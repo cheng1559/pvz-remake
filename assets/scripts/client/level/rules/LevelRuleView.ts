@@ -17,6 +17,8 @@ export interface LevelRuleViewContext {
     readonly audio: LevelAudioPresenter
     /** The plant and tool cursor layer, the sodded lawn under the entities, and the seed bank with its height. */
     readonly cursorLayer: Node
+    /** Over the HUD and the lawn's items, under the cursors and under a seed chooser: where a rule draws its effects. */
+    readonly effectLayer: Node
     readonly ground: Node
     readonly bank: Node
     readonly bankHeight: number

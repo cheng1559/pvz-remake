@@ -5,6 +5,7 @@ import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
 import {
     EconomyStateResource,
+    GridItemComponent,
     LevelStateResource,
     MowedPlantComponent,
     PacketUpgradeOfferResource,
@@ -38,7 +39,9 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         const zombie = world.get(entityId, ZombieComponent)
         const projectile = world.get(entityId, ProjectileComponent)
         const item = world.get(entityId, ItemComponent)
+        const gridItem = world.get(entityId, GridItemComponent)
         if (position) entity.position = { ...position }
+        if (gridItem) entity.gridItem = { ...gridItem }
         if (plant) {
             gameplay.plantBehaviors.validateState(plant, definitions.plants[plant.typeId])
             entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}),
@@ -94,7 +97,6 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         },
         wave: {
             index: wave.index,
-            graves: wave.graves.map(grave => ({ ...grave })),
             ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
             ...(wave.ruleState === undefined ? {} : { ruleState: jsonRoundTrip(wave.ruleState) as JsonObject }),
             plan: wave.plan.map(entry => ({ zombies: [...entry.zombies], ...(entry.flagWave ? { flagWave: true as const } : {}) })),
@@ -151,9 +153,9 @@ export function restoreSession(
         throw new Error('Saved wave row history does not match the level')
     }
     const board = definitions.boards[definition.board]
-    if (save.wave.graves.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
-        throw new Error('Saved grave is outside the board')
-    }
+    const cells = save.entities.flatMap(entity => entity.gridItem ? [entity.gridItem] : [])
+    if (cells.some(item => item.row >= board.rows || item.column >= board.columns)) throw new Error('Saved grid item is outside the board')
+    if (new Set(cells.map(item => `${item.typeId}:${item.column}:${item.row}`)).size !== cells.length) throw new Error('Saved grid items share a cell')
     // The conveyor system runs on a level's belt with the save's.
     if (!!save.seedBank.conveyor !== !!definition.conveyor) throw new Error('Saved conveyor does not match the level')
     // A bank or a belt may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides,
@@ -211,6 +213,14 @@ export function restoreSession(
 
 function restoreEntity(content: ServerContent, world: World, saved: SavedEntity): void {
     const { definitions, gameplay } = content
+    // What stands in a cell has it in place of a position.
+    if (saved.gridItem) {
+        if (Object.keys(saved).some(key => key !== 'entityId' && key !== 'gridItem' && key !== 'extensions')) throw new Error(`Saved grid item ${saved.entityId} must have no other component`)
+        world.activateEntity(saved.entityId)
+        gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
+        world.add(saved.entityId, GridItemComponent, { ...saved.gridItem })
+        return
+    }
     if (!saved.position) throw new Error(`Saved entity ${saved.entityId} has no position`)
     const kinds = [saved.plant, saved.mowedPlant, saved.zombie, saved.projectile, saved.item]
         .filter(value => value !== undefined).length

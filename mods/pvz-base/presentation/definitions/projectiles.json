@@ -1,5 +1,6 @@
 {
   "pvz:lawnmower": {
+    "view": "mower",
     "reanim": {"id": "pvz:lawnmower", "x": 6, "y": -19, "scale": 0.85, "rate": 5.833333333333333},
     "plantShadow": {"x": 36, "y": 65},
     "layer": "lawnMower",

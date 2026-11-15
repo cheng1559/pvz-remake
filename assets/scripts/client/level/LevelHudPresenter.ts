@@ -14,7 +14,7 @@ import { levelRulePresentation } from './rules/LevelRuleView'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
-import { graveAt, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
+import { graveAt, levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
 import { graveAllowsPlanting } from '@/shared/content/teams'
 import { LevelSeedBank } from './LevelSeedBank'
 import { adventureStage, boardCell, levelAwardSize } from './LevelGeometry'
@@ -446,11 +446,11 @@ export class LevelHudPresenter {
             const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
             // Graves block planting, except for a grave buster, which needs one of the other side.
             const team = snapshot.cursor.mode === 'seed' && snapshot.cursor.team || 'plants'
-            valid = valid && !occupant && graveAllowsPlanting(plantSeed!.placement, team, graveAt(snapshot.graves, row, column))
+            valid = valid && !occupant && graveAllowsPlanting(plantSeed!.placement, team, graveAt(snapshot.gridItems, row, column))
                 && (this.canPlantAt?.(snapshot, row, column) ?? true)
         }
         // A grave seed takes any cell of an active row but one with a grave already.
-        if (graveSeed) valid = valid && !graveAt(snapshot.graves, row, column)
+        if (graveSeed) valid = valid && !graveAt(snapshot.gridItems, row, column)
         if (plantId || zombieId !== undefined || graveSeed) {
             this.cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             this.gridPreview.active = valid && !mobile
@@ -472,7 +472,7 @@ export class LevelHudPresenter {
     }
 
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {
-        if (snapshot.paused || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
+        if (levelStandsStill(snapshot) || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
         const { x, y } = this.pointer
         // Coin::MouseHitTest: the level rule may widen every item, as LevelInputPresenter.collectAt does.
         const padding = levelRulePresentation(this.content.presentation, this.level)?.itemPadding
@@ -500,10 +500,9 @@ export class LevelHudPresenter {
      */
     private get gravePreview(): { cursor: Node, grid: Node } {
         if (!this.gravePreviews) {
-            const load = this.loadPacketSprite!
-            const cursor = SeedPacketRenderer.drawGrave(this.cursorPreview, this.cursorPreview.layer, load, -4, -9, 1)
-            const grid = SeedPacketRenderer.drawGrave(this.gridPreview, this.gridPreview.layer, load, -4, -9, 1)
-            for (const sprite of grid.getComponentsInChildren(Sprite)) sprite.color = new Color(255, 255, 255, 100)
+            const cursor = SeedPacketRenderer.drawGrave(this.cursorPreview, this.cursorPreview.layer, -4, -9, 1)
+            const grid = SeedPacketRenderer.drawGrave(this.gridPreview, this.gridPreview.layer, -4, -9, 1)
+            uiNode({ node: grid, opacity: 100 })
             this.gravePreviews = { cursor, grid }
         }
         return this.gravePreviews

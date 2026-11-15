@@ -110,6 +110,7 @@ function entityIds(snapshot: WorldSnapshot): Set<EntityId> {
         ...snapshot.zombies,
         ...snapshot.projectiles,
         ...snapshot.items,
+        ...snapshot.gridItems ?? [],
     ].map(entity => entity.entityId))
 }
 

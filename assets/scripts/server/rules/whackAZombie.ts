@@ -3,12 +3,15 @@ import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
 import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { ItemComponent, WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { spawnZombie } from '../zombies/spawn'
 import { walkAnimationSpeed, zombieGait } from '../zombies/animation'
 import { damageZombie, destroyZombie } from '../zombies/damage'
+import { damagePlant } from '../plants/damage'
+import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
+import type { Team } from '@/shared/protocol'
 import { circleRectOverlap } from '../combat/collision'
-import { createGrave } from '../level/graves'
+import { createGrave, graves as lawnGraves, raiseZombieFromGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
+import { tryDropLevelAward } from '../level/levelAward'
 import { clearCursor } from '../seeds/cursor'
 import type { LevelRuleDefinition } from './registry'
 
@@ -85,7 +88,10 @@ const SPAWN_CUTOFF = 300
 const RISE_TICKS = 50
 /** Challenge::MouseDownWhackAZombie: the mallet hits a circle of this radius, 20 above the click. */
 const HAMMER_RADIUS = 45
-const HAMMER_HELM_DAMAGE = 900
+/** What a blow takes: off a helm (Zombie::TakeHelmDamage), and off a body or a plant that has more than it. */
+const HAMMER_DAMAGE = 900
+/** The mallet is the player's, on the plants' side: it only meets what is hostile to that. */
+const HAMMER_TEAM: Team = 'plants'
 
 /** PvzpAnimateCurve on ints: the clamped linear or quadratic ease-in curve, rounded half away from zero. */
 function animateCurve(start: number, end: number, age: number, from: number, to: number, easeIn = false): number {
@@ -101,8 +107,7 @@ function animateCurve(start: number, end: number, age: number, from: number, to:
  */
 function placeWhackGraves(world: World, count: number, riseAtTick?: number): void {
     const { definition, board } = world.resources.get(LevelStateResource)
-    const waves = world.resources.get(WaveResource)
-    const graves = waves.graves
+    const graves = lawnGraves(world).map(({ grave }) => grave)
     const plants = [...world.query(PositionComponent, PlantComponent)]
     const plantsAt = (row: number, column: number) => plants.filter(entity =>
         world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
@@ -118,7 +123,7 @@ function placeWhackGraves(world: World, count: number, riseAtTick?: number): voi
         let roll = random.integer(0, picks.reduce((sum, pick) => sum + pick.weight, 0) - 1)
         const pick = picks.find(entry => (roll -= entry.weight) < 0)!
         for (const entity of plantsAt(pick.row, pick.column)) if (world.hasEntity(entity)) world.destroyEntity(entity)
-        graves.push({ ...createGrave(world, pick.row, pick.column), ...(riseAtTick === undefined ? {} : { riseAtTick }) })
+        createGrave(world, pick.row, pick.column, riseAtTick === undefined ? {} : { riseAtTick })
         pick.weight = 0
     }
 }
@@ -130,7 +135,7 @@ function placeWhackGraves(world: World, count: number, riseAtTick?: number): voi
 function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:whack-a-zombie',
-        run({ world, tick }) {
+        run({ world, tick, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result !== 'playing' || level.paused) return
             const rules = whackSettings(level.definition.rules!)
@@ -140,7 +145,7 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             const events = world.resources.get(EventQueueResource)
             state.countdown--
             if (state.countdown === 100 && waves.index > 0) {
-                placeWhackGraves(world, Math.max(1, rules.refillGraves - waves.graves.length), tick)
+                placeWhackGraves(world, Math.max(1, rules.refillGraves - lawnGraves(world).length), tick)
             }
             if (state.countdown === 5) {
                 // Board::NextWaveComing: the final wave's banner; the awooga first, the siren before the last wave.
@@ -159,13 +164,13 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
                 state.groupTicks = waves.index === waves.plan.length ? FINAL_GROUP_DELAY : 1
             } else if (state.countdown < SPAWN_CUTOFF) return
             if (--state.groupTicks !== 0) return
-            raiseGroup(world, definitions)
+            raiseGroup(world, definitions, commands)
         },
     }
 }
 
-function raiseGroup(world: World, definitions: GameplayDefinitions): void {
-    const { definition, board } = world.resources.get(LevelStateResource)
+function raiseGroup(world: World, definitions: GameplayDefinitions, remover: EntityRemover): void {
+    const { definition } = world.resources.get(LevelStateResource)
     const zombies = whackSettings(definition.rules!).zombies
     const waves = world.resources.get(WaveResource)
     const state = whackState(world)
@@ -179,57 +184,75 @@ function raiseGroup(world: World, definitions: GameplayDefinitions): void {
         : typeHit < PAIL_CHANCE[phase] + CONE_CHANCE[phase] ? zombies.cone : zombies.plain
     // A grave a grave buster is eating raises nothing.
     const plants = [...world.query(PositionComponent, PlantComponent)]
-    const graves = waves.graves.filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
+    const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
         && world.get(entity, PlantComponent)!.column === grave.column && definitions.plants[world.get(entity, PlantComponent)!.typeId].graveBuster))
     let maxSpeed = animateCurve(1, 12, wave, 1, 3, true)
     count = Math.min(count, graves.length)
-    const events = world.resources.get(EventQueueResource)
     for (let index = 0; index < count; index++) {
         const [grave] = graves.splice(random.integer(0, graves.length - 1), 1)
         if (final) {
             typeId = random.integer(0, 1) === 0 ? zombies.cone : zombies.pail
             maxSpeed = 2
         }
-        const entityId = spawnZombie(world, definitions, typeId, grave.row,
-            board.origin.x + grave.column * board.cell.width - 25,
-            board.origin.y + grave.row * board.cell.height - 30)
-        const zombie = world.get(entityId, ZombieComponent)!
-        zombie.riseTicks = RISE_TICKS
+        const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, RISE_TICKS), ZombieComponent)!
         zombie.speedPerTick = 0.5 + random.nextFloat() * (maxSpeed - 0.5)
         zombie.animationSpeed = walkAnimationSpeed(zombie.speedPerTick, zombieGait(definitions.zombies[typeId], definitions).walkGround)
-        emitServerEvent(events, 'zombieRoseFromGrave', { entityId, row: grave.row })
     }
     state.groupTicks = random.integer(animateCurve(1, 12, wave, 100, 30), animateCurve(1, 12, wave, 200, 60))
     if (final) {
         state.countdown = 0
         state.groupTicks = 0
+        // The award comes from the last zombie to go. With every grave being eaten no zombie rose, and with none left
+        // on the lawn either there is none to go: the award drops now, which the original never does (it stays stuck).
+        tryDropLevelAward(world, definitions, remover)
     }
 }
 
 /**
- * Challenge::MouseDownWhackAZombie: the mallet hits the front zombie under it. A helm takes 900 damage and only the
- * helm; a bare zombie dies at once with its loot, and the cursor is cleared (Board::ClearCursor).
+ * Challenge::MouseDownWhackAZombie: the mallet hits the front one under it of the other side's zombies and plants, and
+ * passes over its own side's. A helm takes 900 damage and only the helm, as in the original, whatever shield is held.
+ * A bare zombie with no more health than that dies at once with its loot (`killed`, the POW), and the cursor is
+ * cleared (Board::ClearCursor): every zombie of the original, which kills any. One with more only takes the 900, past
+ * its shield. A plant, which the original's mallet never meets, takes the 900 the same way.
  */
 function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: number, remover: EntityRemover): void {
-    let top: { entity: number; row: number } | undefined
+    // Lower rows draw in front; within a row a zombie is over a plant, and the later of two alike over the earlier.
+    let top: { entity: number; row: number; plant?: true } | undefined
+    const reached = (position: { x: number; y: number }, body: { x: number; y: number; width: number; height: number }) =>
+        circleRectOverlap(x, y - 20, HAMMER_RADIUS, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })
+    for (const entity of world.query(PositionComponent, PlantComponent)) {
+        const plant = world.get(entity, PlantComponent)!, position = world.get(entity, PositionComponent)!
+        if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(position, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))) continue
+        if (!top || position.row >= top.row) top = { entity, row: position.row, plant: true }
+    }
     for (const entity of world.query(PositionComponent, ZombieComponent)) {
         const zombie = world.get(entity, ZombieComponent)!
-        if (zombie.state === 'dying' || zombie.state === 'burned' || zombie.state === 'mowered') continue
+        if (zombie.state === 'dying' || zombie.state === 'burned' || zombie.state === 'mowered' || !isHostile(zombieTeam(zombie), HAMMER_TEAM)) continue
         const position = world.get(entity, PositionComponent)!
-        const body = definitions.zombies[zombie.typeId].body
-        if (!circleRectOverlap(x, y - 20, HAMMER_RADIUS, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })) continue
-        // Lower rows draw in front; within a row the later zombie does.
+        if (!reached(position, definitions.zombies[zombie.typeId].body)) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row }
     }
     if (!top) return
-    const zombie = world.get(top.entity, ZombieComponent)!
     const events = world.resources.get(EventQueueResource)
-    if (zombie.helmHealth > 0) {
-        emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm?.type ?? 'cone' })
-        damageZombie(world, definitions, top.entity, HAMMER_HELM_DAMAGE, { helmOnly: true }, remover)
+    if (top.plant) {
+        damagePlant(world, definitions, top.entity, HAMMER_DAMAGE, remover)
+        // What is left says whether the blow ended it: a plant kept from harm (`/plantinvincible`) is not.
+        const left = world.get(top.entity, PlantComponent), killed = !left || left.health === 0
+        emitServerEvent(events, 'plantWhacked', { plantId: top.entity, x, y, ...(killed ? { killed } : {}) })
         return
     }
-    emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y })
+    const zombie = world.get(top.entity, ZombieComponent)!
+    if (zombie.helmHealth > 0) {
+        emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm?.type ?? 'cone' })
+        damageZombie(world, definitions, top.entity, HAMMER_DAMAGE, { helmOnly: true }, remover)
+        return
+    }
+    if (zombie.health > HAMMER_DAMAGE) {
+        emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y })
+        damageZombie(world, definitions, top.entity, HAMMER_DAMAGE, { bypassShield: true }, remover)
+        return
+    }
+    emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, killed: true })
     destroyZombie(world, definitions, top.entity, remover)
     // Challenge::ClearCursor puts the mallet away for good once this blow has dropped the award.
     clearCursor(world)
@@ -256,7 +279,7 @@ export const whackAZombieRule: LevelRuleDefinition = {
     initialize(world) {
         const level = world.resources.get(LevelStateResource).definition
         const waves = world.resources.get(WaveResource)
-        waves.graves = []
+        for (const { entity } of lawnGraves(world)) world.destroyEntity(entity)
         placeWhackGraves(world, whackSettings(level.rules!).graves)
         // The rule counts mZombieCountDown itself; the wave system's countdown stays unset.
         waves.nextWaveAtTick = undefined

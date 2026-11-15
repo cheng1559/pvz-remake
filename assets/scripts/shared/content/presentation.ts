@@ -184,8 +184,19 @@ export interface PresentationSound {
     readonly pitchRange?: number
 }
 
+/** What stands in a cell without being a plant or a zombie (GridItemSnapshot): the view that draws it and where it is drawn among the rest. */
+export interface GridItemPresentationDefinition {
+    /** Its view (GridItemViewRegistry). */
+    readonly view: string
+    /** Its render layer and its offset on it: a grave's `graveStone` and 3 (Board::AddAGraveStone). */
+    readonly layer: RenderLayer
+    readonly offset?: number
+}
+
 /** Exactly one of `sprite` and `reanim`. */
 export interface ProjectilePresentationDefinition {
+    /** Its view (ProjectileViewRegistry): `projectile` when omitted, a mower's `mower`. */
+    readonly view?: string
     readonly viewConfig?: Readonly<JsonObject>
     readonly sprite?: string
     /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
@@ -512,11 +523,14 @@ export interface PresentationDefinitions {
     readonly plants: Readonly<Record<string, PlantPresentationDefinition>>
     readonly zombies: Readonly<Record<string, ZombiePresentationDefinition>>
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
+    readonly gridItems: Readonly<Record<string, GridItemPresentationDefinition>>
     readonly seedPackets: {
         readonly flash: { readonly id: string }
         readonly selection: { readonly color: readonly [number, number, number] }
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
+        /** A grave seed's packet: the grave at about a plant's size, centred, a little above the picture window's floor. */
+        readonly grave: SeedPacketPlacement
         readonly plantCels: Readonly<Record<string, number>>
     }
 }
@@ -795,8 +809,15 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (!target.animations) throw new TypeError(id + ' has no animations')
         for (const slot of slots) if (!target.animations[slot]) throw new TypeError(`${id} is missing ${slot} animation`)
     }
+    for (const [id, value] of Object.entries(object(data.gridItems, 'gridItems'))) {
+        const item = object(value, id)
+        text(item.view, id + '.view')
+        if (!isRenderLayer(item.layer)) throw new TypeError(id + '.layer is not a render layer')
+        if (item.offset !== undefined) finite(item.offset, id + '.offset')
+    }
     for (const [id, value] of Object.entries(object(data.projectiles, 'projectiles'))) {
         const projectile = object(value, id)
+        if (projectile.view !== undefined) text(projectile.view, id + '.view')
         if (projectile.viewConfig !== undefined) object(projectile.viewConfig, id + '.viewConfig')
         if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(id + ' needs exactly one of sprite and reanim')
         if (projectile.sprite !== undefined) text(projectile.sprite, id + '.sprite')
@@ -837,6 +858,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     const selection = object(packets.selection, 'seedPackets.selection')
     if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
+    placement(packets.grave, 'seedPackets.grave')
     for (const [id, value] of Object.entries(object(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
     for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {
         if (!Number.isInteger(value) || (value as number) < 0) throw new TypeError('Invalid packet cel: ' + id)

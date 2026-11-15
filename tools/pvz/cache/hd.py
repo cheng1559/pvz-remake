@@ -1,9 +1,9 @@
-"""Redraws the cached plants and the lawn mower for an HD pack from that pack's own part images, instead of
-super-resolving the 1x atlases, so they match the HD plants on the lawn.
+"""Redraws the cached plants for an HD pack from that pack's own part images, instead of super-resolving the 1x
+atlas, so they match the HD plants on the lawn.
 
     python3 -m pvz.cache.hd ../mods/hd   (run from tools/)
 
-Every part comes from the pack at the density its content.json records, as the game draws it: both are drawn at 2x,
+Every part comes from the pack at the density its content.json records, as the game draws it: they are drawn at 2x,
 the density of the HD parts.
 """
 import argparse
@@ -11,9 +11,9 @@ import json
 from pathlib import Path
 
 from .. import ROOT
-from . import lawnmower, packets, plants
+from . import packets, plants
 
-SCALES = {'plant_previews_cached': 2, 'lawnmower_cached': 2}
+SCALES = {'plant_previews_cached': 2}
 
 
 def part_images(pack: Path) -> dict[str, tuple[Path, int]]:
@@ -33,7 +33,7 @@ def main() -> None:
     content = json.loads(text)
     sprites = content['resources']['sprites']
     parts = part_images(args.pack)
-    for name, generate in [('plant_previews_cached', plants.generate), ('lawnmower_cached', lawnmower.generate)]:
+    for name, generate in [('plant_previews_cached', plants.generate)]:
         scale = SCALES[name]
         packets.hd(scale, parts)
         entry = sprites[f'pvz:{name}']

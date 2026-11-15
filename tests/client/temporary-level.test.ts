@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as protocol from '@/shared/protocol'
+
+// The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
+const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
 
 test('temporary levels preserve the adventure save when entered, restarted and exited', async () => {
     const saved: any[] = []
@@ -51,7 +55,7 @@ test('temporary levels preserve the adventure save when entered, restarted and e
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { rechargingEnabled: true, sunCostEnabled: true, plantInvincible: true, collectMode: 'click' } },
         '@/shared/debug/DebugCli': {},
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id], Date, Math, Promise, Error })
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? shared[id], Date, Math, Promise, Error })
     const controller = module.exports.createLevelController({})
     await controller.play({ levelId: 'normal' })
     assert.equal(controller.isLevelIntro(), true)

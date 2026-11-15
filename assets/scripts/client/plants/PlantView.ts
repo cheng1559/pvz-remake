@@ -2,13 +2,15 @@ import { Color, type Node, Sprite, type SpriteFrame } from 'cc'
 import type { ClientAnimationClip, ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
+import { boardToLayer, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import type { EntityAttachments } from '@/client/view/EntityAttachments'
 import { uiNode } from '@/client/view/uiNode'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
-import type { ReanimKeyframe } from '@/shared/content/reanim'
-import { plantFacingX, plantTeam } from '@/shared/content/teams'
-import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
+import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
+import { renderOrder } from '@/shared/content/renderOrder'
+import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
+import { type PlantSnapshot, TICK_SECONDS, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
 export type PlantViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'plant' }>
@@ -42,10 +44,21 @@ export interface PlantViewContext {
     plant: ShownPlant
     tick: number
     draw?: PlantDraw
+    /** The board it is on; none off the board. */
+    stage?: LevelStage
 }
 
 /** Reanimation::StartBlend(20): a layer that changes its clip blends from the pose it had, unless the clip says how long. */
 const BLEND_SECONDS = 0.2
+/** The original's driver for a mowed zombie, and its rate (ZOMBIE_MOWERED_ANIMATION_SPEED: 8 fps, advanced twice). */
+const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
+const MOWERED_RATE = 16 / 12
+/** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
+const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
+/** A plant turns about the middle of its base instead, from its top left in board units. */
+const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
+/** LawnMoweredZombie's locator once loaded, by the content it is of. */
+const locators = new WeakMap<object, { track?: ReanimTrack }>()
 
 interface Layer { player: ReanimPlayer, key?: string, time: number, shown: boolean }
 interface FireParticle { id: string; x: number; y: number; delayTicks: number }
@@ -84,6 +97,12 @@ export class PlantView {
     private readonly bases = new Map<string, ReanimKeyframe>()
     /** Tick the current shot started, for a particle that follows it; null until the next sync reports it. */
     private shotTick?: number | null
+    /** The bite or production glow it was last drawn with. */
+    private flash = 0
+    private highlighted = false
+    private chilled = false
+    /** Mowed, it is frozen as it stood for its squashing. */
+    private frozen = false
 
     constructor(protected readonly context: PlantViewContext) {
         const animation = context.content.definitions.plants[context.plant.typeId].animation
@@ -232,8 +251,83 @@ export class PlantView {
     }
 
     /**
-     * The plant on the board, by the server's snapshot. `flash`: the bite or production glow
-     * (Plant::mEatenFlashCountdown), from the client's EntityFlashes.
+     * The plant on the board for a frame: where it stands, facing its side's way, and what the board does to any plant
+     * (a mowed one is squashed, a chilled one is blue and slow, the shovel over it lights it). `sync` shows the plant
+     * itself. `flash`: the bite or production glow (Plant::mEatenFlashCountdown), from the client's EntityFlashes.
+     */
+    update(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
+        const { node } = this.context
+        // A mowed plant stays as it stood.
+        if (plant.mowered) { this.squash(plant); return }
+        // A plant on the zombies' side faces left, mirrored across its width.
+        const mirrored = plant.team === 'zombies', at = boardToLayer(plant.x + (mirrored ? PLANT_WIDTH : 0), plant.y)
+        node.setPosition(at.x, at.y)
+        node.setScale(mirrored ? -1 : 1, 1, 1)
+        this.flash = flash
+        this.sync(plant, world, particle, false, flash)
+        // A plant chilled by a hostile snow pea draws blue and animates at half speed. Its players are revisited every
+        // frame while chilled, since a layer may start a new clip, and once more as it thaws.
+        const chilled = (plant.chilledTicks ?? 0) > 0
+        if (chilled || this.chilled) for (const player of node.getComponentsInChildren(ReanimPlayer)) player.setChilled(chilled)
+        this.chilled = chilled
+        if (this.highlighted) this.glow()
+    }
+
+    /** Plant::mHighlighted: the shovel is over it, so all of it is lit; without it, as much as its flash. */
+    highlight(on: boolean): void {
+        if (on === this.highlighted) return
+        this.highlighted = on
+        this.glow()
+    }
+
+    private glow(): void {
+        const gray = Math.min(255, this.flash * 3)
+        const color = this.highlighted ? new Color(255, 255, 255, 196) : new Color(gray, gray, gray)
+        for (const player of this.context.node.getComponentsInChildren(ReanimPlayer)) player.setExtraAdditiveDraw(this.highlighted || this.flash > 0, color)
+    }
+
+    /**
+     * A plant a mower crushed (PlantSnapshot.mowered) is squashed with a zombie's LawnMoweredZombie, at the server's
+     * time: frozen as it stood, without its shadow, its node turns and scales by the locator's pose about the middle of
+     * its base as a zombie does about its foot, tipping the way the mower ran, then flattens.
+     */
+    private squash(plant: PlantSnapshot): void {
+        const { node, content } = this.context
+        if (!this.frozen) {
+            this.frozen = true
+            for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
+            const shadow = node.getChildByName('PlantShadow')
+            if (shadow) shadow.active = false
+        }
+        let locator = locators.get(content.registry)
+        if (!locator) {
+            const loaded: { track?: ReanimTrack } = {}
+            locators.set(content.registry, locator = loaded)
+            new ReanimRepository(content.registry, content.loader).load(MOWERED_REANIM)
+                .then(({ data }) => { loaded.track = data.tracks.find(track => track.id === 'locator') })
+                .catch(error => console.error('[Level] Failed to load the mowed animation', error))
+        }
+        const pose = locator.track && sampleReanimTrack(locator.track, plant.mowered!.ticks * TICK_SECONDS * MOWERED_RATE)
+        if (!pose) return
+        const facing = plant.team === 'zombies' ? -1 : 1, tip = plant.mowered!.left ? -1 : 1
+        const origin = boardToLayer(plant.x + (facing < 0 ? PLANT_WIDTH : 0), plant.y)
+        const foot = boardToLayer(plant.x + MOWED_PLANT_FOOT.x, plant.y + MOWED_PLANT_FOOT.y)
+        const linear = (degrees: number) => {
+            const turn = degrees * Math.PI / 180, cos = Math.cos(turn), sin = Math.sin(turn)
+            return (x: number, y: number) => ({ x: cos * pose.scaleX * x - sin * pose.scaleY * y, y: sin * pose.scaleX * x + cos * pose.scaleY * y })
+        }
+        // The locator moves the zombie's foot (MOWERED_ZOMBIE_FOOT); that carries over to the plant's, mirrored tipping left.
+        const zombieFoot = linear(-pose.skewX)(MOWERED_ZOMBIE_FOOT.x, MOWERED_ZOMBIE_FOOT.y)
+        const carry = { x: tip * (zombieFoot.x + pose.x - MOWERED_ZOMBIE_FOOT.x), y: zombieFoot.y - pose.y - MOWERED_ZOMBIE_FOOT.y }
+        const body = linear(-tip * pose.skewX)(origin.x - foot.x, origin.y - foot.y)
+        node.setPosition(foot.x + body.x + carry.x, foot.y + body.y + carry.y)
+        node.angle = -tip * pose.skewX
+        node.setScale(facing * pose.scaleX, pose.scaleY, 1)
+    }
+
+    /**
+     * The plant itself on the board, by the server's snapshot: its layers, a particle that follows its shot, its color
+     * and its glow. A view adds what its plant does here.
      */
     sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void {
         this.show(plant)
@@ -268,6 +362,27 @@ export class PlantView {
 
     /** What the view made outside its node goes with it. */
     destroy?(): void
+
+    /** Plant::Fire: the plant starts what follows its shot. */
+    static readonly fired: StageEvent = (stage, event) => {
+        if (typeof event.data.plantId === 'number') stage.plant(event.data.plantId)?.fire()
+    }
+
+    /** Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own draw order, so it draws after it. */
+    static readonly rose: StageEvent = (stage, event, world) => {
+        const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
+        if (plant) stage.particle('pvz:potatominerise', plant.x + 40, plant.y + 40, stage.plantOrder(plant))
+    }
+
+    /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off. The plant is gone by then. */
+    static readonly exploded: StageEvent = (stage, event) => {
+        const { x, y, row } = event.data
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
+        const explosion = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId]?.explosion : undefined
+        if (!explosion) return
+        // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
+        stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
+    }
 }
 
 function upgradeFlashColor(tick: number): Color {

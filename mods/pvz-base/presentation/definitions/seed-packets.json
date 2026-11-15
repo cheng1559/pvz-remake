@@ -2,6 +2,7 @@
   "flash": {"id": "pvz:seedpacketflash"},
   "selection": {"color": [255, 255, 0]},
   "defaultPlacement": {"scale": 0.5, "offsetX": 5, "offsetY": 8},
+  "grave": {"scale": 0.38, "offsetX": 8, "offsetY": 13},
   "placements": {
     "4": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
     "6": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},

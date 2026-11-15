@@ -5,6 +5,10 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import * as plantDefinitions from '@/client/plants/definitions'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as protocol from '@/shared/protocol'
+
+// The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
+const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
 
 // Exercise the real button/hover code with ordered capture/target events, without rendering Cocos.
 function setup() {
@@ -93,7 +97,7 @@ function setup() {
         const compiled = transpileModule(readFileSync(file, 'utf8'), {
             compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
         })
-        runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
+        runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? shared[id] ?? {} })
         return module.exports
     }
     const hover = load('assets/scripts/client/input/UIHoverManager.ts').UIHoverManager

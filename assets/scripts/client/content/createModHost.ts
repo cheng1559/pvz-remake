@@ -25,7 +25,12 @@ import * as levelInput from '@/client/level/LevelInputPresenter'
 import * as levelHud from '@/client/level/LevelHudPresenter'
 import * as seedBank from '@/client/level/LevelSeedBank'
 import * as levelView from '@/client/level/LevelView'
-import * as levelGraves from '@/client/level/LevelGraves'
+import * as graveView from '@/client/gridItems/GraveView'
+import * as projectileView from '@/client/projectiles/ProjectileView'
+import * as mowerView from '@/client/projectiles/MowerView'
+import * as levelStage from '@/client/level/LevelStage'
+import type { ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
+import type { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
 import * as entityFlashes from '@/client/level/EntityFlashes'
 import * as levelRules from '@/client/level/rules'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
@@ -47,12 +52,12 @@ export class ClientModAssets extends ModAssets {
 }
 
 export function createClientModHost(ownerId: string, definitions: DefinitionSources, resources: ArchiveContentRegistry,
-    plants: PlantViewRegistry, zombies: ZombieViewRegistry): ModHost {
+    views: { plants: PlantViewRegistry, zombies: ZombieViewRegistry, projectiles: ProjectileViewRegistry, gridItems: GridItemViewRegistry }): ModHost {
     return new ModHost(ownerId, {
         'cc': engine,
         'content/definitions': definitions,
         'content/resources': resources,
-        'client/views': { plants, zombies },
+        'client/views': views,
         'client/view/ClientViewport': viewport,
         'client/screens/MainMenuScreen': menu,
         'client/plants/PlantView': plantView,
@@ -71,7 +76,10 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/level/LevelHudPresenter': levelHud,
         'client/level/LevelSeedBank': seedBank,
         'client/level/LevelView': levelView,
-        'client/level/LevelGraves': levelGraves,
+        'client/gridItems/GraveView': graveView,
+        'client/projectiles/ProjectileView': projectileView,
+        'client/projectiles/MowerView': mowerView,
+        'client/level/LevelStage': levelStage,
         'client/level/EntityFlashes': entityFlashes,
         'client/level/rules': levelRules,
         'platform/debug/GameDebugSettings': debugSettings,

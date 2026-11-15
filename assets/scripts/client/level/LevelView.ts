@@ -36,7 +36,6 @@ import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser, REPICK_END_TICK } from './LevelSeedChooser'
 import { LevelBoardHud, ownedTools } from './LevelBoardHud'
-import { LevelGraves } from './LevelGraves'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { PlantingLineView } from './PlantingLineView'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
@@ -59,7 +58,6 @@ export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCos
 /** CRAZY_DAVE_1503 ({NO_CLICK} "How's that sound?") asks to buy the seed-slot upgrade it just quoted. */
 
 export class LevelView {
-    private graves?: LevelGraves
     /** The level rule's own view (the Whack-a-Zombie mallet); input passes it unclaimed clicks. */
     rule?: LevelRuleView
     /** The level's red line, when it has one. */
@@ -142,7 +140,7 @@ export class LevelView {
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
             background, seedbank, projectileEntries, projectileShadowEntries,
-            mowerFrame, mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
+            mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
             flagMeterLevelProgress, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
             [poleVaulterArm, wallnutCracked1, wallnutCracked2], helmEntries,
         ] = await Promise.all([
@@ -155,7 +153,6 @@ export class LevelView {
                 const atlas = await sprites.load(shadow.sprite)
                 return [id, getAtlasFrame(atlas, shadow.cell, atlas.originalSize.width / shadow.columns, atlas.originalSize.height, shadow.columns)] as const
             })()] : [])),
-            sprites.load('pvz:lawnmower_cached'),
             sprites.load(boardDefinition.night ? 'pvz:plantshadow2' : 'pvz:plantshadow'),
             sprites.load('pvz:zombie_outerarm_upper2'),
             sprites.load('pvz:flagmeter'),
@@ -321,6 +318,10 @@ export class LevelView {
         const cursorLayer = uiNode({ name: 'CursorLayer', parent: hud }).node
         cursorLayer.setSiblingIndex(cursorPreview.getSiblingIndex())
         cursorPreview.setParent(cursorLayer)
+        // What a level rule draws over the HUD (the mallet's POW, RENDER_LAYER_ABOVE_UI): under the cursors, and under a
+        // seed chooser, which goes between the two.
+        const ruleEffects = uiNode({ name: 'RuleEffects', parent: hud }).node
+        ruleEffects.setSiblingIndex(cursorLayer.getSiblingIndex())
         const awardLayer = uiNode({
             node: slots.awardLayer, size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
@@ -364,7 +365,7 @@ export class LevelView {
             root.layer, content, animations, {
                 projectileFrames: Object.fromEntries(projectileEntries),
                 projectileShadowFrames: Object.fromEntries(projectileShadowEntries),
-                mowerFrame, mowerShadow,
+                mowerShadow,
                 zombieSprites: {
                     damagedArm: damagedZombieArm, poleVaulterDamagedArm: poleVaulterArm,
                     helms: Object.fromEntries(helmEntries),
@@ -405,8 +406,6 @@ export class LevelView {
         entityRenderer.sunBankOffset = () => bankLeft.position.x
         view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
-        view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
-        view.syncGraves(initial.phase === 'gameplay')
         if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
@@ -415,7 +414,7 @@ export class LevelView {
         view.plantingLine = await PlantingLineView.create({ content, ui, ground: slots.sodClip, level, look: presentation.plantingLine, initial })
         if (level.rules) {
             view.rule = await createLevelRuleView({ kind: level.rules.kind, config: rulePresentation ?? {}, content, ui, initial, audio,
-                cursorLayer, ground: slots.sodClip, bank, bankHeight })
+                cursorLayer, effectLayer: ruleEffects, ground: slots.sodClip, bank, bankHeight })
         }
         // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift, and the seed
         // chooser holds them through its whole camera pan; restoring a completed intro clears that hold. The HUD's lawn
@@ -426,7 +425,7 @@ export class LevelView {
             // A repick lifts the bank's layer into the HUD, over it (raiseBankToChooser).
             if (bankLayer.parent === hud) bankLayer.setPosition(0, 0)
             else bankLayer.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
-            for (const layer of [coinLayer, awardLayer, cursorLayer]) layer.setPosition(pin, 0)
+            for (const layer of [coinLayer, awardLayer, ruleEffects, cursorLayer]) layer.setPosition(pin, 0)
         }
         // A repick lifts the bank over everything but the chooser: the lawn's entities and the HUD's coins and sun, which
         // would otherwise come between the bank and the chooser's cards resting in it. It goes back under the entities
@@ -457,6 +456,8 @@ export class LevelView {
             }
             view.pinScreen()
         }
+        // How far above its place the bank was when a repick's chooser started to drop, until it is back there.
+        let hiddenBankY: number | undefined
         view.syncSeedChooserIntro = () => {
             const chooser = view.seedChooser
             if (!chooser) return
@@ -474,8 +475,15 @@ export class LevelView {
             const repick = intro.complete ? chooser.repickTick : undefined
             if (repick !== undefined) {
                 chooser.syncIntro(repick)
-                bank.setPosition(repick <= 425 ? easeInOut(400, 425, repick, 10, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, 10), bank.position.y)
-                chooser.setBankShift(bank.position.x)
+                // A bank a rule still keeps above the screen (Whack-a-Zombie's, until there is sun) comes down as the chooser
+                // drops, as the intro's does, for the cards to be chosen into it, and goes back up as the chooser lifts: the
+                // level stood still meanwhile, so it is no nearer its time.
+                if (repick <= 425) hiddenBankY ??= bank.position.y
+                bank.setPosition(repick <= 425 ? easeInOut(400, 425, repick, 10, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, 10),
+                    hiddenBankY === undefined ? bank.position.y
+                        : repick <= 425 ? easeInOut(400, 425, repick, hiddenBankY, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, hiddenBankY))
+                if (repick >= REPICK_END_TICK) hiddenBankY = undefined
+                chooser.setBankShift(bank.position.x, bank.position.y)
                 raiseBankToChooser(repick < REPICK_END_TICK)
                 return
             }
@@ -519,13 +527,9 @@ export class LevelView {
         this.pinScreen()
     }
 
-    /** Graves rise from the intro's grave tick; a level already in play shows them fully risen. */
-    private syncGraves(playing = false, effects = true): void {
-        this.graves?.sync(playing || this.intro.complete ? Infinity : this.intro.elapsedTicks - (this.intro.graveStartTick ?? 0), effects)
-    }
-
     updateIntro(dt: number): boolean {
-        this.syncGraves()
+        // Graves rise by the intro's time, between the level's frames.
+        this.entityRenderer.syncGridItems()
         // Play counts the coin bank in gameplay ticks; before that the intro's time does.
         if (!this.introComplete && !this.questionOpen) this.hud.advanceCoinBank(dt * 100)
         this.hud.setCoinBankBesideDave(this.boardHud?.daveOut ?? false)
@@ -687,7 +691,6 @@ export class LevelView {
         this.money = snapshot.money
         this.boardHud?.sync(snapshot)
         this.seedChooser?.sync(snapshot)
-        this.graves?.syncWorld(snapshot, typeId => this.definitions.plants[typeId]?.graveBuster?.eatTicks)
         this.entityRenderer.sync(snapshot, changes, events)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
@@ -777,7 +780,7 @@ export class LevelView {
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
-        this.syncGraves(false, false)
+        this.entityRenderer.syncGridItems(false)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
         this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete, this.menuVisible)

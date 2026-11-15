@@ -293,6 +293,8 @@ export class SeedPacketView {
         if (plant) { plant.setColor(color); return }
         const zombie = node.getComponent(ZombiePreview)
         if (zombie) { zombie.setColor(color); return }
+        const grave = node.getComponent(PacketGrave)
+        if (grave) { grave.setColor(color); return }
 
         const sprite = node.getComponent(Sprite)
         if (sprite) {

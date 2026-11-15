@@ -126,7 +126,12 @@ export interface ServerEvent {
     data: JsonObject
 }
 
+/** A grave's type among the things of a cell (GridItemSnapshot). */
+export const GRAVE = 'pvz:grave'
+
 export interface GraveSnapshot {
+    entityId: EntityId
+    typeId: typeof GRAVE
     column: number
     row: number
     variant: number
@@ -141,6 +146,12 @@ export interface GraveSnapshot {
     team?: 'plants'
 }
 
+/**
+ * What stands in a cell without being a plant or a zombie (the original's GridItem): an entity of its type in its cell,
+ * with what else its type has. A grave; craters are to come.
+ */
+export type GridItemSnapshot = GraveSnapshot
+
 /** Board::AddAGraveStone: 20 stone looks and a rise delay of 0-49 ticks. */
 /** The server's fixed step: one tick of the original's 10 ms Board::Update. Ticks in saves and snapshots count these. */
 export const TICK_SECONDS = 0.01
@@ -152,18 +163,27 @@ export const GRAVE_RISEN_COUNTER = 100
 
 /** mGridItemCounter of a grave added in play: -delay when placed, then Board::UpdateGridItems adds one each later tick.
  *  Undefined for the level's own graves, which rise in the intro. */
-export function graveRiseCounter(grave: GraveSnapshot, gameplayTick: number): number | undefined {
+export function graveRiseCounter(grave: Pick<GraveSnapshot, 'riseAtTick' | 'riseDelay'>, gameplayTick: number): number | undefined {
     return grave.riseAtTick === undefined ? undefined : Math.min(GRAVE_RISEN_COUNTER, gameplayTick - grave.riseAtTick - grave.riseDelay)
 }
 
-export function graveAt(graves: readonly GraveSnapshot[] | undefined, row: number, column: number): GraveSnapshot | undefined {
-    return graves?.find(grave => grave.row === row && grave.column === column)
+export function graveAt(items: readonly GridItemSnapshot[] | undefined, row: number, column: number): GraveSnapshot | undefined {
+    return items?.find(item => item.typeId === GRAVE && item.row === row && item.column === column)
 }
 
 /** Shared by snapshots and saves: the look and rise delay must come from AddAGraveStone's ranges. */
 export function checkGraveRanges(grave: Pick<GraveSnapshot, 'variant' | 'riseDelay'>, name: string): void {
     if (grave.variant < 0 || grave.variant >= GRAVE_VARIANTS) throw new TypeError(`${name}.variant is invalid`)
     if (grave.riseDelay < 0 || grave.riseDelay > GRAVE_MAX_RISE_DELAY) throw new TypeError(`${name}.riseDelay is invalid`)
+}
+
+/**
+ * The level stands still: paused, or choosing its seeds again (`/repick`). Nothing on the lawn moves or takes the
+ * pointer meanwhile, whichever it is. The two differ only in what else stops: a pause stops a seed chooser too and ends
+ * with the player's resume, while a repick's chooser goes on and ends with its Let's Rock.
+ */
+export function levelStandsStill(snapshot: Pick<WorldSnapshot, 'paused' | 'seedChooser'>): boolean {
+    return snapshot.paused || snapshot.seedChooser?.repick === true
 }
 
 export interface WorldSnapshot {
@@ -189,7 +209,7 @@ export interface WorldSnapshot {
     seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true, cheatSeeds?: true }
     /** `team`: the side it puts down on, when not its seed's own (`/seed`). */
     conveyorPackets: Array<{ id: number; seedId: string; x: number; team?: Team; selected: boolean; availability: SeedAvailability }>
-    graves?: GraveSnapshot[]
+    gridItems?: GridItemSnapshot[]
     plants: PlantSnapshot[]
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
@@ -806,8 +826,10 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             seedPackets.length > slots) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }
-    if (snapshot.graves !== undefined) array(snapshot.graves, 'snapshot.graves').forEach((value, index) => {
-        const name = `snapshot.graves[${index}]`, grave = record(value, name)
+    if (snapshot.gridItems !== undefined) array(snapshot.gridItems, 'snapshot.gridItems').forEach((value, index) => {
+        const name = `snapshot.gridItems[${index}]`, grave = record(value, name)
+        integer(grave.entityId, `${name}.entityId`)
+        if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
         for (const key of ['column', 'row', 'variant', 'riseDelay']) integer(grave[key], `${name}.${key}`)
         checkGraveRanges(grave as unknown as GraveSnapshot, name)
         finite(grave.offsetX, `${name}.offsetX`); finite(grave.offsetY, `${name}.offsetY`)

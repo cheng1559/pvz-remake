@@ -133,7 +133,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     class Views extends EntityViewRegistry<any, any> {
         constructor() {
             super(context => ({ kind: context.kind, typeId: context.typeId }))
-            const views = [...Object.values(presentation.plants), ...Object.values(presentation.zombies)].map((entry: any) => entry.view ?? 'zombie')
+            const views = [...[...Object.values(presentation.plants), ...Object.values(presentation.zombies)].map((entry: any) => entry.view ?? 'zombie'),
+                ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view)]
             for (const kind of new Set(views)) this.register(kind, () => ({}))
         }
     }
@@ -161,6 +162,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         '@/server/session/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
         '@/client/plants/PlantViewRegistry': { PlantViewRegistry: Views },
         '@/client/zombies/ZombieViewRegistry': { ZombieViewRegistry: Views },
+        '@/client/projectiles/ProjectileViewRegistry': { ProjectileViewRegistry: Views },
+        '@/client/gridItems/GridItemViewRegistry': { GridItemViewRegistry: Views },
         '@/client/content/ArchiveContentRegistry': { ArchiveContentRegistry },
         '@/client/content/createModHost': {
             ClientModAssets: class extends ModAssets { async sprite(path: string) {
@@ -168,8 +171,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
                 assert.deepEqual(Array.from(png.slice(0, 8)), [137, 80, 78, 71, 13, 10, 26, 10])
                 return { source: path }
             } },
-            createClientModHost: (owner: string, sources: DefinitionSources, resources: ArchiveContentRegistry, plants: Views, zombies: Views) =>
-                keep(new ModHost(owner, { ...clientModules, 'content/definitions': sources, 'content/resources': resources, 'client/views': { plants, zombies } })),
+            createClientModHost: (owner: string, sources: DefinitionSources, resources: ArchiveContentRegistry, views: Record<string, Views>) =>
+                keep(new ModHost(owner, { ...clientModules, 'content/definitions': sources, 'content/resources': resources, 'client/views': views })),
         },
         '@/client/content/ModManager': { modManager: { ready, failures } },
         '@/client/content/ModRuntime': {

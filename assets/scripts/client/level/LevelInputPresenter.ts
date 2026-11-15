@@ -8,7 +8,7 @@ import { boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
 import { UIButton } from '@/client/ui/UIButton'
-import type { WorldSnapshot } from '@/shared/protocol'
+import { levelStandsStill, type WorldSnapshot } from '@/shared/protocol'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -108,7 +108,7 @@ export class LevelInputPresenter {
     private selectSeedPacket(index: number, replace = false): void {
         if (!this.enabled || !this.view.introComplete) return
         const snapshot = this.game.render()
-        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
         if (snapshot.cursor.mode !== 'none' && (!replace || packet.selected)) {
@@ -126,7 +126,7 @@ export class LevelInputPresenter {
             this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
         }
         const snapshot = this.game.render()
-        if (snapshot.paused || snapshot.result !== 'playing') return
+        if (levelStandsStill(snapshot) || snapshot.result !== 'playing') return
         const location = event.getLocation()
         const hit = (button: UIButton) => button.node.activeInHierarchy && button.interactable &&
             button.node.getComponent(UITransform)!.hitTest(location, event.windowId)
@@ -254,7 +254,7 @@ export class LevelInputPresenter {
     }
 
     private canUseCursor(snapshot: WorldSnapshot): boolean {
-        return !snapshot.paused && snapshot.result === 'playing' &&
+        return !levelStandsStill(snapshot) && snapshot.result === 'playing' &&
             (snapshot.phase === 'gameplay' && this.view.introComplete || snapshot.cursor.mode === 'tool')
     }
 
@@ -323,7 +323,7 @@ export class LevelInputPresenter {
         const packetIndex = event.keyCode === KeyCode.DIGIT_0 ? 9 : event.keyCode - KeyCode.DIGIT_1
         if (packetIndex >= 0 && packetIndex < 10) {
             const snapshot = this.game.render()
-            if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+            if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
             this.selectSeedPacket(packetIndex, true)
         }
         else if (event.keyCode === KeyCode.KEY_D) {

@@ -1,5 +1,7 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
+import type { StageEvent } from '@/client/level/LevelStage'
+import { plantRenderOffset, renderOrder } from '@/shared/content/renderOrder'
 import { PlantView, type PlantParticle } from './PlantView'
 
 /** Plant::UpdateGraveBuster: it lands, then chews and sinks while the grave disappears. */
@@ -14,5 +16,15 @@ export class GraveBusterView extends PlantView {
         }
         // Plant::UpdateReanim sinks the buster 30px over the eating countdown.
         this.root.setPosition(0, -30 * (1 - plant.ability.ticks / content.definitions.plants[plant.typeId].graveBuster!.eatTicks))
+    }
+
+    /**
+     * Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80), 4 above itself; a
+     * buster of the zombies' side faces left, so its dirt does too, about the same middle. The buster is gone by then.
+     */
+    static readonly busted: StageEvent = (stage, event) => {
+        const x = Number(event.data.x)
+        stage.particle('pvz:gravebusterdie', x + 40, Number(event.data.y) + 80, renderOrder('plant', Number(event.data.row), plantRenderOffset(x)) + 4,
+            undefined, event.data.team === 'zombies')
     }
 }

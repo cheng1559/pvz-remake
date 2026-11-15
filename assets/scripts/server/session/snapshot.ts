@@ -1,6 +1,6 @@
 import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
-import { EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, GridItemComponent, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { heightOverRow, ProjectileMotionsResource } from '../combat/motions'
 import { getAvailableSun } from '../level/items'
@@ -115,6 +115,8 @@ export const snapshot = {
             }
         })
 
+        const gridItems = [...world.query(GridItemComponent)].map(entity => ({ entityId: entity, ...world.get(entity, GridItemComponent)! }))
+
         const owned = tools.owned(session), script = getActiveTutorial(world)
         const question = tutorial.dialogIndex === undefined ? undefined : script?.dialogQuestion?.(world, definitions)
         const ruleSnapshot = levelRule(world)?.snapshot?.(world)
@@ -145,7 +147,7 @@ export const snapshot = {
             conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ id: packet.id, x: packet.x, ...packet.card,
                 selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
                 availability: planting.seedAvailability(session, packet.card.seedId, packet.id) })) ?? [],
-            ...(waves.graves.length ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
+            ...(gridItems.length ? { gridItems } : {}),
             plants,
             zombies,
             projectiles,

@@ -11,6 +11,7 @@ import {
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
 import type {
+    GridItem,
     MowedPlant,
     Plant,
     PlantAbility,
@@ -27,7 +28,7 @@ import type { Item, TutorialState, WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
 import { isQualifiedId } from '@/shared/mod'
 import { parseProjectile as parseProjectileDefinition } from '@/shared/content/gameplay'
-import { checkGraveRanges } from '@/shared/protocol'
+import { checkGraveRanges, GRAVE } from '@/shared/protocol'
 
 export interface SavedEntity {
     extensions?: SavedComponents
@@ -39,6 +40,8 @@ export interface SavedEntity {
     zombie?: Zombie
     projectile?: Projectile
     item?: Item
+    /** What stands in a cell: it has no position. */
+    gridItem?: GridItem
 }
 
 export interface ServerSaveSnapshot {
@@ -244,7 +247,7 @@ function parseTutorial(value: unknown): TutorialState {
 function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
-        ['index', 'plan', 'graves', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'],
+        ['index', 'plan', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'],
         ['nextWaveAtTick', 'accelerateAtTick', 'rowPicks', 'graveRiseAtTick', 'ruleState'],
         'server save.wave',
     )
@@ -253,21 +256,8 @@ function parseWave(value: unknown): WaveState {
         return { zombies: array(wave.zombies, `server save.wave.plan[${index}].zombies`).map(id => nonEmptyString(id, 'wave zombie ID')),
             ...(wave.flagWave === undefined ? {} : { flagWave: trueFlag(wave.flagWave, `server save.wave.plan[${index}].flagWave`) }) }
     })
-    const graves = array(source.graves, 'wave.graves').map(value => {
-        const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], 'grave')
-        const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
-            variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
-            offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY'),
-            ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, 'grave.special') }),
-            ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }),
-            ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, 'grave.team') }) }
-        checkGraveRanges(result, 'grave')
-        return result
-    })
-    if (new Set(graves.map(grave => `${grave.column}:${grave.row}`)).size !== graves.length) throw new TypeError('Duplicate graves')
     const result: WaveState = {
         index: nonNegativeInteger(source.index, 'server save.wave.index'),
-        graves,
         plan,
         zombieIds: array(source.zombieIds, 'server save.wave.zombieIds').map((id, index) =>
             positiveInteger(id, `server save.wave.zombieIds[${index}]`)),
@@ -324,15 +314,14 @@ function parseEventQueue(value: unknown): EventQueue {
 
 function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
     const name = `server save.entities[${index}]`
-    const source = optionalExact(value, ['entityId', 'position'], [
-        'plant', 'mowedPlant', 'plantAttack', 'zombie', 'projectile', 'item', 'extensions',
+    const source = optionalExact(value, ['entityId'], [
+        'position', 'plant', 'mowedPlant', 'plantAttack', 'zombie', 'projectile', 'item', 'gridItem', 'extensions',
     ], name)
     const entityId = positiveInteger(source.entityId, `${name}.entityId`)
     if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
-    const entity: SavedEntity = {
-        entityId,
-        position: parsePosition(source.position, `${name}.position`),
-    }
+    const entity: SavedEntity = { entityId }
+    if (source.position !== undefined) entity.position = parsePosition(source.position, `${name}.position`)
+    if (source.gridItem !== undefined) entity.gridItem = parseGridItem(source.gridItem, `${name}.gridItem`)
     if (source.plant !== undefined) entity.plant = parsePlant(source.plant, `${name}.plant`)
     if (source.mowedPlant !== undefined) {
         const mowed = optionalExact(source.mowedPlant, ['plant', 'ticks'], ['left'], `${name}.mowedPlant`)
@@ -353,6 +342,20 @@ function parseEntity(value: unknown, index: number, nextEntity: number): SavedEn
     }
     if (Object.keys(entity).length === 1) throw new TypeError(`${name} must contain a component`)
     return entity
+}
+
+/** A grave: the only thing of a cell there is. */
+function parseGridItem(value: unknown, name: string): GridItem {
+    const grave = optionalExact(value, ['typeId', 'column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], name)
+    if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
+    const result = { typeId: GRAVE, column: nonNegativeInteger(grave.column, `${name}.column`), row: nonNegativeInteger(grave.row, `${name}.row`),
+        variant: integer(grave.variant, `${name}.variant`), riseDelay: integer(grave.riseDelay, `${name}.riseDelay`),
+        offsetX: integer(grave.offsetX, `${name}.offsetX`), offsetY: integer(grave.offsetY, `${name}.offsetY`),
+        ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, `${name}.special`) }),
+        ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, `${name}.riseAtTick`) }),
+        ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, `${name}.team`) }) } as const
+    checkGraveRanges(result, name)
+    return result
 }
 
 function parsePosition(value: unknown, name: string): Position {

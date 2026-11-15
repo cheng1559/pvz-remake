@@ -1,4 +1,8 @@
 import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
+import { boardToLayer, type StageEvent } from '@/client/level/LevelStage'
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
+import { renderOrder } from '@/shared/content/renderOrder'
+import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
@@ -169,7 +173,9 @@ export class ZombieView implements ZombieViewInstance {
         this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
         this.shadowNode.active = this.draw.shadow !== false
         if (this.animation === zombie.animation) { this.applyParts(zombie); return }
-        this.show(zombie)
+        // The board draws a shield in its own colors, apart from the body's (applyHitFlash); a picture's shield takes the
+        // picture's color with the rest, as a packet's gray.
+        this.show(zombie, false)
         if (start) this.player!.seek(start * this.player!.durationSeconds)
     }
 
@@ -308,8 +314,9 @@ export class ZombieView implements ZombieViewInstance {
     /**
      * Shows the zombie's animation: its body changes to that clip where it is, blending from the pose it had, so that
      * what is on the zombie (a splat, a dropped helm) stays over it.
+     * `board`: with what the board colors a zombie by; off it, whoever shows the picture colors it whole.
      */
-    private show(zombie: ZombieSnapshot): void {
+    private show(zombie: ZombieSnapshot, board = true): void {
         // Landing and WalkIntoHouse both use StartWalkAnim(0), without blending the held pole into the walk.
         const landing = (this.animation === 'anim_jump' || this.presentation.vault && this.animation === 'anim_run' && zombie.hasPole === false)
             && (zombie.state === 'walking' || zombie.state === 'eating')
@@ -341,8 +348,10 @@ export class ZombieView implements ZombieViewInstance {
             hideOnFinish: false,
         })
         this.applyParts(zombie)
-        this.applyHitFlash(zombie)
-        this.applyColor(zombie, true)
+        if (board) {
+            this.applyHitFlash(zombie)
+            this.applyColor(zombie, true)
+        }
         this.syncRise(zombie)
     }
 
@@ -461,7 +470,123 @@ export class ZombieView implements ZombieViewInstance {
         return Object.values(this.clips()).find(value => value?.reanimId === reanimId)
     }
 
+    /** Zombie::AnimateChewSound and AnimateChewEffect: wall-nuts crumble softly, on the row's projectile layer. */
+    static readonly chewed: StageEvent = (stage, event, world) => {
+        const plant = world.plants.find(candidate => candidate.entityId === event.data.plantId)
+        const zombie = world.zombies.find(candidate => candidate.entityId === event.data.zombieId)
+        const presentation = plant ? stage.content.presentation.plants[plant.typeId] : undefined
+        const nut = presentation?.chewParticle !== undefined
+        stage.audio.chew(nut)
+        if (!nut || !zombie) return
+        const tint = presentation!.visual.tint
+        // At (37, 40) from the zombie. A zombie facing right mirrors it across its width, and its debris flies the other way.
+        const mirrored = zombie.team === 'plants'
+        stage.particle(presentation!.chewParticle!, zombie.x + mirrorX(37, ZOMBIE_WIDTH, mirrored), zombie.y + 40,
+            renderOrder('projectile', zombie.row), tint ? new Color(...tint) : undefined, mirrored)
+    }
+
+    /** Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer. */
+    static readonly rose: StageEvent = (stage, event, world) => {
+        const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
+        if (zombie) stage.particle(stage.riseParticle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
+    }
+
+    /** Zombie::DropHelm and DropShield: the armor falls as its effect, with its sound and reanim unless bypassed. */
+    static readonly armorDropped: StageEvent = (stage, event, world) => {
+        const entityId = event.data.entityId, slot = event.type === 'zombieHelmDropped' ? 'helm' : 'shield'
+        if (typeof entityId !== 'number' || event.data.silent === true) return
+        const node = stage.node(entityId), view = stage.zombie(entityId)
+        const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
+        const typeId = zombie?.typeId ?? stage.zombieType(entityId)
+        const armor = typeId ? stage.content.presentation.zombies[typeId]?.[slot] : undefined
+        if (!node || !armor) return
+        if (event.data.bypassed !== true) {
+            view?.armorDropped?.(slot)
+            stage.audio.sounds(armor.dropSounds)
+        }
+        const track = view?.getTrackWorldPosition(armor.track)
+        const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
+        // A zombie facing right sheds its armor the way it faces.
+        const mirrored = zombie?.team === 'plants'
+        ParticlePlayer.spawn({
+            parent: stage.layer, id: armor.effect,
+            x: local?.x ?? node.position.x + mirrorX(armor.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + armor.offset[1],
+            // One above the zombie.
+            renderOrder: stage.zombieOrder(zombie?.row ?? 0) + 1,
+            mirrored,
+        })
+    }
+
+    /** Zombie::DropHead, DropArm and DropFlag: the part flies off from where it is on the body, with its sounds. */
+    static readonly partDropped: StageEvent = (stage, event, world) => {
+        const { entityId, part } = event.data
+        if (typeof entityId !== 'number' || (part !== 'head' && part !== 'arm' && part !== 'flag')) return
+        const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
+        if (zombie) stage.showZombie(zombie, world)
+        const node = stage.node(entityId)
+        const drop = node && stage.content.presentation.zombies[stage.zombieType(entityId) ?? 'pvz:normal']?.drops[part]
+        if (!node || !drop) return
+        const track = stage.zombie(entityId)?.getTrackWorldPosition(drop.track)
+        const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
+        // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
+        // part's flight for a mind-controlled zombie.)
+        const mirrored = zombie?.team === 'plants', chilled = zombie?.chilled === true
+        ParticlePlayer.spawn({
+            parent: stage.layer,
+            id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
+            x: local?.x ?? node.position.x + mirrorX(drop.offset[0], ZOMBIE_WIDTH, mirrored),
+            y: local?.y ?? node.position.y + drop.offset[1],
+            // One above the zombie.
+            renderOrder: stage.zombieOrder(zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)) + 1,
+            // The pole vaulter's own head and a bare hand are swapped in.
+            spriteOverride: drop.image,
+            // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
+            tint: chilled ? new Color(75, 75, 255, 255) : undefined,
+            extraAdditive: chilled,
+            mirrored,
+        })
+        stage.audio.sounds(drop.sounds)
+    }
+
+    /**
+     * Zombie::ApplyBurn leaves a charred zombie that crumbles at its own pace, in the zombie's place among what is
+     * drawn. One that walked right crumbles flipped and 60 further right. The zombie is gone by then.
+     */
+    static readonly charred: StageEvent = (stage, event) => {
+        const { x, y, row, rate, entityId } = event.data
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
+        const mirrored = event.data.team === 'plants'
+        ZombieView.remains(stage, 'CharredZombie', 'pvz:zombie_charred', x + (mirrored ? CHARRED_MIRRORED_SHIFT : 0), y, stage.zombieOrder(row), entityId, rate, mirrored)
+    }
+
+    /** Zombie::MowDown for a zombie that is not flattened: REANIM_PUFF two above it and the mower's cloud one above. */
+    static readonly puffed: StageEvent = (stage, event) => {
+        const { x, y, row, zombieId } = event.data
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof zombieId !== 'number') return
+        const order = stage.zombieOrder(row)
+        stage.particle('pvz:mowercloud', x + 110, y, order + 1)
+        ZombieView.remains(stage, 'MowerPuff', 'pvz:puff', x - 73, y - 56, order + 2, zombieId, 1, false)
+    }
+
+    /** An animation played once where a zombie was, at a draw order among what is drawn with that zombie. */
+    private static remains(stage: Parameters<StageEvent>[0], name: string, reanim: string, x: number, y: number, order: number, entityId: number,
+        rate: number, mirrored: boolean): void {
+        const node = uiNode({ name, parent: stage.layer, position: boardToLayer(x, y), anchor: { x: 0, y: 1 } }).node
+        if (mirrored) node.setScale(-1, 1, 1)
+        stage.addScenery(node, order, entityId)
+        const end = () => { if (node.isValid) node.destroy() }
+        const player = node.addComponent(ReanimPlayer)
+        void player.load(reanim, stage.content.registry, stage.content.loader).then(() => {
+            if (node.isValid) player.play({ loop: false, rate, timeSeconds: 0, onFinish: end })
+        }).catch(error => {
+            end()
+            console.error(`[Level] Failed to play ${reanim}`, error)
+        })
+    }
 }
+
+/** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
+const CHARRED_MIRRORED_SHIFT = 60
 
 /** -1 without the armor or once it is gone, otherwise its damage index (0 whole, 1 below 2/3, 2 below 1/3). */
 function armorStage(health: number | undefined, armor: { readonly health: number } | undefined): number {

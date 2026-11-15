@@ -12,7 +12,7 @@ import {
 } from '@/client/level/LevelScene'
 import { uiNode } from '@/client/view/uiNode'
 import { menuApi } from '@/client/api/MenuApi'
-import type { EnabledMod, JsonValue } from '@/shared/protocol/index'
+import { levelStandsStill, type EnabledMod, type JsonValue } from '@/shared/protocol/index'
 import type { ServerSaveSnapshot } from '@/server/session/save'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
@@ -312,7 +312,7 @@ export function createLevelController(
         cancelCursor() {
             if (!current?.root.isValid) return false
             const snapshot = current.game.render()
-            if (snapshot.paused || snapshot.result !== 'playing' || snapshot.cursor.mode === 'none') return false
+            if (levelStandsStill(snapshot) || snapshot.result !== 'playing' || snapshot.cursor.mode === 'none') return false
             current.game.command({ type: 'clearCursor' })
             current.game.update(0)
             current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())

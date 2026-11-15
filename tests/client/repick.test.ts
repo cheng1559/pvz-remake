@@ -152,3 +152,13 @@ test('a chooser lays its pages out from the offer it has now, as /cheatseed turn
     chooser.layOut(false, ['pvz:pea'], [])
     assert.deepEqual([shown.at(-1), turner.node.active, added.length], [['pvz:pea:0'], false, count + 1 + entries.length])
 })
+
+test('the level stands still for a pause and for a repick alike, which is all the lawn asks', () => {
+    const playing = { paused: false, seedChooser: { availableSeeds: [], slots: 6, choosing: false } }
+    assert.equal(protocol.levelStandsStill({ paused: false }), false)
+    assert.equal(protocol.levelStandsStill(playing), false, 'a chooser that has started the level')
+    assert.equal(protocol.levelStandsStill({ ...playing, paused: true }), true)
+    assert.equal(protocol.levelStandsStill({ paused: false, seedChooser: { ...playing.seedChooser, choosing: true, repick: true } }), true)
+    assert.equal(protocol.levelStandsStill({ paused: false, seedChooser: { ...playing.seedChooser, repick: true } }), true,
+        "until the chooser has lifted out after its Let's Rock")
+})

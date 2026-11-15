@@ -1,5 +1,5 @@
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { GraveSnapshot, JsonObject } from '@/shared/protocol'
+import type { JsonObject } from '@/shared/protocol'
 import type { WavePlan } from '../rules/registry'
 
 export interface Item {
@@ -40,7 +40,7 @@ export interface TutorialState {
 
 export interface WaveState {
     index: number
-    graves: GraveSnapshot[]
+    /** When the lawn's graves raise their zombies after the last wave (updateGraveSpawns). */
     graveRiseAtTick?: number
     /** Every wave of this game, built when it starts and kept by saves. */
     plan: WavePlan[]

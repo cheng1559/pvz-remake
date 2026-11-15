@@ -135,13 +135,10 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
         register('music', f'pvz:{tune}', file)
     music.unlink()
 
-    print('[content] Cached plants and lawn mower', flush=True)
+    print('[content] Cached plants', flush=True)
     from .cache.plants import generate as plant_cache
-    from .cache.lawnmower import generate as mower_cache
     plant_cache()
-    mower_cache()
-    for name in ('plant_previews_cached', 'lawnmower_cached'):
-        register_sprite(assets / f'images/{name}.png')
+    register_sprite(assets / 'images/plant_previews_cached.png')
     file = assets / 'prefabs/ui/level.prefab'
     file.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / 'assets/resources/ui/level.prefab', file)

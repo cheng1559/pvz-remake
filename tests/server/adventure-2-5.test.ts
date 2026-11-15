@@ -44,8 +44,8 @@ test('2-5 opens on nine graves from column 4 with three ready packets, no sun an
     assert.deepEqual(levels.levels['pvz:adventure-2-5'].award, { kind: 'seed', id: 'pvz:hypnoshroom' })
     const server = play()
     const snapshot = server.snapshot()
-    assert.equal(snapshot.graves!.length, 9)
-    assert.ok(snapshot.graves!.every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
+    assert.equal(snapshot.gridItems!.length, 9)
+    assert.ok(snapshot.gridItems!.every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
     assert.deepEqual(snapshot.seedPackets.map(packet => [packet!.seedId, packet!.ready]),
         [['pvz:potatomine', true], ['pvz:gravebuster', true], ['pvz:cherrybomb', true]])
     assert.equal(snapshot.sun, 0)
@@ -105,6 +105,57 @@ function debug(server: IntegratedGameServer, command: string) {
     return server.drainCommandResults()[0].debug
 }
 
+test('with every grave being eaten and no zombie left, the award drops when the final group would have risen', () => {
+    const server = play({ randomSeed: 11 })
+    const wave = () => (server.save() as unknown as { wave: { ruleState: { countdown: number }, index: number } }).wave
+    for (let tick = 0; tick < 2000 * 9 && wave().index < server.snapshot().wave.total; tick++) whackAll(server, server.tick())
+    // The final wave has started: its group rises 300 ticks on. A grave buster on each grave by then, and the lawn cleared.
+    const graves = server.snapshot().gridItems!
+    for (const grave of graves) assert.equal(debug(server, `/plant gravebuster ${grave.row + 1} ${grave.column + 1}`)?.ok, true)
+    assert.equal(server.snapshot().plants.filter(plant => plant.typeId === 'pvz:gravebuster').length, graves.length)
+    let dropped = -1
+    for (let tick = 0; tick < 400 && dropped < 0; tick++) {
+        const snapshot = server.tick()
+        whackAll(server, snapshot)
+        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom')) dropped = tick
+        else assert.ok(wave().ruleState.countdown > 0, 'not before the final group is due')
+    }
+    assert.ok(dropped >= 0, 'the level does not stay stuck')
+    assert.equal(server.snapshot().zombies.length, 0)
+})
+
+test("a grave of the plants' side raises its zombies on that side, and the mallet only meets the other side's", () => {
+    const server = play({ randomSeed: 11 })
+    for (const grave of server.snapshot().gridItems!) assert.equal(debug(server, `/grave ${grave.row + 1} ${grave.column + 1} plants`)?.ok, true)
+    let snapshot = server.snapshot()
+    for (let tick = 0; tick < 2000 && !snapshot.zombies.length; tick++) snapshot = server.tick()
+    assert.ok(snapshot.zombies.length > 0)
+    assert.ok(snapshot.zombies.every(zombie => zombie.team === 'plants'), 'as the last wave raises them from such a grave')
+    // The mallet passes over the plants' own zombies.
+    server.drainEvents()
+    whackAll(server, snapshot)
+    const after = server.tick()
+    assert.deepEqual(after.zombies.map(zombie => zombie.entityId), snapshot.zombies.map(zombie => zombie.entityId))
+    assert.equal(server.drainEvents().some(event => event.type === 'zombieWhacked'), false)
+    // A plant of the other side takes the mallet's 900; one of its own does not.
+    for (const line of ['/plant wallnut 1 2 zombies', '/plant wallnut 5 2']) assert.equal(debug(server, line)?.ok, true, line)
+    const nuts = () => server.snapshot().plants.filter(plant => plant.typeId === 'pvz:wallnut')
+    for (const nut of nuts()) assert.equal(runCommand(server, { type: 'boardClick', x: Math.round(nut.x + 40), y: Math.round(nut.y + 60) }), undefined)
+    server.tick()
+    assert.deepEqual(nuts().map(nut => [nut.team, nut.health]).sort(), [['zombies', 4000 - 900], [undefined, 4000]].sort())
+    const blows = () => server.drainEvents().filter(event => event.type === 'plantWhacked').map(event => event.data.killed === true)
+    assert.deepEqual(blows(), [false], 'a blow it outlasts is no POW')
+    // The blow ends what has no more than its 900 left, and that is the POW.
+    const hostile = () => nuts().find(nut => nut.team === 'zombies')
+    for (let blow = 0; blow < 4; blow++) {
+        const nut = hostile()!
+        runCommand(server, { type: 'boardClick', x: Math.round(nut.x + 40), y: Math.round(nut.y + 60) })
+        server.tick()
+    }
+    assert.equal(hostile(), undefined, '3100, 2200, 1300, 400, gone')
+    assert.deepEqual(blows(), [false, false, false, true])
+})
+
 test('planting recharges the packet, and the award only drops once the final group has risen', () => {
     const server = play({ randomSeed: 11 })
     debug(server, '/sun set 500')
@@ -117,7 +168,7 @@ test('planting recharges the packet, and the award only drops once the final gro
     assert.equal(runCommand(server, { type: 'clearCursor' }), undefined)
     assert.equal(hammer(server), true)
     // Board::MouseDownWithPlant: a seed refused by CanPlantAt is dropped rather than kept in hand.
-    const grave = server.snapshot().graves![0]
+    const grave = server.snapshot().gridItems![0]
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:cherrybomb' }), undefined)
     assert.equal(runCommand(server, { type: 'placePlant', row: grave.row, column: grave.column }), 'cell-has-grave')
     assert.equal(server.snapshot().cursor.mode, 'none')
@@ -146,7 +197,7 @@ test('a game saved mid-wave restores its countdown and graves', () => {
     const saved = JSON.parse(JSON.stringify(server.save())) as JsonValue
     const restored = new IntegratedGameServer(definitions, levels)
     restored.restore(saved)
-    assert.deepEqual(restored.snapshot().graves, server.snapshot().graves)
+    assert.deepEqual(restored.snapshot().gridItems, server.snapshot().gridItems)
     run(server, 300)
     run(restored, 300)
     assert.deepEqual(restored.snapshot().zombies.map(zombie => [zombie.typeId, zombie.x, zombie.row]),

@@ -25,9 +25,9 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
         displayedAdvice: [],
         ...(blocked || !level.skySun ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
     })
+    if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,
-        graves: level.graves ? createGraves(world) : [],
         nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
         plan: planWaves(rules.draft(level, definitions), level, world.resources.get(RandomResource)),
         zombieIds: [],

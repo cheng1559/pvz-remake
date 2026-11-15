@@ -23,7 +23,7 @@ test('2-4 follows 2-3 with 20 waves of the allowed zombies over seven graves and
     assert.equal(levels.levels['pvz:adventure-2-3'].nextLevel, 'pvz:adventure-2-4')
     assert.equal(level.award.kind, 'unlock', 'COIN_ALMANAC is collected and shown, not a usable tool')
     // Board::InitLevel: AddGraveStones(5, 1), (6, 1), (7, 2), (8, 3) on levels 14 and 16.
-    const graves = start().save().wave.graves!
+    const graves = start().snapshot().gridItems!
     assert.deepEqual([5, 6, 7, 8].map(column => graves.filter(grave => grave.column === column).length), [1, 1, 2, 3])
     const allowed = new Set(['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:pole_vaulter', 'pvz:screendoor'])
     for (let seed = 1; seed <= 20; seed++) {

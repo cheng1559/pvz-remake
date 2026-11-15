@@ -1,7 +1,7 @@
 import type { BoardDefinition, LevelDefinition, ProjectileDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { EntityBehaviorState, JsonObject, Team } from '@/shared/protocol'
+import type { EntityBehaviorState, GraveSnapshot, GridItemSnapshot, JsonObject, Team } from '@/shared/protocol'
 
 export interface Position {
     x: number
@@ -202,6 +202,15 @@ export interface MowedPlant { plant: Plant, ticks: number, left?: true }
 export const MowedPlantComponent = defineComponent<MowedPlant>('pvz:mowed_plant')
 
 export const ZombieComponent = defineComponent<Zombie>('pvz:zombie')
+
+/**
+ * What stands in a cell without being a plant or a zombie (GridItemSnapshot), by its type: its cell is its own, so it
+ * has no position.
+ */
+export type GridItem = Omit<GridItemSnapshot, 'entityId'>
+export type Grave = Omit<GraveSnapshot, 'entityId'>
+
+export const GridItemComponent = defineComponent<GridItem>('pvz:grid_item')
 
 export const ProjectileComponent = defineComponent<Projectile>('pvz:projectile')
 

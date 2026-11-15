@@ -6,7 +6,7 @@ import { plantDefinition } from '@/client/plants/definitions'
 import type { ZombieDraw, ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
 import { type AnimationRandom, startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardZombieAnimation } from '@/shared/content/zombieAnimation'
-import type { ZombieSnapshot } from '@/shared/protocol/index'
+import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { EntityAttachments } from './EntityAttachments'
 
 /**
@@ -90,4 +90,15 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     view.shadowNode.setSiblingIndex(0)
     view.display(zombie, start)
     return { view: view as OffBoardZombie['view'], zombie }
+}
+
+/**
+ * A thing of a cell in `node`, as it stands off the board (a grave risen, for a packet's picture or a preview): drawn
+ * by its view. Nothing when its type has none.
+ */
+export async function createOffBoardGridItem(node: Node, typeId: GridItemSnapshot['typeId']): Promise<boolean> {
+    const game = await offBoardContent()
+    if (!node.isValid || !game.presentation.gridItems[typeId]) return false
+    await game.gridItemViews.create({ node, content: game, item: { typeId } })
+    return true
 }

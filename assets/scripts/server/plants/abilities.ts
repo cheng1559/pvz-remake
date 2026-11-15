@@ -22,6 +22,7 @@ import { hostilePlants } from '../combat/targets'
 import { destroyEatenPlant, detonatePlant, isPlantInedible } from './damage'
 import { plantSkipsTick } from './chill'
 import { plantAbilityAnimation } from './animation'
+import { graveAt } from '../level/graves'
 
 export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {
     if (definition.fuse) return { state: 'fuse', ticks: definition.fuse.ticks }
@@ -126,10 +127,8 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     case 'eating': {
                         // Plant::UpdateGraveBuster: the grave and the buster disappear together.
                         if (ability.ticks > 0) break
-                        const waves = world.resources.get(WaveResource)
-                        const graves = waves.graves
-                        waves.graves = graves.filter(grave => grave.row !== position.row || grave.column !== plant.column)
-                        const ate = waves.graves.length < graves.length
+                        const grave = graveAt(world, position.row, plant.column), ate = grave !== undefined
+                        if (grave) world.destroyEntity(grave.entity)
                         commands.destroyEntity(entity)
                         // `team`: a buster of the zombies' side, facing left, whose dirt turns round with it.
                         emitServerEvent(events, 'graveBusted', {

@@ -1,97 +1,68 @@
-import type { ProjectilePresentationDefinition } from '@/shared/content/presentation'
-import { Color, Component, Node, Sprite, Vec3 } from 'cc'
-import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
+import { Color, Component, Node, Vec3 } from 'cc'
+import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
-import { type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
-import { TICK_SECONDS } from '@/shared/protocol/index'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { ItemSnapshot, PlantSnapshot, ProjectileSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import { levelStandsStill, type PlantSnapshot, type ServerEvent, type WorldSnapshot, type ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
-import { MOWER_READY_X, mowerY, SUN_BANK_TARGET } from '@/shared/content/gameplay'
+import { MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
-import { plantDefinition } from '@/client/plants/definitions'
-import type { ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
+import type { ZombieViewInstance } from '@/client/zombies/ZombieView'
+import { ZombieView } from '@/client/zombies/ZombieView'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
-import { zombieDefinition } from '@/client/zombies/definitions'
-import type { PlantView } from '@/client/plants/PlantView'
-import { mirrorX, PLANT_WIDTH, ZOMBIE_WIDTH } from '@/shared/content/teams'
+import { PlantView } from '@/client/plants/PlantView'
+import { GraveBusterView } from '@/client/plants/GraveBusterView'
+import { ProjectileView } from '@/client/projectiles/ProjectileView'
+import type { GridItemView } from '@/client/gridItems/GridItemView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { boardCell, levelAwardSize } from './LevelGeometry'
+import { boardCell } from './LevelGeometry'
 import { LevelItemView } from './LevelItemView'
 import { EntityFlashes } from './EntityFlashes'
+import { boardToLayer, type LevelEntityAssets, type LevelStage, type StageEvent } from './LevelStage'
 
-const WIDTH = 800
-const HEIGHT = 600
-/** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
-const CHARRED_MIRRORED_SHIFT = 60
-/** Projectile::DrawShadow: a thrown projectile's shadow is half its size by this far up, and no smaller above. */
-const SHADOW_SHRINK_HEIGHT = 200
-/**
- * Projectile::DoImpact: where the splat of a projectile is from its middle, forward and down, by default. Flying into
- * what it hits (`shotOffset`), ahead at its front, as the pea's; coming down (`lobOffset`), where it is. A shot already
- * past the middle of the zombie, this far from its corner, splats as far back.
- */
-const SHOT_SPLAT: readonly [number, number] = [35, -2]
-const LOB_SPLAT: readonly [number, number] = [0, 0]
-const IMPACT_PAST = 60
-const ZOMBIE_MIDDLE = 40
-/** The original's driver for a mowed zombie, and its rate (ZOMBIE_MOWERED_ANIMATION_SPEED: 8 fps, advanced twice). */
-const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
-const MOWERED_RATE = 16 / 12
-/** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
-const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
-/** A plant turns about the middle of its base instead, from its top left in board units. */
-const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
+export type { LevelEntityAssets } from './LevelStage'
+
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
-type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
-type FontAsset = Awaited<ReturnType<FontRepository['load']>>
 
-export interface LevelEntityAssets {
-    /** Projectile sprites by projectile ID. */
-    projectileFrames: Record<string, SpriteAsset>
-    projectileShadowFrames: Record<string, SpriteAsset>
-    mowerFrame: SpriteAsset
-    mowerShadow: SpriteAsset
-    zombieSprites: ZombieViewSprites
-    wallnutCracked: [SpriteAsset, SpriteAsset]
-    loadPacketSprite: SeedPacketRenderArgs['loadSprite']
-    packetCostFont: FontAsset
+/**
+ * Who hears of an event: the views whose entity it is about, by what it is. What falls off a zombie is heard of before
+ * the frame's entities go, so it leaves from the zombie as it was; the rest once the frame is drawn.
+ */
+const BEFORE: Record<string, StageEvent> = {
+    zombieHelmDropped: ZombieView.armorDropped, zombieShieldDropped: ZombieView.armorDropped, zombiePartDropped: ZombieView.partDropped,
+}
+const AFTER: Record<string, StageEvent> = {
+    plantFiring: PlantView.fired, mineRising: PlantView.rose, plantExploded: PlantView.exploded, graveBusted: GraveBusterView.busted,
+    projectileImpact: ProjectileView.impact,
+    zombieChewedPlant: ZombieView.chewed, zombieRoseFromGrave: ZombieView.rose, zombieCharred: ZombieView.charred, zombiePuffed: ZombieView.puffed,
 }
 
-export class LevelEntityRenderer {
-    private readonly scenery = new Map<Node, number>()
-    addScenery(node: Node, order: number): void { this.scenery.set(node, order) }
+/**
+ * What is on the board, drawn by the views of its entities (plants, zombies, projectiles, the things of a cell, items):
+ * which exist, where each is drawn among the rest, and which view hears of an event. The views draw; the board is
+ * their stage.
+ */
+export class LevelEntityRenderer implements LevelStage {
+    /** Nodes of the layer that are no entity's, each with its place in the draw order. */
+    private readonly scenery = new Map<Node, { order: number, entityId?: number }>()
     private readonly entities = new Map<number, Node>()
-    private readonly collectStarts = new Map<number, { x: number, y: number }>()
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
-    private readonly projectileShadows = new Map<number, Node>()
-    private readonly projectileTrails = new Map<number, ParticlePlayer>()
     private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
     private readonly plantViews = new Map<number, PlantView>()
     private readonly zombies = new Map<number, ZombieViewInstance>()
     private readonly zombieTypes = new Map<number, string>()
+    private readonly projectiles = new Map<number, ProjectileView>()
+    private readonly gridItems = new Map<number, GridItemView>()
+    private readonly itemViews = new Map<number, LevelItemView>()
     private readonly flashes = new EntityFlashes()
-    /** This frame's plant glows, by entity, for the shovel highlight between frames. */
-    private plantFlashes = new Map<number, number>()
-    /** Plants drawn chilled, so that their players thaw with them. */
-    private readonly chilledPlants = new Set<number>()
     /** Each plant's and zombie's attachment list. */
     private readonly attachments = new Map<number, EntityAttachments>()
-    /** Charred remains and mower puffs keep their zombie's layer and ordering identity after removal. */
-    private readonly charred = new Map<Node, { order: number, entityId: number }>()
-    /** Mowed plants already frozen for their squashing. */
-    private readonly frozenPlants = new Set<number>()
-    private moweredLoad?: Promise<void>
-    private locator?: ReanimTrack
     /** The rows' waiting mowers, by row; one set off goes on as a projectile. */
     private readonly waitingMowers = new Map<number, Node>()
     private pointer?: { x: number; y: number }
@@ -99,21 +70,30 @@ export class LevelEntityRenderer {
     private highlightedPlant?: number
     /** Board particles share one node per drawing order, so a new one is appended rather than moved. */
     private readonly particleHolders = new Map<number, Node>()
-    private readonly itemViews = new Map<number, LevelItemView>()
 
     constructor(
         private readonly rootLayer: number,
-        private readonly content: LoadedContent,
-        private readonly animations: ClientAnimationRegistry,
-        private readonly assets: LevelEntityAssets,
-        private readonly entityLayer: Node,
+        readonly content: LoadedContent,
+        readonly animations: ClientAnimationRegistry,
+        readonly assets: LevelEntityAssets,
+        readonly layer: Node,
         private readonly coinLayer: Node,
         private readonly awardLayer: Node,
-        private readonly audio: LevelAudioPresenter,
-        private readonly intro: LevelIntro,
-        /** Zombie::RiseFromGrave: the level rule's `graveRise` or the presentation's `graves.rise`. */
-        private readonly riseParticle: string,
+        readonly audio: LevelAudioPresenter,
+        readonly intro: LevelIntro,
+        readonly riseParticle: string,
     ) {}
+
+    addScenery(node: Node, order: number, entityId?: number): void { this.scenery.set(node, { order, ...(entityId === undefined ? {} : { entityId }) }) }
+    plant(id: number): PlantView | undefined { return this.plantViews.get(id) }
+    zombie(id: number): ZombieViewInstance | undefined { return this.zombies.get(id) }
+    zombieType(id: number): string | undefined { return this.zombieTypes.get(id) }
+
+    showZombie(zombie: ZombieSnapshot, world: WorldSnapshot): void {
+        const at = boardToLayer(zombie.x, zombie.y)
+        this.entities.get(zombie.entityId)?.setPosition(at.x, at.y)
+        this.zombies.get(zombie.entityId)?.sync(zombie, world, this.flashes.zombie(zombie.entityId, world.gameplayTick))
+    }
 
     node(id: number): Node | undefined {
         return this.entities.get(id)
@@ -129,33 +109,18 @@ export class LevelEntityRenderer {
         if (this.lastSnapshot) this.syncPlantHighlight(this.lastSnapshot)
     }
 
+    /** The shovel's target under the pointer is lit (tools.use: neither a grave buster nor a plant on the zombies' side). */
     private syncPlantHighlight(snapshot: WorldSnapshot): void {
         if (!this.pointer && this.highlightedPlant === undefined) return
         const level = this.content.levels.levels[snapshot.levelId]
-        const cell = this.pointer && !snapshot.paused && snapshot.cursor.mode === 'tool'
+        const cell = this.pointer && !levelStandsStill(snapshot) && snapshot.cursor.mode === 'tool'
             ? boardCell(this.content.definitions.boards[level.board], this.pointer.x, this.pointer.y) : undefined
-        // The shovel's targets (tools.use): neither a grave buster nor a plant on the zombies' side.
         const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
             this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster &&
             plant.team !== 'zombies' && !plant.mowered)?.entityId : undefined
-        for (const id of new Set([this.highlightedPlant, highlighted])) {
-            if (id === undefined) continue
-            const flash = this.plantFlashes.get(id) ?? 0
-            const gray = Math.min(255, flash * 3)
-            const color = id === highlighted ? new Color(255, 255, 255, 196) : new Color(gray, gray, gray)
-            for (const player of this.entities.get(id)?.getComponentsInChildren(ReanimPlayer) ?? []) player.setExtraAdditiveDraw(id === highlighted || flash > 0, color)
-        }
+        if (highlighted !== this.highlightedPlant && this.highlightedPlant !== undefined) this.plantViews.get(this.highlightedPlant)?.highlight(false)
+        if (highlighted !== undefined) this.plantViews.get(highlighted)?.highlight(true)
         this.highlightedPlant = highlighted
-    }
-
-    /** The server flies sun to the layout's counter; ease toward the counter's actual position along the way. */
-    private collectOffset(item: ItemSnapshot): number {
-        const offset = this.sunBankOffset()
-        if (item.state !== 'collecting' || !offset) return 0
-        let start = this.collectStarts.get(item.entityId)
-        if (!start) this.collectStarts.set(item.entityId, start = { x: item.x, y: item.y })
-        const total = Math.hypot(start.x - SUN_BANK_TARGET.x, start.y - SUN_BANK_TARGET.y)
-        return total ? offset * (1 - Math.hypot(item.x - SUN_BANK_TARGET.x, item.y - SUN_BANK_TARGET.y) / total) : offset
     }
 
     syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number, approachTicks = 0): void {
@@ -241,99 +206,32 @@ export class LevelEntityRenderer {
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
+        // What the level started or was loaded with comes without what goes with coming.
+        const added = this.lastSnapshot !== undefined
         this.lastSnapshot = snapshot
         this.flashes.applyEvents(events, snapshot.gameplayTick)
-        for (const event of events) {
-            const armor = event.type === 'zombieHelmDropped' ? 'helm' : event.type === 'zombieShieldDropped' ? 'shield' : undefined
-            if (armor && typeof event.data.entityId === 'number' && event.data.silent !== true) {
-                this.dropArmor(event.data.entityId, snapshot, armor, event.data.bypassed === true)
-            }
-            if (event.type !== 'zombiePartDropped') continue
-            const entityId = event.data.entityId
-            const part = event.data.part
-            if (typeof entityId !== 'number' || (part !== 'head' && part !== 'arm' && part !== 'flag')) continue
-            const zombie = snapshot.zombies.find(candidate => candidate.entityId === entityId)
-            const node = this.entities.get(entityId)
-            if (zombie && node) {
-                node.setPosition(zombie.x - WIDTH / 2, HEIGHT / 2 - zombie.y)
-                this.zombies.get(entityId)?.sync(zombie, snapshot, this.flashes.zombie(entityId, snapshot.gameplayTick))
-            }
-            const row = zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)
-            this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true, zombie?.team === 'plants')
-        }
+        for (const event of events) BEFORE[event.type]?.(this, event, snapshot)
         for (const id of changes.removed) this.remove(id)
         for (const id of changes.added) {
             if (this.pending.has(id) || this.entities.has(id)) continue
-            const task = this.create(id, snapshot)
+            const task = this.create(id, snapshot, added)
                 .catch(error => console.error('[Level] Failed to create entity', error))
                 .finally(() => this.creationTasks.delete(id))
             this.creationTasks.set(id, task)
         }
-        for (const entity of snapshot.zombies) {
-            this.entities.get(entity.entityId)?.setPosition(entity.x - WIDTH / 2, HEIGHT / 2 - entity.y)
-        }
-        // A plant on the zombies' side faces left, mirrored across its 80 width; its projectiles fly left, mirrored
-        // across their hitbox.
-        for (const plant of snapshot.plants) {
-            const node = this.entities.get(plant.entityId), mirrored = plant.team === 'zombies'
-            if (plant.mowered) { if (node) this.syncMowedPlant(node, plant); continue }
-            node?.setPosition(plant.x + (mirrored ? PLANT_WIDTH : 0) - WIDTH / 2, HEIGHT / 2 - plant.y)
-            node?.setScale(mirrored ? -1 : 1, 1, 1)
-        }
-        for (const projectile of snapshot.projectiles) {
-            const node = this.entities.get(projectile.entityId), hitbox = this.content.definitions.projectiles[projectile.typeId]?.hitbox
-            const mirror = projectile.team === 'zombies' && hitbox ? 2 * hitbox.x + hitbox.width : 0
-            let x = projectile.x + mirror - WIDTH / 2, y = HEIGHT / 2 - projectile.y, angle = 0
-            if (projectile.facing !== undefined && hitbox) {
-                // It points the way it flies, turned about the middle of its picture (of its hitbox, drawn by an
-                // animation); mirrored, it already points left. The angle is counter-clockwise here, and the middle is
-                // from the node's corner, y up.
-                angle = (mirror ? Math.PI : 0) - projectile.facing
-                const middle = this.projectileMiddle(projectile.typeId)!
-                const middleX = (mirror ? -1 : 1) * middle.x, middleY = -middle.y
-                const cos = Math.cos(angle), sin = Math.sin(angle)
-                x += middleX - (cos * middleX - sin * middleY)
-                y += middleY - (sin * middleX + cos * middleY)
-            }
-            node?.setPosition(x, y)
-            if (node) node.angle = angle * 180 / Math.PI
-            node?.setScale(mirror ? -1 : 1, 1, 1)
-            this.placeProjectileParts(projectile)
-        }
-        for (const id of this.collectStarts.keys()) {
-            if (!snapshot.items.some(item => item.entityId === id && item.state === 'collecting')) this.collectStarts.delete(id)
-        }
-        for (const item of snapshot.items) {
-            const node = this.entities.get(item.entityId)
-            if (!node) continue
-            const award = item.typeId === this.content.levels.levels[snapshot.levelId].award.id
-            const size = levelAwardSize(this.content.levels.levels[snapshot.levelId].award)
-            // Only sun flies to the (possibly edge-pinned) sun counter.
-            const sun = this.content.definitions.items[item.typeId]?.kind !== 'money'
-            node.setPosition(
-                award ? item.x + size.width / 2 : item.x + 30 + (sun ? this.collectOffset(item) : 0),
-                award ? -(item.y + size.height / 2) : -(item.y + 30),
-            )
-            if (!award) node.setScale(item.scale, item.scale, 1)
-            else this.syncAwardEffect(node, item, this.content.levels.levels[snapshot.levelId].award.kind)
-            uiNode({ node, opacity: item.alpha })
-            this.itemViews.get(item.entityId)?.sync(item)
-        }
-        this.syncWaitingMowers(snapshot)
         const particle = (effect: string, x: number, y: number, tint?: Color, mirrored = false) => ParticlePlayer.spawn({
-            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: renderOrder('top'), tint, mirrored,
+            parent: this.layer, id: effect, ...boardToLayer(x, y), renderOrder: renderOrder('top'), tint, mirrored,
         })
-        this.plantFlashes = new Map(snapshot.plants.map(plant => [plant.entityId, this.flashes.plant(plant, snapshot.gameplayTick)]))
         for (const plant of snapshot.plants) {
-            // A mowed plant stays as it stood.
-            if (plant.mowered) continue
-            this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false, this.plantFlashes.get(plant.entityId)!)
-            this.syncPlantChill(plant)
+            const flash = this.flashes.plant(plant, snapshot.gameplayTick)
+            this.plantViews.get(plant.entityId)?.update(plant, snapshot, particle, flash)
         }
         this.syncPlantHighlight(snapshot)
-        for (const zombie of snapshot.zombies) {
-            this.zombies.get(zombie.entityId)?.sync(zombie, snapshot, this.flashes.zombie(zombie.entityId, snapshot.gameplayTick))
-        }
+        for (const zombie of snapshot.zombies) this.showZombie(zombie, snapshot)
+        for (const projectile of snapshot.projectiles) this.projectiles.get(projectile.entityId)?.sync(projectile)
+        this.syncGridItems()
+        for (const item of snapshot.items) this.itemViews.get(item.entityId)?.sync(item)
+        this.syncWaitingMowers(snapshot)
         for (const plant of snapshot.plants) {
             const node = this.entities.get(plant.entityId)
             if (node) node.active = this.plantViews.has(plant.entityId) && GameDebugSettings.perfPlantsVisible
@@ -342,489 +240,151 @@ export class LevelEntityRenderer {
             const node = this.entities.get(zombie.entityId)
             if (node) node.active = this.zombies.has(zombie.entityId) && GameDebugSettings.perfZombiesVisible
         }
-        this.playEvents(snapshot, events)
+        for (const event of events) {
+            AFTER[event.type]?.(this, event, snapshot)
+            if (event.type === 'plantPlaced') this.plantingEffect(snapshot, event)
+        }
         this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
+    }
+
+    /**
+     * The things of the cells as they are now: also between the level's frames, since graves rise by the intro's time.
+     * `effects`: `false` takes their state without what goes with getting there (a restored game).
+     */
+    syncGridItems(effects = true): void {
+        const world = this.lastSnapshot
+        for (const item of world?.gridItems ?? []) this.gridItems.get(item.entityId)?.sync(item, world!, effects)
     }
 
     private remove(id: number): void {
         this.pending.delete(id)
         this.plantViews.get(id)?.destroy?.()
         this.plantViews.delete(id)
-        this.chilledPlants.delete(id)
-        this.frozenPlants.delete(id)
         this.zombies.get(id)?.destroy()
         this.zombies.delete(id)
         this.zombieTypes.delete(id)
+        this.projectiles.get(id)?.destroy()
+        this.projectiles.delete(id)
+        this.gridItems.get(id)?.destroy?.()
+        this.gridItems.delete(id)
+        this.itemViews.delete(id)
         this.flashes.remove(id)
         this.attachments.delete(id)
-        this.itemViews.delete(id)
+        if (this.highlightedPlant === id) this.highlightedPlant = undefined
         this.entities.get(id)?.destroy()
         this.entities.delete(id)
-        this.removeProjectileParts(id)
     }
 
-    private playEvents(snapshot: WorldSnapshot, events: ServerEvent[]): void {
-        for (const event of events) {
-            if (event.type === 'plantFiring') {
-                const id = event.data.plantId
-                if (typeof id === 'number') this.plantViews.get(id)?.fire?.()
-            } else if (event.type === 'plantPlaced') {
-                const id = event.data.entityId
-                if (typeof id === 'number') this.spawnPlantingParticle(snapshot, id)
-            } else if (event.type === 'projectileImpact') {
-                // A piercing projectile flies on through what it hits (`through`): it stays, with the sound of its hit, and
-                // only splats where it comes down.
-                const id = event.data.projectileId, through = event.data.through === true
-                if (typeof id === 'number' && !through) this.entities.get(id)?.destroy()
-                const projectile = this.content.presentation.projectiles[String(event.data.typeId)]
-                const targetType = event.data.targetTypeId
-                // Projectile::PlayImpactSound: the armor worn before the hit sounds too, the shield in front of the helm,
-                // and some armor muffles the projectile's own sound unless that is loud.
-                const target = typeof targetType === 'string' ? this.content.presentation.zombies[targetType] : undefined
-                const armor = event.data.shield ? target?.shield : event.data.helm ? target?.helm : undefined
-                this.audio.sounds(armor?.impactSounds)
-                if (!armor?.muffles || projectile?.loud) this.audio.sounds(projectile?.impactSounds)
-                if (projectile?.impact && !through) this.spawnProjectileImpact(snapshot, event, projectile.impact)
-            } else if (event.type === 'zombieChewedPlant') {
-                this.playChew(snapshot, event)
-            } else if (event.type === 'plantExploded') {
-                this.playExplosion(event)
-            } else if (event.type === 'mineRising') {
-                const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
-                // Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own render order, so it draws after it.
-                if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, this.plantOrder(plant))
-            } else if (event.type === 'graveBusted') {
-                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80), 4 above itself;
-                // a buster of the zombies' side faces left, so its dirt does too, about the same middle.
-                const x = Number(event.data.x)
-                this.spawnBoardParticle('pvz:gravebusterdie', x + 40, Number(event.data.y) + 80, renderOrder('plant', Number(event.data.row), plantRenderOffset(x)) + 4,
-                    undefined, event.data.team === 'zombies')
-            } else if (event.type === 'zombieRoseFromGrave') {
-                const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.entityId)
-                // Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer.
-                if (zombie) this.spawnBoardParticle(this.riseParticle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
-            } else if (event.type === 'zombieCharred') {
-                this.spawnCharred(event)
-            } else if (event.type === 'zombiePuffed') {
-                this.spawnMowerPuff(event)
-            }
-        }
+    /** Board::DoPlantingEffects: the dirt of a plant put down, over everything. */
+    private plantingEffect(snapshot: WorldSnapshot, event: ServerEvent): void {
+        const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
+        if (plant) ParticlePlayer.spawn({ parent: this.layer, id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74), renderOrder: renderOrder('top') })
     }
 
-    /**
-     * A plant chilled by a hostile snow pea draws blue and animates at half speed. Its players are revisited every
-     * frame while chilled, since a view may start a new one (a changed body animation), and once more when it thaws.
-     */
-    private syncPlantChill(plant: PlantSnapshot): void {
-        const chilled = (plant.chilledTicks ?? 0) > 0
-        if (!chilled && !this.chilledPlants.has(plant.entityId)) return
-        if (chilled) this.chilledPlants.add(plant.entityId)
-        else this.chilledPlants.delete(plant.entityId)
-        for (const player of this.entities.get(plant.entityId)?.getComponentsInChildren(ReanimPlayer) ?? []) player.setChilled(chilled)
-    }
-
-    /** Zombie::AnimateChewSound and AnimateChewEffect: wall-nuts crumble softly. */
-    private playChew(snapshot: WorldSnapshot, event: ServerEvent): void {
-        const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.plantId)
-        const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.zombieId)
-        const presentation = plant ? this.content.presentation.plants[plant.typeId] : undefined
-        const nut = presentation?.chewParticle !== undefined
-        this.audio.chew(nut)
-        if (nut && zombie) {
-            const tint = presentation!.visual.tint
-            // Zombie::AnimateChewEffect: on the row's projectile layer, at (37, 40) from the zombie. A zombie facing right
-            // mirrors it across its width, and its debris flies the other way.
-            const mirrored = zombie.team === 'plants'
-            this.spawnBoardParticle(presentation!.chewParticle!, zombie.x + mirrorX(37, ZOMBIE_WIDTH, mirrored), zombie.y + 40,
-                renderOrder('projectile', zombie.row), tint ? new Color(...tint) : undefined, mirrored)
-        }
-    }
-
-    /** Plant::DoSpecial: cherry bombs and explode-o-nuts say "Powie", mines say "Spudow". */
-    private playExplosion(event: ServerEvent): void {
-        const { x, y, row } = event.data
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
-        const explosion = typeof event.data.typeId === 'string' ? this.content.presentation.plants[event.data.typeId]?.explosion : undefined
-        if (!explosion) return
-        // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
-        const offset = event.data.team === 'zombies' ? -explosion.x : explosion.x
-        this.spawnBoardParticle(explosion.effect, x + offset, y, renderOrder(explosion.layer, row))
-    }
-
-    /** Zombie::ApplyBurn leaves a charred zombie that crumbles at its own pace. */
-    private spawnCharred(event: ServerEvent): void {
-        const { x, y, row, rate, entityId } = event.data
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
-        // Zombie::ApplyBurn: a zombie walking right crumbles flipped and 60 further right.
-        const mirrored = event.data.team === 'plants'
-        const mirrorShift = mirrored ? CHARRED_MIRRORED_SHIFT : 0
-        const node = uiNode({ name: 'CharredZombie', parent: this.entityLayer, position: { x: x + mirrorShift - WIDTH / 2, y: HEIGHT / 2 - y }, anchor: { x: 0, y: 1 } }).node
-        if (mirrored) node.setScale(-1, 1, 1)
-        this.charred.set(node, { order: this.zombieOrder(row), entityId })
-        const player = node.addComponent(ReanimPlayer)
-        void player.load('pvz:zombie_charred', this.content.registry, this.content.loader).then(() => {
-            if (!node.isValid) return
-            player.play({ loop: false, rate, timeSeconds: 0, onFinish: () => { this.charred.delete(node); if (node.isValid) node.destroy() } })
-        }).catch(error => {
-            this.charred.delete(node)
-            if (node.isValid) node.destroy()
-            console.error('[Level] Failed to play charred zombie', error)
-        })
-    }
-
-    /** Zombie::MowDown for a zombie that is not flattened: REANIM_PUFF two above it and the mower's cloud one above. */
-    private spawnMowerPuff(event: ServerEvent): void {
-        const { x, y, row, zombieId } = event.data
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof zombieId !== 'number') return
-        const order = this.zombieOrder(row)
-        this.spawnBoardParticle('pvz:mowercloud', x + 110, y, order + 1)
-        const node = uiNode({ name: 'MowerPuff', parent: this.entityLayer, position: { x: x - 73 - WIDTH / 2, y: HEIGHT / 2 - (y - 56) }, anchor: { x: 0, y: 1 } }).node
-        this.charred.set(node, { order: order + 2, entityId: zombieId })
-        const end = () => { this.charred.delete(node); if (node.isValid) node.destroy() }
-        const player = node.addComponent(ReanimPlayer)
-        void player.load('pvz:puff', this.content.registry, this.content.loader).then(() => {
-            if (node.isValid) player.play({ loop: false, rate: 1, timeSeconds: 0, onFinish: end })
-        }).catch(error => {
-            end()
-            console.error('[Level] Failed to play the mower puff', error)
-        })
-    }
-
-    /** LawnMoweredZombie's locator, once loaded. */
-    private moweredLocator(): ReanimTrack | undefined {
-        this.moweredLoad ??= new ReanimRepository(this.content.registry, this.content.loader).load(MOWERED_REANIM)
-            .then(({ data }) => { this.locator = data.tracks.find(track => track.id === 'locator') })
-            .catch(error => console.error('[Level] Failed to load the mowed animation', error))
-        return this.locator
-    }
-
-    /**
-     * A plant a mower crushed (PlantSnapshot.mowered) is squashed with a zombie's LawnMoweredZombie, at the server's
-     * time: frozen as it stood, without its shadow, its node turns and scales by the locator's pose about the middle of
-     * its base as a zombie does about its foot, tipping the way the mower ran, then flattens.
-     */
-    private syncMowedPlant(node: Node, plant: PlantSnapshot): void {
-        if (!this.frozenPlants.has(plant.entityId) && this.plantViews.has(plant.entityId)) {
-            this.frozenPlants.add(plant.entityId)
-            for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
-            const shadow = node.getChildByName('PlantShadow')
-            if (shadow) shadow.active = false
-        }
-        const track = this.moweredLocator()
-        const pose = track && sampleReanimTrack(track, plant.mowered!.ticks * TICK_SECONDS * MOWERED_RATE)
-        if (!pose) return
-        const facing = plant.team === 'zombies' ? -1 : 1, tip = plant.mowered!.left ? -1 : 1
-        const origin = { x: plant.x + (facing < 0 ? PLANT_WIDTH : 0) - WIDTH / 2, y: HEIGHT / 2 - plant.y }
-        const foot = { x: plant.x + MOWED_PLANT_FOOT.x - WIDTH / 2, y: HEIGHT / 2 - plant.y - MOWED_PLANT_FOOT.y }
-        const linear = (degrees: number) => {
-            const turn = degrees * Math.PI / 180, cos = Math.cos(turn), sin = Math.sin(turn)
-            return (x: number, y: number) => ({ x: cos * pose.scaleX * x - sin * pose.scaleY * y, y: sin * pose.scaleX * x + cos * pose.scaleY * y })
-        }
-        // The locator moves the zombie's foot (MOWERED_ZOMBIE_FOOT); that carries over to the plant's, mirrored tipping left.
-        const zombieFoot = linear(-pose.skewX)(MOWERED_ZOMBIE_FOOT.x, MOWERED_ZOMBIE_FOOT.y)
-        const carry = { x: tip * (zombieFoot.x + pose.x - MOWERED_ZOMBIE_FOOT.x), y: zombieFoot.y - pose.y - MOWERED_ZOMBIE_FOOT.y }
-        const body = linear(-tip * pose.skewX)(origin.x - foot.x, origin.y - foot.y)
-        node.setPosition(foot.x + body.x + carry.x, foot.y + body.y + carry.y)
-        node.angle = -tip * pose.skewX
-        node.setScale(facing * pose.scaleX, pose.scaleY, 1)
-    }
-
-    /** Zombie::DropHelm and DropShield: the armor falls as its effect, with its sound and reanim unless bypassed. */
-    private dropArmor(entityId: number, snapshot: WorldSnapshot, slot: 'helm' | 'shield', bypassed: boolean): void {
-        const node = this.entities.get(entityId)
-        const zombie = snapshot.zombies.find(candidate => candidate.entityId === entityId)
-        const typeId = zombie?.typeId ?? this.zombieTypes.get(entityId)
-        const helm = typeId ? this.content.presentation.zombies[typeId]?.[slot] : undefined
-        if (!node || !helm) return
-        if (!bypassed) {
-            this.zombies.get(entityId)?.armorDropped?.(slot)
-            this.audio.sounds(helm.dropSounds)
-        }
-        const track = this.zombies.get(entityId)?.getTrackWorldPosition(helm.track)
-        const local = track ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(track) : null
-        // A zombie facing right sheds its armor the way it faces.
-        const mirrored = zombie?.team === 'plants'
-        ParticlePlayer.spawn({
-            parent: this.entityLayer, id: helm.effect,
-            x: local?.x ?? node.position.x + mirrorX(helm.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + helm.offset[1],
-            // Zombie::DropHelm and DropShield: one above the zombie.
-            renderOrder: this.zombieOrder(zombie?.row ?? 0) + 1,
-            mirrored,
-        })
-    }
-
-    /**
-     * What goes with a projectile apart from it, so that neither turns as it does, each at its offset from the
-     * projectile and mirrored across the hitbox of one flying left. Its shadow lies on the ground under it: as far down
-     * as the projectile flies above the ground (ProjectileSnapshot.height), and smaller the higher it has been thrown
-     * (`lift`). Its trail leaves from the projectile itself, at its render order; no save keeps it, so it starts here,
-     * again after a load.
-     */
-    private placeProjectileParts(projectile: ProjectileSnapshot): void {
-        const hitbox = this.content.definitions.projectiles[projectile.typeId]?.hitbox
-        const { shadow, plantShadow, trail, layer } = this.content.presentation.projectiles[projectile.typeId] ?? {}
-        if (!hitbox) return
-        const mirrored = projectile.team === 'zombies', top = HEIGHT / 2 - projectile.y
-        const left = (x: number) => projectile.x + (mirrored ? 2 * hitbox.x + hitbox.width - x : x) - WIDTH / 2
-        const shadowNode = this.projectileShadows.get(projectile.entityId), offset = shadow?.offset ?? plantShadow
-        if (shadowNode && offset) {
-            const scale = (shadow?.scale ?? 1) * SHADOW_SHRINK_HEIGHT / (Math.min(projectile.lift ?? 0, SHADOW_SHRINK_HEIGHT) + SHADOW_SHRINK_HEIGHT)
-            shadowNode.setPosition(left(offset.x), top - offset.y - (projectile.height ?? 0))
-            shadowNode.setScale(mirrored ? -scale : scale, scale, 1)
-        }
-        if (trail && this.entities.get(projectile.entityId)?.isValid) {
-            let particles = this.projectileTrails.get(projectile.entityId)
-            if (!particles?.isValid) this.projectileTrails.set(projectile.entityId, particles = ParticlePlayer.spawn({ parent: this.entityLayer, ...trail, unsaved: true }))
-            particles.node.setPosition(left(trail.x), top + trail.y)
-            particles.node.setScale(mirrored ? -1 : 1, 1, 1)
-            particles.renderOrder = renderOrder(layer ?? 'projectile', projectile.row)
-        }
-    }
-
-    private removeProjectileParts(id: number): void {
-        this.projectileShadows.get(id)?.destroy()
-        this.projectileShadows.delete(id)
-        // Projectile::Die: its trail stays where it ended, launching no more, until its last particle is gone.
-        const trail = this.projectileTrails.get(id)
-        if (trail?.isValid) trail.stop()
-        this.projectileTrails.delete(id)
-    }
-
-    /**
-     * Board coordinates; recycled under a shared holder per render order. `mirrored`: the effect plays flipped left to
-     * right, for a zombie or plant facing the other way.
-     */
-    spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color, mirrored = false): void {
-        let parent = this.particleHolders.get(renderOrder)
+    /** Recycled under a shared holder per draw order. */
+    particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored = false): void {
+        let parent = this.particleHolders.get(order)
         if (!parent) {
-            parent = uiNode({ name: `BoardParticles-${renderOrder}`, parent: this.entityLayer, layer: this.entityLayer.layer }).node
-            this.particleHolders.set(renderOrder, parent)
+            parent = uiNode({ name: `BoardParticles-${order}`, parent: this.layer, layer: this.layer.layer }).node
+            this.particleHolders.set(order, parent)
         }
-        ParticlePlayer.spawn({ parent, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder, tint, mirrored, recycle: true })
+        ParticlePlayer.spawn({ parent, id: effect, ...boardToLayer(x, y), renderOrder: order, tint, mirrored, recycle: true })
     }
 
-    private async create(id: number, snapshot: WorldSnapshot): Promise<void> {
-        const entity = allEntities(snapshot).find(value => value.entityId === id)
-        if (!entity) return
-        this.pending.add(id)
-        const item = snapshot.items.find(value => value.entityId === id)
+    /** `added`: it came during play. */
+    private async create(id: number, snapshot: WorldSnapshot, added: boolean): Promise<void> {
         const plant = snapshot.plants.find(value => value.entityId === id)
         const zombie = snapshot.zombies.find(value => value.entityId === id)
-        const isAward = item?.typeId === this.content.levels.levels[snapshot.levelId].award.id
+        const projectile = snapshot.projectiles.find(value => value.entityId === id)
+        const item = snapshot.items.find(value => value.entityId === id)
+        const gridItem = snapshot.gridItems?.find(value => value.entityId === id)
+        const positioned = plant ?? zombie ?? projectile
+        if (!positioned && !item && !gridItem) return
+        this.pending.add(id)
+        const level = this.content.levels.levels[snapshot.levelId]
         const node = uiNode({
-            name: `Entity-${id}`, parent: isAward ? this.awardLayer : item ? this.coinLayer : this.entityLayer,
+            name: `Entity-${id}`, parent: item ? item.typeId === level.award.id ? this.awardLayer : this.coinLayer : this.layer,
             anchor: { x: 0, y: 1 },
-            position: item ? undefined : { x: entity.x - WIDTH / 2, y: HEIGHT / 2 - entity.y },
+            // An item and a thing of a cell are placed by their views.
+            position: positioned && boardToLayer(positioned.x, positioned.y),
             // Factories stay hidden until their first sync applies the current position and pose.
             active: !plant && !zombie,
         }).node
         this.entities.set(id, node)
+        // A view made for an entity that went meanwhile goes with it.
+        const keep = <View extends { destroy?(): void }>(views: Map<number, View>, view: View): boolean => {
+            if (node.isValid) views.set(id, view)
+            else view.destroy?.()
+            return node.isValid
+        }
         try {
-            const projectile = snapshot.projectiles.find(value => value.entityId === id)
             if (projectile) {
-                const presentation = this.content.presentation.projectiles[projectile.typeId]
-                if (presentation?.reanim) await this.createAnimatedProjectile(node, presentation.reanim)
-                else {
-                    const frame = this.assets.projectileFrames[projectile.typeId]
-                    if (!frame) throw new Error(`Projectile sprite is not installed: ${projectile.typeId}`)
-                    uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-                }
-                // Its shadow is apart from it, on the ground: its own picture, or the board's plant shadow about a point.
-                const frame = presentation?.shadow ? this.assets.projectileShadowFrames[projectile.typeId] : presentation?.plantShadow ? this.assets.mowerShadow : undefined
-                if (presentation?.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${projectile.typeId}`)
-                if (frame && node.isValid) {
-                    this.projectileShadows.set(id, uiNode({ name: `ProjectileShadow-${id}`, parent: this.entityLayer,
-                        ...(presentation.shadow ? { anchor: { x: 0, y: 1 } } : {}), sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node)
-                }
-                this.placeProjectileParts(projectile)
+                keep(this.projectiles, await this.content.projectileViews.create({ node, stage: this, typeId: projectile.typeId, projectile }))
             } else if (plant) {
                 const attachments = new EntityAttachments()
                 const view = await this.content.plantViews.create({ node, attachments, content: this.content, animations: this.animations,
                     assets: { shadow: this.assets.mowerShadow, wallnutCracked: this.assets.wallnutCracked },
-                    plant, tick: snapshot.gameplayTick })
-                if (node.isValid) {
-                    this.plantViews.set(id, view)
-                    this.attachments.set(id, attachments)
-                } else view.destroy?.()
+                    plant, tick: snapshot.gameplayTick, stage: this })
+                if (keep(this.plantViews, view)) this.attachments.set(id, attachments)
             } else if (zombie) {
                 const attachments = new EntityAttachments()
                 const view = await this.content.zombieViews.create({ node, attachments, content: this.content, animations: this.animations,
-                    shadowParent: this.entityLayer, assets: { shadow: this.assets.mowerShadow, sprites: this.assets.zombieSprites },
+                    shadowParent: this.layer, assets: { shadow: this.assets.mowerShadow, sprites: this.assets.zombieSprites },
                     zombie, tick: snapshot.gameplayTick })
-                if (node.isValid) {
-                    this.zombies.set(id, view)
+                if (keep(this.zombies, view)) {
                     this.zombieTypes.set(id, zombie.typeId)
                     this.attachments.set(id, attachments)
-                } else view.destroy()
-            } else if (isAward) {
-                await this.createAward(node, snapshot)
+                }
+            } else if (gridItem) {
+                const view = await this.content.gridItemViews.create({ node, content: this.content, item: gridItem, stage: this, added })
+                if (keep(this.gridItems, view)) this.syncGridItems()
             } else {
-                const definition = this.content.presentation.items[item!.typeId]
-                if (!definition) throw new Error(`Item presentation is not installed: ${item!.typeId}`)
-                const view = await LevelItemView.create(node, definition, this.content)
+                const view = await LevelItemView.create(node, item!, { content: this.content, assets: this.assets, layer: this.rootLayer, level,
+                    sunBankOffset: () => this.sunBankOffset() })
                 if (node.isValid) { this.itemViews.set(id, view); view.sync(item!) }
             }
         } catch (error) {
             if (node.isValid) node.destroy()
             this.entities.delete(id)
-            this.removeProjectileParts(id)
             throw error
         } finally {
             this.pending.delete(id)
         }
     }
 
-    /**
-     * Coin::Update adds the bouncy arrow once an award lands (CoinInitialize only sets mNeedsBouncyArrow):
-     * the seed packet glow for seed packets (PARTICLE_SEED_PACKET), the pickup arrow for every other award.
-     * Collecting removes it (LevelEndPresenter); a restored game brings back its saved one.
-     */
-    private syncAwardEffect(node: Node, item: ItemSnapshot, kind: string): void {
-        const back = node.getChildByName('AwardBackEffects')
-        if (!back || !item.landed || item.state !== 'available') return
-        const id = kind === 'seed' ? 'pvz:seedpacket' : 'pvz:awardpickuparrow'
-        if (back.children.some(child => child.getComponent(ParticlePlayer)?.id === id)) return
-        ParticlePlayer.spawn({ parent: back, id, x: 0, y: 60, z: -1 })
-    }
-
-    private async createAward(node: Node, snapshot: WorldSnapshot): Promise<void> {
-        const award = this.content.levels.levels[snapshot.levelId].award
-        const size = levelAwardSize(award)
-        uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
-        // The pickup arrow or seed packet glow is added here once the award lands (syncAwardEffect).
-        uiNode({ name: 'AwardBackEffects', parent: node })
-        if (award.kind !== 'seed') {
-            const visual = this.content.presentation.awards?.[award.id]
-            if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
-            const frame = await new SpriteRepository(this.content.registry, this.content.loader).load(visual.sprite)
-            if (!node.isValid) return
-            const image = uiNode({ name: 'AwardImage', parent: node,
-                position: { x: visual.x + frame.originalSize.width / 2 - size.width / 2,
-                    y: -(visual.y + frame.originalSize.height / 2 - size.height / 2) } }).node
-            uiNode({ parent: image, anchor: { x: 0.5, y: 0.5 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-                .node.setScale(visual.scale, visual.scale, 1)
-            return
-        }
-        const cost = this.content.definitions.seeds[award.id].sunCost
-        const seedType = plantDefinition(this.content.presentation, award.id).visual.seedType
-        SeedPacketRenderer.drawSeedPacket({
-            definitions: this.content.presentation,
-            name: 'FinalSeedPacketNormal', parent: node, layer: this.rootLayer, x: 0, y: 0,
-            seedType, cost, costFont: this.assets.packetCostFont,
-            loadSprite: this.assets.loadPacketSprite,
-        })
-        const large = SeedPacketRenderer.drawSeedPacket({
-            definitions: this.content.presentation,
-            name: 'FinalSeedPacketLarge', parent: node, layer: this.rootLayer, x: 0, y: 0,
-            scale: 2, seedType, cost, costFont: this.assets.packetCostFont,
-            loadSprite: this.assets.loadPacketSprite,
-        })
-        large.active = false
-    }
-
-    /** `mirrored`: a zombie facing right, whose part flies off the way it faces, as its body is drawn. */
-    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number, chilled: boolean,
-        mirrored: boolean): void {
-        const node = this.entities.get(entityId)
-        if (!node) return
-        const typeId = this.zombieTypes.get(entityId) ?? 'pvz:normal'
-        const drop = zombieDefinition(this.content.presentation, typeId).drops[part]
-        if (!drop) return
-        const trackPosition = this.zombies.get(entityId)?.getTrackWorldPosition(drop.track)
-        const localPosition = trackPosition ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(trackPosition) : null
-        ParticlePlayer.spawn({
-            parent: this.entityLayer,
-            id: mowered ? drop.moweredEffect ?? drop.effect : drop.effect,
-            x: localPosition?.x ?? node.position.x + mirrorX(drop.offset[0], ZOMBIE_WIDTH, mirrored),
-            y: localPosition?.y ?? node.position.y + drop.offset[1],
-            // Zombie::DropHead and DropArm: one above the zombie.
-            renderOrder: this.zombieOrder(row) + 1,
-            // Zombie::DropHead and DropArm swap in the pole vaulter's own head and a bare hand.
-            spriteOverride: drop.image,
-            // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
-            tint: chilled ? new Color(75, 75, 255, 255) : undefined,
-            extraAdditive: chilled,
-            // The original keeps the part's flight for a mind-controlled zombie; here it follows the zombie's facing.
-            mirrored,
-        })
-        this.audio.sounds(drop.sounds)
-    }
-
-    private spawnPlantingParticle(snapshot: WorldSnapshot, entityId: number): void {
-        const plant = snapshot.plants.find(candidate => candidate.entityId === entityId)
-        if (!plant) return
-        ParticlePlayer.spawn({
-            parent: this.entityLayer, id: "pvz:planting",
-            x: plant.x + 41 - WIDTH / 2, y: HEIGHT / 2 - plant.y - 74,
-            // Board::DoPlantingEffects: RENDER_LAYER_TOP.
-            renderOrder: renderOrder('top'),
-        })
-    }
-
-    /** The middle of a projectile from its corner: of its picture, or of its hitbox for an animated one. It turns about it. */
-    private projectileMiddle(typeId: string): { x: number, y: number } | undefined {
-        const picture = this.assets.projectileFrames[typeId]?.originalSize, hitbox = this.content.definitions.projectiles[typeId]?.hitbox
-        return picture ? { x: picture.width / 2, y: picture.height / 2 } : hitbox && { x: hitbox.x + hitbox.width / 2, y: hitbox.y + hitbox.height / 2 }
-    }
-
-    private spawnProjectileImpact(snapshot: WorldSnapshot, event: ServerEvent, impact: NonNullable<ProjectilePresentationDefinition['impact']>): Node | undefined {
-        const targetId = event.data.targetId
-        const x = event.data.x
-        const y = event.data.y
-        if (typeof x !== 'number' || typeof y !== 'number') return
-        const zombie = snapshot.zombies.find(candidate => candidate.entityId === targetId)
-        // A splat on a zombie follows it; one on a plant, on the ground, or the board's own (`free`) stays on the board.
-        const attached = !impact.free && typeof targetId === 'number' && event.data.target !== 'plant'
-        const parent = attached ? this.entities.get(targetId) : this.entityLayer
-        if (!parent) return
-        const typeId = String(event.data.typeId), hitbox = this.content.definitions.projectiles[typeId]?.hitbox, middle = this.projectileMiddle(typeId)
-        if (!hitbox || !middle) return
-        // One that flew into what it hit splats by its shot offset; one that came down on it from above (`above`), or
-        // only on the ground, by its lob offset.
-        const shot = typeof targetId === 'number' && event.data.above !== true
-        const [forward, down] = shot ? impact.shotOffset ?? SHOT_SPLAT : impact.lobOffset ?? LOB_SPLAT
-        // A projectile flying left splats at its mirrored front, across its hitbox.
-        const mirrored = event.data.team === 'zombies', mirror = 2 * hitbox.x + hitbox.width
-        const past = shot && zombie && (mirrored ? x + mirror < zombie.x + ZOMBIE_WIDTH - ZOMBIE_MIDDLE : x > zombie.x + ZOMBIE_MIDDLE)
-        const offsetX = mirrorX(middle.x + forward - (past ? IMPACT_PAST : 0), mirror, mirrored), offsetY = middle.y + down
-        const [top, bottom] = impact.yRange ?? [-Infinity, Infinity]
-        const position = attached && zombie
-            ? { x: x + offsetX - zombie.x, y: -Math.max(top, Math.min(bottom, y + offsetY - zombie.y)) }
-            : { x: x + offsetX - WIDTH / 2, y: HEIGHT / 2 - y - offsetY }
-        // The board's own is drawn over what flies in its row (the original's mRenderOrder + 1), so over the row's zombies.
-        const row = event.data.row
-        const order = impact.free && typeof row === 'number'
-            ? { renderOrder: renderOrder(this.content.presentation.projectiles[typeId]?.layer ?? 'projectile', row) + 1 } : {}
-        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, ...order, seed: event.eventId >>> 0, recycle: true }).node
-    }
-
-    /** Mods can append scenery to the same ordering pass as entities and particles. */
+    /** Everything of the layer that has a place in the draw order, with it. */
     private collectLayerEntries(snapshot: WorldSnapshot): { node: Node, order: number, entityId?: number }[] {
         const entries: { node: Node, order: number, entityId?: number }[] = []
-        for (const [node, order] of this.scenery) {
-            if (node.isValid) entries.push({ node, order })
+        for (const [node, entry] of this.scenery) {
+            if (node.isValid) entries.push({ node, ...entry })
             else this.scenery.delete(node)
         }
         const add = (entityId: number, order: number) => {
             const node = this.entities.get(entityId)
             if (node?.isValid) entries.push({ node, order, entityId })
         }
+        // Shadows lie on the ground layer, under every row's plants and zombies.
+        const shadow = (node: Node | undefined, entity: { entityId: number, row: number }) => {
+            if (node?.isValid) entries.push({ node, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
+        }
+        const { presentation } = this.content
         for (const entity of snapshot.plants) add(entity.entityId, this.plantOrder(entity))
         for (const entity of snapshot.zombies) {
             add(entity.entityId, this.zombieOrder(entity.row))
-            // Shadows lie on the ground layer, under every row's plants and zombies.
-            const shadow = this.zombies.get(entity.entityId)?.shadowNode
-            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
+            shadow(this.zombies.get(entity.entityId)?.shadowNode, entity)
         }
         for (const entity of snapshot.projectiles) {
-            add(entity.entityId, renderOrder(this.content.presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row))
-            const shadow = this.projectileShadows.get(entity.entityId)
-            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
+            add(entity.entityId, renderOrder(presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row))
+            shadow(this.projectiles.get(entity.entityId)?.shadowNode, entity)
         }
-        for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
-        for (const [row, node] of this.waitingMowers) entries.push({ node, order: renderOrder('lawnMower', row) })
-        for (const child of this.entityLayer.children) {
+        for (const entity of snapshot.gridItems ?? []) {
+            const { layer, offset } = presentation.gridItems[entity.typeId]
+            add(entity.entityId, renderOrder(layer, entity.row, offset))
+        }
+        const mower = presentation.projectiles[this.content.levels.levels[snapshot.levelId].lawnMower]?.layer ?? 'projectile'
+        for (const [row, node] of this.waitingMowers) entries.push({ node, order: renderOrder(mower, row) })
+        for (const child of this.layer.children) {
             const particle = child.getComponent(ParticlePlayer)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
         }
@@ -836,14 +396,14 @@ export class LevelEntityRenderer {
      * Plant::CalcRenderOrder: within a row, a plant further left draws later, so the chomper's head covers the plant to
      * its right; rolling bowling nuts draw on the projectile layer.
      */
-    private plantOrder(entity: PlantSnapshot): number {
+    plantOrder(entity: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number {
         // Plant::UpdateBowling changes draw order before incrementing the downward target row: a plant rolling down
         // is drawn with the row above.
         const row = entity.row - (Number(entity.behaviorState?.direction) > 0 ? 1 : 0)
         return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', row, plantRenderOffset(entity.x))
     }
 
-    private zombieOrder(row: number): number {
+    zombieOrder(row: number): number {
         return renderOrder('zombie', row, ZOMBIE_RENDER_OFFSET)
     }
 
@@ -853,7 +413,7 @@ export class LevelEntityRenderer {
         entries.sort((left, right) => left.order - right.order || (left.entityId ?? Infinity) - (right.entityId ?? Infinity))
         // Unlisted children (an entity leaving the snapshot) keep their place; comparing by index instead would move every
         // node after one of them. Most nodes are already in place, so the engine is called only for the rest.
-        const layer = this.entityLayer, children = layer.children, listed = new Set<Node>()
+        const layer = this.layer, children = layer.children, listed = new Set<Node>()
         for (const { node } of entries) listed.add(node)
         let index = 0
         for (const { node } of entries) {
@@ -864,36 +424,21 @@ export class LevelEntityRenderer {
         }
     }
 
-    /** A projectile drawn by a looping animation, like a running mower. */
-    private async createAnimatedProjectile(node: Node, reanim: NonNullable<ProjectilePresentationDefinition['reanim']>): Promise<void> {
-        const animationNode = uiNode({ name: 'ProjectileAnimation', parent: node, position: { x: reanim.x, y: reanim.y }, anchor: { x: 0, y: 1 } }).node
-        animationNode.setScale(reanim.scale, reanim.scale, 1)
-        const player = animationNode.addComponent(ReanimPlayer)
-        await player.load(reanim.id, this.content.registry, this.content.loader)
-        if (node.isValid) player.play({ loop: true, rate: reanim.rate })
-    }
-
-    /** Each row's waiting mower: the cached picture on the plants' shadow, where the intro rolls it in. */
+    /** Each row's waiting mower, where the intro rolls it in: the level's mower before it is set off, drawn by its view. */
     private syncWaitingMowers(snapshot: WorldSnapshot): void {
         for (const [row, node] of this.waitingMowers) {
             if (snapshot.mowerRows.includes(row)) continue
             node.destroy()
             this.waitingMowers.delete(row)
         }
+        const level = this.content.levels.levels[snapshot.levelId]
         for (const row of snapshot.mowerRows) {
             if (this.waitingMowers.has(row)) continue
-            const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
-            const node = uiNode({ name: `WaitingMower-${row}`, parent: this.entityLayer, anchor: { x: 0, y: 1 },
-                position: { x: MOWER_READY_X - WIDTH / 2, y: HEIGHT / 2 - mowerY(board, row) } }).node
-            uiNode({ name: 'MowerShadow', parent: node, position: { x: 36, y: -65, z: -1 }, sprite: { frame: this.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-            uiNode({ name: 'CachedMower', parent: node, position: { x: -14, y: -19 }, anchor: { x: 0, y: 1 }, sprite: { frame: this.assets.mowerFrame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            const node = uiNode({ name: `WaitingMower-${row}`, parent: this.layer, anchor: { x: 0, y: 1 },
+                position: boardToLayer(MOWER_READY_X, mowerY(this.content.definitions.boards[level.board], row)) }).node
             this.waitingMowers.set(row, node)
+            void this.content.projectileViews.create({ node, stage: this, typeId: level.lawnMower })
+                .catch(error => console.error('[Level] Failed to draw a waiting mower', error))
         }
     }
-}
-
-type Positioned = { entityId: number, x: number, y: number }
-
-function allEntities(snapshot: WorldSnapshot): Positioned[] {
-    return [...snapshot.plants, ...snapshot.zombies, ...snapshot.projectiles, ...snapshot.items]
 }

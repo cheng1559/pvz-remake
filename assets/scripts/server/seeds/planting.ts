@@ -2,7 +2,6 @@ import type { SeedAvailability } from '@/shared/protocol/index'
 import { graveAllowsPlanting, seedTeam, type Team } from '@/shared/content/teams'
 import type { SeedDefinition } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
-import { graveAt } from '@/shared/protocol/index'
 import {
     EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
     type SeedBankState, ZombieComponent,
@@ -18,7 +17,7 @@ import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
 import { clearCursor } from './cursor'
-import { placeGrave } from '../level/graves'
+import { graveAt, placeGrave } from '../level/graves'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -118,7 +117,7 @@ export const planting = {
         if (seed.kind === 'grave') {
             // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave (the plants there die);
             // on the plants' side when its packet is, so its zombies rise there too.
-            if (graveAt(world.resources.get(WaveResource).graves, row, column)) return refuseCell('cell-has-grave')
+            if (graveAt(world, row, column)) return refuseCell('cell-has-grave')
             placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
@@ -138,7 +137,7 @@ export const planting = {
         const occupiedEntity = planting.findPlantAt(session, row, column)
         if (occupiedEntity !== undefined) return refuseCell('cell-occupied')
         // Board::CanPlantAt: graves block planting, except that a grave buster needs one, of the other side.
-        const grave = graveAt(world.resources.get(WaveResource).graves, row, column)
+        const grave = graveAt(world, row, column)?.grave
         const onGrave = grave !== undefined
         if (onGrave && seed.placement === 'grave' && !graveAllowsPlanting(seed.placement, team, grave)) return refuseCell('cell-has-own-grave')
         if (onGrave !== (seed.placement === 'grave')) {

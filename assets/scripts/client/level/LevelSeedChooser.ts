@@ -79,6 +79,7 @@ export class LevelSeedChooser {
      */
     repickTick?: number
     private bankShift = 0
+    private bankRise = 0
     private repickFinished = false
     /** The almanac and store buttons, which a repick leaves out. */
     private readonly pageButtons: UIButton[] = []
@@ -346,16 +347,18 @@ export class LevelSeedChooser {
 
     /** Board::GetSeedPacketPositionX, 8px below the bank's top, from where the bank stands now. */
     private slotPosition(slot: number): { x: number, y: number } {
-        return { x: seedPacketX(slot, this.slots) + this.bankShift, y: 8 }
+        return { x: seedPacketX(slot, this.slots) + this.bankShift, y: 8 - this.bankRise }
     }
 
     /**
-     * How far the bank stands right of its choosing place (SEED_BANK_OFFSET_X), while a repick slides it there and back:
-     * the cards resting in it and its empty slots ride along (SeedChooserScreen::GetSeedPositionInBank reads mSeedBank->mX).
+     * How far the bank stands right of its choosing place (SEED_BANK_OFFSET_X), while a repick slides it there and back,
+     * and how far above its place (`rise`), while one brings a hidden bank down: the cards resting in it and its empty
+     * slots ride along (SeedChooserScreen::GetSeedPositionInBank reads mSeedBank->mX and mY).
      */
-    setBankShift(shift: number): void {
-        if (shift === this.bankShift) return
+    setBankShift(shift: number, rise = 0): void {
+        if (shift === this.bankShift && rise === this.bankRise) return
         this.bankShift = shift
+        this.bankRise = rise
         for (const choice of this.choices) if (choice.slot >= 0 && !choice.motion) {
             const destination = this.slotPosition(choice.slot)
             choice.view.node.setPosition(destination.x, -destination.y)

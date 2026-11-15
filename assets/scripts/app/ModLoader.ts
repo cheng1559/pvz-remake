@@ -10,6 +10,8 @@ import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { createServerModHost } from '@/server/session/createModHost'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
+import { ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
+import { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
 import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
 import { modManager } from '@/client/content/ModManager'
 import { importModModule, mountMod } from '@/client/content/ModRuntime'
@@ -32,6 +34,8 @@ async function loadMods() {
     const gameplay = new GameplayRegistry()
     const plantViews = new PlantViewRegistry()
     const zombieViews = new ZombieViewRegistry()
+    const projectileViews = new ProjectileViewRegistry()
+    const gridItemViews = new GridItemViewRegistry()
     const clientContent = new ArchiveContentRegistry()
     const manifests: ModManifest[] = []
     const loadedIds = new Set<string>()
@@ -45,7 +49,7 @@ async function loadMods() {
         const missing = manifest.dependencies.find(dependency => !loadedIds.has(dependency.id))
         if (missing) { fail(manifest.id, 'dependencies', `Dependency failed to load: ${missing.id}`); continue }
         const rollback = [gameplayDefinitions.checkpoint(), presentationDefinitions.checkpoint(), gameplay.checkpoint(),
-            plantViews.checkpoint(), zombieViews.checkpoint(), clientContent.checkpoint()]
+            plantViews.checkpoint(), zombieViews.checkpoint(), projectileViews.checkpoint(), gridItemViews.checkpoint(), clientContent.checkpoint()]
         const hosts: ModHost[] = []
         let stage = 'mount'
         try {
@@ -68,7 +72,7 @@ async function loadMods() {
                 const module = await importModModule(manifest.id, stage) as ModModule
                 // The host exposes game/UI modules that also consume this loader.
                 const { ClientModAssets, createClientModHost } = await import('@/client/content/createModHost')
-                const host = createClientModHost(manifest.id, presentationDefinitions, clientContent, plantViews, zombieViews)
+                const host = createClientModHost(manifest.id, presentationDefinitions, clientContent, { plants: plantViews, zombies: zombieViews, projectiles: projectileViews, gridItems: gridItemViews })
                 hosts.push(host)
                 await module.register({ host, assets: new ClientModAssets(manifest, mod.files) })
             }
@@ -86,7 +90,11 @@ async function loadMods() {
                 if (!view || !zombieViews.has(view.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
             }
             for (const id of Object.keys(content.definitions.projectiles)) {
-                if (!presentation.projectiles[id]) throw new Error(`Projectile presentation is not installed: ${id}`)
+                const view = presentation.projectiles[id]
+                if (!view || !projectileViews.has(view.view ?? 'projectile')) throw new Error(`Projectile presentation is not installed: ${id}`)
+            }
+            for (const [id, item] of Object.entries(presentation.gridItems)) {
+                if (!gridItemViews.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
             }
             manifests.push(manifest)
             loadedIds.add(manifest.id)
@@ -100,7 +108,7 @@ async function loadMods() {
     Object.freeze(gameplayDefinitions.sources)
     Object.freeze(presentationDefinitions.sources)
     if (manifests.length) console.info(`[Mods] Loaded ${manifests.map(mod => mod.id).join(', ')}`)
-    return { manifests, gameplay, plantViews, zombieViews, clientContent,
+    return { manifests, gameplay, plantViews, zombieViews, projectileViews, gridItemViews, clientContent,
         gameplayDefinitions: gameplayDefinitions.sources, presentationDefinitions: presentationDefinitions.sources }
 }
 

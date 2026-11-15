@@ -5,7 +5,7 @@ import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { WaveResource, type WaveState } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
-import { updateGraveSpawns } from './graves'
+import { graves, updateGraveSpawns } from './graves'
 import { levelRule } from '../rules/registry'
 import { isEnemyZombie } from '@/shared/content/teams'
 
@@ -92,7 +92,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             })
             waves.index++
             // Board::SpawnZombieWave: after the last wave every grave on the lawn opens, not only the level's own.
-            if (waves.index === waves.plan.length && waves.graves.length && level.definition.graveZombies?.length) waves.graveRiseAtTick = tick + 200
+            if (waves.index === waves.plan.length && graves(world).length && level.definition.graveZombies?.length) waves.graveRiseAtTick = tick + 200
             waves.zombieIds = zombieIds
             const waveHealthStart = zombieIds.reduce((total, entity) => addWaveHealth(total, world.get(entity, ZombieComponent)!), 0)
             waves.healthToNextWave = (0.5 + world.resources.get(RandomResource).nextFloat() * 0.15) * waveHealthStart

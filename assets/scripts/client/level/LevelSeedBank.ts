@@ -5,7 +5,7 @@ import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import type { GameCommand, SeedPacketSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol'
+import { levelStandsStill, type GameCommand, type SeedPacketSnapshot, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
 import type { SeedDefinition } from '@/shared/content/gameplay'
 import type { SeedPacketSeedType } from '@/shared/content/presentation'
 import type { LevelHudOptions } from './LevelHudPresenter'
@@ -215,7 +215,7 @@ export class LevelSeedBank {
                     introComplete &&
                     snapshot.phase === 'gameplay' &&
                     snapshot.result === 'playing' &&
-                    !snapshot.paused
+                    !levelStandsStill(snapshot)
             }
             entry.view.sync({
                 gameStarted: introComplete,

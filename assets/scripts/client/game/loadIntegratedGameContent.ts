@@ -35,12 +35,18 @@ export async function loadIntegratedGameContent() {
     plantViews.freeze()
     const zombieViews = loadedMods.zombieViews
     zombieViews.freeze()
+    const { projectileViews, gridItemViews } = loadedMods
+    projectileViews.freeze()
+    gridItemViews.freeze()
     for (const id of Object.keys(definitions.plants)) {
         const definition = presentation.plants[id]
         if (!definition?.view || !plantViews.has(definition.view)) throw new Error(`Plant presentation is not installed: ${id}`)
     }
     for (const id of Object.keys(definitions.projectiles)) {
-        if (!presentation.projectiles[id]) throw new Error(`Projectile presentation is not installed: ${id}`)
+        if (!presentation.projectiles[id] || !projectileViews.has(presentation.projectiles[id].view ?? 'projectile')) throw new Error(`Projectile presentation is not installed: ${id}`)
+    }
+    for (const [id, item] of Object.entries(presentation.gridItems)) {
+        if (!gridItemViews.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
     }
     for (const id of Object.keys(definitions.zombies)) {
         const definition = presentation.zombies[id]
@@ -51,6 +57,6 @@ export async function loadIntegratedGameContent() {
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
         definitions, presentation, levels, levelPrefab, registry, loader,
-        contentHash: manifest.contentHash, loadedMods, enabledMods, animations, plantViews, zombieViews,
+        contentHash: manifest.contentHash, loadedMods, enabledMods, animations, plantViews, zombieViews, projectileViews, gridItemViews,
     }
 }

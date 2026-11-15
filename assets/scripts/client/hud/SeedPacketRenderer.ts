@@ -1,3 +1,5 @@
+import { createOffBoardGridItem } from '@/client/view/offBoard'
+import { GRAVE } from '@/shared/protocol/index'
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
@@ -10,6 +12,7 @@ import { ZombiePreview } from './ZombiePreview'
 import { PacketGrave } from './PacketGrave'
 import { SEED_PACKET_WIDTH } from './packetPicture'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
+import { supersampleSprites } from '@/client/render/KernelBatch'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
 
@@ -61,10 +64,6 @@ export interface SeedPacketRenderArgs {
     costFont?: BitmapFontAssets | null
 }
 
-/** The plain grave's cell in the tombstone atlases (5 looks a row): its third row (other rows' graves), first look. */
-const GRAVE_CELL = 10
-/** A grave seed's packet picture: the grave at about a plant's size, centred, a little above the picture window's floor. */
-const GRAVE_PACKET = { x: 8, y: 13, scale: 0.38 }
 
 async function loadPacketSprite(name: string): Promise<SpriteFrame> {
     const frame = await modResources.asset(name, SpriteFrame)
@@ -180,30 +179,30 @@ export class SeedPacketRenderer {
     }
 
     /**
-     * A grave as it stands once risen (GridItem::DrawGraveStone): the plain stone (the atlases' third row, first look)
-     * and its mound, from (x, y) at `scale`. On the lawn its corner is 4 left of and 9 above its cell.
+     * A grave as it stands once risen, drawn by its view (the plain stone), from (x, y) at `scale`. On the lawn its
+     * corner is 4 left of and 9 above its cell.
      */
-    static drawGrave(parent: Node, layer: number | undefined, loadSprite: (name: string) => Promise<SpriteFrame>,
-        x: number, y: number, scale: number): Node {
+    static drawGrave(parent: Node, layer: number | undefined, x: number, y: number, scale: number, drawn?: () => void): Node {
         const node = uiNode({ name: 'Grave', parent, layer, anchor: { x: 0, y: 1 }, position: { x, y: -y } }).node
         node.setScale(scale, scale, 1)
-        for (const atlas of ['tombstones', 'tombstone_mounds']) {
-            const image = uiNode({ name: atlas, parent: node, layer, anchor: { x: 0, y: 1 }, sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false } })
-            void loadSprite(atlas).then(frame => {
-                if (!isValid(image.node, true)) return
-                image.sprite!.spriteFrame = getAtlasFrame(frame, GRAVE_CELL, frame.originalSize.width / 5, frame.originalSize.height / 4, 5)
-            }).catch(error => console.error('[SeedPacket] Failed to load the grave', error))
-        }
+        // `drawn`: its pictures are there, for what colors them.
+        void createOffBoardGridItem(node, GRAVE).then(() => { if (isValid(node, true)) drawn?.() })
+            .catch(error => console.error('[SeedPacket] Failed to draw the grave', error))
         return node
     }
 
-    /** A grave seed's packet: the grave in the picture's place (GRAVE_PACKET), in a holder the packet's width that a packet of the other side turns round. */
+    /**
+     * A grave seed's packet: the grave in the picture's place (`seedPackets.grave`), drawn by its view in a holder the
+     * packet's width, which a packet of the other side turns round. Much smaller than its art, it is supersampled as a
+     * plant's picture is.
+     */
     private static _drawGraveIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
         const size = scale > 1 ? scale : 1
         const holder = uiNode({ name: 'PacketGrave', parent: root, layer: args.layer, anchor: { x: 0, y: 1 },
             size: { width: SEED_PACKET_WIDTH * size, height: SEED_PACKET_HEIGHT * size } }).node
-        holder.addComponent(PacketGrave)
-        this.drawGrave(holder, args.layer, args.loadSprite ?? loadPacketSprite, GRAVE_PACKET.x * size, GRAVE_PACKET.y * size, GRAVE_PACKET.scale * size)
+        const { offsetX, offsetY, scale: graveScale } = args.definitions.seedPackets.grave
+        holder.addComponent(PacketGrave).initialize(drawn =>
+            this.drawGrave(holder, args.layer, offsetX * size, offsetY * size, graveScale * size, () => { supersampleSprites(holder); drawn() }))
     }
 
     /**

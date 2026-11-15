@@ -5,7 +5,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { LevelRulePresentation, PresentationSound } from '@/shared/content/presentation'
-import type { ServerEvent, WorldSnapshot } from '@/shared/protocol'
+import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
 import type { LevelAudioPresenter } from '../LevelAudioPresenter'
 import type { LevelRuleView, LevelRuleViewContext } from './LevelRuleView'
 
@@ -50,13 +50,14 @@ export class WhackAZombieView implements LevelRuleView {
     private pointer?: { x: number; y: number }
     /** A touch swing keeps the mallet where it came down until the swing ends. */
     private touchSwing?: { x: number; y: number }
-    private bankY: number
+    /** Where the bank starts once the intro is over: above the screen. From then on its place is its node's. */
+    private bankY?: number
     private lastTick?: number
 
     private constructor(
         private readonly config: WhackPresentation,
         private readonly kind: string,
-        private readonly layer: Node,
+        private readonly effects: Node,
         private readonly bank: Node,
         private readonly audio: LevelAudioPresenter,
         private readonly isSun: (typeId: string) => boolean,
@@ -69,7 +70,7 @@ export class WhackAZombieView implements LevelRuleView {
         const { content } = context
         const config = parseConfig(context.config)
         const isSun = (typeId: string) => content.definitions.items[typeId] !== undefined && content.definitions.items[typeId].kind !== 'money'
-        const view = new WhackAZombieView(config, context.kind, context.cursorLayer, context.bank, context.audio, isSun, context.bankHeight)
+        const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, context.audio, isSun, context.bankHeight)
         const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 }, active: false }).node
         node.once(Node.EventType.NODE_DESTROYED, () => UIHoverManager.setIdleCursor('default'))
         const hammer = node.addComponent(ReanimPlayer)
@@ -99,21 +100,22 @@ export class WhackAZombieView implements LevelRuleView {
 
     sync(snapshot: WorldSnapshot, events: readonly ServerEvent[], introComplete: boolean): void {
         for (const event of events) {
-            if (event.type !== 'zombieWhacked') continue
+            // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.
+            if (event.type !== 'zombieWhacked' && event.type !== 'plantWhacked') continue
             const helm = event.data.helm === undefined ? undefined : String(event.data.helm)
             if (helm !== undefined) { this.audio.sounds(this.config.helmSounds[helm]); continue }
             const { bonk } = this.config
             this.audio.sounds(bonk.sounds)
+            if (event.data.killed !== true) continue
             const x = Number(event.data.x) + bonk.x, y = Number(event.data.y) + bonk.y
-            ParticlePlayer.spawn({ parent: this.layer, id: bonk.particle, x, y: -y })
-            this.hammer?.node.setSiblingIndex(this.layer.children.length - 1)
+            ParticlePlayer.spawn({ parent: this.effects, id: bonk.particle, x, y: -y })
         }
         this.syncBank(snapshot, introComplete)
         const hammer = this.hammer
         if (!hammer?.node.isValid) return
         const point = this.touchSwing ?? this.pointer
         // The mallet is the cursor only in play, while nothing else is held and until the award puts it away.
-        const visible = !!point && introComplete && snapshot.phase === 'gameplay' && snapshot.result === 'playing' && !snapshot.paused &&
+        const visible = !!point && introComplete && snapshot.phase === 'gameplay' && snapshot.result === 'playing' && !levelStandsStill(snapshot) &&
             snapshot.cursor.mode === 'none' && this.hammerOut(snapshot)
         hammer.node.active = visible
         // Board::UpdateCursor: over nothing clickable, the mallet replaces the system cursor.
@@ -134,15 +136,18 @@ export class WhackAZombieView implements LevelRuleView {
         return snapshot.sun > 0 || snapshot.items.some(item => item.state === 'collecting' && this.isSun(item.typeId))
     }
 
-    /** Challenge::Update: the hidden bank comes down 2 pixels a tick once there is sun, banked or on its way. */
+    /**
+     * Challenge::Update: the hidden bank comes down 2 pixels a tick once there is sun, banked or on its way. Something
+     * else may move it meanwhile (a repick brings it down to choose into and puts it back): its place is its node's.
+     */
     private syncBank(snapshot: WorldSnapshot, introComplete: boolean): void {
         if (!introComplete) return
         const ticks = this.lastTick === undefined ? 0 : Math.max(0, snapshot.gameplayTick - this.lastTick)
         this.lastTick = snapshot.gameplayTick
-        if (this.bankY > 0 && this.hasSun(snapshot)) {
-            this.bankY = Math.max(0, this.bankY - this.config.seedBankSlide * ticks)
-        }
+        let y = this.bankY ?? this.bank.position.y
+        this.bankY = undefined
+        if (y > 0 && this.hasSun(snapshot)) y = Math.max(0, y - this.config.seedBankSlide * ticks)
         this.bank.active = true
-        this.bank.setPosition(this.bank.position.x, this.bankY)
+        this.bank.setPosition(this.bank.position.x, y)
     }
 }

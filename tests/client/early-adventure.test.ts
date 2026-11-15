@@ -3,13 +3,17 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
+import * as protocol from '@/shared/protocol'
+
+// The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
+const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
 
 function loadLevelModule(name: string, modules: Record<string, unknown>) {
     const exports: Record<string, any> = {}
     const code = transpileModule(readFileSync(`assets/scripts/client/level/${name}.ts`, 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? shared[id] ?? {} })
     return exports
 }
 

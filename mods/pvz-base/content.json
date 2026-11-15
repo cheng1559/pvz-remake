@@ -17,6 +17,7 @@
     "conveyor": "presentation/definitions/conveyor.json",
     "shovel": "presentation/definitions/shovel.json",
     "graves": "presentation/definitions/graves.json",
+    "gridItems": "presentation/definitions/grid-items.json",
     "rules": "presentation/definitions/rules.json",
     "dave": "presentation/definitions/dave.json",
     "mainMenu": "presentation/definitions/main-menu.json",
@@ -14934,27 +14935,6 @@
         "offset": [
           2,
           0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "pvz:lawnmower_cached": {
-        "file": "assets/images/lawnmower_cached.png",
-        "width": 90,
-        "height": 100,
-        "rect": [
-          8,
-          2,
-          70,
-          57
-        ],
-        "offset": [
-          -2,
-          19.5
         ],
         "borders": [
           0,

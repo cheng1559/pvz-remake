@@ -60,21 +60,21 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     }
     assert.equal(game.debugCommand('/grave 3 2').ok, true)
     assert.equal(game.debugCommand('/grave 1 9').ok, true, 'debug commands can use inactive board rows')
-    assert.deepEqual(game.render().graves!.map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
+    assert.deepEqual(game.render().gridItems!.map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
         'they rise from the current gameplay tick')
     assert.equal(game.render().paused, true)
     assert.equal(game.render().gameplayTick, tick)
     assert.equal(game.debugCommand('/grave 3 2 plants').ok, true, 'a grave in the cell is replaced')
-    assert.equal(game.render().graves!.find(grave => grave.row === 2 && grave.column === 1)!.team, 'plants', "`plants`: on the plants' side")
+    assert.equal(game.render().gridItems!.find(grave => grave.row === 2 && grave.column === 1)!.team, 'plants', "`plants`: on the plants' side")
     assert.equal(game.debugCommand('/grave 3 2 zombies').ok, true)
-    assert.equal(game.render().graves!.find(grave => grave.row === 2 && grave.column === 1)!.team, undefined)
+    assert.equal(game.render().gridItems!.find(grave => grave.row === 2 && grave.column === 1)!.team, undefined)
     assert.equal(game.debugCommand('/plant wallnut 3 3').ok, true)
     assert.equal(game.debugCommand('/grave 3 3').ok, true, 'plants do not stop a debug grave')
     assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'Challenge::GraveDangerSpawnGraveAt kills the plants in the cell')
     assert.equal(game.debugCommand('/plant bowling-wallnut 2 3').ok, true)
     assert.equal(game.debugCommand('/grave 2 3').ok, true)
     assert.ok(game.render().plants.some(plant => plant.typeId === 'pvz:bowling-wallnut'), 'a bowling nut holds no cell, so it rolls on')
-    const graves = game.render().graves!
+    const graves = game.render().gridItems!
     assert.deepEqual(graves.map(({ row, column }) => [row, column]), [[0, 8], [2, 1], [2, 2], [1, 2]])
     const save = game.saveAtBoundary()
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
@@ -95,7 +95,7 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     final.restore(finalSave)
     for (let tick = 0; tick < 300; tick++) final.tick()
     assert.equal(final.snapshot().wave.index, final.snapshot().wave.total)
-    assert.deepEqual(final.snapshot().graves, graves)
+    assert.deepEqual(final.snapshot().gridItems, graves)
     const risen = final.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined)
     assert.deepEqual(risen.map(zombie => [zombie.row, zombie.typeId]).sort(), graves.map(grave => [grave.row, 'pvz:normal']).sort(),
         'Board::SpawnZombieWave opens every grave after the last wave, on a day lawn too')
@@ -103,7 +103,9 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     // Board::SpawnZombiesFromGraves skips a grave whose mGridItemCounter is still below 100 when they open.
     const opensAt = finalSave.gameplayTick + 1 + 200
     const rising = JSON.parse(JSON.stringify(finalSave))
-    rising.wave.graves = graves.slice(0, 2).map((grave, index) => ({ ...grave, riseAtTick: opensAt - grave.riseDelay - 99 - index }))
+    const late = graves.slice(0, 2).map(grave => grave.entityId)
+    rising.entities = rising.entities.flatMap((entity: any) => !entity.gridItem ? [entity] : !late.includes(entity.entityId) ? [] : [{ ...entity,
+        gridItem: { ...entity.gridItem, riseAtTick: opensAt - entity.gridItem.riseDelay - 99 - late.indexOf(entity.entityId) } }])
     const partial = new IntegratedGameServer(definitions, levels)
     partial.restore(rising)
     for (let tick = 0; tick < 300; tick++) partial.tick()
@@ -134,7 +136,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     const rejection = () => game.lastRejection
     assert.equal(rejection()?.code, 'cell-has-grave', 'unlike /grave, a planted grave leaves a grave there alone')
     place(1, 1, 4)
-    assert.deepEqual(game.render().graves!.map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
+    assert.deepEqual(game.render().gridItems!.map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
         [[2, 2, tick, undefined], [2, 5, tick, 'plants'], [1, 4, tick, 'plants']])
     assert.equal(game.render().seedPackets[1]!.team, 'plants')
 
@@ -303,7 +305,7 @@ test("a grave buster goes only on a grave of the other side", () => {
     assert.ok(!game.render().plants.some(value => value.typeId === 'pvz:gravebuster'), 'every grave buster is done')
     const busted = game.drainEvents().filter(event => event.type === 'graveBusted').map(event => [event.data.column, event.data.team])
     assert.deepEqual(busted.sort(), [[1, undefined], [5, undefined], [6, 'zombies']], "the zombies' buster's dirt turns round with it")
-    assert.deepEqual(game.render().graves!.map(grave => grave.column).sort(), [3, 4], 'the eaten graves are gone')
+    assert.deepEqual(game.render().gridItems!.map(grave => grave.column).sort(), [3, 4], 'the eaten graves are gone')
     const loot = game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
     assert.equal(loot.length, 1, "one coin, from the plants' grave buster")
 })
