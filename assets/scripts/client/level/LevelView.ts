@@ -600,8 +600,8 @@ export class LevelView {
             message: ui.text('UPGRADE_DIALOG_BODY').replace(/\{SLOTS\}/g, String(question.slots)),
             confirmText: ui.text('DIALOG_BUTTON_YES'), cancelText: ui.text('DIALOG_BUTTON_NO'),
         })
-        // aDialog->mX += 120, mY += 130.
-        dialog.node.setPosition(dialog.node.position.x + 120, dialog.node.position.y - 130)
+        // aDialog->mX += 120, mY += 130: the panel moves within the screen, which still bounds its dragging.
+        dialog.content.setPosition(dialog.content.position.x + 120, dialog.content.position.y - 130)
         this.questionOpen = true
         this.hud.setCoinBankBesideDave(true)
         void dialog.result.then(accept => {
