@@ -35,7 +35,7 @@ function executeCommand(
 ): DebugCliResult {
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
-    const preference = ['cooldown', 'suncost', 'plantinvincible', 'collect'].includes(name)
+    const preference = ['cooldown', 'suncost', 'plantinvincible', 'collect', 'cheatseed'].includes(name)
     // The purse and the achievements are no board state, so /money and /achievement also work in the intro (Crazy
     // Dave's offer checks the purse there).
     const anyPhase = name === 'money' || name === 'achievement'
@@ -85,9 +85,7 @@ function executeCommand(
             return debugSuccess('Choose your seeds again')
         }
         case 'cheatseed': {
-            // A chooser takes the switch up when it opens: one open now keeps the offer it opened with.
-            const bank = world.resources.get(SeedBankResource)
-            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
+            // Any time: a chooser open now offers what the switch gives at once.
             const rules = { ...getDebugRules(world), cheatSeeds: !getDebugRules(world).cheatSeeds }
             world.resources.set(DebugRulesResource, rules)
             return debugSwitched(name, rules.cheatSeeds)

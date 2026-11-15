@@ -384,10 +384,15 @@ test('/cheatseed offers every grid seed, owned or not, and its pages, counted to
     }
 })
 
-test('/cheatseed turns over between choosers, which take it up as they open, and stays with a loaded save', () => {
+test('/cheatseed turns over in any state, an open chooser taking it up at once, and stays with a loaded save', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
-    assert.deepEqual([game.debugCommand('/cheatseed').ok, game.render().seedChooser?.cheatSeeds], [false, undefined], 'not while choosing')
+    // While choosing: the chooser offers every card at once, and turned off again no longer does.
+    const choosing = game.debugCommand('/cheatseed')
+    assert.deepEqual([choosing.ok, choosing.enabled], [true, true])
+    const offered = game.render().seedChooser!
+    assert.deepEqual([offered.cheatSeeds, offered.entries], [true, cheatSeedEntries(definitions, seeds)])
+    assert.deepEqual([game.debugCommand('/cheatseed').enabled, game.render().seedChooser?.cheatSeeds], [false, undefined])
     for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
     command(game, { type: 'completeIntro' })
