@@ -50,7 +50,7 @@ export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>
 /** Profile values the level shows: the house name and Dave's quotes. */
 /** `upgradeCost` is the seed-slot price Dave quotes; `nextUpgradeCost` replaces it once the offer is bought. */
 /**
- * `almanacZombies`: the almanac's zombies (by `nameKey`) once the player has the almanac (LawnApp::CanShowAlmanac);
+ * `almanacZombies`: the almanac's zombies (their IDs) once the player has the almanac (LawnApp::CanShowAlmanac);
  * `store`: the player has the store (LawnApp::CanShowStore).
  */
 export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCost: number; almanacZombies?: string[]; store?: boolean }
@@ -90,7 +90,7 @@ export class LevelView {
     /** The level granted an achievement the player did not have; `shown` when it was announced in the level. */
     onAchievementEarned?: (id: string, shown: boolean) => void
     /** The seed chooser opens the almanac, on a preview zombie's entry when it has its `nameKey`, or the store. */
-    onOpenAlmanac?: (zombieNameKey?: string) => void
+    onOpenAlmanac?: (zombieId?: string) => void
     onOpenStore?: () => void
     private player!: LevelPlayer
     private answerDialog: (accept: boolean) => void = () => {}
@@ -265,7 +265,7 @@ export class LevelView {
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
-            almanacZombies: player.almanacZombies, openAlmanacZombie: nameKey => view.onOpenAlmanac?.(nameKey),
+            almanacZombies: player.almanacZombies, openAlmanacZombie: zombie => view.onOpenAlmanac?.(zombie),
             chooserPages: player.almanacZombies !== undefined || player.store === true,
             seedChooser: seedChooser !== undefined,
             mowers: () => entityRenderer.mowers(),

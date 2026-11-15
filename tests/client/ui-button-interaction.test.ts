@@ -99,11 +99,11 @@ function setup() {
     modules['@/client/plants/definitions'] = plantDefinitions
     modules['@/client/hud/SeedPacketView'] = { SeedPacketView: class {
         node: FakeNode; options: unknown
-        replacement?: { seedType: string, cost: number }
+        replacement?: { plant: string, cost: number }
         /** The picture loads later than the packet, as SeedPacketView's does. */
         ready: Promise<void> = Promise.resolve()
         constructor(options: any) { this.node = new FakeNode(options.x); options.parent.addChild(this.node) }
-        setSeed(seedType: string, cost: number) { this.replacement = { seedType, cost } }
+        setSeed(plant: string, cost: number) { this.replacement = { plant, cost } }
         setMirrored() {}
         sync(options: unknown) { this.options = options }
     } }
@@ -208,7 +208,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         bank.sync(world, [], true, null, false)
         assert.equal(slot.view.node, node)
         assert.equal(slot.button, button, 'replacement preserves the input presenter’s button reference')
-        assert.deepEqual({ ...slot.view.replacement }, { seedType: 'snowpea', cost: 175 })
+        assert.deepEqual({ ...slot.view.replacement }, { plant: 'pvz:snowpea', cost: 175 })
         assert.equal(slot.tooltip.text, 'SNOW_PEA')
         slot.button.onClick()
         assert.equal(commands.at(-1).seedId, 'ice')
@@ -327,7 +327,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         try {
             input.start()
             bank.sync(snapshot, [], true, null, false)
-            if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.view.replacement.seedType === 'peashooter'),
+            if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.view.replacement.plant === 'pvz:peashooter'),
                 'each slot initializes its card from the supplied packet')
             // A new card shows once its picture is drawn.
             await new Promise(resolve => setTimeout(resolve, 0))

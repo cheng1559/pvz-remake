@@ -49,7 +49,6 @@ function setup() {
 test('namespaced Mod packets keep their ID and are drawn by their plant view', async () => {
     const { classes, modules, load, renderer } = setup()
     const plant = structuredClone(presentationFixture.plants['pvz:peashooter']) as any
-    plant.visual.seedType = 'example:rapid_pea'
     plant.clips.body.reanimId = 'example:body'
     plant.packet = { x: 12, y: 12, scale: 0.85 }
     const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
@@ -75,7 +74,7 @@ test('namespaced Mod packets keep their ID and are drawn by their plant view', a
 
     let id: unknown
     modules['./PlantPreview'].PlantPreview = class { initialize(_definitions: unknown, plantId: unknown) { id = plantId } }
-    renderer._drawPlantIcon(new Node(), { definitions, seedType: 'example:rapid_pea' }, 1)
+    renderer._drawPlantIcon(new Node(), { definitions, plant: 'example:rapid_pea' }, 1)
     assert.equal(id, 'example:rapid_pea')
 })
 
@@ -86,7 +85,7 @@ test('a packet drawn above 1x uses the larger background, as DrawSeedPacket does
         resources.sprite = async (name: string) => { loaded.push(name); return { name } }
         const background = new classes.SeedPacketBackground()
         background.node = new Node()
-        background.initialize(sprite, { seedType: 0, upgrade }, scale)
+        background.initialize(sprite, { plant: 'pvz:peashooter', upgrade }, scale)
         await new Promise(setImmediate)
         assert.deepEqual(loaded, [expected], `scale ${scale}${upgrade ? ' upgrade' : ''}`)
         if (scale > 1) assert.deepEqual(sprite.spriteFrame, { name: 'seedpacket_larger' })

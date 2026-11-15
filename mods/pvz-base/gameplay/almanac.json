@@ -1,26 +1,26 @@
 {
   "plants": [
-    {"id": 0, "key": "PEASHOOTER", "seed": "pvz:peashooter", "ground": "day"},
-    {"id": 1, "key": "SUNFLOWER", "seed": "pvz:sunflower", "ground": "day"},
-    {"id": 2, "key": "CHERRY_BOMB", "seed": "pvz:cherrybomb", "ground": "day"},
-    {"id": 3, "key": "WALL_NUT", "seed": "pvz:wallnut", "ground": "day"},
-    {"id": 4, "key": "POTATO_MINE", "seed": "pvz:potatomine", "ground": "day"},
-    {"id": 5, "key": "SNOW_PEA", "seed": "pvz:snowpea", "ground": "day"},
-    {"id": 6, "key": "CHOMPER", "seed": "pvz:chomper", "ground": "day"},
-    {"id": 7, "key": "REPEATER", "seed": "pvz:repeater", "ground": "day"},
-    {"id": 8, "key": "PUFF_SHROOM", "seed": "pvz:puffshroom", "ground": "night"},
-    {"id": 9, "key": "SUN_SHROOM", "seed": "pvz:sunshroom", "ground": "night"},
-    {"id": 10, "key": "FUME_SHROOM", "seed": "pvz:fumeshroom", "ground": "night"},
-    {"id": 11, "key": "GRAVE_BUSTER", "seed": "pvz:gravebuster", "ground": "night"},
-    {"id": 12, "key": "HYPNO_SHROOM", "seed": "pvz:hypnoshroom", "ground": "night"}
+    {"seed": "pvz:peashooter", "ground": "day"},
+    {"seed": "pvz:sunflower", "ground": "day"},
+    {"seed": "pvz:cherrybomb", "ground": "day"},
+    {"seed": "pvz:wallnut", "ground": "day"},
+    {"seed": "pvz:potatomine", "ground": "day"},
+    {"seed": "pvz:snowpea", "ground": "day"},
+    {"seed": "pvz:chomper", "ground": "day"},
+    {"seed": "pvz:repeater", "ground": "day"},
+    {"seed": "pvz:puffshroom", "ground": "night"},
+    {"seed": "pvz:sunshroom", "ground": "night"},
+    {"seed": "pvz:fumeshroom", "ground": "night"},
+    {"seed": "pvz:gravebuster", "ground": "night"},
+    {"seed": "pvz:hypnoshroom", "ground": "night"}
   ],
   "zombies": [
-    {"id": 0, "key": "ZOMBIE", "zombie": "pvz:normal", "startingLevel": 1},
-    {"id": 1, "key": "FLAG_ZOMBIE", "zombie": "pvz:flag", "startingLevel": 1},
-    {"id": 2, "key": "CONEHEAD_ZOMBIE", "zombie": "pvz:conehead", "startingLevel": 3},
-    {"id": 3, "key": "POLE_VAULTING_ZOMBIE", "zombie": "pvz:pole_vaulter", "startingLevel": 6},
-    {"id": 4, "key": "BUCKETHEAD_ZOMBIE", "zombie": "pvz:buckethead", "startingLevel": 8},
-    {"id": 5, "key": "NEWSPAPER_ZOMBIE", "zombie": "pvz:newspaper", "startingLevel": 11},
-    {"id": 6, "key": "SCREEN_DOOR_ZOMBIE", "zombie": "pvz:screendoor", "startingLevel": 13}
+    {"id": 0, "zombie": "pvz:normal", "startingLevel": 1},
+    {"id": 1, "zombie": "pvz:flag", "startingLevel": 1},
+    {"id": 2, "zombie": "pvz:conehead", "startingLevel": 3},
+    {"id": 3, "zombie": "pvz:pole_vaulter", "startingLevel": 6},
+    {"id": 4, "zombie": "pvz:buckethead", "startingLevel": 8},
+    {"id": 5, "zombie": "pvz:newspaper", "startingLevel": 11},
+    {"id": 6, "zombie": "pvz:screendoor", "startingLevel": 13}
   ]
 }

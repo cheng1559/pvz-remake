@@ -15,7 +15,8 @@ const { ccclass } = _decorator
 export interface LevelLifecycle {
     onMenu?: () => void | Promise<void>
     /** The seed chooser opens the almanac (on a zombie's entry, by its `nameKey`) or the store over the level. */
-    onAlmanac?: (zombieNameKey?: string) => void | Promise<void>
+    /** The almanac, on a zombie's page when it is given (its ID). */
+    onAlmanac?: (zombieId?: string) => void | Promise<void>
     onStore?: () => void | Promise<void>
     onComplete?: () => void | Promise<void>
     onGameOver?: () => void | Promise<void>

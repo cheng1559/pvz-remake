@@ -1,7 +1,7 @@
 {
   "pvz:bowling-wallnut": {
     "layer": "projectile",
-    "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
+    "visual": {"packetPlant": "pvz:wallnut", "nameKey": "WALL_NUT"},
     "plantedSounds": [{"audio": "pvz:bowling", "foley": false}],
     "clips": {
       "body": {"reanimId": "pvz:wallnut_roll", "x": 0, "y": 0},
@@ -13,7 +13,7 @@
   },
   "pvz:bowling-explodenut": {
     "layer": "projectile",
-    "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
+    "visual": {"packetPlant": "pvz:explodenut", "nameKey": "EXPLODE_O_NUT", "tint": [255, 64, 64]},
     "plantedSounds": [{"audio": "pvz:bowling", "foley": false}],
     "clips": {"from": "pvz:bowling-wallnut"},
     "shadow": {"x": -3, "y": -51}, "scale": 1,
@@ -21,7 +21,7 @@
     "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:peashooter": {
-    "visual": {"seedType": "peashooter", "preview": 0},
+    "visual": {"nameKey": "PEASHOOTER"},
     "clips": {
       "body": {"reanimId": "pvz:peashooter", "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:peashooter_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -32,7 +32,7 @@
     "scale": 1
   },
   "pvz:repeater": {
-    "visual": {"seedType": "repeater", "preview": 7},
+    "visual": {"nameKey": "REPEATER"},
     "clips": {
       "body": {"reanimId": "pvz:repeater", "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:repeater_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -43,7 +43,7 @@
     "scale": 1
   },
   "pvz:snowpea": {
-    "visual": {"seedType": "snowpea", "preview": 5, "nameKey": "SNOW_PEA"},
+    "visual": {"nameKey": "SNOW_PEA"},
     "clips": {
       "body": {"reanimId": "pvz:snowpea", "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:snowpea_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -54,7 +54,7 @@
     "scale": 1
   },
   "pvz:sunflower": {
-    "visual": {"seedType": "sunflower", "preview": 1},
+    "visual": {"nameKey": "SUNFLOWER"},
     "packet": {"time": 0.15},
     "clips": {
       "body": {"reanimId": "pvz:sunflower", "x": 0, "y": 0},
@@ -64,7 +64,7 @@
     "scale": 1
   },
   "pvz:cherrybomb": {
-    "visual": {"seedType": "cherrybomb", "preview": 2, "nameKey": "CHERRY_BOMB"},
+    "visual": {"nameKey": "CHERRY_BOMB"},
     "view": "cherrybomb",
     "clips": {
       "idle": {"reanimId": "pvz:cherrybomb_idle", "fps": 30, "x": 0, "y": 0},
@@ -78,7 +78,7 @@
     "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:wallnut": {
-    "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
+    "visual": {"nameKey": "WALL_NUT"},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
     "crackedFaces": ["pvz:wallnut_cracked1", "pvz:wallnut_cracked2"],
@@ -93,7 +93,7 @@
     "scale": 1
   },
   "pvz:potatomine": {
-    "visual": {"seedType": "potatomine", "preview": 4, "nameKey": "POTATO_MINE"},
+    "visual": {"nameKey": "POTATO_MINE"},
     "explosion": {"effect": "pvz:potatomine", "x": 20, "layer": "particle"},
     "clips": {
       "buried": {"reanimId": "pvz:potatomine_buried", "x": 12, "y": -12},
@@ -103,14 +103,15 @@
       "glow": {"reanimId": "pvz:potatomine_glow", "x": 0, "y": 0, "attachmentTrackId": "anim_light", "onlyTracks": ["anim_glow"]}
     },
     "offBoard": {"body": "armed"},
-    "packet": {"x": 12, "y": 12, "scale": 0.85, "clips": {"light": "glow"}},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}, "x": 12, "y": 12, "scale": 0.85, "clips": {"light": "glow"}},
     "shadow": {"x": -3, "y": -51},
     "scale": 0.8,
     "explosionSounds": [{"audio": "pvz:potato_mine", "foley": false}],
     "parts": {"eyes": ["anim_eye"]}
   },
   "pvz:chomper": {
-    "visual": {"seedType": "chomper", "preview": 6},
+    "visual": {"nameKey": "CHOMPER"},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}},
     "view": "chomper",
     "parts": {"prey": ["Zombie_outerarm_hand", "Zombie_outerarm_lower"]},
     "clips": {
@@ -124,7 +125,7 @@
     "scale": 1
   },
   "pvz:explodenut": {
-    "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
+    "visual": {"nameKey": "EXPLODE_O_NUT", "tint": [255, 64, 64]},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
     "crackedFaces": ["pvz:wallnut_cracked1", "pvz:wallnut_cracked2"],
@@ -136,7 +137,7 @@
     "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:puffshroom": {
-    "visual": {"seedType": "puffshroom", "preview": 8, "nameKey": "PUFF_SHROOM"},
+    "visual": {"nameKey": "PUFF_SHROOM"},
     "clips": {
       "body": {"reanimId": "pvz:puffshroom", "x": 0, "y": -5},
       "sleep": {"reanimId": "pvz:puffshroom_sleep", "x": 0, "y": -5},
@@ -149,7 +150,7 @@
     "drawHeightOffset": 5
   },
   "pvz:sunshroom": {
-    "visual": {"seedType": "sunshroom", "preview": 9, "nameKey": "SUN_SHROOM"},
+    "visual": {"nameKey": "SUN_SHROOM"},
     "clips": {
       "body": {"reanimId": "pvz:sunshroom_big", "x": 0, "y": 0, "blend": 0.1},
       "small": {"reanimId": "pvz:sunshroom", "x": 0, "y": 0},
@@ -164,7 +165,8 @@
     "scale": 1
   },
   "pvz:fumeshroom": {
-    "visual": {"seedType": "fumeshroom", "preview": 10, "nameKey": "FUME_SHROOM"},
+    "visual": {"nameKey": "FUME_SHROOM"},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}},
     "viewConfig": {"fireParticle": {"id": "pvz:fumecloud", "x": 85, "y": 31, "delayTicks": 35}},
     "fireSounds": [{"audio": "pvz:fume", "foley": true, "pitchRange": 10}],
     "clips": {
@@ -178,7 +180,8 @@
     "scale": 1
   },
   "pvz:gravebuster": {
-    "visual": {"seedType": "gravebuster", "preview": 11, "nameKey": "GRAVE_BUSTER"},
+    "visual": {"nameKey": "GRAVE_BUSTER"},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 10.0, "offsetY": 15.0}},
     "view": "gravebuster",
     "almanacOffset": [0, 55],
     "plantedSounds": [{"audio": "pvz:gravebusterchomp", "foley": true}],
@@ -192,7 +195,8 @@
     "pointerOffsetY": 15
   },
   "pvz:hypnoshroom": {
-    "visual": {"seedType": "hypnoshroom", "preview": 12, "nameKey": "HYPNO_SHROOM"},
+    "visual": {"nameKey": "HYPNO_SHROOM"},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}},
     "clips": {
       "body": {"reanimId": "pvz:hypnoshroom", "x": 0, "y": 0},
       "sleep": {"reanimId": "pvz:hypnoshroom_sleep", "x": 0, "y": 0},

@@ -17,7 +17,7 @@ export interface LevelIntroContext {
      * `nameKey`) say "click to view" and open it on a click.
      */
     almanacZombies?: readonly string[]
-    openAlmanacZombie?: (nameKey: string) => void
+    openAlmanacZombie?: (zombieId: string) => void
     /** LawnApp::CanShowAlmanac || CanShowStore: the chooser shows its Almanac or Store button. */
     chooserPages?: boolean
     /** The level opens with the seed chooser: the bank comes in with its drop, from tick 400 to 425. */

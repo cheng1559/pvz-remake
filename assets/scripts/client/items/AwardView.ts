@@ -5,7 +5,7 @@ import { easeInOutCurve } from '@/client/view/GameScreenMath'
 import { levelAwardSize } from '@/client/level/LevelGeometry'
 import type { EntityView, StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { plantDefinition } from '@/client/plants/definitions'
+import { plantPacket } from '@/client/plants/definitions'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import type { ItemSnapshot } from '@/shared/protocol/index'
@@ -58,7 +58,7 @@ export class AwardView implements EntityView<ItemSnapshot> {
             if (!node.isValid) return
             const packet = {
                 definitions: content.presentation, parent: node, layer: node.layer, x: 0, y: 0, cost: content.definitions.seeds[award.id].sunCost,
-                seedType: plantDefinition(content.presentation, award.id).visual.seedType, costFont,
+                plant: plantPacket(content.presentation, award.id).plant, costFont,
             }
             const normal = SeedPacketRenderer.drawSeedPacket({ ...packet, name: 'FinalSeedPacketNormal' })
             const large = SeedPacketRenderer.drawSeedPacket({ ...packet, name: 'FinalSeedPacketLarge', scale: 2 })

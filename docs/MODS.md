@@ -61,7 +61,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 成就写在玩法定义的 `achievements` 表里，ID 到 `{ titleKey, descriptionKey, icon: { sprite, index } }`，图标取 `sprite` 中按 70×70、每行 7 格切出的第 `index` 格。成就页和领奖页按本体在前、各 Mod 依次在后的顺序列出。服务端脚本通过宿主模块 `server/achievements` 的 `grantAchievement(world, id, announce)` 发放：玩家已有的不重复发放；`announce` 为 true 时在关卡里立即提示，否则留到过关后的领奖页列出。档案由客户端转交菜单接口保存。成就怎么获得写在它的 `trigger: { kind, ...设置 }` 里：游戏代码只发服务端事件，成就模块观察每个事件，按 `kind` 对应的触发类型判定。本体的触发类型有 `pvz:blast`（`plants`、`kills`）、`pvz:bowling`（`plants`、`hits`）、`pvz:coin-streak`（`items`、`coins`）、`pvz:sun-held`（`sun`）和 `pvz:win-planting`（`boards`、`skipRules`、`only` / `never`），详见 `docs/ACHIEVEMENTS.zh-CN.md`。Mod 的新成就可以直接用这些类型；需要新的判定方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`server/GameplayRegistry`），`observe` 收到事件、设置和这个成就在关卡里的状态（随存档保存）。要让本体成就认到 Mod 的植物，用 `overrides` 改它的 `trigger`。关卡定义写 `achievements: false` 时，这一关不发放任何成就，适合测试关卡。
 
-植物的 `visual.nameKey`、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。
+植物的 `visual.nameKey`（必填）、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。种子包默认画植物自己；`visual.packetPlant` 写另一株植物的完整 ID 时画那一株（如保龄球坚果画普通坚果）。卡包里植物图的位置和大小写在植物的 `packet.placement`（`{ scale, offsetX, offsetY }`，原版 `SeedPacket::DrawSeedPacket` 的偏移），不写时用 `seedPackets.defaultPlacement`；`packet` 的其余字段是原版 `Plant::DrawSeedType` 的偏移和姿势。
 
 每个僵尸定义都必须写 `wave: { points, weight, firstWave? }`，即原版 `ZombieDefinition` 的分值 `mZombieValue`、出怪权重 `mPickWeight` 和最早出现的波次 `mFirstAllowedWave`。分值既是出怪时花的点数，也决定它死亡时掉钱的概率（`Zombie::DropLoot`），所以只在列出的波次、墓碑或调试命令里出现的僵尸也要写；不想被出怪池随机选中就把 `weight` 写成 0。关卡 `zombiePool` 的条目可以覆盖这些值。缺少 `wave` 的僵尸在加载时报错。
 

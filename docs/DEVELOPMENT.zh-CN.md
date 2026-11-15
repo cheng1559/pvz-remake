@@ -12,7 +12,7 @@
 
 冒险 2-2 复用 2-1 的夜间流程：20 波（第 10、20 波为旗帜波），出现普通、路障、铁桶、读报和旗帜僵尸，墓碑布局同 2-1，最终波后墓碑按 4000:4000 出普通或路障僵尸；首次冒险播放戴夫 1401–1402 对话，`{MONEY}`、`{UPGRADE_COST}` 分别替换为当前金币和下一次卡槽升级价格。通关奖励为大喷菇，领取后进入 2-3。选卡警告按关卡脚本的 `chooserWarnings` 依次弹出：2-1 首次冒险未带小喷菇先提示，未带产阳光植物时使用夜间专用文案，任何一次选择重新挑选都会中止开始。
 
-选卡阶段鼠标移到预览僵尸上显示名字提示框，光标保持箭头。玩家有了图鉴（档案 `unlocks.almanac`）后，图鉴里有的僵尸（按 `nameKey` 对应）提示框多一行“click to view”，点击播放点击音效并在暂停的关卡上打开僵尸页、定位到它，关闭后回到选卡（`SeedChooserScreen::MouseDown`、`AlmanacDialog::ShowZombie`）。选卡面板在 (560, 572)、(680, 572) 显示原版的“图鉴”“商店”按钮，分别在图鉴、商店解锁后出现；从这里打开的商店返回按钮显示“回到游戏”。
+选卡阶段鼠标移到预览僵尸上显示名字提示框，光标保持箭头。玩家有了图鉴（档案 `unlocks.almanac`）后，图鉴里有的僵尸（按僵尸 ID 对应）提示框多一行“click to view”，点击播放点击音效并在暂停的关卡上打开僵尸页、定位到它，关闭后回到选卡（`SeedChooserScreen::MouseDown`、`AlmanacDialog::ShowZombie`）。选卡面板在 (560, 572)、(680, 572) 显示原版的“图鉴”“商店”按钮，分别在图鉴、商店解锁后出现；从这里打开的商店返回按钮显示“回到游戏”。
 
 冒险 2-3 沿用夜间流程和墓碑，10 波，出现普通、路障和铁栅门僵尸。铁栅门僵尸（`pvz:screendoor`）的门有 1100 耐久，出怪点数 4、权重 3500、第 5 波起出现，在第 6 波和最后一波固定出现。门是盾牌：`Board::TotalZombiesHealthInWave` 按 0.2f 计入，僵尸死亡时门掉落但不播放撕报纸声（`DropShield(1U)`），被割草机碾压时先掉落头盔和盾牌（`Zombie::MowDown`）。首次冒险时，若金币够买第一次卡槽升级、还没买过、拒绝不到两次（`CutScene::CanGetPacketUpgrade`），戴夫说 1501–1503 推销；1503 在 `pvz:dialog` 中带有 `question`（价格和升级后的格数），由“是/否”对话框回答：选“是”扣钱、这一关的选卡立即多一格，接着说 1510–1511；选“否”接着说 1520。回答和回答后的金币通过一次 `recordPacketUpgradeOffer` 写入档案，推销状态随存档保存。通关奖励为墓碑吞噬者。
 
@@ -34,9 +34,9 @@
 
 图鉴只列出已有玩法定义的植物和僵尸（`gameplay/almanac.json`，条目用 `seed`／`zombie` 指明画哪一个）；还没有玩法的条目不放进图鉴。图鉴、种子包图片、种植预览、开场街景里的植物和僵尸都由关卡使用的同一个 `PlantView`／`ZombieView` 绘制（`client/view/offBoard.ts`），不创建后端实体。全部动画使用全局时钟。
 
-图鉴条目（植物的名称键、卡包图片编号和种子 ID、背景地面，僵尸的首次出场关卡等；植物的费用和冷却取自其种子定义的 `sunCost`、`cooldownTicks`，与原版图鉴读取 `gPlantDefs` 一致）配置在 `mods/pvz-base/gameplay/almanac.json`，登记为 `pvz:gameplay/almanac`，和商店一样由应用加载后注入后端；`server/menu/almanacCatalog` 只负责校验和解锁规则。图鉴按当前档案显示：植物只列出种子已拥有且已安装的（档案的 `seeds` 加 `seedBank.startingSeeds`，与选卡相同），其余格子不绘制；僵尸按 `gZombieDefs` 的 `mStartingLevel`，到达首次出场关卡才显示（`ZombieIsShown`，伴舞、雪橇队和小鬼要过了该关），否则画空白窗口且不可点；过了首次出场关卡才有说明（`ZombieHasDescription`），之前说明框居中显示 `NOT_ENCOUNTERED_YET`。通关冒险后僵尸全部显示。尚未实现：原版在本次选定玩家后击败过的僵尸也会提前显示说明（`gZombieDefeated`），以及雪人可出现前的剪影，目前雪人在可出现前直接隐藏。
+图鉴条目（植物的种子和背景地面，僵尸的位置和首次出场关卡等；植物的费用和冷却取自其种子定义的 `sunCost`、`cooldownTicks`，与原版图鉴读取 `gPlantDefs` 一致）配置在 `mods/pvz-base/gameplay/almanac.json`，登记为 `pvz:gameplay/almanac`，和商店一样由应用加载后注入后端；`server/menu/almanacCatalog` 只负责校验和解锁规则。图鉴按当前档案显示：植物只列出种子已拥有且已安装的（档案的 `seeds` 加 `seedBank.startingSeeds`，与选卡相同），其余格子不绘制；僵尸按 `gZombieDefs` 的 `mStartingLevel`，到达首次出场关卡才显示（`ZombieIsShown`，伴舞、雪橇队和小鬼要过了该关），否则画空白窗口且不可点；过了首次出场关卡才有说明（`ZombieHasDescription`），之前说明框居中显示 `NOT_ENCOUNTERED_YET`。通关冒险后僵尸全部显示。尚未实现：原版在本次选定玩家后击败过的僵尸也会提前显示说明（`gZombieDefeated`），以及雪人可出现前的剪影，目前雪人在可出现前直接隐藏。
 
-已实现实体的图鉴动画、身体坐标、缩放和影子来自统一表现定义；选卡预览也直接使用待机动画的坐标。图鉴目录 `mods/pvz-base/gameplay/almanac.json` 只列出条目的顺序、文本键、对应的种子或僵尸，以及背景或出场关卡。
+已实现实体的图鉴动画、身体坐标、缩放和影子来自统一表现定义；选卡预览也直接使用待机动画的坐标。图鉴目录 `mods/pvz-base/gameplay/almanac.json` 中植物条目只写种子、背景和是否升级植物，僵尸条目写位置、僵尸和出场关卡；植物的位置取其种子的 `position`，名称取其表现层的 `visual.nameKey`，僵尸的名称取其表现层的 `nameKey`。
 
 主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
 

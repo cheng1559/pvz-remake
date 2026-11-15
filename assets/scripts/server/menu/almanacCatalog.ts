@@ -2,11 +2,8 @@ import type { AlmanacPlantDefinition, AlmanacView, AlmanacZombieDefinition } fro
 import { seedGroupPages, type SeedDefinition } from '@/shared/content/gameplay'
 import type { PlayerProfile } from './profileStore'
 
-/**
- * `id` is the packet image (the original SeedType) and `seed` the seed ID the player owns the plant by; the cost and
- * recharge come from that seed's definition.
- */
-type AlmanacPlant = Omit<AlmanacPlantDefinition, 'cost' | 'refreshTime'>
+/** `seed` is the seed the player owns the plant by; its place, cost and recharge come from that seed's definition. */
+type AlmanacPlant = Omit<AlmanacPlantDefinition, 'place' | 'cost' | 'refreshTime'>
 /**
  * gZombieDefs' mStartingLevel; `spawnedOnly` is Board::IsZombieTypeSpawnedOnly; `afterAdventure` zombies only come
  * once the adventure is finished (LawnApp::CanSpawnYetis).
@@ -33,7 +30,7 @@ export function createAlmanacCatalog(value: unknown) {
         const level = profile?.adventureLevel ?? 1, finishedTimes = profile?.finishedAdventure ?? 0, finished = finishedTimes > 0
         return {
             plants: plants.flatMap(plant => (cheatSeeds || owned.includes(plant.seed)) && seeds[plant.seed]
-                ? [{ ...plant, cost: seeds[plant.seed].sunCost, refreshTime: seeds[plant.seed].cooldownTicks }] : []),
+                ? [{ ...plant, place: seeds[plant.seed].position, cost: seeds[plant.seed].sunCost, refreshTime: seeds[plant.seed].cooldownTicks }] : []),
             zombies: zombies.map(({ startingLevel, spawnedOnly, afterAdventure, ...zombie }) => {
                 if (cheatSeeds) return { ...zombie, shown: true, described: true }
                 if (afterAdventure) {
@@ -51,7 +48,7 @@ export function createAlmanacCatalog(value: unknown) {
         }
     }
 
-    return { view, plants: plants as readonly AlmanacPlant[] }
+    return { view }
 }
 
 export type AlmanacCatalog = ReturnType<typeof createAlmanacCatalog>
@@ -59,17 +56,15 @@ export type AlmanacCatalog = ReturnType<typeof createAlmanacCatalog>
 function validateAlmanac(value: unknown): asserts value is AlmanacDefinition {
     const data = value as AlmanacDefinition
     if (!data || !Array.isArray(data.plants) || !Array.isArray(data.zombies)) throw new Error('Invalid almanac definition')
-    const plants = new Set<number>(), seeds = new Set<string>()
+    const seeds = new Set<string>()
     for (const plant of data.plants) {
-        if (!Number.isInteger(plant.id) || plant.id < 0 || plants.has(plant.id) || typeof plant.key !== 'string' ||
-            typeof plant.seed !== 'string' || !plant.seed || seeds.has(plant.seed) ||
-            !GROUNDS.has(plant.ground)) throw new Error(`Invalid or duplicate almanac plant: ${plant.id}`)
-        plants.add(plant.id)
+        if (typeof plant.seed !== 'string' || !plant.seed || seeds.has(plant.seed) ||
+            !GROUNDS.has(plant.ground)) throw new Error(`Invalid or duplicate almanac plant: ${plant.seed}`)
         seeds.add(plant.seed)
     }
     const zombies = new Set<number>()
     for (const zombie of data.zombies) {
-        if (!Number.isInteger(zombie.id) || zombie.id < 0 || zombies.has(zombie.id) || typeof zombie.key !== 'string' ||
+        if (!Number.isInteger(zombie.id) || zombie.id < 0 || zombies.has(zombie.id) ||
             typeof zombie.zombie !== 'string' || !zombie.zombie ||
             !Number.isInteger(zombie.startingLevel) || zombie.startingLevel < 1) throw new Error(`Invalid or duplicate almanac zombie: ${zombie.id}`)
         zombies.add(zombie.id)

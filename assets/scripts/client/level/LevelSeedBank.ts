@@ -85,7 +85,7 @@ export class LevelSeedBank {
             layer: options.rootLayer,
             x: index * 59,
             y: 0,
-            seedType: look?.seedType,
+            plant: look?.plant,
             zombie: look?.zombie,
             grave: look?.grave,
             iconLayer: this.iconLayer,
@@ -172,7 +172,7 @@ export class LevelSeedBank {
                 entry.seedId = packet.seedId
                 entry.hotkey = undefined
                 entry.tooltip.hide()
-                entry.view.setSeed(look.seedType, seed.sunCost, look.zombie, look.grave)
+                entry.view.setSeed(look.plant, seed.sunCost, look.zombie, look.grave)
                 entry.tooltip.text = this.options.ui.text(look.nameKey)
                 // The picture loads after this frame is drawn: a belt packet would come in empty for a frame first.
                 const seedId = packet.seedId

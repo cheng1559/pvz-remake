@@ -3,6 +3,7 @@ import { Color, type Node } from 'cc'
 import type { AwardView } from '@/shared/menu'
 import { menuApi } from '@/client/api/MenuApi'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
+import { plantPacket } from '@/client/plants/definitions'
 import type { UI } from '@/client/ui/UI'
 
 export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> {
@@ -20,9 +21,11 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
     }
     ui.label(parent, { text: ui.text(award.titleKey), font: 'title', x: 400, y: 58,
         color: new Color(213, 159, 43), baseline: true, align: 'center' })
+    // A seed's packet, name and text are its plant's, as the level's award draws its packet (AwardView).
+    const names = award.kind === 'seed' ? plantPacket(ui.assets.presentation, award.seed) : { nameKey: award.nameKey, tooltipKey: award.descriptionKey }
     if (award.kind === 'seed') SeedPacketRenderer.drawSeedPacket({
         definitions: ui.assets.presentation, name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
-        seedType: award.seed, cost: award.cost, costFont: ui.assets.fonts.packetCost,
+        plant: plantPacket(ui.assets.presentation, award.seed).plant, cost: award.cost, costFont: ui.assets.fonts.packetCost,
     })
     else {
         const visual = ui.assets.presentation.awards?.[award.id]
@@ -32,11 +35,11 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
         ui.image(parent, frame, { x: 400 - frame.originalSize.width / 2, y: visual.pageY })
     }
     ui.label(parent, {
-        text: ui.text(award.nameKey), font: 'yellow', x: 400, y: 326,
+        text: ui.text(names.nameKey), font: 'yellow', x: 400, y: 326,
         baseline: true, align: 'center',
     })
     const description = ui.label(parent, {
-        text: ui.text(award.descriptionKey), font: 'profile', x: 285, y: 360, width: 230,
+        text: ui.text(names.tooltipKey), font: 'profile', x: 285, y: 360, width: 230,
         align: 'center', color: new Color(40, 50, 90),
     })
     description.setPosition(285, 360 + Math.max(0, (90 - description.renderer.contentHeight) / 2))

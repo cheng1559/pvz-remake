@@ -8,8 +8,7 @@ import {
     SEED_PACKET_WIDTH,
     SeedPacketRenderer,
     type SeedPacketRenderArgs,
-    type SeedPacketSeedType,
-    IMITATER_SEED_TYPE,
+    isImitaterSeed,
 } from '@/client/hud/SeedPacketRenderer'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
@@ -24,7 +23,8 @@ export interface SeedPacketViewArgs {
     layer: number
     x: number
     y: number
-    seedType?: SeedPacketSeedType
+    /** The plant a plant seed's packet shows. */
+    plant?: string
     /** The upgrade plants' background (SeedPacket::DrawSeedPacket). */
     upgrade?: boolean
     /** A zombie seed's zombie type, drawn instead of a plant. */
@@ -87,7 +87,7 @@ export class SeedPacketView {
     readonly node: Node
     selectedHighlight?: Node
     cooldownClip?: Node
-    seedType?: SeedPacketSeedType
+    plant?: string
     /** The packet's picture, cost and selection frame, above every packet's background (`iconLayer`). */
     private readonly top?: Node
     /**
@@ -106,14 +106,14 @@ export class SeedPacketView {
             size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT } }).node
         if (args.iconLayer) this.top = this.followingNode(args.iconLayer, `${args.name}Icon`)
         this.labels = args.labelLayer ? this.followingNode(args.labelLayer, `${args.name}Labels`) : this.node
-        if (args.seedType !== undefined) this.setSeed(args.seedType, args.cost ?? 0, args.zombie, args.grave)
+        if (args.plant !== undefined || args.zombie !== undefined || args.grave) this.setSeed(args.plant, args.cost ?? 0, args.zombie, args.grave)
     }
 
-    setSeed(seedType: SeedPacketSeedType, cost: number, zombie?: string, grave?: boolean): void {
-        const args = { ...this.args, seedType, cost, zombie, grave,
+    setSeed(plant: string | undefined, cost: number, zombie?: string, grave?: boolean): void {
+        const args = { ...this.args, plant, cost, zombie, grave,
             parent: this.node.parent!, x: this.node.position.x, y: this.node.position.y }
         this.args = args
-        this.seedType = seedType
+        this.plant = plant
         for (const parent of this.parts) {
             for (const child of [...parent.children]) {
                 if (child === this.top || child === this.labels) continue
@@ -206,7 +206,7 @@ export class SeedPacketView {
             : options.cooldownTotal > 0 ? options.cooldownRemaining / options.cooldownTotal : 0
         this.syncCooldown(options.gameStarted ? percentDark : 0)
         if (this.selectedHighlight) this.selectedHighlight.active = options.mobile &&
-            this.seedType !== IMITATER_SEED_TYPE &&
+            !isImitaterSeed(this.plant) &&
             options.gameStarted &&
             options.selected &&
             (options.conveyor || options.cooldownRemaining <= 0)

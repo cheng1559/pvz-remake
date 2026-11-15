@@ -1,4 +1,3 @@
-import { baseQualified } from '@/shared/mod'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { createOffBoardGridItem } from '@/client/view/offBoard'
 import { GRAVE } from '@/shared/content/graves'
@@ -15,15 +14,15 @@ import { ZombiePreview } from './ZombiePreview'
 import { PacketGrave } from './PacketGrave'
 import { SEED_PACKET_WIDTH } from './packetPicture'
 import { supersampleSprites } from '@/client/render/KernelBatch'
-import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
-export type { SeedPacketSeedType } from '@/client/plants/definitions'
 /** Mods take the atlas cells from here as they always have. */
 export { getAtlasFrame } from '@/client/render/atlasFrame'
 
 export { SEED_PACKET_WIDTH }
 export const SEED_PACKET_HEIGHT = SEED_PACKET_SIZE.height
 /** SEED_IMITATER: its packet has a background of its own and no mobile selection frame. */
-export const IMITATER_SEED_TYPE = 48
+export function isImitaterSeed(plant: string | undefined): boolean {
+    return plant === 'pvz:imitater'
+}
 
 const SEED_PACKET_ATLAS_COLUMNS = 9
 const BACKGROUND_IMITATER = 0
@@ -51,7 +50,8 @@ export interface SeedPacketRenderArgs {
     x: number
     y: number
     scale?: number
-    seedType: SeedPacketSeedType
+    /** A plant seed's packet: the plant it shows (by its view), whether or not there is a plant behind it yet. */
+    plant?: string
     /** A zombie seed's zombie type, drawn instead of a plant (SEED_ZOMBIE_*). */
     zombie?: string
     /** A grave seed's packet, which draws a grave instead of a plant. */
@@ -68,9 +68,9 @@ export interface SeedPacketRenderArgs {
 @_decorator.ccclass('SeedPacketBackground')
 class SeedPacketBackground extends Component {
     initialize(sprite: Sprite, args: SeedPacketRenderArgs, scale: number): void {
-        const { seedType, upgrade } = args
+        const { plant, upgrade } = args
         const frame = scale > 1 ? modResources.sprite('seedpacket_larger') : modResources.sprite('seeds').then(frame => getAtlasFrame(frame,
-            seedType === IMITATER_SEED_TYPE ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
+            isImitaterSeed(plant) ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
             SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS))
         void frame.then(frame => {
             if (isValid(this.node, true)) sprite.spriteFrame = frame
@@ -144,14 +144,12 @@ export class SeedPacketRenderer {
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
-        const plantId = typeof args.seedType === 'string' ? baseQualified(args.seedType) : args.seedType
-        const seedId = typeof plantId === 'string' ? plantVisual(args.definitions, plantId)?.preview : plantId
-        if (typeof seedId !== 'number') return
-
+        if (args.plant === undefined) return
+        // A seed with no plant behind it yet keeps the default place, its picture left to whatever draws one.
         const icon = uiNode({ name: 'PacketPlant', parent: root, layer: args.layer }).node
-        const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
+        const placement = args.definitions.plants[args.plant]?.packet?.placement ?? args.definitions.seedPackets.defaultPlacement
         const iconScale = scale > 1 ? scale : 1
-        icon.addComponent(PlantPreview).initialize(args.definitions, plantId, {
+        icon.addComponent(PlantPreview).initialize(args.definitions, args.plant, {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
         }, iconScale)

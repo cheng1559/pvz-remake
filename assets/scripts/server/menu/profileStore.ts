@@ -9,7 +9,8 @@ const CHALLENGE_RECORD_COUNT = 100
 const PURCHASE_COUNT = 80
 
 export interface PersistedPottedPlant {
-    seedType: string
+    /** The potted plant's ID. */
+    plant: string
     whichZenGarden: string
     x: number
     y: number
@@ -209,7 +210,7 @@ export function createProfileStore(storage: MenuStorage) {
         profile.numPottedPlants = Math.max(0, Math.floor(Number(raw.numPottedPlants ?? 0) || 0))
         profile.pottedPlants = Array.isArray(raw.pottedPlants)
             ? raw.pottedPlants.slice(0, profile.numPottedPlants).map((plant) => ({
-                seedType: String(plant?.seedType ?? 'peashooter'),
+                plant: String(plant?.plant ?? 'pvz:peashooter'),
                 whichZenGarden: String(plant?.whichZenGarden ?? 'main'),
                 x: Number(plant?.x ?? 0) || 0,
                 y: Number(plant?.y ?? 0) || 0,

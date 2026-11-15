@@ -4,7 +4,7 @@ import type { AlmanacCatalog } from './almanacCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
 import { createProfileStore, type PlayerProfile } from './profileStore'
-import type { StoreCatalog } from './storeCatalog'
+import { packetSeed, type StoreCatalog } from './storeCatalog'
 
 function userView(profile: PlayerProfile | null): UserView | null {
     if (!profile) return null
@@ -192,14 +192,12 @@ export class MenuService {
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
             ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
         }
-        const plant = this.almanacCatalog.plants.find(plant => plant.seed === level.award.id)
         const seed = this.gameplaySettings.seeds[level.award.id]
-        if (!plant || !seed) throw new Error(`Unknown plant award: ${level.award.id}`)
+        if (seed?.kind !== 'plant') throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
             nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3, achievements: this.awardAchievements,
-            seed: plant.id, cost: seed.sunCost,
-            nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
+            seed: level.award.id, cost: seed.sunCost,
         }
     }
 
@@ -248,9 +246,9 @@ export class MenuService {
             pages: storePages(profile).map(id => ({ id, items: STORE_PAGES[id].map((item): StoreItemView => ({
                 id: item.id,
                 ...(item.sprite !== undefined && { sprite: item.sprite }),
-                ...(item.seed !== undefined && { seed: item.seed }),
+                ...(packetSeed(item) !== undefined && { seed: packetSeed(item) }),
                 ...(item.offset !== undefined && { offset: item.offset }),
-                highlight: item.highlight ?? (item.seed !== undefined ? { type: 'seedPacket' }
+                highlight: item.highlight ?? (packetSeed(item) !== undefined ? { type: 'seedPacket' }
                     : item.sprite ? { type: 'additive', opacity: 96 } : { type: 'none' }),
                 cost: itemCost(item, profile), affordable: profile.coins >= itemCost(item, profile), state: itemState(item, profile, this.now()),
                 ...itemDetails(item, profile),

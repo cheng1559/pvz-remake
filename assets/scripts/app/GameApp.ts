@@ -102,7 +102,7 @@ export class GameApp extends Component {
                 return this.openDialog('gameOptions')
             },
             // SeedChooserScreen: the almanac (on a preview zombie's entry) and the store open over the paused level.
-            onAlmanac: nameKey => this.openAlmanacFromLevel(nameKey),
+            onAlmanac: zombie => this.openAlmanacFromLevel(zombie),
             onStore: () => this.navigate('store'),
             onComplete: () => this.finish('award'),
             onGameOver: () => this.finish('gameOver'),
@@ -142,9 +142,9 @@ export class GameApp extends Component {
      * chooser's Almanac (SeedChooserScreen::ButtonDepress) waits on the dialog without pausing the board's music, so
      * the level pauses but its music plays on.
      */
-    private async openAlmanacFromLevel(zombieNameKey?: string): Promise<void> {
-        if (zombieNameKey === undefined) return this.navigate('almanac', undefined, { keepMusic: true })
-        const zombie = (await menuApi.getAlmanac()).zombies.find(entry => entry.key === zombieNameKey)
+    private async openAlmanacFromLevel(zombieId?: string): Promise<void> {
+        if (zombieId === undefined) return this.navigate('almanac', undefined, { keepMusic: true })
+        const zombie = (await menuApi.getAlmanac()).zombies.find(entry => entry.zombie === zombieId)
         if (!zombie || !this.menu) return
         this.menu.presetAlmanac({ plant: 0, zombie: zombie.id })
         return this.navigate('zombies', undefined, { keepMusic: true })

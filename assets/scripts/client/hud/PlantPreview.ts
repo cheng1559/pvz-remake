@@ -10,17 +10,16 @@ import { PLANT_WIDTH } from '@/shared/content/teams'
 import { mirrorInPacket, PacketPictureStyle, PLANT_TILT, placePacketPicture } from './packetPicture'
 
 const { ccclass } = _decorator
-export type PreviewPlantId = string | number
 
 /**
- * A plant held still, by its view, for seed packets and placement previews. A seed type with no plant behind it (a
- * number), or a plant its view does not draw off the board, shows nothing.
+ * A plant held still, by its view, for seed packets and placement previews. A seed with no plant behind it yet, or a
+ * plant its view does not draw off the board, shows nothing.
  */
 @ccclass('PlantPreview')
 export class PlantPreview extends Component {
     ready: Promise<void> = Promise.resolve()
     private definitions!: PresentationDefinitions
-    private plantId?: PreviewPlantId
+    private plantId?: string
     private placement!: { x: number, y: number, scale: number }
     private packetScale?: number
     private picture!: PacketPictureStyle
@@ -37,7 +36,7 @@ export class PlantPreview extends Component {
     private mirrored = false
     private unmirroredX?: number
 
-    initialize(definitions: PresentationDefinitions, plantId: PreviewPlantId | undefined, placement: { x: number, y: number, scale: number }, packetScale?: number): void {
+    initialize(definitions: PresentationDefinitions, plantId: string | undefined, placement: { x: number, y: number, scale: number }, packetScale?: number): void {
         this.definitions = definitions
         this.plantId = plantId
         this.placement = placement
@@ -46,7 +45,7 @@ export class PlantPreview extends Component {
         this.refresh()
     }
 
-    setPlant(plantId: PreviewPlantId | undefined): void {
+    setPlant(plantId: string | undefined): void {
         if (this.plantId === plantId) return
         this.plantId = plantId
         this.rendering = undefined
@@ -88,7 +87,7 @@ export class PlantPreview extends Component {
         if (this.plantId === undefined) return
         // /tilted is a packet's; the held and grid previews are never tilted.
         if (!this.picture.sync(this.packetScale) && this.rendering !== undefined) return
-        const drawn = typeof this.plantId === 'string' && !!plantVisual(this.definitions, this.plantId)
+        const drawn = !!plantVisual(this.definitions, this.plantId)
         if (this.rendering === drawn) {
             if (drawn) this.applyPlacement()
             return
@@ -106,7 +105,7 @@ export class PlantPreview extends Component {
         const root = uiNode({ name: 'RenderedPlant', parent: this.node, active: false }).node
         this.rendered = root
         this.applyPlacement()
-        this.ready = this.load(root, this.plantId as string).then(() => {
+        this.ready = this.load(root, this.plantId).then(() => {
             if (!isValid(root, true) || root !== this.rendered) return
             this.loaded = true
             return this.finish(root)

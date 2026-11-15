@@ -116,13 +116,13 @@ export interface ClientAnimationDefinitions {
 
 export type ClientAnimationTarget = string
 
-export type SeedPacketSeedType = string | number
 export type PlantViewKind = string
 export interface PlantVisual {
-    readonly seedType: SeedPacketSeedType
-    readonly nameKey?: string
+    /** The plant its seed's packet shows, when not itself (a bowling nut's shows the plain nut). */
+    readonly packetPlant?: string
+    readonly nameKey: string
+    /** Its chooser text; `{nameKey}_TOOLTIP` without. */
     readonly tooltipKey?: string
-    readonly preview?: number
     readonly tint?: readonly [number, number, number]
 }
 
@@ -162,11 +162,14 @@ export interface PlantPresentationDefinition {
      */
     readonly offBoard?: Readonly<Record<string, string>>
     /**
-     * Plant::DrawSeedType, a packet's picture of the plant: where it goes from the picture's place and at what size
-     * (the potato mine's), how far towards its clips' last frame it is posed (`time`, the sunflower's), and the clips
-     * its layers show on top of `offBoard` (`clips`: the potato mine's light lit, the sun-shroom small).
+     * A packet's picture of the plant. `placement`: SeedPacket::DrawSeedPacket's place and size of the picture in the
+     * packet (seedPackets.defaultPlacement without). The rest is Plant::DrawSeedType: where the plant goes from that
+     * place and at what size (the potato mine's), how far towards its clips' last frame it is posed (`time`, the
+     * sunflower's), and the clips its layers show on top of `offBoard` (`clips`: the potato mine's light lit, the
+     * sun-shroom small).
      */
     readonly packet?: {
+        readonly placement?: SeedPacketPlacement
         readonly x?: number; readonly y?: number; readonly scale?: number; readonly time?: number
         readonly clips?: Readonly<Record<string, string>>
     }
@@ -279,7 +282,7 @@ export interface ZombieDrop {
 }
 
 export interface ZombiePresentationDefinition {
-    readonly nameKey?: string
+    readonly nameKey: string
     /** The view that draws it (ZombieViewRegistry), where it has one of its own. */
     readonly view?: string
     /** The pictures of its clips, as a plant's: with `from`, another zombie's, adding what it writes of its own (a Mod zombie on the plain body). */
@@ -553,8 +556,8 @@ export interface PresentationDefinitions {
     readonly seedPackets: {
         readonly flash: { readonly id: string }
         readonly selection: { readonly color: readonly [number, number, number] }
+        /** A plant's picture in its packet, unless the plant has its own (`packet.placement`). */
         readonly defaultPlacement: SeedPacketPlacement
-        readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         /** A grave seed's packet: the grave at about a plant's size, centred, a little above the picture window's floor. */
         readonly grave: SeedPacketPlacement
     }
@@ -707,8 +710,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     for (const [id, entry] of Object.entries(plants)) {
         const plant = record(entry, id), visual = record(plant.visual, id + '.visual')
         if (plant.viewConfig !== undefined) record(plant.viewConfig, id + '.viewConfig')
-        if (typeof visual.seedType !== 'string' && typeof visual.seedType !== 'number') throw new TypeError(id + '.seedType is invalid')
-        if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
+        if (visual.packetPlant !== undefined) text(visual.packetPlant, id + '.visual.packetPlant')
         if (plant.shadow !== undefined) {
             point(plant.shadow, id + '.shadow')
             if ((plant.shadow as Record<string, unknown>).scale !== undefined) positiveFinite((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
@@ -724,7 +726,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (parts.face !== undefined) text(parts.face, id + '.parts.face')
             if (parts.prey !== undefined) texts(parts.prey, id + '.parts.prey')
         }
-        if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
+        text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
         const packet = plant.packet === undefined ? {} : record(plant.packet, id + '.packet')
@@ -733,6 +735,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         }
         for (const key of ['x', 'y', 'time']) if (packet[key] !== undefined) finite(packet[key], id + '.packet.' + key)
         if (packet.scale !== undefined) positiveFinite(packet.scale, id + '.packet.scale')
+        if (packet.placement !== undefined) placement(packet.placement, id + '.packet.placement')
         if (plant.almanacOffset !== undefined) pair(plant.almanacOffset, id + '.almanacOffset')
         if (plant.crackedFaces !== undefined) {
             if (!Array.isArray(plant.crackedFaces) || plant.crackedFaces.length !== 2) throw new TypeError(id + '.crackedFaces must be two sprites')
@@ -749,7 +752,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     for (const [id, entry] of Object.entries(zombies)) {
         const zombie = record(entry, id), parts = record(zombie.parts, id + '.parts')
-        if (zombie.nameKey !== undefined) text(zombie.nameKey, id + '.nameKey')
+        text(zombie.nameKey, id + '.nameKey')
         text(zombie.damagedArmSprite, id + '.damagedArmSprite')
         if (zombie.enragedHead !== undefined) {
             const head = record(zombie.enragedHead, id + '.enragedHead')
@@ -881,7 +884,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     placement(packets.grave, 'seedPackets.grave')
-    for (const [id, value] of Object.entries(record(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
     return data as unknown as PresentationDefinitions
 }
 

@@ -10,7 +10,6 @@ export interface StoreItem {
     id: number
     cost: number
     sprite?: string
-    seed?: number
     offset?: readonly [number, number]
     highlight?: StoreItemHighlight
     message: number
@@ -24,6 +23,11 @@ export interface StoreItem {
     quantity?: number
     effect?: 'seedSlots' | 'tree'
     unlockChallenge?: { index: number; value: number }
+}
+
+/** The seed an item with no picture of its own shows, as its packet: the seed it sells. */
+export function packetSeed(item: StoreItem): string | undefined {
+    return item.sprite === undefined && item.purchase.kind === 'seed' ? item.purchase.id : undefined
 }
 
 interface StoreDefinition {

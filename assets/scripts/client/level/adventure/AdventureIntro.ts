@@ -163,7 +163,7 @@ export class AdventureIntro implements LevelIntro {
     }
 
     private installPreviewTooltips(ui: UI, surface: Node, gameplay: GameplayDefinitions, almanacZombies: readonly string[],
-        openAlmanacZombie?: (nameKey: string) => void): void {
+        openAlmanacZombie?: (zombieId: string) => void): void {
         this.previewTooltipContext = { ui, gameplay, almanacZombies }
         for (const node of this.introZombies) {
             const hit = uiNode({ name: 'ZombieHitArea', parent: node, active: false, anchor: { x: 0, y: 1 } }).node
@@ -178,11 +178,11 @@ export class AdventureIntro implements LevelIntro {
             button.pressSound = null
             button.clickOnPress = true
             button.onClick = () => {
-                const nameKey = this.previewNameKey(node)
-                if (!openAlmanacZombie || !almanacZombies.includes(nameKey)) return
+                const typeId = this.previewTypes.get(node)!
+                if (!openAlmanacZombie || !almanacZombies.includes(typeId)) return
                 tooltip.hide()
                 void SoundSystem.play(SoundEffect.Tap)
-                openAlmanacZombie(nameKey)
+                openAlmanacZombie(typeId)
             }
             this.previewTooltips.set(node, { hit, tooltip })
             this.syncPreviewTooltip(node)
@@ -196,14 +196,8 @@ export class AdventureIntro implements LevelIntro {
         const typeId = this.previewTypes.get(node)!
         const body = gameplay.zombies[typeId].body
         uiNode({ node: preview.hit, position: { x: body.x, y: -body.y }, size: body })
-        const nameKey = this.previewNameKey(node)
-        preview.tooltip.title = ui.text(nameKey)
-        preview.tooltip.text = almanacZombies.includes(nameKey) ? ui.text('CLICK_TO_VIEW') : ''
-    }
-
-    private previewNameKey(node: Node): string {
-        const typeId = this.previewTypes.get(node)!
-        return this.definitions.zombies[typeId].nameKey ?? typeId
+        preview.tooltip.title = ui.text(this.definitions.zombies[typeId].nameKey)
+        preview.tooltip.text = almanacZombies.includes(typeId) ? ui.text('CLICK_TO_VIEW') : ''
     }
 
     constructor(

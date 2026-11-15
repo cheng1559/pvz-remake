@@ -140,7 +140,7 @@ test('settings, challenge progress and almanac data are supplied by the backend 
     assert.equal(challenges.total, 20)
     assert.equal(challenges.items[0].completed, true)
     const almanac = await api.getAlmanac()
-    assert.deepEqual(almanac.plants.map(plant => plant.key), ['PEASHOOTER'], 'a new player has only the peashooter')
+    assert.deepEqual(almanac.plants.map(plant => plant.seed), ['pvz:peashooter'], 'a new player has only the peashooter')
     almanac.plants[0].cost = -100
     assert.equal((await api.getAlmanac()).plants[0].cost, 100)
 })
@@ -151,25 +151,25 @@ test('the almanac shows the plants the player has and the zombies met so far', a
     const almanac = async (changes: { adventureLevel?: number, finishedAdventure?: number, seeds?: string[] }) => {
         profiles.saveProfile({ ...profile, ...changes })
         const view = await api.getAlmanac()
-        const zombie = (key: string) => view.zombies.find(zombie => zombie.key === key)!
-        return { plants: view.plants.map(plant => plant.id), zombie: (key: string) => [zombie(key).shown, zombie(key).described] }
+        const zombie = (id: string) => view.zombies.find(zombie => zombie.zombie === id)!
+        return { plants: view.plants.map(plant => plant.place), zombie: (id: string) => [zombie(id).shown, zombie(id).described] }
     }
     // After 2-4 the player has collected the plants through the Grave Buster and has met every zombie up to the screen door.
     const collected = ['sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster']
     const level15 = await almanac({ adventureLevel: 15, seeds: collected.map(name => `pvz:${name}`) })
     assert.deepEqual(level15.plants, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     assert.deepEqual((await almanac({ adventureLevel: 15, seeds: [] })).plants, [0], 'the plants come from the owned seeds, not the level')
-    assert.deepEqual(level15.zombie('SCREEN_DOOR_ZOMBIE'), [true, true])
+    assert.deepEqual(level15.zombie('pvz:screendoor'), [true, true])
     // A zombie shows on its debut level but is described only after it.
-    assert.deepEqual((await almanac({ adventureLevel: 12 })).zombie('SCREEN_DOOR_ZOMBIE'), [false, false])
-    assert.deepEqual((await almanac({ adventureLevel: 13 })).zombie('SCREEN_DOOR_ZOMBIE'), [true, false])
+    assert.deepEqual((await almanac({ adventureLevel: 12 })).zombie('pvz:screendoor'), [false, false])
+    assert.deepEqual((await almanac({ adventureLevel: 13 })).zombie('pvz:screendoor'), [true, false])
     // A bought store plant is an owned seed too.
     const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, seeds: ['pvz:hypnoshroom', 'pvz:imitater'] })
     assert.deepEqual(finished.plants, [0, 12], 'an owned seed that is not installed (the Imitater) is left out')
-    assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.id === 12),
-        { id: 12, key: 'HYPNO_SHROOM', seed: 'pvz:hypnoshroom', cost: 75, refreshTime: 3000, ground: 'night' }, "cost and recharge are the seed definition's")
-    assert.deepEqual(finished.zombie('SCREEN_DOOR_ZOMBIE'), [true, true], 'a finished adventure has met them all')
-    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.key === 'ZOMBIE')!.zombie, 'pvz:normal', 'an entry names the zombie it shows')
+    assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.place === 12),
+        { seed: 'pvz:hypnoshroom', place: 12, cost: 75, refreshTime: 3000, ground: 'night' }, "place, cost and recharge are the seed definition's")
+    assert.deepEqual(finished.zombie('pvz:screendoor'), [true, true], 'a finished adventure has met them all')
+    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.id === 0)!.zombie, 'pvz:normal', 'an entry names the zombie it shows')
 })
 
 test('achievement entries keep the original order and expose only the active user’s unlocks', async () => {
@@ -225,16 +225,16 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     assert.deepEqual(award, {
         kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
-        seed: 1, cost: 50, nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
+        seed: 'pvz:sunflower', cost: 50,
     })
-    award.seed = 22
-    assert.equal((await api.getAward()).seed, 1, 'the returned view cannot change the reward')
+    award.seed = 'pvz:repeater'
+    assert.equal((await api.getAward()).seed, 'pvz:sunflower', 'the returned view cannot change the reward')
     // The packet shows the seed's own cost; a seed that is not installed has no award to show.
     level = { ...level, award: { kind: 'seed', id: 'pvz:hypnoshroom' } }
     assert.deepEqual(await api.getAward(), {
         kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
-        seed: 12, cost: 75, nameKey: 'HYPNO_SHROOM', descriptionKey: 'HYPNO_SHROOM_TOOLTIP',
+        seed: 'pvz:hypnoshroom', cost: 75,
     })
     level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
     await assert.rejects(api.getAward(), /Unknown plant award/)
@@ -264,15 +264,14 @@ test('winning advances the current profile once and exposes the next installed l
     assert.deepEqual(await new MenuApi(createLocalMenuTransport(storage)).getAdventure(), { levelId: 'pvz:adventure-1-2' })
     level = levels.levels['pvz:adventure-1-2']
     const award = await api.completeLevel()
-    assert.equal(award.seed, 2)
-    assert.equal(award.nameKey, 'CHERRY_BOMB')
+    assert.equal(award.seed, 'pvz:cherrybomb')
     assert.equal(award.nextLevelId, 'pvz:adventure-1-3')
     assert.equal(award.showMainMenu, false, 'AwardScreen hides the menu button up to player level 3')
     assert.equal((await api.getCurrentUser())!.adventureLevel, 3)
     level = levels.levels['pvz:adventure-1-3']
     const nut = await api.completeLevel()
     assert.equal(nut.kind, 'seed')
-    assert.equal(nut.seed, 3)
+    assert.equal(nut.seed, 'pvz:wallnut')
     assert.equal(nut.nextLevelId, 'pvz:adventure-1-4')
     assert.equal(nut.showMainMenu, true, 'after 1-3 the player is on level 4, so the menu button shows')
     level = levels.levels['pvz:adventure-1-4']
@@ -280,7 +279,7 @@ test('winning advances the current profile once and exposes the next installed l
     assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
         descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true, achievements: [] })
     assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
-    for (const [index, kind, seed] of [[5, 'seed', 4], [6, 'seed', 5], [7, 'seed', 6], [8, 'seed', 7], [9, 'note', undefined], [10, 'seed', 8]] as const) {
+    for (const [index, kind, seed] of [[5, 'seed', 'pvz:potatomine'], [6, 'seed', 'pvz:snowpea'], [7, 'seed', 'pvz:chomper'], [8, 'seed', 'pvz:repeater'], [9, 'note', undefined], [10, 'seed', 'pvz:puffshroom']] as const) {
         level = levels.levels[`pvz:adventure-1-${index}`]
         const award = await api.completeLevel()
         assert.equal(award.kind, kind)
@@ -290,8 +289,8 @@ test('winning advances the current profile once and exposes the next installed l
         assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
     }
-    for (const [index, kind, seed, next] of [[1, 'seed', 9, 'pvz:adventure-2-2'], [2, 'seed', 10, 'pvz:adventure-2-3'],
-        [3, 'seed', 11, 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 12, null]] as const) {
+    for (const [index, kind, seed, next] of [[1, 'seed', 'pvz:sunshroom', 'pvz:adventure-2-2'], [2, 'seed', 'pvz:fumeshroom', 'pvz:adventure-2-3'],
+        [3, 'seed', 'pvz:gravebuster', 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 'pvz:hypnoshroom', null]] as const) {
         level = levels.levels[`pvz:adventure-2-${index}`]
         const award = await api.completeLevel()
         assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])

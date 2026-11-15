@@ -1,8 +1,6 @@
 {
   "example:rapid_pea": {
     "visual": {
-      "seedType": "example:rapid_pea",
-      "preview": 0,
       "nameKey": "example:rapid_pea"
     },
     "clips": {
@@ -47,8 +45,6 @@
   },
   "example:beacon": {
     "visual": {
-      "seedType": "example:beacon",
-      "preview": 1,
       "nameKey": "example:beacon"
     },
     "view": "example:beacon",

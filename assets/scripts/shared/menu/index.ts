@@ -29,7 +29,8 @@ export interface StoreItemView {
     affordable: boolean
     state: 'available' | 'hidden' | 'comingSoon' | 'soldOut'
     sprite?: string
-    seed?: number
+    /** The seed the item sells, shown as its packet (an item with no `sprite`). */
+    seed?: string
     offset?: readonly [number, number]
     highlight: StoreItemHighlight
     message: number
@@ -59,14 +60,17 @@ export interface ChallengeView {
     total: number
     items: { key: string, endless?: boolean, completed: boolean, record: number }[]
 }
-/** `cost` and `refreshTime` are the seed's own `sunCost` and `cooldownTicks` (AlmanacDialog reads gPlantDefs too). */
-/** `id`: the packet image (the original SeedType); `seed`: the seed the player owns the plant by, which is the plant's own ID. */
+/**
+ * `seed`: the seed the player owns the plant by, which is the plant's own ID; `place`: its place on the first page,
+ * the seed's `position`; `cost` and `refreshTime`: the seed's own `sunCost` and `cooldownTicks` (AlmanacDialog reads
+ * gPlantDefs too). The plant's name is its presentation's `nameKey`.
+ */
 export interface AlmanacPlantDefinition {
-    id: number, key: string, seed: string, cost: number, refreshTime: number, upgrade?: boolean,
+    seed: string, place: number, cost: number, refreshTime: number, upgrade?: boolean,
     ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
 }
-/** `zombie`: the zombie it shows. */
-export interface AlmanacZombieDefinition { id: number, key: string, zombie: string, iceGround?: boolean }
+/** `id`: its place on the zombies' page; `zombie`: the zombie it shows, named by its presentation's `nameKey`. */
+export interface AlmanacZombieDefinition { id: number, zombie: string, iceGround?: boolean }
 /** `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player. */
 export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
 /**
@@ -99,7 +103,8 @@ interface AwardDetails {
     opens?: { page: 'almanac', buttonKey: string }
 }
 export type AwardView = AwardDetails & (
-    { kind: 'seed'; seed: number; cost: number; nameKey: string; descriptionKey: string }
+    /** `seed`: the awarded seed's ID; the client names it and draws its packet from its plant's presentation. */
+    { kind: 'seed'; seed: string; cost: number; nameKey?: never; descriptionKey?: never }
     | { kind: 'tool' | 'unlock'; id: string; seed?: never; cost?: never; nameKey: string; descriptionKey: string }
     | { kind: 'note'; id: string; seed?: never; cost?: never }
 )
