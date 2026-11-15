@@ -8,11 +8,11 @@ import {
 } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { getAvailableSun } from '../level/items'
-import { TutorialResource } from '../state/levelState'
+import { adviceShown, displayAdviceOnce } from '../tutorials/advice'
 import { initialPlantAbility } from '../plants/abilities'
+import { hasPlantAttack } from '@/shared/content/plantAbilities'
 import { startPlantAnimations } from '../plants/animation'
-import { packetAvailability, selectedSeedId, selectedTeam } from './seedBank'
+import { packetAvailability, seedSunCost, selectedSeedId, selectedTeam } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
@@ -52,7 +52,7 @@ export const planting = {
         const slot = requestedSlot ?? slots.find(slot => !planting.seedAvailability(session, seedId, undefined, slot).reason) ?? slots[0]
         const availability = planting.seedAvailability(session, seedId, undefined, slot)
         if (availability.reason) return planting.rejectSeed(session, seedId, availability)
-        if (world.resources.get(TutorialResource).cantAffordAdviceShown) {
+        if (adviceShown(world, CANT_AFFORD_ADVICE)) {
             emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: CANT_AFFORD_ADVICE })
         }
         seedBank.selection = { mode: 'seed', slot: slot! }
@@ -78,10 +78,11 @@ export const planting = {
 
         const packet = seedBank.selection.mode === 'seed' ? seedBank.packets[seedBank.selection.slot] : undefined
         const seed = definitions.seeds[seedId]
-        const rules = getDebugRules(world)
-        const sunCost = !seedBank.conveyor && rules.sunCost ? seed.sunCost : 0
-        if (rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
-        if (getAvailableSun(world, definitions) < sunCost) {
+        // A bank packet still has to be usable as it goes down (SeedPacket::CanPickUp); a conveyor's seeds cost nothing.
+        const sunCost = packet ? seedSunCost(world, definitions, seedId) : 0
+        const availability = packet ? packetAvailability(world, definitions, packet, gameplayTick) : {}
+        if (availability.reason === 'seed-not-ready') return 'seed-not-ready'
+        if (availability.reason === 'not-enough-sun') {
             notEnoughSun(session)
             return 'not-enough-sun'
         }
@@ -121,11 +122,7 @@ export const planting = {
         // Board::CanPlantAt: nothing past the level's red line, with ADVICE_NOT_PASSED_LINE once a game.
         const line = level.definition.plantingLine
         if (line && column > line.column) {
-            const displayed = world.resources.get(TutorialResource).displayedAdvice
-            if (!displayed.includes('ADVICE_NOT_PASSED_LINE')) {
-                displayed.push('ADVICE_NOT_PASSED_LINE')
-                emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key: 'ADVICE_NOT_PASSED_LINE', style: 'hint' })
-            }
+            displayAdviceOnce(world, 'ADVICE_NOT_PASSED_LINE', 'hint')
             return refuseCell('column-out-of-range')
         }
         const occupiedEntity = planting.findPlantAt(session, row, column)
@@ -137,12 +134,7 @@ export const planting = {
         if (onGrave !== (seed.placement === 'grave')) {
             // Board::DisplayAdvice remembers the help index for the rest of this game.
             const key = onGrave ? 'ADVICE_PLANT_NOT_ON_GRAVE' : 'ADVICE_GRAVEBUSTERS_ON_GRAVES'
-            const displayed = world.resources.get(TutorialResource).displayedAdvice
-            if (!displayed.includes(key)) {
-                displayed.push(key)
-                session.graveAdvice = key
-                emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key, style: 'hint' })
-            }
+            if (displayAdviceOnce(world, key, 'hint')) session.graveAdvice = key
             return refuseCell(onGrave ? 'cell-has-grave' : 'cell-needs-grave')
         }
         if (session.graveAdvice) {
@@ -203,10 +195,10 @@ export const planting = {
         })
         const ability = initialPlantAbility(definition, random)
         if (ability) world.get(entity, PlantComponent)!.ability = ability
-        const delay = definition.shooter?.initialDelayTicks ?? definition.producer?.initialDelayTicks
-        if (delay) world.add(entity, PlantAttackComponent, {
-            readyAtTick: gameplayTick + random.integer(delay.min, delay.max),
-        })
+        if (hasPlantAttack(definition)) {
+            const delay = (definition.shooter ?? definition.producer)!.initialDelayTicks
+            world.add(entity, PlantAttackComponent, { readyAtTick: gameplayTick + random.integer(delay.min, delay.max) })
+        }
         startPlantAnimations(world.get(entity, PlantComponent)!, definition, !!definition.nocturnal && !level.board.night, random)
         return entity
     },

@@ -12,6 +12,7 @@ import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/
 import type { World } from '@/ecs/index'
 import { damageZombie, destroyZombie, isTargetableZombie } from '../zombies/damage'
 import { isHostile, plantFacingX, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { hostilePlants } from './targets'
 import { damagePlant } from '../plants/damage'
 
@@ -57,7 +58,7 @@ export function explode(
         const burned = explosion.burn && zombie.health < explosion.damage
         if (burned) burnZombie(world, definitions, entity, zombie, position, remover)
         else damageZombie(world, definitions, entity, explosion.damage, { leaveBody: false }, remover)
-        if (burned || zombie.health === 0 || zombie.state === 'dying' || zombie.state === 'mowered') kills++
+        if (burned || zombie.health === 0 || isDeadOrDying(zombie)) kills++
     }
     // Hostile plants take the blast's damage; `kills` stays the zombies'.
     const plantX = x + teamDirection(team) * plantReach

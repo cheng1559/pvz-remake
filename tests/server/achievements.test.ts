@@ -132,5 +132,5 @@ test('achievement triggers are checked with the content', () => {
     }
     assert.throws(broken({ kind: 'pvz:nothing' }), /achievement trigger is not installed: pvz:nothing/)
     assert.throws(broken({ kind: 'pvz:blast', plants: ['pvz:torchwood'], kills: 1 }), /plants references unknown ID pvz:torchwood/)
-    assert.throws(broken({ kind: 'pvz:blast', plants: ['pvz:potatomine'], kills: 0 }), /kills must be a positive safe integer/)
+    assert.throws(broken({ kind: 'pvz:blast', plants: ['pvz:potatomine'], kills: 0 }), /kills must be positive/)
 })

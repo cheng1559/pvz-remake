@@ -33,7 +33,7 @@ async function main() {
             await module.register({ host, assets: new ModAssets(manifest, files) })
         }
         const content = buildGameplayContent(builtin ? gameplay : readBaseContent().gameplay, definitions.sources)
-        registry.freeze(content.definitions)
+        registry.freeze(content.definitions, content.levels)
         console.info(`[mod] Validated ${manifest.id} with the server host`)
     } finally { host.dispose() }
 }

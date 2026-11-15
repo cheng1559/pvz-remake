@@ -5,7 +5,8 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { uiNode } from '@/client/view/uiNode'
 import { renderOrder } from '@/shared/content/renderOrder'
-import { graveRiseCounter, type GraveSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
+import type { GraveSnapshot, WorldSnapshot } from '@/shared/protocol/index'
+import { graveRiseCounter } from '@/shared/content/graves'
 import type { GridItemView, GridItemViewContext } from './GridItemView'
 
 /** The atlases' looks a row. */

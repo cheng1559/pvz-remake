@@ -9,16 +9,16 @@ import {
     PositionComponent,
     RandomResource,
 } from '../state/components'
-import { ItemComponent } from '../state/levelState'
+import { spawnItem } from '../level/itemSpawn'
 import { plantTeam } from '@/shared/content/teams'
+import { levelAwardDropped } from '../level/levelAward'
 
 export function createProductionSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:plant-production',
         run({ world, commands, tick }) {
             const level = world.resources.get(LevelStateResource)
-            const stopped = level.result !== 'playing' || level.paused ||
-                [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)
+            const stopped = level.result !== 'playing' || level.paused || levelAwardDropped(world)
             for (const entity of world.query(PlantComponent, PlantAttackComponent, PositionComponent)) {
                 const plant = world.get(entity, PlantComponent)!
                 const definition = definitions.plants[plant.typeId], producer = definition.producer
@@ -44,15 +44,9 @@ export function createProductionSystem(definitions: GameplayDefinitions): GameSy
                     emitServerEvent(world.resources.get(EventQueueResource), 'sunDrained', { entityId: entity, sun: drained })
                     continue
                 }
-                const item = commands.createEntity()
-                commands.add(item, PositionComponent, { x: position.x, y: position.y, row: -1 })
-                commands.add(item, ItemComponent, {
-                    typeId: itemId, value: itemDefinition.value, state: 'available',
-                    velocityX: -0.4 + random.nextFloat() * 0.8,
-                    velocityY: -1.7 - random.nextFloat() * 1.7, accelerationY: 0.09,
-                    width: itemDefinition.width, groundY: position.y + 15 + random.integer(0, 19),
-                    disappearTicks: 0, fadeTicks: 0, scale: 0.4 * (itemDefinition.scale ?? 1), alpha: 255,
-                })
+                // It comes out small and grows to its size as it rises (Coin::Update).
+                const item = spawnItem(world, commands, { typeId: itemId, value: itemDefinition.value, width: itemDefinition.width,
+                    scale: 0.4 * (itemDefinition.scale ?? 1) }, position.x, position.y, 'plant')
                 emitServerEvent(world.resources.get(EventQueueResource), 'sunProduced', { entityId: entity, itemId: item })
             }
         },

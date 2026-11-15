@@ -1,13 +1,12 @@
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
-import { TutorialResource, WaveResource } from '../state/levelState'
+import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { updateSkySun } from './sun'
-import { getAvailableSun } from './items'
 import { getActiveTutorial, TUTORIALS } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
-import { seedSunCost } from '../seeds/seedBank'
+import { seedAffordable } from '../seeds/seedBank'
 import { createGraves } from './graves'
 
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
@@ -17,13 +16,10 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
     world.resources.set(TutorialResource, {
         firstAdventure,
         step: 'complete',
-        cantAffordAdviceShown: false,
-        seedRefreshAdviceShown: false,
-        zombieWarningShown: false,
-        sunsFallen: 0,
         displayedAdvice: [],
-        ...(blocked || !level.skySun ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
     })
+    // Board::InitLevel: the first sky sun, unless the tutorial holds it back for its first plant.
+    world.resources.set(SkySunResource, { fallen: 0, ...(blocked || !level.skySun ? {} : { atTick: world.resources.get(RandomResource).integer(425, 699) }) })
     if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,
@@ -57,7 +53,7 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
                 const initialReady = tick === 1 && packet.readyAtTick <= tick
                 const cooldownFinished = packet.readyAtTick === tick
                 if (!initialReady && !cooldownFinished || bank.selection.mode === 'seed' && bank.selection.slot === slot ||
-                    getAvailableSun(world, definitions) < seedSunCost(world, definitions, packet.seedId)) continue
+                    !seedAffordable(world, definitions, packet.seedId)) continue
                 emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId, slot })
                 if (cooldownFinished) script?.seedReady?.(world, definitions, tick, packet.seedId)
             }

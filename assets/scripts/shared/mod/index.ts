@@ -1,3 +1,4 @@
+import { record, array, nonEmptyString } from '@/shared/validate'
 export interface ModDependency {
     id: string
     version: string
@@ -40,29 +41,37 @@ export function isModId(value: unknown): value is string {
     return typeof value === 'string' && modIdPattern.test(value)
 }
 
+/**
+ * An ID as content writes it: one without a namespace names the base's (`peashooter` is `pvz:peashooter`), the one rule
+ * the client reads resource IDs and view kinds by.
+ */
+export function baseQualified(id: string): string {
+    return id.includes(':') ? id : `${BASE_MOD_ID}:${id}`
+}
+
 /** Whether a qualified ID is in this Mod's own namespace (added by it, not a replacement of another's). */
 export function isOwnId(modId: string, id: string): boolean {
     return id.startsWith(`${modId}:`)
 }
 
 export function parseModManifest(value: unknown): ModManifest {
-    const manifest = object(value, 'manifest')
+    const manifest = record(value, 'manifest')
     if (manifest.schemaVersion !== 1) throw new Error('manifest.schemaVersion must be 1')
     if (!isModId(manifest.id)) throw new Error('manifest.id must be a Mod name such as widescreen (its namespace)')
 
     const version = semanticVersion(manifest.version, 'manifest.version')
     if (manifest.apiVersion !== 1) throw new Error('manifest.apiVersion must be 1')
-    const contentHash = string(manifest.contentHash, 'manifest.contentHash')
+    const contentHash = nonEmptyString(manifest.contentHash, 'manifest.contentHash')
 
     const dependencyIds = new Set<string>()
     const dependencies = array(manifest.dependencies, 'manifest.dependencies').map((entry, index) => {
-            const dependency = object(entry, `manifest.dependencies[${index}]`)
+            const dependency = record(entry, `manifest.dependencies[${index}]`)
             if (!isModId(dependency.id)) {
                 throw new Error(`manifest.dependencies[${index}].id must be a Mod ID`)
             }
             if (dependencyIds.has(dependency.id)) throw new Error(`duplicate dependency: ${dependency.id}`)
             dependencyIds.add(dependency.id)
-            const range = string(dependency.version, `manifest.dependencies[${index}].version`)
+            const range = nonEmptyString(dependency.version, `manifest.dependencies[${index}].version`)
             semanticVersion(range.startsWith('>=') ? range.slice(2) : range, `manifest.dependencies[${index}].version`)
             return { id: dependency.id, version: range }
         })
@@ -132,36 +141,56 @@ export function sortModManifests(manifests: readonly ModManifest[]): ModManifest
     return sorted
 }
 
+/**
+ * Qualified IDs to values, each with the Mod that registered it when one is given. A checkpoint undoes whatever was
+ * registered after it (freezing too); freezing ends registration and freezes the values.
+ */
 export class Registry<T> {
-    private readonly values = new Map<string, T>()
+    private readonly values = new Map<string, { value: T, ownerId?: string }>()
     private isFrozen = false
 
-    register(id: string, value: T): void {
-        if (this.isFrozen) throw new Error('registry is frozen')
+    /** `name` is what it holds, for its errors: "level rule". */
+    constructor(private readonly name?: string) {}
+
+    register(id: string, value: T, ownerId?: string): void {
+        if (this.isFrozen) throw new Error(this.name ? `${this.name} registry is frozen` : 'registry is frozen')
         if (!isQualifiedId(id)) throw new Error(`invalid qualified ID: ${id}`)
-        if (this.values.has(id)) throw new Error(`duplicate registration: ${id}`)
-        this.values.set(id, value)
+        if (ownerId !== undefined && !isModId(ownerId)) throw new Error(`invalid Mod ID: ${ownerId}`)
+        const existing = this.values.get(id)
+        if (existing) {
+            throw new Error(existing.ownerId === undefined ? `duplicate registration: ${id}`
+                : `${this.name ?? 'registration'} ${id} is already registered by ${existing.ownerId}`)
+        }
+        this.values.set(id, { value, ownerId })
+    }
+
+    has(id: string): boolean {
+        return this.values.has(id)
     }
 
     get(id: string): T | undefined {
-        return this.values.get(id)
+        return this.values.get(id)?.value
     }
 
-    entries(): IterableIterator<[string, T]> {
-        return this.values.entries()
+    get size(): number {
+        return this.values.size
+    }
+
+    *entries(): IterableIterator<[string, T]> {
+        for (const [id, { value }] of this.values) yield [id, value]
     }
 
     checkpoint(): () => void {
         const keys = new Set(this.values.keys()), frozen = this.isFrozen
         return () => {
-            for (const key of this.values.keys()) if (!keys.has(key)) this.values.delete(key)
+            for (const key of [...this.values.keys()]) if (!keys.has(key)) this.values.delete(key)
             this.isFrozen = frozen
         }
     }
 
     freeze(): void {
         this.isFrozen = true
-        for (const value of this.values.values()) deepFreeze(value)
+        for (const { value } of this.values.values()) deepFreeze(value)
     }
 }
 
@@ -176,7 +205,7 @@ function versionSatisfies(version: string, range: string): boolean {
 }
 
 function parseGameplay(value: unknown): ModManifest['gameplay'] {
-    const gameplay = object(value, 'manifest.gameplay')
+    const gameplay = record(value, 'manifest.gameplay')
     return {
         nodeModule: relativePath(gameplay.nodeModule, 'manifest.gameplay.nodeModule'),
         cocosModule: relativePath(gameplay.cocosModule, 'manifest.gameplay.cocosModule'),
@@ -184,7 +213,7 @@ function parseGameplay(value: unknown): ModManifest['gameplay'] {
 }
 
 function parseClient(value: unknown): ModManifest['client'] {
-    const client = object(value, 'manifest.client')
+    const client = record(value, 'manifest.client')
     return {
         module: relativePath(client.module, 'manifest.client.module'),
         ...(client.bundle === undefined ? {} : { bundle: relativePath(client.bundle, 'manifest.client.bundle') }),
@@ -192,7 +221,7 @@ function parseClient(value: unknown): ModManifest['client'] {
 }
 
 function relativePath(value: unknown, name: string): string {
-    const path = string(value, name)
+    const path = nonEmptyString(value, name)
     let decoded: string
     try {
         decoded = decodeURIComponent(path)
@@ -206,7 +235,7 @@ function relativePath(value: unknown, name: string): string {
 }
 
 function semanticVersion(value: unknown, name: string): string {
-    const version = string(value, name)
+    const version = nonEmptyString(value, name)
     const match = version.match(versionPattern)
     if (!match) throw new Error(`${name} must use x.y.z`)
     if (match.slice(1).some(part => !Number.isSafeInteger(Number(part)))) {
@@ -224,23 +253,4 @@ export function deepFreeze(value: unknown, seen = new WeakSet<object>()): void {
         if ('value' in descriptor) deepFreeze(descriptor.value, seen)
     }
     Object.freeze(target)
-}
-
-function object(value: unknown, name: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
-    return value as Record<string, unknown>
-}
-
-function array(value: unknown, name: string): unknown[] {
-    if (!Array.isArray(value)) throw new Error(`${name} must be an array`)
-    return value
-}
-
-function string(value: unknown, name: string): string {
-    if (!nonEmptyString(value)) throw new Error(`${name} must be a non-empty string`)
-    return value
-}
-
-function nonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0
 }

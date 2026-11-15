@@ -4,7 +4,8 @@ import {
     EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
 } from '../state/components'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { tryDropLevelAward } from './levelAward'
+import { levelAwardDropped, tryDropLevelAward } from './levelAward'
+import { spawnItem } from './itemSpawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
@@ -29,8 +30,8 @@ export function dropZombieLoot(world: World, definitions: GameplayDefinitions, e
     if (!zombie || !position) return
     tryDropLevelAward(world, definitions, remover, entity)
     if (zombie.droppedLoot) return
+    if (levelAwardDropped(world) || !canDropLoot(world)) return
     const level = world.resources.get(LevelStateResource).definition
-    if ([...world.query(ItemComponent)].some(item => world.get(item, ItemComponent)!.typeId === level.award.id) || !canDropLoot(world)) return
     zombie.droppedLoot = true
     const body = definitions.zombies[zombie.typeId].body
     // GetZombieDefinition().mZombieValue, the same points the wave picker spends on it.
@@ -75,18 +76,10 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
 /** Coin::CoinInitialize with COIN_MOTION_COIN, or COIN_MOTION_LAWNMOWER_COIN when `collect` (it flies straight to the bank). */
 export function spawnLoot(world: World, definitions: GameplayDefinitions, commands: Pick<CommandBuffer, 'createEntity' | 'add'>,
     typeId: string, x: number, y: number, arrow = false, collect = false): number {
-    const random = world.resources.get(RandomResource)
     // Coins are drawn from a corner offset of their spawn point; sun keeps it.
     const [dx, dy] = typeId === DIAMOND ? [15, 15] : typeId === SILVER || typeId === GOLD ? [10, 8] : [0, 0]
-    const entity = commands.createEntity()
-    commands.add(entity, PositionComponent, { x: x - dx, y: y - dy, row: -1 })
-    commands.add(entity, ItemComponent, {
-        typeId, value: definitions.items[typeId].value, state: collect ? 'collecting' : 'available',
-        velocityX: collect ? 0 : -0.5 + random.nextFloat(), velocityY: collect ? 0 : -3 - random.nextFloat() * 2, accelerationY: 0.15,
-        width: definitions.items[typeId].width,
-        groundY: collect ? 600 : Math.max(80, Math.min(521, y - dy + 45 + random.integer(0, 19))),
-        disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255, ...(arrow ? { arrow: true as const } : {}),
-    })
+    const { value, width } = definitions.items[typeId]
+    const entity = spawnItem(world, commands, { typeId, value, width, arrow }, x - dx, y - dy, collect ? 'mower-coin' : 'coin')
     const events = world.resources.get(EventQueueResource)
     emitServerEvent(events, 'itemSpawned', { entityId: entity, typeId })
     // Collect() without Coin::PlayCollectSound: the mower coin only plays the rising "points" note.

@@ -6,7 +6,6 @@ import {
     LevelStateResource,
     type Plant,
     type PlantAbility,
-    type PlantAbilityState,
     PlantComponent,
     type Position,
     PositionComponent,
@@ -15,6 +14,7 @@ import {
 } from '../state/components'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
+import { PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind, type PlantAbilityKind, type PlantAbilityState } from '@/shared/content/plantAbilities'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
 import { zombieFacingRect, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { hostilePlants } from '../combat/targets'
@@ -23,15 +23,25 @@ import { plantSkipsTick } from './chill'
 import { plantAbilityAnimation } from './animation'
 import { graveAt } from '../level/graves'
 
+/** The ability a plant is put down with: in its first state, for as long as that lasts. */
 export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {
-    if (definition.fuse) return { state: 'fuse', ticks: definition.fuse.ticks }
-    if (definition.mine) return { state: 'arming', ticks: definition.mine.armingTicks }
-    if (definition.chomper) return { state: 'ready', ticks: 0 }
-    if (definition.producer?.growth) return { state: 'small', ticks: definition.producer.growth.ticks }
-    // The landing clip plays once at the body's random 10-15 fps.
-    const land = definition.graveBuster?.landTicks
-    if (land) return { state: 'landing', ticks: random ? random.integer(land.min, land.max) : land.min }
-    return undefined
+    const kind = plantAbilityKind(definition)
+    if (!kind) return undefined
+    return { state: PLANT_ABILITY_STATES_BY_KIND[kind][0], ticks: firstStateTicks(definition, kind, random) }
+}
+
+function firstStateTicks(definition: PlantDefinition, kind: PlantAbilityKind, random?: DeterministicRng): number {
+    switch (kind) {
+        case 'fuse': return definition.fuse!.ticks
+        case 'mine': return definition.mine!.armingTicks
+        case 'chomper': return 0
+        case 'growth': return definition.producer!.growth!.ticks
+        case 'graveBuster': {
+            // The landing clip plays once at the body's random 10-15 fps.
+            const land = definition.graveBuster!.landTicks
+            return random ? random.integer(land.min, land.max) : land.min
+        }
+    }
 }
 
 /** Fuse, mine, chomper, sun-shroom and grave buster plants, following Plant::UpdateAbilities. */

@@ -73,7 +73,7 @@ async function loadMods() {
             stage = 'definitions'
             const content = buildGameplayContent(base!.gameplay, gameplayDefinitions.sources)
             const presentation = buildPresentationDefinitions(base!.presentation, presentationDefinitions.sources)
-            gameplay.validate(content.definitions)
+            gameplay.validate(content.definitions, content.levels)
             new ClientAnimationRegistry(presentation)
             assertPresented(content.definitions, presentation, views)
             manifests.push(manifest)

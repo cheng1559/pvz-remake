@@ -2,7 +2,8 @@ import type { GameSystem } from '@/ecs/index'
 import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
 import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
-import { LevelStateResource, type Plant, type PlantAbilityState, PlantAttackComponent, PlantComponent, RandomResource } from '../state/components'
+import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent, RandomResource } from '../state/components'
+import type { PlantAbilityState } from '@/shared/content/plantAbilities'
 import { plantSkipsTick } from './chill'
 
 /**

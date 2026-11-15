@@ -259,7 +259,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
             assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))
         }
-        result.gameplay.freeze(buildGameplayContent(base(), result.gameplayDefinitions).definitions)
+        const installed = buildGameplayContent(base(), result.gameplayDefinitions)
+        result.gameplay.freeze(installed.definitions, installed.levels)
         assert.match(loader.failures.get('legacy')!, /registerDefinitions is not a function/)
         assert.match(loader.failures.get('dependent')!, /Dependency failed to load: legacy/)
         assert.match(loader.failures.get('broken')!, /client.js.*client initialization failed/)

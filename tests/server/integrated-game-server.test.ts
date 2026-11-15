@@ -13,7 +13,7 @@ ZombieComponent
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { ItemComponent,TutorialResource } from '@/server/state/levelState'
+import { ItemComponent, SkySunResource, TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
 import { getAvailableSun } from '@/server/level/items'
 import { startMower } from '@/server/level/mower'
@@ -349,7 +349,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     world.add(plantId, PlantAttackComponent, { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } })
     const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     damageZombie(world, definitions, corpseId, 270)
-    world.resources.get(TutorialResource).sunAtTick = 1
+    world.resources.get(SkySunResource).atTick = 1
     const sunId = world.createEntity()
     world.add(sunId, PositionComponent, { x: 300, y: 300, row: -1 })
     world.add(sunId, ItemComponent, {

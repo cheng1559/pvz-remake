@@ -3,6 +3,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { PlantComponent, SeedBankResource } from '../state/components'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import type { TutorialScript } from './index'
+import { displayAdviceOnce } from './advice'
 import { packetAvailability, selectedSeedId } from '../seeds/seedBank'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
@@ -68,10 +69,7 @@ function update(world: World, _definitions: GameplayDefinitions, tick: number): 
         tutorial.promptAtTick = undefined
     }
     const waves = world.resources.get(WaveResource)
-    if (!tutorial.zombieWarningShown && waves.index === 0 && tick >= waves.nextWaveAtTick! - 750) {
-        tutorial.zombieWarningShown = true
-        advice(world, 'ADVICE_PLANT_SUNFLOWER3')
-    }
+    if (waves.index === 0 && tick >= waves.nextWaveAtTick! - 750) displayAdviceOnce(world, 'ADVICE_PLANT_SUNFLOWER3', 'tutorial-level2')
 }
 
 export const sunflowerTutorial: TutorialScript = {

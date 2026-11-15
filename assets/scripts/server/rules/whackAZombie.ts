@@ -1,17 +1,19 @@
+import { boolean, exact, integer, nonEmptyString, nonNegativeInteger, positiveInteger } from '@/shared/validate'
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
 import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
-import { ItemComponent, WaveResource } from '../state/levelState'
+import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { startWalk } from '../zombies/animation'
 import { damageZombie, destroyZombie } from '../zombies/damage'
 import { damagePlant } from '../plants/damage'
 import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
+import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { Team } from '@/shared/protocol'
 import { circleRectOverlap } from '../combat/collision'
 import { createGrave, graves as lawnGraves, raiseZombieFromGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
-import { tryDropLevelAward } from '../level/levelAward'
+import { levelAwardDropped, tryDropLevelAward } from '../level/levelAward'
 import { clearCursor } from '../seeds/cursor'
 import type { LevelRuleDefinition } from './registry'
 
@@ -33,27 +35,14 @@ interface WhackState { countdown: number; groupTicks: number; hammer: boolean }
 const parsed = new WeakMap<LevelRule, WhackSettings>()
 
 function parseSettings(rule: LevelRule, name: string): WhackSettings {
-    const source = rule.settings
-    const keys = ['graves', 'refillGraves', 'firstGraveColumn', 'waveTicks', 'zombies', 'sun']
-    for (const key of Object.keys(source)) if (!keys.includes(key)) throw new Error(`${name}.${key} is not supported`)
-    const integer = (key: string, minimum: number) => {
-        const value = source[key]
-        if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) throw new Error(`${name}.${key} must be an integer of at least ${minimum}`)
-        return value
-    }
-    const id = (value: unknown, field: string) => {
-        if (typeof value !== 'string' || !value) throw new Error(`${field} must be an ID`)
-        return value
-    }
-    const zombies = source.zombies
-    if (typeof zombies !== 'object' || zombies === null || Array.isArray(zombies)) throw new Error(`${name}.zombies must be an object`)
-    const types = zombies as Record<string, unknown>
-    if (Object.keys(types).sort().join() !== 'cone,pail,plain') throw new Error(`${name}.zombies needs plain, cone and pail`)
+    const source = exact(rule.settings, ['graves', 'refillGraves', 'firstGraveColumn', 'waveTicks', 'zombies', 'sun'], name)
+    const types = exact(source.zombies, ['plain', 'cone', 'pail'], `${name}.zombies`)
     return {
-        graves: integer('graves', 1), refillGraves: integer('refillGraves', 1), firstGraveColumn: integer('firstGraveColumn', 0),
-        waveTicks: integer('waveTicks', 1),
-        zombies: { plain: id(types.plain, `${name}.zombies.plain`), cone: id(types.cone, `${name}.zombies.cone`), pail: id(types.pail, `${name}.zombies.pail`) },
-        sun: id(source.sun, `${name}.sun`),
+        graves: positiveInteger(source.graves, `${name}.graves`), refillGraves: positiveInteger(source.refillGraves, `${name}.refillGraves`),
+        firstGraveColumn: nonNegativeInteger(source.firstGraveColumn, `${name}.firstGraveColumn`),
+        waveTicks: positiveInteger(source.waveTicks, `${name}.waveTicks`),
+        zombies: Object.fromEntries((['plain', 'cone', 'pail'] as const).map(key => [key, nonEmptyString(types[key], `${name}.zombies.${key}`)])) as WhackSettings['zombies'],
+        sun: nonEmptyString(source.sun, `${name}.sun`),
     }
 }
 
@@ -68,9 +57,7 @@ function whackState(world: World): WhackState {
 }
 
 function awardDropped(world: World): boolean {
-    const level = world.resources.get(LevelStateResource)
-    return level.result !== 'playing' ||
-        [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)
+    return world.resources.get(LevelStateResource).result !== 'playing' || levelAwardDropped(world)
 }
 
 /** Challenge::WhackAZombieSpawning's chances out of 100 per phase: 2 or 3 zombies, and a pail or cone zombie. */
@@ -227,7 +214,7 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     }
     for (const entity of world.query(PositionComponent, ZombieComponent)) {
         const zombie = world.get(entity, ZombieComponent)!
-        if (zombie.state === 'dying' || zombie.state === 'burned' || zombie.state === 'mowered' || !isHostile(zombieTeam(zombie), HAMMER_TEAM)) continue
+        if (isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), HAMMER_TEAM)) continue
         const position = world.get(entity, PositionComponent)!
         if (!reached(position, definitions.zombies[zombie.typeId].body)) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row }
@@ -287,10 +274,9 @@ export const whackAZombieRule: LevelRuleDefinition = {
         waves.ruleState = { ...state }
     },
     parseState(value) {
-        const { countdown, groupTicks, hammer, ...rest } = value
-        if (Object.keys(rest).length || !Number.isSafeInteger(countdown) || (countdown as number) < 0 || !Number.isSafeInteger(groupTicks) ||
-            typeof hammer !== 'boolean') throw new Error('Invalid Whack-a-Zombie state')
-        return { countdown, groupTicks, hammer }
+        const state = exact(value, ['countdown', 'groupTicks', 'hammer'], 'Whack-a-Zombie state')
+        return { countdown: nonNegativeInteger(state.countdown, 'Whack-a-Zombie state.countdown'),
+            groupTicks: integer(state.groupTicks, 'Whack-a-Zombie state.groupTicks'), hammer: boolean(state.hammer, 'Whack-a-Zombie state.hammer') }
     },
     snapshot(world) { return { hammer: whackState(world).hammer } },
     boardClick(session, x, y) {

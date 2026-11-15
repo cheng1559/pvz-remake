@@ -45,7 +45,7 @@ function setup() {
     world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0, packetUpgrades: 0 })
     world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0, cooldownTotal: 0 }] })
     const gameplay = new GameplayRegistry()
-    gameplay.freeze(definitions)
+    gameplay.freeze(definitions, levels)
     initializeLevel(world, true, definitions, gameplay.levelRules)
     const schedule = new Schedule()
     schedule.add('tutorial', createLevelProgressSystem(definitions))

@@ -7,7 +7,8 @@ import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gamepla
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { dropZombieLoot } from '../level/loot'
-import { isEnemyZombie, isHostile, type Team, zombieTeam } from '@/shared/content/teams'
+import { isHostile, type Team, zombieTeam } from '@/shared/content/teams'
+import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
 
 const ZOMBIE_DEATH_HOLD_TICKS = 100
 
@@ -159,10 +160,7 @@ function canDoSuperLongDeath(world: World): boolean {
 /** Board::CountZombiesOnScreen: the zombies' side (not mind-controlled) with their heads, not dying, other than `except`. */
 export function countZombiesOnScreen(world: World, except?: number): number {
     let count = 0
-    for (const entity of world.query(ZombieComponent)) {
-        const zombie = world.get(entity, ZombieComponent)!
-        if (entity !== except && zombie.hasHead && isEnemyZombie(zombie) && zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'mowered') count++
-    }
+    for (const entity of world.query(ZombieComponent)) if (entity !== except && isZombieOnScreen(world.get(entity, ZombieComponent)!)) count++
     return count
 }
 
@@ -189,10 +187,6 @@ export function updateHeadlessZombie(world: World, definitions: GameplayDefiniti
     // Zombie::UpdatePlaying decays sturdier bodies faster.
     zombie.health = Math.max(0, zombie.health - (zombie.maxHealth >= 500 ? 3 : 1))
     if (zombie.health === 0) startZombieDeath(world, definitions, entity, zombie)
-}
-
-function isDeadOrDying(zombie: Zombie): boolean {
-    return zombie.state === 'dying' || zombie.state === 'burned' || zombie.state === 'mowered'
 }
 
 /**

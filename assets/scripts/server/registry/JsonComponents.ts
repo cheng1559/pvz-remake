@@ -1,29 +1,20 @@
 import type { Component, EntityId, World } from '@/ecs/index'
-import { isQualifiedId } from '@/shared/mod'
+import { isQualifiedId, Registry } from '@/shared/mod'
 import { jsonRoundTrip, type JsonObject, type JsonValue } from '@/shared/protocol'
 
 export type SavedComponents = Record<string, JsonObject>
 export class JsonComponents {
-    private readonly entries = new Map<string, { component: Component<JsonObject>, validate?: (value: any) => void }>()
-    private frozen = false
+    private readonly entries = new Registry<{ component: Component<JsonObject>, validate?: (value: any) => void }>('JSON component')
 
     register<T extends JsonObject>(component: Component<T>, validate?: (value: T) => void): void {
-        if (this.frozen) throw new Error('JSON components are frozen')
         if (!isQualifiedId(component.name) || component.name.startsWith('pvz:')) throw new Error(`Invalid Mod component: ${component.name}`)
-        if (this.entries.has(component.name)) throw new Error(`Duplicate JSON component: ${component.name}`)
-        this.entries.set(component.name, { component, validate })
+        this.entries.register(component.name, { component: component as Component<JsonObject>, validate })
     }
-    freeze(): void { this.frozen = true }
-    checkpoint(): () => void {
-        const keys = new Set(this.entries.keys()), frozen = this.frozen
-        return () => {
-            for (const key of this.entries.keys()) if (!keys.has(key)) this.entries.delete(key)
-            this.frozen = frozen
-        }
-    }
+    freeze(): void { this.entries.freeze() }
+    checkpoint(): () => void { return this.entries.checkpoint() }
     capture(world: World, entity: EntityId): SavedComponents {
         const result: SavedComponents = {}
-        for (const [id, entry] of this.entries) {
+        for (const [id, entry] of this.entries.entries()) {
             const value = world.get(entity, entry.component)
             if (value === undefined) continue
             result[id] = this.copy(id, value)
@@ -39,7 +30,7 @@ export class JsonComponents {
     }
     snapshot(world: World): Record<string, JsonValue> {
         const result: Record<string, JsonValue> = {}
-        for (const [id, entry] of this.entries) {
+        for (const [id, entry] of this.entries.entries()) {
             const values: JsonObject = {}
             for (const entity of world.query(entry.component)) values[entity] = this.copy(id, world.get(entity, entry.component)!)
             result[id] = values

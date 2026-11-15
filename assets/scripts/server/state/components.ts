@@ -1,3 +1,5 @@
+import type { ZombieState } from '@/shared/content/zombieStates'
+import type { PlantAbilityState } from '@/shared/content/plantAbilities'
 import type { BoardDefinition, LevelDefinition, ProjectileDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
@@ -30,13 +32,6 @@ export interface Plant extends EntityBehaviorState {
     blinkTicks?: number
 }
 
-export type PlantAbilityState =
-    | 'fuse'
-    | 'arming' | 'rising' | 'armed'
-    | 'ready' | 'biting' | 'got-one' | 'missed' | 'digesting' | 'swallowing'
-    | 'small' | 'growing' | 'big'
-    | 'landing' | 'eating'
-
 export interface PlantAbility {
     state: PlantAbilityState
     ticks: number
@@ -54,8 +49,7 @@ export interface Zombie extends EntityBehaviorState {
     typeId: string
     health: number
     maxHealth: number
-    /** `burned` holds a blackened headless zombie until it crumbles. */
-    state: 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
+    state: ZombieState
     /** Walking speed; while vaulting, the horizontal jump speed. */
     speedPerTick: number
     biteTicks: number

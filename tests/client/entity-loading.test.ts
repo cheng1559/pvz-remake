@@ -11,6 +11,7 @@ import { loadScript } from '../loadScript'
 import { presentationFixture } from './presentationFixture'
 import * as kernelModule from '@/shared/kernel/index'
 import * as protocolModule from '@/shared/protocol'
+import * as gravesModule from '@/shared/content/graves'
 import * as animationModule from '@/shared/content/animation'
 import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
@@ -25,6 +26,7 @@ const clientStubs: Record<string, unknown> = {
     '@/shared/kernel/index': kernelModule,
     '@/shared/protocol': protocolModule,
     '@/shared/protocol/index': protocolModule,
+    '@/shared/content/graves': gravesModule,
     // The renderer tells plants and zombies by their views' classes.
     '@/client/plants/PlantView': { PlantView: class PlantView {} },
     '@/client/zombies/ZombieView': { ZombieView: class ZombieView {} },

@@ -1,6 +1,6 @@
 import type { World } from '@/ecs/index'
 import { PlantComponent } from '../state/components'
-import { emitServerEvent, EventQueueResource } from '../state/events'
+import { displayAdviceOnce } from './advice'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { sunflowerReady, sunflowerTutorial } from './sunflowerTutorial'
 import type { TutorialScript } from './index'
@@ -9,10 +9,7 @@ const sunflowerCount = (world: World) => [...world.query(PlantComponent)]
     .filter(entity => world.get(entity, PlantComponent)!.typeId === 'pvz:sunflower').length
 
 function advice(world: World, key: string, stay = false): void {
-    const displayed = world.resources.get(TutorialResource).displayedAdvice
-    if (displayed.includes(key)) return
-    displayed.push(key)
-    emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key, style: stay ? 'tutorial-later-stay' : 'tutorial-later' })
+    displayAdviceOnce(world, key, stay ? 'tutorial-later-stay' : 'tutorial-later')
 }
 
 /** Board::UpdateTutorial's optional reminder after wave five; it never delays spawning. */

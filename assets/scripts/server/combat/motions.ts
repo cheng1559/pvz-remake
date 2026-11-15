@@ -1,6 +1,7 @@
+import { exact, finite } from '@/shared/validate'
 import { defineResource, type CommandBuffer, type World } from '@/ecs/index'
 import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions, type ProjectileDefinition, type ProjectileOverrides } from '@/shared/content/gameplay'
-import { BASE_MOD_ID, isModId, isQualifiedId } from '@/shared/mod'
+import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { isHostile, plantFacingRect, plantTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import {
     LevelStateResource, PlantComponent, type Position, PositionComponent, type Projectile, ProjectileComponent, RandomResource, ZombieComponent,
@@ -77,36 +78,29 @@ export interface ProjectileMotionDefinition<State = any> {
 }
 
 export class ProjectileMotionRegistry {
-    private readonly entries = new Map<string, { ownerId: string, motion: ProjectileMotionDefinition }>()
-    private frozen = false
+    private readonly motions = new Registry<ProjectileMotionDefinition>('projectile motion')
 
     register(ownerId: string, kind: string, motion: ProjectileMotionDefinition): void {
-        if (this.frozen) throw new Error('projectile motions are frozen')
         if (!isModId(ownerId) || !isQualifiedId(kind) || typeof motion?.move !== 'function') {
             throw new Error(`Invalid projectile motion: ${kind}`)
         }
-        const existing = this.entries.get(kind)
-        if (existing) throw new Error(`projectile motion ${kind} is already registered by ${existing.ownerId}`)
-        this.entries.set(kind, { ownerId, motion: Object.freeze(motion) })
+        this.motions.register(kind, Object.freeze(motion), ownerId)
     }
 
-    has(kind: string): boolean { return this.entries.has(kind) }
+    has(kind: string): boolean { return this.motions.has(kind) }
 
     resolve(kind: string): ProjectileMotionDefinition {
-        const entry = this.entries.get(kind)
-        if (!entry) throw new Error(`Projectile motion is not installed: ${kind}`)
-        return entry.motion
+        const motion = this.motions.get(kind)
+        if (!motion) throw new Error(`Projectile motion is not installed: ${kind}`)
+        return motion
     }
 
     /** A projectile's motion, the one its launcher gave it. */
     of(projectile: Projectile): ProjectileMotionDefinition { return this.resolve(projectile.motion) }
 
-    checkpoint(): () => void {
-        const kinds = new Set(this.entries.keys())
-        return () => { for (const kind of [...this.entries.keys()]) if (!kinds.has(kind)) this.entries.delete(kind) }
-    }
+    checkpoint(): () => void { return this.motions.checkpoint() }
 
-    freeze(): void { this.frozen = true }
+    freeze(): void { this.motions.freeze() }
 }
 
 /** The installed motions, for whatever launches or moves a projectile in this world. */
@@ -145,10 +139,9 @@ export function launchProjectile(world: World, definitions: GameplayDefinitions,
 }
 
 function numbers<Key extends string>(state: unknown, keys: readonly Key[], name: string): Record<Key, number> {
-    if (typeof state !== 'object' || state === null || Array.isArray(state)) throw new Error(`${name} state must be an object`)
-    for (const key of Object.keys(state)) if (!(keys as readonly string[]).includes(key)) throw new Error(`${name} state.${key} is not supported`)
-    for (const key of keys) if (!Number.isFinite((state as Record<string, unknown>)[key])) throw new Error(`${name} state.${key} must be finite`)
-    return state as Record<Key, number>
+    const source = exact(state, keys, `${name} state`)
+    for (const key of keys) finite(source[key], `${name} state.${key}`)
+    return source as Record<Key, number>
 }
 
 /** A zombie's or a plant's body as it faces (`x` its middle), with the side it is on and how fast it walks on. */

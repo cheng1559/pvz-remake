@@ -127,7 +127,7 @@ test('the optional sunflower reminder starts after wave five, persists and never
 test('seed rejection advice is excluded before the first sun prompt and from later levels', () => {
     for (const index of [1, 2, 3, 4]) {
         const server = game(index)
-        if (index > 1) while (!server.save().tutorial.sunsFallen) server.tick()
+        if (index > 1) while (!server.save().skySun.fallen) server.tick()
         const save = server.save()
         save.economy.sun = 0
         const packet = save.seedBank.packets[0]!

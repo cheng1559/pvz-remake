@@ -1,71 +1,34 @@
 import type { World } from '@/ecs/index'
-import { type GameplayDefinitions, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { zombieClip } from '@/shared/content/zombieAnimation'
-import type { EnabledMod, JsonObject } from '@/shared/protocol/index'
+import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
-import {
-    EconomyStateResource,
-    GridItemComponent,
-    LevelStateResource,
-    MowedPlantComponent,
-    PacketUpgradeOfferResource,
-    PlantAttackComponent,
-    PlantComponent,
-    PositionComponent,
-    ProjectileComponent,
-    RandomResource,
-    SeedBankResource,
-    ZombieComponent,
-} from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { EventQueueResource } from '../state/events'
 import { AchievementsResource } from '../achievements/achievements'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
-import { initialPlantAbility } from '../plants/abilities'
+import { ItemComponent, SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
+import { checkSavedEntity, SAVED_COMPONENTS } from './savedComponents'
 import { savedSeedBank } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
-/** Captures a session as a save; `save.ts` defines and validates the format. */
+/**
+ * Captures a session as a save; `save.ts` defines and validates the format. Each entity is saved only as it would be
+ * restored (checkSavedEntity), and everything is copied as the JSON it is.
+ */
 export function saveSession(session: Session): ServerSaveSnapshot {
-    const { world, tick, gameplayTick, mods, definitions, gameplay } = session
+    const { world, tick, gameplayTick, mods, gameplay } = session
     const level = world.resources.get(LevelStateResource)
     const entities = world.queryableEntities().map(entityId => {
         const extensions = gameplay.components.capture(world, entityId)
         const entity: SavedEntity = { entityId, ...(Object.keys(extensions).length ? { extensions } : {}) }
-        const position = world.get(entityId, PositionComponent)
-        const plant = world.get(entityId, PlantComponent)
-        const plantAttack = world.get(entityId, PlantAttackComponent)
-        const mowedPlant = world.get(entityId, MowedPlantComponent)
-        const zombie = world.get(entityId, ZombieComponent)
-        const projectile = world.get(entityId, ProjectileComponent)
-        const item = world.get(entityId, ItemComponent)
-        const gridItem = world.get(entityId, GridItemComponent)
-        if (position) entity.position = { ...position }
-        if (gridItem) entity.gridItem = { ...gridItem }
-        if (plant) {
-            gameplay.plantBehaviors.validateState(plant, definitions.plants[plant.typeId])
-            entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}),
-                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}) }
+        for (const { key, component } of SAVED_COMPONENTS) {
+            const value = world.get(entityId, component)
+            if (value !== undefined) Object.assign(entity, { [key]: asSaved(value) })
         }
-        if (mowedPlant) entity.mowedPlant = jsonRoundTrip(mowedPlant)
-        if (plantAttack) entity.plantAttack = {
-            readyAtTick: plantAttack.readyAtTick,
-            ...(plantAttack.burst ? { burst: { ...plantAttack.burst } } : {}),
-        }
-        if (zombie) {
-            gameplay.zombieBehaviors.validateState(zombie, definitions.zombies[zombie.typeId])
-            entity.zombie = { ...zombie }
-        }
-        if (projectile) entity.projectile = jsonRoundTrip(projectile)
-        if (item) entity.item = { ...item }
+        checkSavedEntity(session, world, entity)
         return entity
     })
-    // A repick is not saved (savedSeedBank).
-    const seedBank = savedSeedBank(world.resources.get(SeedBankResource))
-    const tutorial = world.resources.get(TutorialResource)
-    const wave = world.resources.get(WaveResource)
-    const eventQueue = world.resources.get(EventQueueResource)
+    const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
         schemaVersion: 2,
         levelId: level.id,
@@ -75,44 +38,16 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
         level: { phase: level.phase, result: level.result, paused: level.paused, mowerRows: [...level.mowerRows] },
-        economy: { ...world.resources.get(EconomyStateResource) },
-        ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: { ...world.resources.get(PacketUpgradeOfferResource) } } : {}),
-        seedBank: {
-            selection: { ...seedBank.selection },
-            ...(seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(seedBank.conveyor) }),
-            ...(seedBank.choosing === undefined ? {} : { choosing: seedBank.choosing }),
-            packets: seedBank.packets.map(packet => packet && { ...packet }),
-            ...(seedBank.owned === undefined ? {} : { owned: [...seedBank.owned] }),
-        },
-        tutorial: {
-            ...(tutorial.dialogIndex === undefined ? {} : { dialogIndex: tutorial.dialogIndex }),
-            firstAdventure: tutorial.firstAdventure,
-            step: tutorial.step,
-            zombieWarningShown: tutorial.zombieWarningShown,
-            sunsFallen: tutorial.sunsFallen,
-            ...(tutorial.sunAtTick === undefined ? {} : { sunAtTick: tutorial.sunAtTick }),
-            ...(tutorial.promptAtTick === undefined ? {} : { promptAtTick: tutorial.promptAtTick }),
-            cantAffordAdviceShown: tutorial.cantAffordAdviceShown,
-            seedRefreshAdviceShown: tutorial.seedRefreshAdviceShown,
-            displayedAdvice: [...tutorial.displayedAdvice],
-        },
-        wave: {
-            index: wave.index,
-            ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
-            ...(wave.ruleState === undefined ? {} : { ruleState: jsonRoundTrip(wave.ruleState) as JsonObject }),
-            plan: wave.plan.map(entry => ({ zombies: [...entry.zombies], ...(entry.flagWave ? { flagWave: true as const } : {}) })),
-            ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
-            hugeWaveAnnounced: wave.hugeWaveAnnounced,
-            ...(wave.nextWaveAtTick === undefined ? {} : { nextWaveAtTick: wave.nextWaveAtTick }),
-            ...(wave.accelerateAtTick === undefined ? {} : { accelerateAtTick: wave.accelerateAtTick }),
-            zombieIds: wave.zombieIds.filter(entity => world.get(entity, ZombieComponent) !== undefined),
-            healthToNextWave: wave.healthToNextWave,
-            finalWaveAnnounced: wave.finalWaveAnnounced,
-        },
-        eventQueue: {
-            nextEventId: eventQueue.nextEventId,
-            events: eventQueue.events.map(event => ({ ...event, data: { ...event.data } })),
-        },
+        economy: asSaved(world.resources.get(EconomyStateResource)),
+        ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: asSaved(world.resources.get(PacketUpgradeOfferResource)) } : {}),
+        // A repick is not saved (savedSeedBank).
+        seedBank: asSaved(savedSeedBank(world.resources.get(SeedBankResource))),
+        tutorial: asSaved(world.resources.get(TutorialResource)),
+        skySun: asSaved(world.resources.get(SkySunResource)),
+        // The wave keeps the zombies of its own that are still about.
+        wave: asSaved({ ...wave, zombieIds: wave.zombieIds.filter(entity => world.get(entity, ZombieComponent) !== undefined) }),
+        // Its observer is the session's own (createSession), not the save's.
+        eventQueue: asSaved({ nextEventId: eventQueue.nextEventId, events: eventQueue.events }),
         achievementProgress: jsonRoundTrip(world.resources.get(AchievementsResource).progress),
         entities,
     })
@@ -155,7 +90,6 @@ export function restoreSession(
     }
     const board = definitions.boards[definition.board]
     const cells = save.entities.flatMap(entity => entity.gridItem ? [entity.gridItem] : [])
-    if (cells.some(item => item.row >= board.rows || item.column >= board.columns)) throw new Error('Saved grid item is outside the board')
     if (new Set(cells.map(item => `${item.typeId}:${item.column}:${item.row}`)).size !== cells.length) throw new Error('Saved grid items share a cell')
     // The conveyor system runs on a level's belt with the save's.
     if (!!save.seedBank.conveyor !== !!definition.conveyor) throw new Error('Saved conveyor does not match the level')
@@ -177,23 +111,15 @@ export function restoreSession(
         board,
         ...save.level,
     })
-    world.resources.set(EconomyStateResource, { ...save.economy, sun: Math.min(definitions.economy.maxSun, save.economy.sun) })
-    if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...save.packetUpgradeOffer })
+    world.resources.set(EconomyStateResource, { ...jsonRoundTrip(save.economy), sun: Math.min(definitions.economy.maxSun, save.economy.sun) })
+    if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, jsonRoundTrip(save.packetUpgradeOffer))
     world.resources.set(RandomResource, DeterministicRng.restore(save.random))
-    world.resources.set(SeedBankResource, {
-        selection: { ...save.seedBank.selection },
-        ...(save.seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(save.seedBank.conveyor) }),
-        ...(save.seedBank.choosing === undefined ? {} : { choosing: save.seedBank.choosing }),
-        packets: save.seedBank.packets.map(packet => packet && { ...packet }),
-        ...(save.seedBank.owned === undefined ? {} : { owned: [...save.seedBank.owned] }),
-    })
-    world.resources.set(TutorialResource, { ...save.tutorial })
-    world.resources.set(WaveResource, { ...save.wave })
+    world.resources.set(SeedBankResource, jsonRoundTrip(save.seedBank))
+    world.resources.set(TutorialResource, jsonRoundTrip(save.tutorial))
+    world.resources.set(SkySunResource, jsonRoundTrip(save.skySun))
+    world.resources.set(WaveResource, jsonRoundTrip(save.wave))
     world.resources.get(AchievementsResource).progress = jsonRoundTrip(save.achievementProgress)
-    world.resources.set(EventQueueResource, {
-        nextEventId: save.eventQueue.nextEventId,
-        events: save.eventQueue.events.map(event => ({ ...event, data: { ...event.data } })),
-    })
+    world.resources.set(EventQueueResource, jsonRoundTrip(save.eventQueue))
     for (const saved of save.entities) restoreEntity(content, world, saved)
     if (new Set(save.wave.zombieIds).size !== save.wave.zombieIds.length) {
         throw new Error('Saved wave zombie IDs must be unique')
@@ -213,102 +139,21 @@ export function restoreSession(
 }
 
 function restoreEntity(content: ServerContent, world: World, saved: SavedEntity): void {
-    const { definitions, gameplay } = content
-    // What stands in a cell has it in place of a position.
-    if (saved.gridItem) {
-        if (Object.keys(saved).some(key => key !== 'entityId' && key !== 'gridItem' && key !== 'extensions')) throw new Error(`Saved grid item ${saved.entityId} must have no other component`)
-        world.activateEntity(saved.entityId)
-        gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
-        world.add(saved.entityId, GridItemComponent, { ...saved.gridItem })
-        return
-    }
-    if (!saved.position) throw new Error(`Saved entity ${saved.entityId} has no position`)
-    const kinds = [saved.plant, saved.mowedPlant, saved.zombie, saved.projectile, saved.item]
-        .filter(value => value !== undefined).length
-    if (kinds !== 1 && !(kinds === 0 && saved.extensions && Object.keys(saved.extensions).length)) throw new Error(`Saved entity ${saved.entityId} must have exactly one domain component`)
-    const savedPlantDefinition = saved.plant ? definitions.plants[saved.plant.typeId] : undefined
-    const hasAttack = !!(savedPlantDefinition?.shooter || savedPlantDefinition?.producer)
-    if (saved.plantAttack !== undefined && !hasAttack ||
-        saved.plant !== undefined && savedPlantDefinition !== undefined && hasAttack !== (saved.plantAttack !== undefined)) {
-        throw new Error(`Saved entity ${saved.entityId} has an invalid plant attack component`)
-    }
-    const level = world.resources.get(LevelStateResource)
-    const boardRow = saved.position.row >= 0 && saved.position.row < level.board.rows
-    if (saved.plant) {
-        const plant = definitions.plants[saved.plant.typeId]
-        const seed = definitions.seeds[saved.plant.seedId]
-        if (!plant || seed?.kind !== 'plant' || seed.id !== saved.plant.typeId) {
-            throw new Error(`Unknown saved plant: ${saved.plant.typeId}`)
-        }
-        gameplay.plantBehaviors.validateState(saved.plant, plant)
-        if (!boardRow || saved.plant.column >= level.board.columns) throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
-        if ((saved.plant.ability === undefined) !== (initialPlantAbility(plant) === undefined) ||
-            saved.plant.ability && !abilityMatches(plant, saved.plant.ability.state)) {
-            throw new Error(`Saved plant ${saved.entityId} has an invalid ability state`)
-        }
-        // A plant the server animates has its layers, each on a clip of its own; the blink is counted down to with them.
-        const layers = Object.entries(saved.plant.animations ?? {})
-        if (!plant.animation !== !saved.plant.animations || !plant.animation?.blink !== (saved.plant.blinkTicks === undefined) ||
-            layers.some(([layer, state]) => !plant.animation!.clips[state.clip] || layer !== PLANT_BLINK_LAYER && !Object.hasOwn(plant.animation!.layers, layer))) {
-            throw new Error(`Saved plant ${saved.entityId} has an invalid animation state`)
-        }
-    }
-    if (saved.mowedPlant && (!boardRow || !definitions.plants[saved.mowedPlant.plant.typeId])) {
-        throw new Error(`Unknown saved plant: ${saved.mowedPlant.plant.typeId}`)
-    }
-    if (saved.zombie) {
-        const zombie = definitions.zombies[saved.zombie.typeId]
-        if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
-        gameplay.zombieBehaviors.validateState(saved.zombie, zombie)
-        if (!boardRow || saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.shieldHealth > (zombie.shield?.health ?? 0) ||
-            saved.zombie.hasPole && !zombie.vault || saved.zombie.state === 'vaulting' && !zombie.vault) {
-            throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
-        }
-        const body = saved.zombie.animations[ZOMBIE_BODY_LAYER]
-        if (!body || Object.keys(saved.zombie.animations).some(layer => !Object.hasOwn(zombie.animation.layers, layer)) || !zombie.animation.clips[saved.zombie.walkClip]?.ground ||
-            (saved.zombie.state === 'mowered') !== (body.clip === ZOMBIE_CLIPS.mowered) || !zombieClip(zombie.animation, body.clip) ||
-            saved.zombie.state === 'walking' && !saved.zombie.enrageTicks && !zombie.animation.clips[body.clip].ground ||
-            saved.zombie.state === 'dying' && !zombie.animation.clips[body.clip].marks) {
-            throw new Error(`Saved zombie ${saved.entityId} has an invalid animation state`)
-        }
-    }
-    if (saved.projectile && (!boardRow || !definitions.projectiles[saved.projectile.typeId])) {
-        throw new Error(`Unknown saved projectile: ${saved.projectile.typeId}`)
-    }
-    if (saved.projectile) {
-        // Its motion is installed and takes the state it flew with.
-        const motion = gameplay.projectileMotions.of(saved.projectile)
-        if (!motion.parseState && saved.projectile.motionState !== undefined) throw new Error(`Saved projectile ${saved.entityId} has an invalid motion state`)
-        motion.parseState?.(saved.projectile.motionState)
-    }
-    // A mowing projectile runs on its chew.
-    if (saved.projectile && !!saved.projectile.definition.mow !== (saved.projectile.chompCounter !== undefined)) {
-        throw new Error(`Saved projectile ${saved.entityId} is invalid for its type`)
-    }
-    if (saved.item && (saved.item.typeId !== level.definition.award.id && !definitions.items[saved.item.typeId] || saved.position.row !== -1)) {
-        throw new Error(`Unknown saved item: ${saved.item.typeId}`)
-    }
-
+    checkSavedEntity(content, world, saved)
     world.activateEntity(saved.entityId)
-    gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
-    world.add(saved.entityId, PositionComponent, { ...saved.position })
-    if (saved.plant) world.add(saved.entityId, PlantComponent, { ...saved.plant })
-    if (saved.mowedPlant) world.add(saved.entityId, MowedPlantComponent, jsonRoundTrip(saved.mowedPlant))
-    if (saved.plantAttack) world.add(saved.entityId, PlantAttackComponent, {
-        readyAtTick: saved.plantAttack.readyAtTick, ...(saved.plantAttack.burst ? { burst: { ...saved.plantAttack.burst } } : {}),
-    })
-    if (saved.zombie) world.add(saved.entityId, ZombieComponent, { ...saved.zombie })
-    if (saved.projectile) world.add(saved.entityId, ProjectileComponent, jsonRoundTrip(saved.projectile))
-    if (saved.item) world.add(saved.entityId, ItemComponent, { ...saved.item })
+    content.gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
+    for (const { key, component } of SAVED_COMPONENTS) {
+        const value = saved[key]
+        if (value !== undefined) world.add(saved.entityId, component, jsonRoundTrip(value) as never)
+    }
 }
 
-function abilityMatches(definition: GameplayDefinitions['plants'][string], state: string): boolean {
-    if (definition.fuse) return state === 'fuse'
-    if (definition.mine) return state === 'arming' || state === 'rising' || state === 'armed'
-    if (definition.producer?.growth) return state === 'small' || state === 'growing' || state === 'big'
-    if (definition.graveBuster) return state === 'landing' || state === 'eating'
-    return state === 'ready' || state === 'biting' || state === 'got-one' || state === 'missed' ||
-        state === 'digesting' || state === 'swallowing'
+/**
+ * A state as the JSON it is saved as: what is unset (undefined) is left out, as JSON leaves it; the save's parse then
+ * checks what is left (parseServerSaveSnapshot).
+ */
+function asSaved<T>(value: T): T {
+    return JSON.parse(JSON.stringify(value)) as T
 }
 
 function sameMods(saved: readonly EnabledMod[], expected: readonly EnabledMod[]): boolean {

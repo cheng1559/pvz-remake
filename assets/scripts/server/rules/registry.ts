@@ -1,7 +1,7 @@
 import type { GameSystem, Schedule, World } from '@/ecs/index'
 import type { GameplayDefinitions, GameplayLevels, LevelDefinition, LevelRule } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
-import { isModId, isQualifiedId } from '@/shared/mod'
+import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { defineResource } from '@/ecs/index'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -61,44 +61,37 @@ export function zombieValue(level: LevelDefinition, definitions: GameplayDefinit
 }
 
 export class LevelRuleRegistry {
-    private readonly entries = new Map<string, { ownerId: string; rule: LevelRuleDefinition }>()
-    private frozen = false
+    private readonly rules = new Registry<LevelRuleDefinition>('level rule')
 
     register(ownerId: string, kind: string, rule: LevelRuleDefinition): void {
-        if (this.frozen) throw new Error('level rules are frozen')
         if (!isModId(ownerId) || !isQualifiedId(kind) || typeof rule?.validate !== 'function' || typeof rule.draft !== 'function') {
             throw new Error(`Invalid level rule: ${kind}`)
         }
-        const existing = this.entries.get(kind)
-        if (existing) throw new Error(`level rule ${kind} is already registered by ${existing.ownerId}`)
-        this.entries.set(kind, { ownerId, rule: Object.freeze(rule) })
+        this.rules.register(kind, Object.freeze(rule), ownerId)
     }
 
-    has(kind: string): boolean { return this.entries.has(kind) }
+    has(kind: string): boolean { return this.rules.has(kind) }
 
     /** The installed rule of `level`; undefined for listed waves. */
     get(level: LevelDefinition): LevelRuleDefinition | undefined {
         if (!level.rules) return undefined
-        const entry = this.entries.get(level.rules.kind)
-        if (!entry) throw new Error(`level rule is not installed: ${level.rules.kind}`)
-        return entry.rule
+        const rule = this.rules.get(level.rules.kind)
+        if (!rule) throw new Error(`level rule is not installed: ${level.rules.kind}`)
+        return rule
     }
 
-    checkpoint(): () => void {
-        const kinds = new Set(this.entries.keys())
-        return () => { for (const kind of [...this.entries.keys()]) if (!kinds.has(kind)) this.entries.delete(kind) }
-    }
+    checkpoint(): () => void { return this.rules.checkpoint() }
 
     validate(levels: GameplayLevels, definitions: GameplayDefinitions): void {
         for (const [id, level] of Object.entries(levels.levels)) {
             if (!level.rules) continue
-            const entry = this.entries.get(level.rules.kind)
-            if (!entry) throw new Error(`${id}.rules: level rule is not installed: ${level.rules.kind}`)
-            entry.rule.validate(level.rules, level, definitions, `${id}.rules`)
+            const rule = this.rules.get(level.rules.kind)
+            if (!rule) throw new Error(`${id}.rules: level rule is not installed: ${level.rules.kind}`)
+            rule.validate(level.rules, level, definitions, `${id}.rules`)
         }
     }
 
-    freeze(): void { this.frozen = true }
+    freeze(): void { this.rules.freeze() }
 
     /** The level's waves before the random picks. */
     draft(level: LevelDefinition, definitions: GameplayDefinitions): WaveDraft[] {

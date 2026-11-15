@@ -1,3 +1,4 @@
+import { record } from '@/shared/validate'
 import { parseModManifest, type ModManifest } from '@/shared/mod'
 
 export interface ResourceSprite {
@@ -94,11 +95,6 @@ export function pngSize(files: ContentFiles, file: string): [number, number] {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     if (bytes.length < 24 || view.getUint32(0) !== 0x89504e47 || view.getUint32(12) !== 0x49484452) throw new Error(`Invalid PNG: ${file}`)
     return [view.getUint32(16), view.getUint32(20)]
-}
-
-function record(value: unknown, name: string): Record<string, any> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Invalid ${name}`)
-    return value as Record<string, any>
 }
 
 function qualifiedId(id: string): void {

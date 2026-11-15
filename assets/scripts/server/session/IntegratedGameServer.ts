@@ -26,9 +26,7 @@ export class IntegratedGameServer {
     private readonly content: ServerContent
 
     constructor(definitions: GameplayDefinitions, levels: GameplayLevels, gameplay = new GameplayRegistry()) {
-        gameplay.freeze(definitions)
-        gameplay.validateLevels(levels, definitions)
-        gameplay.achievementTriggers.validate(definitions)
+        gameplay.freeze(definitions, levels)
         this.content = { definitions, levels, gameplay }
     }
 

@@ -1,4 +1,4 @@
-import type { JsonObject } from '@/shared/protocol/index'
+import { exact, positiveInteger } from '@/shared/validate'
 import { BASE_MOD_ID } from '@/shared/mod'
 import { LevelStateResource } from '../state/components'
 import type { AchievementTrigger, AchievementTriggerRegistry } from './achievements'
@@ -17,9 +17,9 @@ export function installBuiltinAchievementTriggers(registry: AchievementTriggerRe
 /** Plant::DoSpecial (SPUDOW!, Explodonator): one of `plants` explodes and takes out at least `kills` zombies. */
 const blastTrigger: AchievementTrigger = {
     validate(settings, definitions, name) {
-        exact(settings, ['plants', 'kills'], [], name)
+        exact(settings, ['plants', 'kills'], name)
         ids(settings.plants, definitions.plants, `${name}.plants`)
-        positive(settings.kills, `${name}.kills`)
+        positiveInteger(settings.kills, `${name}.kills`)
     },
     observe({ event, settings, grant }) {
         if (event.type === 'plantExploded' && (settings.plants as string[]).includes(String(event.data.typeId)) &&
@@ -30,9 +30,9 @@ const blastTrigger: AchievementTrigger = {
 /** Plant::UpdateBowling (Roll Some Heads): a rolling nut of `plants` makes its `hits`th zombie impact, or one after. */
 const bowlingTrigger: AchievementTrigger = {
     validate(settings, definitions, name) {
-        exact(settings, ['plants', 'hits'], [], name)
+        exact(settings, ['plants', 'hits'], name)
         ids(settings.plants, definitions.plants, `${name}.plants`)
-        positive(settings.hits, `${name}.hits`)
+        positiveInteger(settings.hits, `${name}.hits`)
     },
     observe({ event, settings, grant }) {
         if (event.type === 'bowlingImpact' && (settings.plants as string[]).includes(String(event.data.plantTypeId)) &&
@@ -46,9 +46,9 @@ const bowlingTrigger: AchievementTrigger = {
  */
 const coinStreakTrigger: AchievementTrigger = {
     validate(settings, definitions, name) {
-        exact(settings, ['items', 'coins'], [], name)
+        exact(settings, ['items', 'coins'], name)
         ids(settings.items, definitions.items, `${name}.items`)
-        positive(settings.coins, `${name}.coins`)
+        positiveInteger(settings.coins, `${name}.coins`)
     },
     observe({ event, settings, state, grant }) {
         if ((event.type !== 'itemScored' && event.type !== 'itemExpired') || !(settings.items as string[]).includes(String(event.data.typeId))) return
@@ -60,8 +60,8 @@ const coinStreakTrigger: AchievementTrigger = {
 /** Board::AddSun (Sunny Days): the bank holds at least `sun` once sun is added. */
 const sunHeldTrigger: AchievementTrigger = {
     validate(settings, _definitions, name) {
-        exact(settings, ['sun'], [], name)
-        positive(settings.sun, `${name}.sun`)
+        exact(settings, ['sun'], name)
+        positiveInteger(settings.sun, `${name}.sun`)
     },
     observe({ event, settings, grant }) {
         if (event.type === 'sunAdded' && Number(event.data.sun) >= (settings.sun as number)) grant()
@@ -78,13 +78,13 @@ interface PlantSelector { nocturnal?: boolean; plants?: string[] }
  */
 const winPlantingTrigger: AchievementTrigger = {
     validate(settings, definitions, name) {
-        exact(settings, ['boards', 'skipRules'], ['only', 'never'], name)
+        exact(settings, ['boards', 'skipRules'], name, ['only', 'never'])
         ids(settings.boards, definitions.boards, `${name}.boards`)
         strings(settings.skipRules, `${name}.skipRules`)
         if (settings.only === undefined && settings.never === undefined) throw new Error(`${name} needs only or never`)
         for (const key of ['only', 'never'] as const) {
             if (settings[key] === undefined) continue
-            const selector = exact(settings[key], [], ['nocturnal', 'plants'], `${name}.${key}`)
+            const selector = exact(settings[key], [], `${name}.${key}`, ['nocturnal', 'plants'])
             if (selector.nocturnal !== undefined && typeof selector.nocturnal !== 'boolean') throw new Error(`${name}.${key}.nocturnal must be boolean`)
             if (selector.plants !== undefined) ids(selector.plants, definitions.plants, `${name}.${key}.plants`)
         }
@@ -103,14 +103,6 @@ const winPlantingTrigger: AchievementTrigger = {
     },
 }
 
-function exact(value: unknown, keys: readonly string[], optional: readonly string[], name: string): JsonObject {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${name} must be an object`)
-    const source = value as JsonObject
-    for (const key of Object.keys(source)) if (!keys.includes(key) && !optional.includes(key)) throw new Error(`${name}.${key} is not supported`)
-    for (const key of keys) if (source[key] === undefined) throw new Error(`${name}.${key} is required`)
-    return source
-}
-
 function strings(value: unknown, name: string): string[] {
     if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string' || !entry)) throw new Error(`${name} must be an array of IDs`)
     return value as string[]
@@ -118,8 +110,4 @@ function strings(value: unknown, name: string): string[] {
 
 function ids(value: unknown, entries: Readonly<Record<string, unknown>>, name: string): void {
     for (const id of strings(value, name)) if (!Object.hasOwn(entries, id)) throw new Error(`${name} references unknown ID ${id}`)
-}
-
-function positive(value: unknown, name: string): void {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive safe integer`)
 }

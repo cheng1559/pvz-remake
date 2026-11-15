@@ -4,9 +4,9 @@ import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import { EconomyStateResource, LevelStateResource, PositionComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
+import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../level/graves'
 import { startRepick } from '../seeds/seedChooser'
@@ -15,6 +15,7 @@ import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
+import { levelAwardDropped, spawnLevelAward } from '../level/levelAward'
 
 export const executor = { execute: executeCommand }
 
@@ -235,7 +236,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const award = ['award', 'levelaward', 'finalseedpacket'].includes(normalizeDebugName(args[0]))
             const typeId = award ? level.definition.award.id : findType(definitions.items, args[0])
             if (!typeId) return debugCondition('DEBUG_ITEM_NOT_INSTALLED', args[0])
-            if (award && [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === typeId)) return debugCondition('DEBUG_AWARD_EXISTS')
+            if (award && levelAwardDropped(world)) return debugCondition('DEBUG_AWARD_EXISTS')
             const grid = args.length === 3 ? position(args[1], args[2]) : undefined
             if (grid === null) return invalidPosition()
             const x = grid ? level.board.origin.x + grid.column! * level.board.cell.width : 400
@@ -245,17 +246,10 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
                 spawnLoot(world, definitions, world, typeId, x, y)
                 return debugSuccess(`Spawned ${args[0]}`)
             }
-            const entityId = world.createEntity()
-            world.add(entityId, PositionComponent, { x, y, row: -1 })
-            world.add(entityId, ItemComponent, {
-                typeId, value: 1, state: 'available',
-                velocityX: 0, velocityY: -3, accelerationY: 0, groundY: y + 45, disappearTicks: 0, fadeTicks: 0,
-                width: 50, scale: 1, alpha: 255,
-            })
             world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
             world.resources.get(TutorialResource).step = 'complete'
             // Unlike Zombie::TrySpawnLevelAward, the debug award leaves the zombies on the board.
-            emitServerEvent(events, 'levelAwardDropped', { entityId, typeId })
+            spawnLevelAward(world, x, y)
             return debugSuccess(`Spawned ${args[0]}`)
         }
         case 'achievement': {

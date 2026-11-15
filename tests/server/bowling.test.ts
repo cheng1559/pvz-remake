@@ -75,7 +75,7 @@ test('1-5 requires Dave, three shovel digs and the second dialogue before gamepl
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
     assert.equal(server.snapshot().wave.countdown, 200)
     assert.deepEqual(server.snapshot().conveyorPackets, [{ id: 1, seedId: 'pvz:bowling-wallnut', x: 515, selected: false, availability: {} }])
-    assert.equal(server.save().tutorial.sunAtTick, undefined)
+    assert.equal(server.save().skySun.atTick, undefined)
     assert.doesNotThrow(() => parseServerPacket({ type: 'frame', protocolVersion: 1, serverTick: server.snapshot().tick, acknowledgedSequence: 1, snapshot: server.snapshot(), events: [] }))
 })
 

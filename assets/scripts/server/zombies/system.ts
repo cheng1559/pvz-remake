@@ -9,6 +9,7 @@ import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
 import { getDebugRules } from '../debug/debugRules'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { isDeadOrDying } from '@/shared/content/zombieStates'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /**
@@ -227,8 +228,7 @@ function findZombieTarget(
         if (entity === self) continue
         const other = world.get(entity, ZombieComponent)!, at = world.get(entity, PositionComponent)!
         const otherTeam = zombieTeam(other)
-        if (at.row !== position.row || !isHostile(team, otherTeam) || other.health <= 0 || !world.hasEntity(entity) ||
-            other.state === 'dying' || other.state === 'burned' || other.state === 'mowered') continue
+        if (at.row !== position.row || !isHostile(team, otherTeam) || other.health <= 0 || !world.hasEntity(entity) || isDeadOrDying(other)) continue
         const body = zombieFacingRect(definitions.zombies[other.typeId].body, otherTeam)
         const overlap = Math.min(right, at.x + body.x + body.width) - Math.max(left, at.x + body.x)
         if (overlap >= 20 || overlap >= 0 && other.state === 'eating') return entity

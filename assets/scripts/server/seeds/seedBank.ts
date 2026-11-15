@@ -26,13 +26,18 @@ export function seedSunCost(world: World, definitions: GameplayDefinitions, seed
     return getDebugRules(world).sunCost ? definitions.seeds[seedId].sunCost : 0
 }
 
+/** The seed's cost is covered by the sun there is and the sun on its way to the counter. */
+export function seedAffordable(world: World, definitions: GameplayDefinitions, seedId: string): boolean {
+    return getAvailableSun(world, definitions) >= seedSunCost(world, definitions, seedId)
+}
+
 /**
  * SeedPacket::CanPickUp: a bank packet can be taken up once it has recharged (always under `/cooldown false`) and its
  * seed is affordable with the sun there is and is on its way to the counter.
  */
 export function packetAvailability(world: World, definitions: GameplayDefinitions, packet: SeedPacketState, tick: number): SeedAvailability {
     if (getDebugRules(world).cooldown && packet.readyAtTick > tick) return { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }
-    if (getAvailableSun(world, definitions) < seedSunCost(world, definitions, packet.seedId)) return { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }
+    if (!seedAffordable(world, definitions, packet.seedId)) return { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }
     return {}
 }
 

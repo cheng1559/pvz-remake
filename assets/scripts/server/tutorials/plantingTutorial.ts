@@ -1,8 +1,9 @@
 import type { World } from '@/ecs/index'
 import { LevelStateResource, PlantComponent } from '../state/components'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
-import { emitServerEvent, EventQueueResource } from '../state/events'
+import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
+import { adviceShown, displayAdviceOnce } from './advice'
 import type { TutorialScript } from './index'
+import { levelAwardDropped } from '../level/levelAward'
 
 const FIRST_SUN_DELAY_TICKS = 400
 const FIRST_WAVE_DELAY_TICKS = 99
@@ -10,8 +11,7 @@ const SECOND_SEED_PROMPT_DELAY_TICKS = 400
 
 function canUpdate(world: World): boolean {
     const level = world.resources.get(LevelStateResource)
-    return level.result === 'playing' && !level.paused &&
-        ![...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)
+    return level.result === 'playing' && !level.paused && !levelAwardDropped(world)
 }
 
 function notePlantPlaced(world: World, tick: number): void {
@@ -20,7 +20,7 @@ function notePlantPlaced(world: World, tick: number): void {
     const plantCount = [...world.query(PlantComponent)].length
     if (plantCount === 1) {
         tutorial.step = 'first-plant-done'
-        tutorial.sunAtTick = tick + FIRST_SUN_DELAY_TICKS
+        world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
     } else if (plantCount >= 2) {
         tutorial.step = 'complete'
         tutorial.promptAtTick = undefined
@@ -73,25 +73,17 @@ export const plantingTutorial: TutorialScript = {
         const tutorial = world.resources.get(TutorialResource)
         if (tutorial.step === 'pick-first-seed' && [...world.query(PlantComponent)].length >= 1) {
             tutorial.step = 'first-plant-done'
-            tutorial.sunAtTick = tick + FIRST_SUN_DELAY_TICKS
+            world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
         }
     },
     sunSpawned(world) {
         const tutorial = world.resources.get(TutorialResource)
-        const displayed = tutorial.displayedAdvice
-        if (!displayed.includes('ADVICE_CLICK_ON_SUN')) displayed.push('ADVICE_CLICK_ON_SUN')
+        displayAdviceOnce(world, 'ADVICE_CLICK_ON_SUN')
         if (tutorial.step === 'first-plant-done') tutorial.step = 'collect-first-sun'
     },
     seedRejected(world, reason) {
-        const tutorial = world.resources.get(TutorialResource)
-        if (!tutorial.displayedAdvice.includes('ADVICE_CLICK_ON_SUN')) return
-        const flag = reason === 'seed-not-ready' ? 'seedRefreshAdviceShown' : 'cantAffordAdviceShown'
-        if (tutorial[flag]) return
-        tutorial[flag] = true
-        emitServerEvent(world.resources.get(EventQueueResource), 'advice', {
-            key: reason === 'seed-not-ready' ? 'ADVICE_SEED_REFRESH' : 'ADVICE_CANT_AFFORD_PLANT',
-            style: 'tutorial-level1',
-        })
+        if (!adviceShown(world, 'ADVICE_CLICK_ON_SUN')) return
+        displayAdviceOnce(world, reason === 'seed-not-ready' ? 'ADVICE_SEED_REFRESH' : 'ADVICE_CANT_AFFORD_PLANT', 'tutorial-level1')
     },
     update(world, _definitions, tick) {
         if (!canUpdate(world)) return

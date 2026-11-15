@@ -1,6 +1,7 @@
 import type { GameSystem, World } from '@/ecs/index'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
-import { ItemComponent, WaveResource } from '../state/levelState'
+import { WaveResource } from '../state/levelState'
+import { levelAwardDropped } from './levelAward'
 
 export function startConveyor(world: World): void {
     const level = world.resources.get(LevelStateResource)
@@ -18,7 +19,7 @@ export function createConveyorSystem(): GameSystem {
         const level = world.resources.get(LevelStateResource)
         const rules = level.definition.conveyor
         if (!rules || level.paused || level.result !== 'playing') return
-        if ([...world.query(ItemComponent)].some(id => world.get(id, ItemComponent)!.typeId === level.definition.award.id)) return
+        if (levelAwardDropped(world)) return
         const conveyor = world.resources.get(SeedBankResource).conveyor!
         if (++conveyor.moveTicks % rules.moveTicks === 0) {
             conveyor.packets.forEach((packet, index) => { packet.x = Math.max(index * rules.spacing, packet.x - 1) })

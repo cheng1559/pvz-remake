@@ -87,7 +87,7 @@ test('1-10 starts empty, spawns at ticks 100/200, permits free planting across t
     assert.equal(game.snapshot().seedChooser, undefined)
     assert.deepEqual(game.snapshot().seedPackets, [])
     assert.deepEqual(game.snapshot().conveyorPackets, [])
-    assert.equal(game.save().tutorial.sunAtTick, undefined)
+    assert.equal(game.save().skySun.atTick, undefined)
     runCommand(game, { type: 'completeIntro' })
     for (let tick = 0; tick < 99; tick++) game.tick()
     assert.equal(game.snapshot().wave.index, 0)

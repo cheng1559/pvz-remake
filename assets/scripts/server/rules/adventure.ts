@@ -1,5 +1,5 @@
+import { array, exact, nonEmptyString, positiveInteger } from '@/shared/validate'
 import type { LevelDefinition, LevelRule } from '@/shared/content/gameplay'
-import type { JsonObject } from '@/shared/protocol'
 import { type LevelRuleDefinition, zombieValue } from './registry'
 
 /** The settings of `rules: {kind: "pvz:adventure", count, ...}`. */
@@ -11,29 +11,22 @@ export interface AdventureWaveSettings {
 }
 
 export function adventureWaveSettings(rule: LevelRule, level: LevelDefinition, name: string): AdventureWaveSettings {
-    const { pointsScale = 1, fixedZombies = [], ...rest } = rule.settings
-    if (Object.keys(rest).length) throw new Error(`${name}.${Object.keys(rest)[0]} is not supported`)
-    const positive = (value: unknown, field: string) => {
-        if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) throw new Error(`${field} must be a positive safe integer`)
-        return value
-    }
-    if (!Array.isArray(fixedZombies)) throw new Error(`${name}.fixedZombies must be an array`)
+    const settings = exact(rule.settings, [], name, ['pointsScale', 'fixedZombies'])
     return {
-        pointsScale: positive(pointsScale, `${name}.pointsScale`),
-        fixedZombies: fixedZombies.map((value, index) => {
+        pointsScale: settings.pointsScale === undefined ? 1 : positiveInteger(settings.pointsScale, `${name}.pointsScale`),
+        fixedZombies: (settings.fixedZombies === undefined ? [] : array(settings.fixedZombies, `${name}.fixedZombies`)).map((value, index) => {
             const field = `${name}.fixedZombies[${index}]`
-            if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${field} must be an object`)
-            const { zombie, waves, count = 1, ...extra } = value as JsonObject
-            if (Object.keys(extra).length) throw new Error(`${field}.${Object.keys(extra)[0]} is not supported`)
-            if (typeof zombie !== 'string' || !level.zombiePool?.some(entry => entry.id === zombie)) {
-                throw new Error(`${field}.zombie: ${String(zombie)} is not in the zombiePool`)
-            }
-            if (!Array.isArray(waves) || !waves.length) throw new Error(`${field}.waves must be a non-empty array`)
+            const entry = exact(value, ['zombie', 'waves'], field, ['count'])
+            const zombie = nonEmptyString(entry.zombie, `${field}.zombie`)
+            if (!level.zombiePool?.some(pooled => pooled.id === zombie)) throw new Error(`${field}.zombie: ${zombie} is not in the zombiePool`)
+            const waves = array(entry.waves, `${field}.waves`)
+            if (!waves.length) throw new TypeError(`${field}.waves must not be empty`)
             return {
-                zombie, count: positive(count, `${field}.count`),
-                waves: waves.map(wave => {
-                    if (positive(wave, `${field}.waves`) > rule.count) throw new Error(`${field}.waves: wave ${String(wave)} is past the last`)
-                    return wave as number
+                zombie, count: entry.count === undefined ? 1 : positiveInteger(entry.count, `${field}.count`),
+                waves: waves.map(value => {
+                    const wave = positiveInteger(value, `${field}.waves[]`)
+                    if (wave > rule.count) throw new Error(`${field}.waves: wave ${wave} is past the last`)
+                    return wave
                 }),
             }
         }),

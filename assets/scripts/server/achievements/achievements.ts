@@ -1,7 +1,7 @@
 import { defineResource, type World } from '@/ecs/index'
 import type { AchievementDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import type { JsonObject, ServerEvent } from '@/shared/protocol/index'
-import { isModId, isQualifiedId } from '@/shared/mod'
+import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { LevelStateResource } from '../state/components'
 
@@ -56,42 +56,35 @@ export interface AchievementTrigger {
 }
 
 export class AchievementTriggerRegistry {
-    private readonly entries = new Map<string, { ownerId: string; trigger: AchievementTrigger }>()
-    private frozen = false
+    private readonly triggers = new Registry<AchievementTrigger>('achievement trigger')
 
     register(ownerId: string, kind: string, trigger: AchievementTrigger): void {
-        if (this.frozen) throw new Error('achievement triggers are frozen')
         if (!isModId(ownerId) || !isQualifiedId(kind) || typeof trigger?.validate !== 'function' || typeof trigger.observe !== 'function') {
             throw new Error(`Invalid achievement trigger: ${kind}`)
         }
-        const existing = this.entries.get(kind)
-        if (existing) throw new Error(`achievement trigger ${kind} is already registered by ${existing.ownerId}`)
-        this.entries.set(kind, { ownerId, trigger: Object.freeze(trigger) })
+        this.triggers.register(kind, Object.freeze(trigger), ownerId)
     }
 
-    has(kind: string): boolean { return this.entries.has(kind) }
+    has(kind: string): boolean { return this.triggers.has(kind) }
 
     get(kind: string): AchievementTrigger {
-        const entry = this.entries.get(kind)
-        if (!entry) throw new Error(`achievement trigger is not installed: ${kind}`)
-        return entry.trigger
+        const trigger = this.triggers.get(kind)
+        if (!trigger) throw new Error(`achievement trigger is not installed: ${kind}`)
+        return trigger
     }
 
-    checkpoint(): () => void {
-        const kinds = new Set(this.entries.keys())
-        return () => { for (const kind of [...this.entries.keys()]) if (!kinds.has(kind)) this.entries.delete(kind) }
-    }
+    checkpoint(): () => void { return this.triggers.checkpoint() }
 
     validate(definitions: GameplayDefinitions): void {
         for (const [id, achievement] of Object.entries(definitions.achievements)) {
             if (!achievement.trigger) continue
             const name = `achievements.${id}.trigger`
-            if (!this.entries.has(achievement.trigger.kind)) throw new Error(`${name}: achievement trigger is not installed: ${achievement.trigger.kind}`)
+            if (!this.triggers.has(achievement.trigger.kind)) throw new Error(`${name}: achievement trigger is not installed: ${achievement.trigger.kind}`)
             this.get(achievement.trigger.kind).validate(achievement.trigger.settings, definitions, name)
         }
     }
 
-    freeze(): void { this.frozen = true }
+    freeze(): void { this.triggers.freeze() }
 }
 
 /** The session's event observer: every achievement the player lacks sees the event through its trigger. */

@@ -1,3 +1,4 @@
+import { exact, array, nonEmptyString, nonNegativeInteger, positiveInteger } from '@/shared/validate'
 import { BASE_MOD_ID } from '@/shared/mod'
 import {
     parseClientPresentationSnapshot,
@@ -107,38 +108,4 @@ function sameContentSet(left: EnabledMod[], right: EnabledMod[]): boolean {
         const other = byId.get(mod.id)
         return other?.version === mod.version && other.contentHash === mod.contentHash
     })
-}
-
-function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new TypeError(`${name} must be an object`)
-    }
-    const source = value as Record<string, unknown>
-    const allowed = new Set(keys)
-    for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
-    for (const key of keys) if (!(key in source)) throw new TypeError(`${name}.${key} is required`)
-    return source
-}
-
-function array(value: unknown, name: string): unknown[] {
-    if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
-    return value
-}
-
-function nonEmptyString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${name} must be a non-empty string`)
-    return value
-}
-
-function nonNegativeInteger(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-        throw new TypeError(`${name} must be a non-negative safe integer`)
-    }
-    return value
-}
-
-function positiveInteger(value: unknown, name: string): number {
-    const result = nonNegativeInteger(value, name)
-    if (result === 0) throw new TypeError(`${name} must be positive`)
-    return result
 }

@@ -1,5 +1,5 @@
 import { createOffBoardGridItem } from '@/client/view/offBoard'
-import { GRAVE } from '@/shared/protocol/index'
+import { GRAVE } from '@/shared/content/graves'
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'

@@ -317,7 +317,7 @@ test('a homing mower keeps homing: it crushes its target, then turns to the next
 
 test("a plant's own way with its projectile is checked as the projectile's attributes are, and leaves what it is alone", () => {
     for (const [type, overrides, message] of [['shooter', { speed: 0 }, /speed must be positive/], ['lobber', { gravity: 1 }, /gravity is not supported/],
-        ['lobber', { flightTicks: 1.5 }, /flightTicks must be/], ['lobber', { landingOffset: 'low' }, /landingOffset must be a finite/],
+        ['lobber', { flightTicks: 1.5 }, /flightTicks must be/], ['lobber', { landingOffset: 'low' }, /landingOffset must be finite/],
         ['lobber', { spin: 1 }, /spin must be two ordered/], ['seeker', { homingSpeed: 0 }, /homingSpeed must be positive/],
         ['shooter', { hitbox: { x: 0, y: 0, width: 1, height: 1 } }, /hitbox is not supported/], ['shooter', { id: 'pvz:lawnmower', damage: 5 }, /pvz:lawnmower mows/],
         ['seeker', { homingSpeed: 4, turn: 0.01, pierce: true }, undefined]] as const) {

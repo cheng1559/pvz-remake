@@ -44,7 +44,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     if (position.y + item.velocityY < item.groundY) {
                         moveItemWithinHorizontalBounds(world, position, item)
                         position.y += item.velocityY
-                        item.velocityY += 0.15
+                        item.velocityY += item.accelerationY
                     } else {
                         position.y = item.groundY
                         position.x = Math.round(position.x)

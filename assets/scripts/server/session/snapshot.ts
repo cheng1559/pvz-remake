@@ -1,6 +1,6 @@
-import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
+import type { JsonObject, PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
-import { EconomyStateResource, GridItemComponent, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, GridItemComponent, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent, type Plant, type Position } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { heightOverRow, ProjectileMotionsResource } from '../combat/motions'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
@@ -39,27 +39,17 @@ export const snapshot = {
             }
         })
         const plants: WorldSnapshot['plants'] = [...world.query(PositionComponent, PlantComponent)].map(entity => {
-            const position = world.get(entity, PositionComponent)!
-            const { chilledTicks, blinkTicks, recentlyEatenCounter, ...plant } = world.get(entity, PlantComponent)!
+            const plant = world.get(entity, PlantComponent)!
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
-                entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
-                ...(plant.ability ? { ability: { ...plant.ability } } : {}),
-                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
-                ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
+                ...plantSnapshot(entity, plant, world.get(entity, PositionComponent)!),
                 ...(definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
                 ...(production ? { produceTicks: Math.max(0, production.readyAtTick - gameplayTick) } : {}),
             }
         })
         for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
-            const { plant: { chilledTicks, blinkTicks, recentlyEatenCounter, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
-            plants.push({
-                entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...world.get(entity, PositionComponent)!,
-                ...(plant.ability ? { ability: { ...plant.ability } } : {}),
-                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
-                ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
-                mowered: { ticks, ...(left ? { left } : {}) },
-            })
+            const { plant, ticks, left } = world.get(entity, MowedPlantComponent)!
+            plants.push({ ...plantSnapshot(entity, plant, world.get(entity, PositionComponent)!), mowered: { ticks, ...(left ? { left } : {}) } })
         }
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -159,4 +149,14 @@ export const snapshot = {
                 ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
         }
     },
+}
+
+/** A plant as a view draws it, standing or mowed: the server's own counters (its blink, its last bite) left out. */
+function plantSnapshot(entityId: number, { chilledTicks, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant }: Plant, position: Position): PlantSnapshot {
+    return {
+        entityId, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
+        ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+        ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
+        ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
+    }
 }

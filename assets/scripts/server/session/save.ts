@@ -1,33 +1,13 @@
 import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
-import {
-    assertJsonValue,
-    jsonRoundTrip,
-    type JsonObject,
-    type EnabledMod,
-    type ServerEvent,
-    type Team,
-} from '@/shared/protocol/index'
+import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, assertJsonValue } from '@/shared/protocol/index'
+import { isQualifiedId } from '@/shared/mod'
+import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
-import type {
-    GridItem,
-    MowedPlant,
-    Plant,
-    PlantAbility,
-    PlantAbilityState,
-    PlantAttack,
-    Position,
-    Projectile,
-    SeedBankState,
-    SeedPacketState,
-    Zombie,
-} from '../state/components'
-import type { LayerState } from '@/shared/content/animation'
-import type { Item, TutorialState, WaveState } from '../state/levelState'
+import type { GridItem, MowedPlant, Plant, PlantAttack, Position, Projectile, SeedBankState, SeedPacketState, Zombie } from '../state/components'
+import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
-import { isQualifiedId } from '@/shared/mod'
-import { parseProjectile as parseProjectileDefinition } from '@/shared/content/gameplay'
-import { checkGraveRanges, GRAVE } from '@/shared/protocol'
+import { SAVED_COMPONENTS } from './savedComponents'
 
 export interface SavedEntity {
     extensions?: SavedComponents
@@ -57,6 +37,7 @@ export interface ServerSaveSnapshot {
     packetUpgradeOffer?: { cost: number }
     seedBank: SeedBankState
     tutorial: TutorialState
+    skySun: SkySunState
     wave: WaveState
     eventQueue: EventQueue
     /** Each achievement's trigger state in the level (AchievementState.progress). */
@@ -66,10 +47,10 @@ export interface ServerSaveSnapshot {
 
 export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
-    const save = optionalExact(value, [
+    const save = exact(value, [
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
-        'seedBank', 'tutorial', 'wave', 'eventQueue', 'achievementProgress', 'entities',
-    ], ['packetUpgradeOffer'], 'server save')
+        'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', 'entities',
+    ], 'server save', ['packetUpgradeOffer'])
     if (save.schemaVersion !== 2) throw new TypeError('server save.schemaVersion must be 2')
 
     const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
@@ -82,20 +63,14 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     DeterministicRng.restore(random)
 
     const levelSource = exact(save.level, ['phase', 'result', 'paused', 'mowerRows'], 'server save.level')
-    if (levelSource.phase !== 'intro' && levelSource.phase !== 'gameplay') {
-        throw new TypeError('server save.level.phase is unknown')
-    }
-    if (levelSource.result !== 'playing' && levelSource.result !== 'won' && levelSource.result !== 'lost') {
-        throw new TypeError('server save.level.result is unknown')
-    }
     const level = {
-        phase: levelSource.phase as 'intro' | 'gameplay',
-        result: levelSource.result as 'playing' | 'won' | 'lost',
+        phase: oneOf(levelSource.phase, ['intro', 'gameplay'] as const, 'server save.level.phase'),
+        result: oneOf(levelSource.result, ['playing', 'won', 'lost'] as const, 'server save.level.result'),
         paused: boolean(levelSource.paused, 'server save.level.paused'),
         mowerRows: array(levelSource.mowerRows, 'server save.level.mowerRows').map(row => integer(row, 'server save.level.mowerRows[]')),
     }
 
-    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'], 'server save.economy')
+    const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'])
     const economy = {
         sun: integer(economySource.sun, 'server save.economy.sun'),
         money: integer(economySource.money, 'server save.economy.money'),
@@ -107,6 +82,11 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     }
     const seedBank = parseSeedBank(save.seedBank)
     const tutorial = parseTutorial(save.tutorial)
+    const skySunSource = exact(save.skySun, ['fallen'], 'server save.skySun', ['atTick'])
+    const skySun: SkySunState = {
+        fallen: nonNegativeInteger(skySunSource.fallen, 'server save.skySun.fallen'),
+        ...(skySunSource.atTick === undefined ? {} : { atTick: nonNegativeInteger(skySunSource.atTick, 'server save.skySun.atTick') }),
+    }
     const wave = parseWave(save.wave)
     const eventQueue = parseEventQueue(save.eventQueue)
     const achievementProgress = Object.fromEntries(Object.entries(record(save.achievementProgress, 'server save.achievementProgress'))
@@ -146,6 +126,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         }),
         seedBank,
         tutorial,
+        skySun,
         wave,
         eventQueue,
         achievementProgress,
@@ -154,7 +135,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
 }
 
 function parseSeedBank(value: unknown): SeedBankState {
-    const source = optionalExact(value, ['packets', 'selection'], ['choosing', 'conveyor', 'owned'], 'server save.seedBank')
+    const source = exact(value, ['packets', 'selection'], 'server save.seedBank', ['choosing', 'conveyor', 'owned'])
     const selected = record(source.selection, 'seedBank.selection')
     let selection: SeedBankState['selection']
     switch (selected.mode) {
@@ -171,28 +152,28 @@ function parseSeedBank(value: unknown): SeedBankState {
         default: throw new Error('Invalid saved selection')
     }
     const parsePacket = (value: unknown, name: string): SeedPacketState => {
-        const packet = optionalExact(value, ['seedId', 'readyAtTick', 'cooldownTotal'], ['team'], name)
+        const packet = exact(value, ['seedId', 'readyAtTick', 'cooldownTotal'], name, ['team'])
         return {
             seedId: nonEmptyString(packet.seedId, `${name}.seedId`),
             readyAtTick: nonNegativeInteger(packet.readyAtTick, `${name}.readyAtTick`),
             cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`),
-            ...(packet.team === undefined ? {} : { team: team(packet.team, `${name}.team`) }),
+            ...(packet.team === undefined ? {} : { team: oneOf(packet.team, TEAMS, `${name}.team`) }),
         }
     }
     const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) =>
         value === null ? null : parsePacket(value, `server save.seedBank.packets[${index}]`))
     let conveyor: SeedBankState['conveyor']
     if (source.conveyor !== undefined) {
-        const data = optionalExact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], ['lastSeedId'], 'seedBank.conveyor')
+        const data = exact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], 'seedBank.conveyor', ['lastSeedId'])
         conveyor = {
             nextId: positiveInteger(data.nextId, 'conveyor.nextId'), spawnAtTick: nonNegativeInteger(data.spawnAtTick, 'conveyor.spawnAtTick'),
             moveTicks: nonNegativeInteger(data.moveTicks, 'conveyor.moveTicks'),
             ...(data.lastSeedId === undefined ? {} : { lastSeedId: nonEmptyString(data.lastSeedId, 'conveyor.lastSeedId') }),
             packets: array(data.packets, 'conveyor.packets').map(value => {
                 const packet = exact(value, ['id', 'x', 'card'], 'conveyor packet')
-                const card = optionalExact(packet.card, ['seedId'], ['team'], 'conveyor packet.card')
+                const card = exact(packet.card, ['seedId'], 'conveyor packet.card', ['team'])
                 return { id: positiveInteger(packet.id, 'packet.id'), x: finite(packet.x, 'packet.x'), card: {
-                    seedId: nonEmptyString(card.seedId, 'packet.card.seedId'), ...(card.team === undefined ? {} : { team: team(card.team, 'packet.card.team') }) } }
+                    seedId: nonEmptyString(card.seedId, 'packet.card.seedId'), ...(card.team === undefined ? {} : { team: oneOf(card.team, TEAMS, 'packet.card.team') }) } }
             }),
         }
         if (new Set(conveyor.packets.map(packet => packet.id)).size !== conveyor.packets.length ||
@@ -207,35 +188,13 @@ function parseSeedBank(value: unknown): SeedBankState {
 }
 
 function parseTutorial(value: unknown): TutorialState {
-    const source = optionalExact(
-        value,
-        ['firstAdventure', 'step', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice'],
-        ['sunAtTick', 'promptAtTick', 'dialogIndex'],
-        'server save.tutorial',
-    )
-    if (source.step !== 'pick-first-seed' && source.step !== 'plant-first-seed' &&
-        source.step !== 'first-plant-done' && source.step !== 'collect-first-sun' &&
-        source.step !== 'collect-more-sun' && source.step !== 'enough-sun' &&
-        source.step !== 'pick-second-seed' && source.step !== 'plant-second-seed' &&
-        source.step !== 'pick-sunflower' && source.step !== 'plant-sunflower' &&
-        source.step !== 'refresh-sunflower' && source.step !== 'waiting-for-sunflowers' && source.step !== 'complete' &&
-        !['dave-opening', 'dave-bowling', 'shovel-pickup', 'shovel-dig', 'shovel-keep-digging',
-            'whack-before-pick-seed', 'whack-pick-seed', 'whack-done'].includes(String(source.step))) {
-        throw new TypeError('server save.tutorial.step is unknown')
-    }
+    const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex'])
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
-        step: source.step as TutorialState['step'],
-        cantAffordAdviceShown: boolean(source.cantAffordAdviceShown, 'server save.tutorial.cantAffordAdviceShown'),
-        seedRefreshAdviceShown: boolean(source.seedRefreshAdviceShown, 'server save.tutorial.seedRefreshAdviceShown'),
-        zombieWarningShown: boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown'),
-        sunsFallen: nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen'),
+        step: oneOf(source.step, TUTORIAL_STEPS, 'server save.tutorial.step'),
         displayedAdvice: array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
             .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]')),
         ...(source.dialogIndex === undefined ? {} : { dialogIndex: nonNegativeInteger(source.dialogIndex, 'tutorial.dialogIndex') }),
-    }
-    if (source.sunAtTick !== undefined) {
-        result.sunAtTick = nonNegativeInteger(source.sunAtTick, 'server save.tutorial.sunAtTick')
     }
     if (source.promptAtTick !== undefined) {
         result.promptAtTick = nonNegativeInteger(source.promptAtTick, 'server save.tutorial.promptAtTick')
@@ -244,14 +203,9 @@ function parseTutorial(value: unknown): TutorialState {
 }
 
 function parseWave(value: unknown): WaveState {
-    const source = optionalExact(
-        value,
-        ['index', 'plan', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'rowPicks', 'graveRiseAtTick', 'ruleState'],
-        'server save.wave',
-    )
+    const source = exact(value, ['index', 'plan', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'], 'server save.wave', ['nextWaveAtTick', 'accelerateAtTick', 'rowPicks', 'graveRiseAtTick', 'ruleState'])
     const plan = array(source.plan, 'server save.wave.plan').map((value, index) => {
-        const wave = optionalExact(value, ['zombies'], ['flagWave'], `server save.wave.plan[${index}]`)
+        const wave = exact(value, ['zombies'], `server save.wave.plan[${index}]`, ['flagWave'])
         return { zombies: array(wave.zombies, `server save.wave.plan[${index}].zombies`).map(id => nonEmptyString(id, 'wave zombie ID')),
             ...(wave.flagWave === undefined ? {} : { flagWave: trueFlag(wave.flagWave, `server save.wave.plan[${index}].flagWave`) }) }
     })
@@ -276,7 +230,7 @@ function parseWave(value: unknown): WaveState {
     if (source.rowPicks !== undefined) {
         result.rowPicks = array(source.rowPicks, 'server save.wave.rowPicks').map((value, index) => {
             const name = `server save.wave.rowPicks[${index}]`
-            const row = optionalExact(value, ['row', 'lastPicked', 'secondLastPicked'], ['mowedAtWave'], name)
+            const row = exact(value, ['row', 'lastPicked', 'secondLastPicked'], name, ['mowedAtWave'])
             return {
                 row: nonNegativeInteger(row.row, `${name}.row`),
                 lastPicked: nonNegativeInteger(row.lastPicked, `${name}.lastPicked`),
@@ -313,25 +267,13 @@ function parseEventQueue(value: unknown): EventQueue {
 
 function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
     const name = `server save.entities[${index}]`
-    const source = optionalExact(value, ['entityId'], [
-        'position', 'plant', 'mowedPlant', 'plantAttack', 'zombie', 'projectile', 'item', 'gridItem', 'extensions',
-    ], name)
+    const source = exact(value, ['entityId'], name, [...SAVED_COMPONENTS.map(entry => entry.key), 'extensions'])
     const entityId = positiveInteger(source.entityId, `${name}.entityId`)
     if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
     const entity: SavedEntity = { entityId }
-    if (source.position !== undefined) entity.position = parsePosition(source.position, `${name}.position`)
-    if (source.gridItem !== undefined) entity.gridItem = parseGridItem(source.gridItem, `${name}.gridItem`)
-    if (source.plant !== undefined) entity.plant = parsePlant(source.plant, `${name}.plant`)
-    if (source.mowedPlant !== undefined) {
-        const mowed = optionalExact(source.mowedPlant, ['plant', 'ticks'], ['left'], `${name}.mowedPlant`)
-        if (mowed.left !== undefined && mowed.left !== true) throw new TypeError(`${name}.mowedPlant.left must be true`)
-        entity.mowedPlant = { plant: parsePlant(mowed.plant, `${name}.mowedPlant.plant`), ticks: nonNegativeInteger(mowed.ticks, `${name}.mowedPlant.ticks`),
-            ...(mowed.left ? { left: true } : {}) }
+    for (const { key, parse } of SAVED_COMPONENTS) {
+        if (source[key] !== undefined) Object.assign(entity, { [key]: parse(source[key], `${name}.${key}`) })
     }
-    if (source.plantAttack !== undefined) entity.plantAttack = parsePlantAttack(source.plantAttack, `${name}.plantAttack`)
-    if (source.zombie !== undefined) entity.zombie = parseZombie(source.zombie, `${name}.zombie`)
-    if (source.projectile !== undefined) entity.projectile = parseProjectile(source.projectile, `${name}.projectile`)
-    if (source.item !== undefined) entity.item = parseItem(source.item, `${name}.item`)
     if (source.extensions !== undefined) {
         const extensions = record(source.extensions, `${name}.extensions`)
         entity.extensions = Object.fromEntries(Object.entries(extensions).map(([id, data]) => {
@@ -341,256 +283,4 @@ function parseEntity(value: unknown, index: number, nextEntity: number): SavedEn
     }
     if (Object.keys(entity).length === 1) throw new TypeError(`${name} must contain a component`)
     return entity
-}
-
-/** A grave: the only thing of a cell there is. */
-function parseGridItem(value: unknown, name: string): GridItem {
-    const grave = optionalExact(value, ['typeId', 'column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], name)
-    if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
-    const result = { typeId: GRAVE, column: nonNegativeInteger(grave.column, `${name}.column`), row: nonNegativeInteger(grave.row, `${name}.row`),
-        variant: integer(grave.variant, `${name}.variant`), riseDelay: integer(grave.riseDelay, `${name}.riseDelay`),
-        offsetX: integer(grave.offsetX, `${name}.offsetX`), offsetY: integer(grave.offsetY, `${name}.offsetY`),
-        ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, `${name}.special`) }),
-        ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, `${name}.riseAtTick`) }),
-        ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, `${name}.team`) }) } as const
-    checkGraveRanges(result, name)
-    return result
-}
-
-function parsePosition(value: unknown, name: string): Position {
-    const source = exact(value, ['x', 'y', 'row'], name)
-    return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`), row: integer(source.row, `${name}.row`) }
-}
-
-
-const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
-    'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
-    'small', 'growing', 'big', 'landing', 'eating',
-]
-
-function parsePlant(value: unknown, name: string): Plant {
-    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], ['ability', 'behaviorState', 'team', 'animations', 'blinkTicks'], name)
-    const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
-    const health = nonNegativeInteger(source.health, `${name}.health`)
-    if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
-    return {
-        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-        seedId: nonEmptyString(source.seedId, `${name}.seedId`),
-        column: nonNegativeInteger(source.column, `${name}.column`),
-        health,
-        maxHealth,
-        recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
-        chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
-        ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
-        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
-        ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
-        ...parseBehaviorState(source, name),
-    }
-}
-
-/** What the layers of an animation play, a plant's or a zombie's, by layer. */
-function parseLayers(value: unknown, name: string): Record<string, LayerState> {
-    return Object.fromEntries(Object.entries(record(value, name)).map(([layer, entry]) => {
-        const state = optionalExact(entry, ['clip', 'time', 'rate'], ['hidden'], `${name}.${layer}`)
-        if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.${layer}.hidden must be true`)
-        return [layer, {
-            ...(state.hidden ? { hidden: true as const } : {}),
-            clip: nonEmptyString(state.clip, `${name}.${layer}.clip`),
-            time: nonNegativeFinite(state.time, `${name}.${layer}.time`),
-            rate: nonNegativeFinite(state.rate, `${name}.${layer}.rate`),
-        }]
-    }))
-}
-
-function parsePlantAbility(value: unknown, name: string): PlantAbility {
-    const source = optionalExact(value, ['state', 'ticks'], ['prey'], name)
-    if (!PLANT_ABILITY_STATES.includes(source.state as PlantAbilityState)) throw new TypeError(`${name}.state is unknown`)
-    if (source.prey !== undefined && source.prey !== 'plant') throw new TypeError(`${name}.prey must be plant`)
-    return {
-        state: source.state as PlantAbilityState, ticks: nonNegativeInteger(source.ticks, `${name}.ticks`),
-        ...(source.prey === 'plant' ? { prey: 'plant' as const } : {}),
-    }
-}
-
-function parsePlantAttack(value: unknown, name: string): PlantAttack {
-    const source = optionalExact(value, ['readyAtTick'], ['burst'], name)
-    const burst = source.burst === undefined ? undefined : exact(source.burst, ['fireAtTick', 'shotsRemaining'], `${name}.burst`)
-    return {
-        readyAtTick: nonNegativeInteger(source.readyAtTick, `${name}.readyAtTick`),
-        ...(burst === undefined ? {} : { burst: {
-            fireAtTick: nonNegativeInteger(burst.fireAtTick, `${name}.burst.fireAtTick`),
-            shotsRemaining: positiveInteger(burst.shotsRemaining, `${name}.burst.shotsRemaining`),
-        } }),
-    }
-}
-
-const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
-
-function parseZombie(value: unknown, name: string): Zombie {
-    const source = optionalExact(value, [
-        'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
-        'moweredTicksRemaining', 'walkClip', 'animations', 'hasHead', 'hasArm',
-        'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
-    ], ['behaviorState', 'droppedLoot', 'team'], name)
-    if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
-    const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
-    const health = nonNegativeInteger(source.health, `${name}.health`)
-    if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
-    const state = source.state as Zombie['state']
-    return {
-        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-        health,
-        maxHealth,
-        state,
-        speedPerTick: finite(source.speedPerTick, `${name}.speedPerTick`),
-        biteTicks: nonNegativeInteger(source.biteTicks, `${name}.biteTicks`),
-        deathTicksRemaining: nonNegativeInteger(source.deathTicksRemaining, `${name}.deathTicksRemaining`),
-        moweredTicksRemaining: nonNegativeInteger(source.moweredTicksRemaining, `${name}.moweredTicksRemaining`),
-        walkClip: nonEmptyString(source.walkClip, `${name}.walkClip`),
-        animations: parseLayers(source.animations, `${name}.animations`),
-        hasHead: boolean(source.hasHead, `${name}.hasHead`),
-        hasTongue: boolean(source.hasTongue, `${name}.hasTongue`),
-        hasArm: boolean(source.hasArm, `${name}.hasArm`),
-        groanCounter: integer(source.groanCounter, `${name}.groanCounter`),
-        helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
-        shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
-        chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
-        hasPole: boolean(source.hasPole, `${name}.hasPole`),
-        enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`),
-        riseTicks: nonNegativeInteger(source.riseTicks, `${name}.riseTicks`),
-        ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
-        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...parseBehaviorState(source, name),
-    }
-}
-
-function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId', 'definition', 'motion'], ['team', 'chompCounter', 'motionState', 'hits'], name)
-    return {
-        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-        definition: parseProjectileDefinition(source.definition, `${name}.definition`),
-        motion: nonEmptyString(source.motion, `${name}.motion`),
-        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.chompCounter === undefined ? {} : { chompCounter: nonNegativeInteger(source.chompCounter, `${name}.chompCounter`) }),
-        ...(source.hits === undefined ? {} : { hits: array(source.hits, `${name}.hits`).map(hit => positiveInteger(hit, `${name}.hits[]`)) }),
-        // Its motion checks it (restoreEntity).
-        ...(source.motionState === undefined ? {} : { motionState: jsonRoundTrip(record(source.motionState, `${name}.motionState`)) as JsonObject }),
-    }
-}
-
-function parseItem(value: unknown, name: string): Item {
-    const source = optionalExact(value, [
-        'typeId', 'value', 'state', 'velocityX', 'velocityY', 'accelerationY', 'width', 'groundY', 'disappearTicks', 'fadeTicks',
-        'scale', 'alpha',
-    ], ['landed', 'arrow'], name)
-    if (source.state !== 'available' && source.state !== 'collecting' && source.state !== 'fading') {
-        throw new TypeError(`${name}.state is unknown`)
-    }
-    const alpha = nonNegativeInteger(source.alpha, `${name}.alpha`)
-    const width = nonNegativeFinite(source.width, `${name}.width`)
-    if (alpha > 255) throw new TypeError(`${name}.alpha must not exceed 255`)
-    if (width === 0) throw new TypeError(`${name}.width must be positive`)
-    return {
-        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-        value: positiveInteger(source.value, `${name}.value`),
-        state: source.state,
-        velocityX: finite(source.velocityX, `${name}.velocityX`),
-        velocityY: finite(source.velocityY, `${name}.velocityY`),
-        accelerationY: finite(source.accelerationY, `${name}.accelerationY`),
-        width,
-        groundY: nonNegativeFinite(source.groundY, `${name}.groundY`),
-        disappearTicks: nonNegativeInteger(source.disappearTicks, `${name}.disappearTicks`),
-        fadeTicks: nonNegativeInteger(source.fadeTicks, `${name}.fadeTicks`),
-        scale: nonNegativeFinite(source.scale, `${name}.scale`),
-        alpha,
-        ...(source.landed === undefined ? {} : { landed: trueFlag(source.landed, `${name}.landed`) }),
-        ...(source.arrow === undefined ? {} : { arrow: trueFlag(source.arrow, `${name}.arrow`) }),
-    }
-}
-
-function optionalExact(
-    value: unknown,
-    required: readonly string[],
-    optional: readonly string[],
-    name: string,
-): Record<string, unknown> {
-    const source = record(value, name)
-    const allowed = new Set([...required, ...optional])
-    for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
-    for (const key of required) if (!(key in source)) throw new TypeError(`${name}.${key} is required`)
-    return source
-}
-
-function parseBehaviorState(source: Record<string, unknown>, name: string) {
-    return source.behaviorState === undefined ? {} : {
-        behaviorState: jsonRoundTrip(record(source.behaviorState, `${name}.behaviorState`)) as JsonObject,
-    }
-}
-
-function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
-    return optionalExact(value, keys, [], name)
-}
-
-function record(value: unknown, name: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${name} must be an object`)
-    return value as Record<string, unknown>
-}
-
-function array(value: unknown, name: string): unknown[] {
-    if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
-    return value
-}
-
-function team(value: unknown, name: string): Team {
-    if (value !== 'plants' && value !== 'zombies') throw new TypeError(`${name} must be plants or zombies`)
-    return value
-}
-
-function nonEmptyString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${name} must be a non-empty string`)
-    return value
-}
-
-function trueFlag(value: unknown, name: string): true {
-    if (value !== true) throw new TypeError(`${name} must be true`)
-    return true
-}
-
-function plantsTeam(value: unknown, name: string): 'plants' {
-    if (value !== 'plants') throw new TypeError(`${name} must be plants`)
-    return 'plants'
-}
-
-function boolean(value: unknown, name: string): boolean {
-    if (typeof value !== 'boolean') throw new TypeError(`${name} must be boolean`)
-    return value
-}
-
-function finite(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
-    return value
-}
-
-function nonNegativeFinite(value: unknown, name: string): number {
-    const result = finite(value, name)
-    if (result < 0) throw new TypeError(`${name} must be non-negative`)
-    return result
-}
-
-function integer(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new TypeError(`${name} must be a safe integer`)
-    return value
-}
-
-function nonNegativeInteger(value: unknown, name: string): number {
-    const result = integer(value, name)
-    if (result < 0) throw new TypeError(`${name} must be non-negative`)
-    return result
-}
-
-function positiveInteger(value: unknown, name: string): number {
-    const result = integer(value, name)
-    if (result < 1) throw new TypeError(`${name} must be positive`)
-    return result
 }

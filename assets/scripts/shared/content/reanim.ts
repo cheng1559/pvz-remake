@@ -1,3 +1,4 @@
+import { nonEmptyString, finite, positiveFinite } from '@/shared/validate'
 import { isQualifiedId } from '@/shared/mod/index'
 import { kernel, KEY } from '@/shared/kernel/index'
 
@@ -91,7 +92,7 @@ export function parseReanim(value: unknown): Reanim {
     if (source.schemaVersion !== 2) throw new Error('reanim.schemaVersion must be 2')
     if (!isQualifiedId(source.id)) throw new Error('reanim.id must be a qualified ID')
 
-    const durationSeconds = positiveNumber(source.durationSeconds, 'reanim.durationSeconds')
+    const durationSeconds = positiveFinite(source.durationSeconds, 'reanim.durationSeconds')
     if (!Array.isArray(source.tracks) || source.tracks.length === 0) {
         throw new Error('reanim.tracks must be a non-empty array')
     }
@@ -119,12 +120,12 @@ export function parseReanim(value: unknown): Reanim {
                 ],
                 keyframeName,
             )
-            const timeSeconds = finiteNumber(frame.timeSeconds, `${keyframeName}.timeSeconds`)
+            const timeSeconds = finite(frame.timeSeconds, `${keyframeName}.timeSeconds`)
             if (timeSeconds < 0 || timeSeconds > durationSeconds || timeSeconds <= previousTime) {
                 throw new Error(`${keyframeName}.timeSeconds must increase within the animation duration`)
             }
             previousTime = timeSeconds
-            const alpha = finiteNumber(frame.alpha, `${keyframeName}.alpha`)
+            const alpha = finite(frame.alpha, `${keyframeName}.alpha`)
             if (alpha < 0 || alpha > 1) throw new Error(`${keyframeName}.alpha must be between 0 and 1`)
             if (frame.sprite !== null && !isQualifiedId(frame.sprite)) {
                 throw new Error(`${keyframeName}.sprite must be null or a qualified ID`)
@@ -135,12 +136,12 @@ export function parseReanim(value: unknown): Reanim {
 
             return {
                 timeSeconds,
-                x: finiteNumber(frame.x, `${keyframeName}.x`),
-                y: finiteNumber(frame.y, `${keyframeName}.y`),
-                scaleX: finiteNumber(frame.scaleX, `${keyframeName}.scaleX`),
-                scaleY: finiteNumber(frame.scaleY, `${keyframeName}.scaleY`),
-                skewX: finiteNumber(frame.skewX, `${keyframeName}.skewX`),
-                skewY: finiteNumber(frame.skewY, `${keyframeName}.skewY`),
+                x: finite(frame.x, `${keyframeName}.x`),
+                y: finite(frame.y, `${keyframeName}.y`),
+                scaleX: finite(frame.scaleX, `${keyframeName}.scaleX`),
+                scaleY: finite(frame.scaleY, `${keyframeName}.scaleY`),
+                skewX: finite(frame.skewX, `${keyframeName}.skewX`),
+                skewY: finite(frame.skewY, `${keyframeName}.skewY`),
                 alpha,
                 sprite: frame.sprite,
                 interpolation: frame.interpolation,
@@ -166,22 +167,6 @@ function exactObject(value: unknown, keys: readonly string[], name: string): Rec
         if (!Object.prototype.hasOwnProperty.call(record, key)) throw new Error(`${name}.${key} is required`)
     }
     return record
-}
-
-function nonEmptyString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || value.length === 0) throw new Error(`${name} must be a non-empty string`)
-    return value
-}
-
-function finiteNumber(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${name} must be a finite number`)
-    return value
-}
-
-function positiveNumber(value: unknown, name: string): number {
-    const number = finiteNumber(value, name)
-    if (number <= 0) throw new Error(`${name} must be positive`)
-    return number
 }
 
 /** The parent's movement since its base pose, applied before an attached pose. */

@@ -31,20 +31,21 @@ export class GameplayRegistry {
         const rollback = [this.plantBehaviors.checkpoint(), this.zombieBehaviors.checkpoint(), this.components.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint()]
         return () => { for (const undo of rollback.reverse()) undo() }
     }
-    validate(definitions: GameplayDefinitions): void {
+    /** Everything the content names is installed and takes its settings: behaviors, level rules, achievement triggers. */
+    validate(definitions: GameplayDefinitions, levels: GameplayLevels): void {
         this.installBuiltins(definitions)
         this.plantBehaviors.validate(definitions)
         this.zombieBehaviors.validate(definitions)
+        this.levelRules.validate(levels, definitions)
+        this.achievementTriggers.validate(definitions)
     }
-    freeze(definitions: GameplayDefinitions): void {
-        this.installBuiltins(definitions)
-        this.plantBehaviors.freeze(definitions)
-        this.zombieBehaviors.freeze(definitions)
+    freeze(definitions: GameplayDefinitions, levels: GameplayLevels): void {
+        this.validate(definitions, levels)
+        this.plantBehaviors.freeze()
+        this.zombieBehaviors.freeze()
         this.components.freeze()
         this.levelRules.freeze()
         this.achievementTriggers.freeze()
         this.projectileMotions.freeze()
     }
-    /** Every level's rule is installed and takes its settings. */
-    validateLevels(levels: GameplayLevels, definitions: GameplayDefinitions): void { this.levelRules.validate(levels, definitions) }
 }

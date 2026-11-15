@@ -60,7 +60,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
     }
     assert.equal(runCommand(server, { type: 'confirmSeeds' }), undefined)
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
-    assert.equal(server.save().tutorial.sunAtTick, undefined)
+    assert.equal(server.save().skySun.atTick, undefined)
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:puffshroom' })
     const grave = initial.gridItems![0]
     assert.equal(runCommand(server, { type: 'placePlant', row: grave.row, column: grave.column }), 'cell-has-grave')

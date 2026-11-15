@@ -12,7 +12,6 @@ import { createItemSystem } from '../level/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
 import { chooserOffer, seedBankStart } from '../seeds/seedChooser'
 import { TUTORIALS } from '../tutorials'
-import { TutorialResource } from '../state/levelState'
 import { createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
@@ -176,7 +175,6 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     if (level.conveyor) {
         world.resources.get(SeedBankResource).packets = []
         world.resources.get(SeedBankResource).conveyor = { nextId: 1, spawnAtTick: level.conveyor.spawnDelay[0].ticks, moveTicks: 0, packets: [] }
-        world.resources.get(TutorialResource).sunAtTick = undefined
     }
     for (const plant of level.initialPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column, plant.team)
     if (packet.firstAdventure) for (const plant of TUTORIALS[level.tutorial]?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)

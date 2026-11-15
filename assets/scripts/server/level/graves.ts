@@ -1,10 +1,11 @@
 import type { EntityId, World } from '@/ecs'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveRiseCounter } from '@/shared/protocol'
+import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveRiseCounter } from '@/shared/content/graves'
 import { type Grave, GridItemComponent, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
-import { ItemComponent, WaveResource } from '../state/levelState'
+import { WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
+import { levelAwardDropped } from './levelAward'
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {
@@ -84,7 +85,7 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
     waves.graveRiseAtTick = undefined
     const { definition } = world.resources.get(LevelStateResource)
     // Board::UpdateGame stops the rise counter after HasLevelAwardDropped.
-    if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === definition.award.id)) return
+    if (levelAwardDropped(world)) return
     const choices = definition.graveZombies!, random = world.resources.get(RandomResource)
     for (const { grave } of graves(world)) {
         // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves

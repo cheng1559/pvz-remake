@@ -51,7 +51,7 @@ test('levels name only installed level rules, which check their settings', () =>
         assert.throws(() => new IntegratedGameServer(definitions, parseGameplayLevels(source, definitions)), error)
     }
     rejects({ kind: 'pvz:adventure', count: 4, extra: true }, /rules\.extra is not supported/)
-    rejects({ kind: 'pvz:adventure', count: 4, pointsScale: 0 }, /pointsScale must be a positive/)
+    rejects({ kind: 'pvz:adventure', count: 4, pointsScale: 0 }, /pointsScale must be positive/)
     rejects({ kind: 'pvz:adventure', count: 4, fixedZombies: [{ zombie: 'pvz:conehead', waves: [4] }] }, /not in the zombiePool/)
     rejects({ kind: 'pvz:adventure', count: 4, fixedZombies: [{ zombie: 'pvz:normal', waves: [5] }] }, /past the last/)
     const gameplay = new GameplayRegistry()
