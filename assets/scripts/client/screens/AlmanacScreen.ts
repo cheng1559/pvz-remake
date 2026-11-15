@@ -69,7 +69,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 ui.label(details, { text: ui.text(zombie.key), font: 'button', color: new Color(190, 255, 235), x: 613, y: 362, baseline: true, align: 'center' })
                 if (zombie.described) {
                     const header = drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION_HEADER`), { x: 485, y: 377, width: 258 })
-                    drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`), { x: 485, y: 377 + header, width: 257, height: Math.max(20, 160 - header) })
+                    // Steam 1096 AlmanacDialog: the description's box is 485, 377, 258 x 160, the header's width.
+                    drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`), { x: 485, y: 377 + header, width: 258, height: Math.max(20, 160 - header) })
                 } else {
                     // AlmanacDialog::DrawZombies: [NOT_ENCOUNTERED_YET] in the middle of the 258x170 description box.
                     const text = ui.text('NOT_ENCOUNTERED_YET')

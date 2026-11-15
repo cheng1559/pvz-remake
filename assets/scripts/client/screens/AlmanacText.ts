@@ -4,7 +4,8 @@ import type { UI } from '@/client/ui/UI'
 import type { ScrollbarColors } from '@/client/ui/UIScroll'
 import { uiNode } from '@/client/view/uiNode'
 
-interface Run { text: string, color: Color }
+/** `flavor`: {FLAVOR} text, whose line ends are spaces. */
+interface Run { text: string, color: Color, flavor?: boolean }
 interface Line { runs: Run[], spacing: number }
 const BODY = new Color(40, 50, 90)
 const ACCENT = new Color(143, 67, 27)
@@ -20,8 +21,8 @@ export function almanacLines(text: string, measure: (text: string) => number, wi
     let line: Line = { runs: [], spacing: 0 }, color = BODY, flavor = false, skipBreak = false
     const append = (value: string) => {
         const last = line.runs.at(-1)
-        if (last?.color === color) last.text += value
-        else line.runs.push({ text: value, color })
+        if (last?.color === color && !!last.flavor === flavor) last.text += value
+        else line.runs.push({ text: value, color, flavor })
     }
     const finish = (spacing = 0) => { line.spacing = spacing; source.push(line); line = { runs: [], spacing: 0 } }
     for (const part of text.replace(/\r/g, '').split(/(\{[^}]*\}|\n)/)) {
@@ -41,20 +42,23 @@ export function almanacLines(text: string, measure: (text: string) => number, wi
     const wrapped: Line[] = []
     for (const original of source) {
         let current: Line = { runs: [], spacing: 0 }, used = 0
-        const add = (value: string, tint: Color) => {
+        const add = (value: string, run: Run) => {
             if (!used && !value.trim()) return
+            // TodWriteString: flavor text draws a run of spaces and line ends as one space (the strings wrap their own
+            // lines after a space), though TodDrawStringWrapped counts each toward the line's width.
+            const drawn = run.flavor && !value.trim() ? ' ' : value
             const last = current.runs.at(-1)
-            if (last?.color === tint) last.text += value
-            else current.runs.push({ text: value, color: tint })
+            if (last?.color === run.color) last.text += drawn
+            else current.runs.push({ text: drawn, color: run.color })
             used += measure(value)
         }
         for (const run of original.runs) for (const word of run.text.split(/(\s+)/).filter(Boolean)) {
             const size = measure(word)
             if (used && used + size > width && word.trim()) { wrapped.push(current); current = { runs: [], spacing: 0 }; used = 0 }
-            if (size <= width) add(word, run.color)
+            if (size <= width) add(word, run)
             else for (const char of word) {
                 if (used && used + measure(char) > width) { wrapped.push(current); current = { runs: [], spacing: 0 }; used = 0 }
-                add(char, run.color)
+                add(char, run)
             }
         }
         current.spacing = original.spacing
