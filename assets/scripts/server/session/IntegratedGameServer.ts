@@ -12,6 +12,7 @@ import { restoreSession, saveSession } from './persistence'
 import type { ServerSaveSnapshot } from './save'
 import { startSession, type CommandResult, type ServerContent, type Session } from './session'
 import { snapshot } from './snapshot'
+import { getActiveTutorial } from '../tutorials/index'
 import { AchievementsResource } from '../achievements/achievements'
 
 export type { CommandRejectionCode } from './session'
@@ -103,6 +104,12 @@ export class IntegratedGameServer {
         const session = this.requireSession()
         if (this.processBoundaryCommands()) return
         const level = session.world.resources.get(LevelStateResource)
+        // Plant::Update: the plants on the lawn of such an intro go on as in play, while the level waits.
+        if (level.phase === 'intro' && !level.paused && getActiveTutorial(session.world)?.plantsLiveInIntro) {
+            session.tick++
+            session.introSchedule.run(session.world, session.gameplayTick)
+            return
+        }
         // A repick (`/repick`) stands the level still until its Let's Rock.
         if (level.phase !== 'gameplay' || level.paused || level.result === 'lost' || session.world.resources.get(SeedBankResource).repick) return
         session.tick++

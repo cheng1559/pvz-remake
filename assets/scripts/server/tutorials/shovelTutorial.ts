@@ -14,6 +14,7 @@ export const shovelTutorial: TutorialScript = {
     alwaysActive: true,
     dave: true,
     toolsInIntro: true,
+    plantsLiveInIntro: true,
     // Challenge::InitLevel puts three peashooters on a first adventure's lawn to dig up.
     introPlants: [{ seedId: 'pvz:peashooter', row: 1, column: 5 }, { seedId: 'pvz:peashooter', row: 2, column: 7 }, { seedId: 'pvz:peashooter', row: 3, column: 6 }],
     initialize(world, firstAdventure) {

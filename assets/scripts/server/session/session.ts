@@ -67,6 +67,8 @@ export interface ServerContent {
 export interface Session extends ServerContent {
     world: World
     schedule: Schedule
+    /** What goes on in an intro whose plants live (TutorialScript.plantsLiveInIntro): their animation. */
+    introSchedule: Schedule
     tick: number
     gameplayTick: number
     mods: EnabledMod[]
@@ -92,6 +94,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         ...content,
         world,
         schedule: new Schedule(),
+        introSchedule: new Schedule(),
         tick: clock.tick,
         gameplayTick: clock.gameplayTick,
         mods: mods.map(mod => ({ ...mod })),
@@ -104,6 +107,8 @@ export function createSession(content: ServerContent, world: World, clock: { tic
     // The level's rules hook in wherever they take part; their systems run after the wave system.
     const rule = gameplay.levelRules.get(world.resources.get(LevelStateResource).definition)
     world.resources.set(LevelRuleResource, rule)
+    const plantAnimation = createPlantAnimationSystem(definitions)
+    session.introSchedule.add('plant', plantAnimation)
     const systems = [
         { phase: 'command', system: { id: 'pvz:commands', run: () => processCommandPhase(session) } },
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
@@ -115,7 +120,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
         { phase: 'plant', system: createConveyorSystem() },
         { phase: 'plant', system: gameplay.plantBehaviors.system(definitions) },
-        { phase: 'plant', system: createPlantAnimationSystem(definitions) },
+        { phase: 'plant', system: plantAnimation },
         { phase: 'zombie', system: createZombieGroanSystem() },
         { phase: 'zombie', system: createZombieSystem(definitions) },
         { phase: 'zombie', system: gameplay.zombieBehaviors.system(definitions) },

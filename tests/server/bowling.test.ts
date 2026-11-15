@@ -36,6 +36,18 @@ function rollNut() {
 }
 
 
+test("1-5's peashooters go on through the intro while the level waits (Plant::Update on Wall-nut Bowling)", () => {
+    const server = new IntegratedGameServer(definitions, levels)
+    server.start(options)
+    const before = server.snapshot()
+    for (let tick = 0; tick < 30; tick++) server.step()
+    const after = server.snapshot()
+    assert.equal(after.phase, 'intro')
+    assert.equal(after.gameplayTick, before.gameplayTick, 'the level itself is no further')
+    assert.ok(after.tick > before.tick, 'a frame the client takes up')
+    assert.notDeepEqual(after.plants.map(plant => plant.animations), before.plants.map(plant => plant.animations))
+})
+
 test('1-5 requires Dave, three shovel digs and the second dialogue before gameplay, and restores each stage', () => {
     const server = new IntegratedGameServer(definitions, levels)
     server.start(options)

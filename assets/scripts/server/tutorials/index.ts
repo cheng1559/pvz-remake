@@ -26,6 +26,8 @@ export interface TutorialScript {
     readonly toolsInIntro?: true
     /** Plants on a first adventure's lawn when the level starts. */
     readonly introPlants?: ReadonlyArray<{ seedId: string; row: number; column: number }>
+    /** Plant::Update: the plants on the lawn go on through the intro (Wall-nut Bowling's), where others wait for play. */
+    readonly plantsLiveInIntro?: true
     /**
      * Board::DropLootPiece on a first adventure: `firstCoinAfterWave` guarantees a coin once that many waves have
      * spawned, and no drop brings the money (with the mowers' coins) to `savingsCap`.
