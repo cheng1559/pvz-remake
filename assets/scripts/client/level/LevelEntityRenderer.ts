@@ -3,7 +3,6 @@ import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGame
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { levelStandsStill, type PlantSnapshot, type ServerEvent, type WorldSnapshot, type ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
@@ -178,10 +177,9 @@ export class LevelEntityRenderer implements LevelStage {
             const flash = this.flashes.snapshot(entityId)
             result.push({ ...view.snapshot(entityId), ...(flash ? { flash } : {}) })
         }
-        for (const [entityId, node] of this.entities) {
-            if (this.plantViews.has(entityId) || this.zombies.has(entityId)) continue
-            const animation = node.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
-            if (animation) result.push({ kind: 'sun', entityId, animation: animation.snapshot() })
+        for (const [entityId, view] of this.itemViews) {
+            const item = view.snapshot(entityId)
+            if (item) result.push(item)
         }
         return result.sort((left, right) => left.entityId - right.entityId)
     }
@@ -195,11 +193,7 @@ export class LevelEntityRenderer implements LevelStage {
             } else if (snapshot.kind === 'zombie') {
                 const view = this.zombies.get(snapshot.entityId)
                 if (view) await view.restore(snapshot)
-            } else {
-                const node = this.entities.get(snapshot.entityId)
-                const player = node?.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
-                if (player && snapshot.animation) player.restore(snapshot.animation)
-            }
+            } else this.itemViews.get(snapshot.entityId)?.restore(snapshot)
         }
         // Paused scenes do not tick again to reveal the restored views.
         if (this.lastSnapshot) this.sync(this.lastSnapshot, { added: [], removed: [] }, [])

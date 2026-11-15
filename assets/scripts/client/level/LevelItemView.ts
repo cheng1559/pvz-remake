@@ -9,11 +9,14 @@ import { type LevelDefinition, SUN_BANK_TARGET } from '@/shared/content/gameplay
 import type { ItemPresentationDefinition } from '@/shared/content/presentation'
 import type { ItemSnapshot } from '@/shared/protocol/index'
 import { levelAwardSize } from './LevelGeometry'
+import type { LevelEntitySnapshot } from './LevelPresentationSnapshot'
 import type { LevelEntityAssets } from './LevelStage'
 import type { LoadedContent } from './LevelView'
 
 /** Item nodes sit at the 60x60 item's center (they scale around it); definitions measure from its top-left. */
 const HALF = 30
+
+export type LevelItemViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'sun' }>
 
 export interface LevelItemContext {
     content: LoadedContent
@@ -31,7 +34,6 @@ export interface LevelItemContext {
  * or glow behind it once it has landed.
  */
 export class LevelItemView {
-    static readonly ANIMATION = 'ItemAnimation'
     /** The effects behind an award. */
     static readonly AWARD_BACK = 'AwardBackEffects'
 
@@ -52,7 +54,7 @@ export class LevelItemView {
         // Glow first so it draws under the coin.
         const glow = definition.glow && await image('ItemGlow', definition.glow.sprite, definition.glow.offset)
         const [x, y] = definition.offset
-        const animation = uiNode({ name: LevelItemView.ANIMATION, parent: node, position: { x: x - HALF, y: HALF - y } }).node
+        const animation = uiNode({ name: 'ItemAnimation', parent: node, position: { x: x - HALF, y: HALF - y } }).node
         const player = animation.addComponent(ReanimPlayer)
         await player.load(definition.reanim, content.registry, content.loader)
         const [min, max] = definition.rate
@@ -100,6 +102,16 @@ export class LevelItemView {
         private readonly flight?: Node,
         private readonly glow?: Node,
     ) {}
+
+    /** Its spin, for a save; the level's award has none to keep. */
+    snapshot(entityId: number): LevelItemViewSnapshot | undefined {
+        const player = this.animation?.getComponent(ReanimPlayer)
+        return player ? { kind: 'sun', entityId, animation: player.snapshot() } : undefined
+    }
+
+    restore(snapshot: LevelItemViewSnapshot): void {
+        if (snapshot.animation) this.animation?.getComponent(ReanimPlayer)?.restore(snapshot.animation)
+    }
 
     sync(item: ItemSnapshot): void {
         const { node, definition, context } = this
