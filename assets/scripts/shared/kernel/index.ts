@@ -25,6 +25,12 @@ export interface Kernel {
     particlesDestroy(handle: number): void
     /** Decodes a premultiplied RGBA8 PNG into the start of output, which holds (width * 4 + 1) * height bytes; see PngResult. */
     decodePng(png: Uint8Array, output: Uint8Array): number
+    /**
+     * Sands straight-alpha RGBA8 in place, as the original does to every image it loads: each fully transparent texel
+     * takes the average color of the visible texels above and below it; see pvz_png.h. A native image's decoded data
+     * (ImageAsset.data), which JavaScript holds unread, is sanded where it is.
+     */
+    sandAlphaEdges(rgba: Uint8Array | object, width: number, height: number): void
 }
 
 /** Layouts shared with native/engine/common/kernel/pvz_kernel.h. */
@@ -33,6 +39,8 @@ export const ParticleOption = {
     RED: 0, GREEN: 1, BLUE: 2, ALPHA: 3, SCALE: 4, ADDITIVE: 5, EXTRA: 6, OPACITY: 7, STRIDE: 8, CAPACITY: 9, SIZE: 10,
 } as const
 export const PngResult = { OK: 0, UNSUPPORTED: -1, SCANLINES: -2, FILTER: -3 } as const
+/** Bytes of an image the WebAssembly kernel sands at a time. */
+const SAND_BAND = 4 << 20
 export const Header = {
     TIME: 0, RED: 1, GREEN: 2, BLUE: 3, ALPHA: 4, EXTRA: 5, EXTRA_RED: 6, EXTRA_GREEN: 7, EXTRA_BLUE: 8, EXTRA_ALPHA: 9,
     OPACITY: 10, STRIDE: 11, TRACKS: 12, CAPACITY: 13, TINTED: 14, IMAGES: 15, BLENDING: 16, RATIO: 17,
@@ -50,11 +58,12 @@ type Native = {
     __pvzKernelBlend?: Kernel['blend']
     __pvzKernelWriteReanim?: Kernel['writeReanim']
     __pvzKernelDecodePng?: Kernel['decodePng']
+    __pvzKernelSandAlphaEdges?: Kernel['sandAlphaEdges']
 }
 
 function nativeKernel(): Kernel | null {
     const native = globalThis as Native
-    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesStop || !native.__pvzParticlesDestroy || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelDecodePng) return null
+    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesStop || !native.__pvzParticlesDestroy || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelDecodePng || !native.__pvzKernelSandAlphaEdges) return null
     return {
         f64: length => new Float64Array(length),
         i32: length => new Int32Array(length),
@@ -69,6 +78,7 @@ function nativeKernel(): Kernel | null {
         blend: native.__pvzKernelBlend,
         writeReanim: native.__pvzKernelWriteReanim,
         decodePng: native.__pvzKernelDecodePng,
+        sandAlphaEdges: native.__pvzKernelSandAlphaEdges,
     }
 }
 
@@ -81,6 +91,7 @@ interface WasmExports {
     pvz_particles_stop(handle: number): void
     pvz_particles_destroy(handle: number): void
     pvz_png_decode_premultiplied(png: number, length: number, output: number, outputLength: number): number
+    pvz_sand_alpha_edges(rgba: number, width: number, height: number): void
     _initialize?(): void
     memory: WebAssembly.Memory
     malloc(size: number): number
@@ -154,6 +165,22 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
             const result = wasm.pvz_png_decode_premultiplied(pointer(png), png.length, address, output.length)
             done([[output, address]])
             return result
+        },
+        sandAlphaEdges(rgba, width, height) {
+            const pixels = rgba as Uint8Array, stride = width * 4
+            // In bands, so an image need not fit the kernel's memory. Each takes along the rows beside it, which are
+            // read but not kept: sanded there, they would lack their own neighbors.
+            const rows = Math.max(1, Math.floor(SAND_BAND / stride))
+            for (let y = 0; y < height; y += rows) {
+                const first = Math.max(0, y - 1), end = Math.min(height, y + rows), last = Math.min(height, end + 1)
+                const address = wasm.malloc((last - first) * stride)
+                if (!address) throw new Error('drawing kernel is out of memory')
+                const band = new Uint8Array(buffer, address, (last - first) * stride)
+                band.set(pixels.subarray(first * stride, last * stride))
+                wasm.pvz_sand_alpha_edges(address, width, last - first)
+                pixels.set(band.subarray((y - first) * stride, (end - first) * stride), y * stride)
+                wasm.free(address)
+            }
         },
         sample(keys, first, count, time, pose) {
             if (first < 0 || count < 0 || (first + count) * KEY > keys.length || pose.length < 7) return -1

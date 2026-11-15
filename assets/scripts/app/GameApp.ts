@@ -8,6 +8,7 @@ import { loadKernelMaterial } from '@/client/render/KernelBatch'
 import { gameClock } from '@/core/GameClock'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { CursorManager } from '@/client/input/CursorManager'
+import { OriginalResolution } from '@/client/view/OriginalResolution'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { MenuScreen } from '@/client/screens/MenuScreen'
 import { ScreenTransition } from '@/client/screens/ScreenTransition'
@@ -80,6 +81,7 @@ export class GameApp extends Component {
         UIHoverManager.start(this.node)
         // Load the original arrow now rather than on the first mouse move.
         CursorManager.refresh()
+        OriginalResolution.refresh()
         this.gameLayer = uiNode({
             name: 'GameLayer', parent: this.node, viewport: true, active: false,
         }).node

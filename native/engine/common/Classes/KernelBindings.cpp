@@ -1,5 +1,7 @@
 // Exposes the shared drawing kernel (native/engine/common/kernel) to JavaScript. Typed arrays are passed without copying.
 #include "bindings/jswrapper/SeApi.h"
+#include "bindings/manual/jsb_conversions.h"
+#include "core/data/JSBNativeDataHolder.h"
 #include "../kernel/pvz_kernel.h"
 #include "../kernel/pvz_particles.h"
 #include "../kernel/pvz_png.h"
@@ -142,6 +144,25 @@ bool decodePngBinding(se::State &s) {
     return true;
 }
 SE_BIND_FUNC(decodePngBinding)
+
+// (pixels, width, height): RGBA8 in a Uint8Array, or the decoded data of an image, which JavaScript holds unread
+bool sandAlphaEdgesBinding(se::State &s) {
+    const auto &a = s.args();
+    if (a.size() != 3 || !a[0].isObject() || !a[1].isNumber() || !a[2].isNumber()) return true;
+    const int32_t width = a[1].toInt32(), height = a[2].toInt32();
+    se::Object *object = a[0].toObject();
+    uint8_t *rgba = nullptr;
+    int32_t length = 0;
+    if (typedArray(a[0], Type::UINT8, rgba, length)) {
+        if (width <= 0 || height <= 0 || int64_t(width) * height * 4 > length) return true;
+    } else if (object->_getClass() == __jsb_cc_JSBNativeDataHolder_class && object->getPrivateData()) {
+        // The engine's loader makes every image it decodes RGBA8, whatever its file holds.
+        rgba = static_cast<cc::JSBNativeDataHolder *>(object->getPrivateData())->getData();
+    }
+    pvz_sand_alpha_edges(rgba, width, height);
+    return true;
+}
+SE_BIND_FUNC(sandAlphaEdgesBinding)
 } // namespace
 
 bool registerPvzKernel(se::Object *global) {
@@ -154,5 +175,6 @@ bool registerPvzKernel(se::Object *global) {
            global->defineFunction("__pvzKernelSample", _SE(sampleBinding)) &&
            global->defineFunction("__pvzKernelBlend", _SE(blendBinding)) &&
            global->defineFunction("__pvzKernelWriteReanim", _SE(writeReanimBinding)) &&
-           global->defineFunction("__pvzKernelDecodePng", _SE(decodePngBinding));
+           global->defineFunction("__pvzKernelDecodePng", _SE(decodePngBinding)) &&
+           global->defineFunction("__pvzKernelSandAlphaEdges", _SE(sandAlphaEdgesBinding));
 }

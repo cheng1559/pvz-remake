@@ -22,7 +22,7 @@ export type DebugCliResult = DebugCliOutcome & (
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 /** The switches: each command turns its switch over and says where it now stands as advice (debugSwitchAdvice). */
-export const DEBUG_SWITCHES = ['hotkeys', 'haptics', 'cursor', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'cheatseed', 'fps',
+export const DEBUG_SWITCHES = ['hotkeys', 'haptics', 'cursor', 'highresolution', 'tilted', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'cheatseed', 'fps',
     'hitboxes', 'background', 'mobile', 'fullscreen'] as const
 /** The /perf switches, one per category. */
 export const DEBUG_PERF_SWITCHES = ['plants', 'zombies', 'particles', 'sfx', 'logic'] as const
@@ -45,8 +45,7 @@ const builtins: CommandSpec[] = [
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
     ...DEBUG_SWITCHES.map(name => ({ name, parameters: [], minimum: 0 })),
-    { name: 'fontsharpness', parameters: ['{0-1}'], minimum: 1 },
-    { name: 'seedstyle', parameters: ['{standard|rendered|tilted}'], minimum: 1, values: { 0: ['standard', 'rendered', 'tilted'] } },
+    { name: 'sharpness', parameters: ['{0-1}'], minimum: 1 },
     { name: 'mod', parameters: [], minimum: 0 },
     { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}'], minimum: 1, values: { 0: DEBUG_PERF_SWITCHES } },
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },

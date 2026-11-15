@@ -30,15 +30,40 @@ CCProgram mixed-vs %{
 }%
 
 CCProgram mixed-fs %{
+  #pragma extension([GL_OES_standard_derivatives, __VERSION__ < 300])
   precision highp float;
   #include <builtin/internal/embedded-alpha>
   #pragma builtin(local)
   layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
   in vec2 uv;
   in vec4 color;
-  vec4 frag () {
-    vec4 pixel = CCSampleWithAlphaSeparated(cc_spriteTexture, uv) * vec4(color.rgb, abs(color.a));
+  // Premultiplied, so that samples average by what they cover.
+  vec4 texel (vec2 at) {
+    vec4 pixel = CCSampleWithAlphaSeparated(cc_spriteTexture, at);
     pixel.rgb *= pixel.a;
+    return pixel;
+  }
+
+  vec4 frag () {
+    #if SUPERSAMPLED
+      // Four samples to a screen pixel, at its quarters: the image as drawn at twice the size and halved, which is
+      // what the original's cached frame scaled into a seed packet comes to. One sample falls among texels of art
+      // several times the picture's size and skips the rest, so thin outlines come and go.
+      #if __VERSION__ < 300
+        #ifdef GL_OES_standard_derivatives
+          vec2 dx = dFdx(uv) * 0.25, dy = dFdy(uv) * 0.25;
+        #else
+          vec2 dx = vec2(0.0), dy = vec2(0.0);
+        #endif
+      #else
+        vec2 dx = dFdx(uv) * 0.25, dy = dFdy(uv) * 0.25;
+      #endif
+      vec4 pixel = (texel(uv - dx - dy) + texel(uv + dx - dy) + texel(uv - dx + dy) + texel(uv + dx + dy)) * 0.25;
+    #else
+      vec4 pixel = texel(uv);
+    #endif
+    float alpha = abs(color.a);
+    pixel *= vec4(color.rgb * alpha, alpha);
     if (color.a < 0.0) pixel.a = 0.0;
     return pixel;
   }

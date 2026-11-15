@@ -364,7 +364,9 @@ export class UI {
         root.setWorldPosition(canvas.worldPosition)
         root.setWorldScale(canvas.worldScale)
         root.addComponent(BlockInputEvents)
-        const panel = this.box(root, 'Panel', { x: -width / 2, y: -height / 2, width, height })
+        // LawnApp::CenterDialog: (BOARD_WIDTH - width) / 2 and the same down, in integers. A dialog of an odd size stands
+        // on whole units like any other, where its text, which keeps to whole pixels, sits steady in it.
+        const panel = this.box(root, 'Panel', { x: Math.floor(-width / 2), y: Math.floor(-height / 2), width, height })
         panel.addComponent(BlockInputEvents)
         if (options.background) this.image(panel, options.background, { width, height })
         else this.dialogFrame(panel, width, height, options.tall)

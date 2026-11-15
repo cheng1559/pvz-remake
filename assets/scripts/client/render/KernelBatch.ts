@@ -4,17 +4,39 @@ import { JSB } from 'cc/env'
 const { ccclass } = _decorator
 
 let material: Material | null = null
+let supersampled: Material | null = null
 let loading: Promise<Material> | undefined
-/** Normal and additive images in one draw: the shader premultiplies, and a negative vertex alpha marks additive. */
+/**
+ * Normal and additive images in one draw: the shader premultiplies, and a negative vertex alpha marks additive. With
+ * it comes the same taking four samples to a screen pixel (pictureMaterial).
+ */
 export function loadKernelMaterial(): Promise<Material> {
     return loading ??= new Promise<Material>((resolve, reject) => {
         resources.load('effects/reanim-mixed', EffectAsset, (error, effect) => {
             if (error) { reject(error); return }
             const result = new Material()
             result.initialize({ effectAsset: effect })
+            supersampled = new Material()
+            supersampled.initialize({ effectAsset: effect, defines: { SUPERSAMPLED: true } })
             resolve(material = result)
         })
     }).catch(error => { loading = undefined; throw error })
+}
+
+/**
+ * For a picture drawn much smaller than its art, a seed packet's: four samples to a screen pixel. The art is several
+ * times the size it is shown at even on the lawn, and the original scales a plant's cached frame into its packet by
+ * about a half more, from whole units: each pixel there is the average of four of the frame's. An image drawn
+ * straight into the packet with one sample to a pixel skips most of its texels, and its outlines come and go.
+ */
+export function pictureMaterial(): Material {
+    if (!supersampled) throw new Error('kernel material is not loaded; await loadKernelMaterial() first')
+    return supersampled
+}
+
+/** That, for every plain image under `root`: a picture with no animation behind it (a grave seed's packet). */
+export function supersampleSprites(root: Node): void {
+    for (const sprite of root.getComponentsInChildren(Sprite)) if (!sprite.customMaterial) sprite.customMaterial = pictureMaterial()
 }
 
 /** Supplies a batch's quads through the drawing kernel. */
@@ -105,6 +127,7 @@ export class KernelBatch extends Sprite {
     written = 0
     dirty = false
     local = new Float32Array(0)
+    private supersampled = false
 
     setSource(source: KernelQuadSource, frame: SpriteFrame, capacity: number): void {
         this.source = source
@@ -123,6 +146,19 @@ export class KernelBatch extends Sprite {
         this.count = this.written = 0
         this.source = null
         this.markForUpdateRenderData()
+    }
+
+    /** Four samples to a screen pixel, for a picture drawn much smaller than its art (pictureMaterial). */
+    setSupersampled(supersampled: boolean): void {
+        if (this.supersampled === supersampled) return
+        this.supersampled = supersampled
+        if (this.renderData) this.syncMaterial()
+    }
+
+    private syncMaterial(): void {
+        if (!material) throw new Error('kernel material is not loaded; await loadKernelMaterial() first')
+        const wanted = this.supersampled ? pictureMaterial() : material
+        if (this.customMaterial !== wanted) this.customMaterial = wanted
     }
 
     /** World bounds of the drawn images, for offscreen compositing. */
@@ -144,8 +180,7 @@ export class KernelBatch extends Sprite {
     protected _flushAssembler(): void {
         this._useVertexOpacity = true
         this._assembler = assembler
-        if (!material) throw new Error('kernel material is not loaded; await loadKernelMaterial() first')
-        if (this.customMaterial !== material) this.customMaterial = material
+        this.syncMaterial()
         if (!this.renderData) assembler.createData(this).material = this.getRenderMaterial(0)!
         // Render data is released while hidden; rebuild it whenever geometry is needed.
         const rd = this.renderData!, vertices = this.count * 4

@@ -8,15 +8,11 @@ from PIL import Image
 from ..reanim import plant_display_nodes
 
 
-PACKET_WIDTH = 50
-PACKET_HEIGHT = 70
-ATLAS_COLUMNS = 8
 SEED_COUNT = 49
 
 from .. import ROOT
 ANIMATION_DIR = ROOT / "mods/pvz-base/assets/json/animations"
 TEXTURE_DIR = ROOT / "mods/pvz-base/assets/images"
-OUTPUT_PATH = TEXTURE_DIR / "packet_plants_cached.png"
 
 ANIMATION_NAMES: dict[int, str] = {
     0: "peashootersingle",
@@ -97,31 +93,10 @@ def logical_height(image: Image.Image) -> float:
     return image.height / image.info.get("density", 1)
 
 
-DEFAULT_STYLE = {"x": 5.0, "y": -9.0, "scale": 0.5, "timeRatio": 0.0}
+# How far into anim_idle a seed's cached frame is taken (ReanimatorCache::MakeCachedPlantFrame draws its start).
+DEFAULT_STYLE = {"timeRatio": 0.0}
 STYLES: dict[int, dict[str, float]] = {
     1: {"timeRatio": 0.15},
-    10: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    11: {"x": 10.0, "y": -16.0, "scale": 0.4},
-    12: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    15: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    17: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    18: {"x": 5.0, "y": -11.0},
-    19: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    21: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    22: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    25: {"x": 8.0, "y": -13.0, "scale": 0.4},
-    26: {"x": 9.0, "y": -14.0},
-    28: {"x": 12.0, "y": -13.0, "scale": 0.45},
-    29: {"x": 6.0, "y": -9.0},
-    31: {"y": -13.0},
-    32: {"x": 15.0, "y": -15.0, "scale": 0.4},
-    34: {"x": 13.0, "y": -15.0, "scale": 0.4},
-    35: {"x": 0.0, "y": -10.0, "scale": 0.55},
-    37: {"x": 5.0, "y": -11.0},
-    39: {"x": 18.0, "y": -20.0, "scale": 0.35},
-    40: {"x": 2.0, "y": -9.0},
-    42: {"x": 7.0, "y": -15.0, "scale": 0.45},
-    43: {"x": 8.0, "y": -14.0, "scale": 0.45},
 }
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -495,34 +470,3 @@ def render_plant_cache(seed_id: int, animation_json: dict[str, Any], style: dict
         paste_transformed(cache, load_texture(item["image"]), matrix, item["alpha"])
 
     return cache, offset_x, offset_y
-
-
-def render_seed(seed_id: int) -> Image.Image:
-    animation_name = ANIMATION_NAMES[seed_id]
-    animation_json = load_json(ANIMATION_DIR / f"{animation_name}.json")
-    style = style_for(seed_id)
-    canvas = new_canvas(PACKET_WIDTH, PACKET_HEIGHT)
-    cache, offset_x, offset_y = render_plant_cache(seed_id, animation_json, style)
-    scale = style["scale"]
-    matrix = (
-        scale,
-        0,
-        0,
-        scale,
-        style["x"] + offset_x * scale,
-        -style["y"] + offset_y * scale,
-    )
-    paste_transformed(canvas, cache, matrix, 1.0)
-
-    return canvas
-
-
-def generate(output: Path | None = None):
-    output = output or OUTPUT_PATH
-    rows = math.ceil(SEED_COUNT / ATLAS_COLUMNS)
-    atlas = new_canvas(ATLAS_COLUMNS * PACKET_WIDTH, rows * PACKET_HEIGHT)
-    for seed_id in range(SEED_COUNT):
-        cel = render_seed(seed_id)
-        composite(atlas, cel, seed_id % ATLAS_COLUMNS * PACKET_WIDTH, seed_id // ATLAS_COLUMNS * PACKET_HEIGHT)
-    atlas.save(output)
-    print(f"Wrote {output}")

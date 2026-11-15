@@ -12,11 +12,12 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 
 ```text
 /gamespeed 2
-/seedstyle tilted
-/fontsharpness 0.5
+/tilted
+/sharpness 0.5
 /level pvz:seed-chooser-test
 /haptics
 /cursor
+/highresolution
 /fps
 /plantinvincible
 /cheatseed
@@ -30,11 +31,13 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /goto main
 ```
 
-The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`) take no state: each turns its switch over and shows where it now stands as advice, such as "Recharge: off".
+The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`) take no state: each turns its switch over and shows where it now stands as advice, such as "Recharge: off".
 
 `/haptics` turns all haptic feedback on or off immediately and saves the preference locally. Enabled by default.
 
 `/cursor` switches between the original mouse cursors and the system ones: the original big arrow, a pointing hand over clickable objects and an open hand while dragging a dialog; text fields keep the system I-beam. Enabled by default and saved locally. `npm run build:content` extracts the images from the original executable into the base content; resource packs may replace them by ID.
+
+The game is drawn as the original draws it: at one pixel to a unit of its 800x600 layout (as wide as the window makes it), with that picture enlarged over the window. The scene is still drawn once: its camera draws into the small picture and stays the one that takes the pointer (the engine's `Camera.presentedOnWindow`). `/highresolution` draws it straight to the window at the window's own pixels instead, where the same art is sharper than the original ever shows it. Off by default and saved locally.
 
 `/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
 
@@ -48,9 +51,9 @@ The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/fps`, `/hitboxes`,
 
 `/seed {slot} {seed_name}` replaces a seed-bank slot, numbered from 1 on the left, with an installed seed, or fills it when empty; `/seed {slot} empty` empties it. The new packet is immediately ready and uses its own cost and cooldown. Replacing a held packet clears the cursor. A seed may appear in several slots, each with its own recharge. On a conveyor level the slots are the belt's packets from the left: a seed changes that packet where it stands, and `empty` takes it off, the ones after it closing up as the belt moves; the team works there too. The command is unavailable while the seed chooser is open. Changes work while paused or at zero speed and persist in the level save.
 
-`/seedstyle standard|rendered|tilted` independently selects the seed packet style and saves it locally. `standard` uses cached plant art; `rendered` uses the original Reanim pose; `tilted` enlarges that pose and rotates it clockwise. Plants are clipped only at the image area's inner left and bottom borders; the top and right sides may overflow. Backgrounds, costs and hit areas keep their original size. Switching between `rendered` and `tilted` reuses the loaded plant. Almanac zombie portraits and held/grid previews follow it too: `standard` uses the original cached art, the other two render the pose (previews are not tilted).
+A seed packet shows its plant or zombie drawn by its view, on the pose the original's cached art has, with four samples to a screen pixel, which is what that cached art scaled into a packet comes to. `/tilted` enlarges the picture and rotates it clockwise: plants are clipped only at the image area's inner left and bottom borders, and the top and right sides may overflow. Backgrounds, costs and hit areas keep their original size, and the loaded picture is reused when the switch turns. The held and grid previews are never tilted. A seed whose plant no view draws yet shows the original's cached art. Off by default and saved locally.
 
-`/fontsharpness {0-1}` sets how crisp the base bitmap fonts are when magnified and saves it locally. Glyphs are area sampled, so strokes stay even when shrunk; magnified to a non-integer scale, an edge between two atlas pixels blends over `1 - sharpness` screen pixels. `0` is full area sampling (most even strokes, softest edges), `1` is close to nearest (crisp edges, strokes may differ by a pixel); the default is 0.5. Whole-number scales are unaffected.
+`/sharpness {0-1}` sets how crisp an enlarged pixel is and saves it locally: the edge between two pixels blends over `1 - sharpness` screen pixels. `0` blends over a whole screen pixel (softest edges), `1` is close to nearest (crisp edges; at a non-integer scale pixels may differ in size by one); the default is 0.5. The pixels are those of the picture enlarged over the window. With `/highresolution` there is no such picture, and it applies to the base bitmap fonts: their glyphs are area sampled, so strokes stay even when shrunk, and whole-number scales are unaffected.
 
 `/achievement give {achievement}` grants an achievement by ID (`pvz:` may be omitted, e.g. `sunny-days`). In a level the level grants it, so it is announced with its message and sound like a real one; outside a level it only goes into the profile and waits for the next award page. `/achievement reset [achievement]` forgets one, or every achievement without an ID.
 

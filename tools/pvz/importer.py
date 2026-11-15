@@ -135,16 +135,12 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
         register('music', f'pvz:{tune}', file)
     music.unlink()
 
-    print('[content] Cached portraits and packet atlas', flush=True)
-    from .cache.packets import generate as packet_cache
+    print('[content] Cached plants and lawn mower', flush=True)
     from .cache.plants import generate as plant_cache
-    from .cache.zombies import generate as zombie_cache
     from .cache.lawnmower import generate as mower_cache
-    packet_cache()
     plant_cache()
-    zombie_cache()
     mower_cache()
-    for name in ('packet_plants_cached', 'plant_previews_cached', 'zombie_previews_cached', 'lawnmower_cached'):
+    for name in ('plant_previews_cached', 'lawnmower_cached'):
         register_sprite(assets / f'images/{name}.png')
     file = assets / 'prefabs/ui/level.prefab'
     file.parent.mkdir(parents=True, exist_ok=True)

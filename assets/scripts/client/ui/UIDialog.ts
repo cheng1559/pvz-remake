@@ -1,6 +1,7 @@
 import { _decorator, Component, EventTouch, KeyCode, Node, UITransform, Vec3, type EventKeyboard } from 'cc'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { UIInput } from './UIInput'
 
 const { ccclass } = _decorator
@@ -96,9 +97,14 @@ export class UIDialog extends Component {
         const halfWidth = bounds.width / 2 + 8, halfHeight = bounds.height / 2 + 8
         const clamp = (value: number, a: number, b: number) =>
             Math.max(Math.min(a, b), Math.min(Math.max(a, b), value))
+        // A pixel is a whole unit (unless /highresolution), as in the original, whose pointer is on whole pixels with whatever
+        // it drags: the dialog goes by whole units from where it stands. Text keeps to whole pixels (FontRenderer), each
+        // line moved by its own part of one; going by less, those parts would change and the lines hop about in the frame.
+        const from = this.content.position
+        const place = (to: number, at: number) => GameDebugSettings.highResolutionEnabled ? to : at + Math.round(to - at)
         this.content.setPosition(
-            clamp(point.x, -halfWidth, halfWidth - size.width),
-            clamp(point.y, size.height - halfHeight, halfHeight),
+            place(clamp(point.x, -halfWidth, halfWidth - size.width), from.x),
+            place(clamp(point.y, size.height - halfHeight, halfHeight), from.y),
         )
         event.propagationStopped = true
     }

@@ -344,9 +344,9 @@ export class UIButton extends Component {
             if (!original.call(transform, point, windowId)) return false
             if (this.polygon.length < 3) return true
             for (const camera of this.node.scene.renderScene?.cameras ?? []) {
-                if (!(camera.visibility & this.node.layer) || camera.systemWindowId !== windowId
-                    || (camera.window && !camera.window.swapchain)) continue
-                world.set(point.x, point.y, 0)
+                if (!(camera.visibility & this.node.layer) || camera.systemWindowId !== windowId) continue
+                // As UITransform.hitTest: a camera of a texture takes the window's point only where its texture is presented over it.
+                if (!UITransform.windowToCameraScreen(camera, world.set(point.x, point.y, 0), world)) continue
                 camera.screenToWorld(world, world)
                 transform.convertToNodeSpaceAR(world, local)
                 const x = local.x + transform.anchorX * transform.width

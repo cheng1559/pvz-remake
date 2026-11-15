@@ -1,20 +1,19 @@
-"""Redraws the cached plant and zombie portraits and the lawn mower for an HD pack from that pack's own part images, instead of
-super-resolving the 1x atlases, so they match the HD plants and zombies on the lawn.
+"""Redraws the cached plants and the lawn mower for an HD pack from that pack's own part images, instead of
+super-resolving the 1x atlases, so they match the HD plants on the lawn.
 
     python3 -m pvz.cache.hd ../mods/hd   (run from tools/)
 
-Every part comes from the pack at the density its content.json records, as the game draws it. The portraits draw parts
-at about half size, so they are written at 4x to keep every pixel of the 2x parts. The plant previews sheet would take
-120 MB of GPU memory at 4x (7040x4480), so it and the lawn mower are drawn at 2x, the density of the HD parts.
+Every part comes from the pack at the density its content.json records, as the game draws it: both are drawn at 2x,
+the density of the HD parts.
 """
 import argparse
 import json
 from pathlib import Path
 
 from .. import ROOT
-from . import lawnmower, packets, plants, zombies
+from . import lawnmower, packets, plants
 
-SCALES = {'packet_plants_cached': 4, 'plant_previews_cached': 2, 'zombie_previews_cached': 4, 'lawnmower_cached': 2}
+SCALES = {'plant_previews_cached': 2, 'lawnmower_cached': 2}
 
 
 def part_images(pack: Path) -> dict[str, tuple[Path, int]]:
@@ -34,8 +33,7 @@ def main() -> None:
     content = json.loads(text)
     sprites = content['resources']['sprites']
     parts = part_images(args.pack)
-    for name, generate in [('packet_plants_cached', packets.generate), ('plant_previews_cached', plants.generate),
-                           ('zombie_previews_cached', zombies.generate), ('lawnmower_cached', lawnmower.generate)]:
+    for name, generate in [('plant_previews_cached', plants.generate), ('lawnmower_cached', lawnmower.generate)]:
         scale = SCALES[name]
         packets.hd(scale, parts)
         entry = sprites[f'pvz:{name}']

@@ -130,11 +130,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     name: 'PortraitClip', parent: button.node, position: { x: 2, y: -2 },
                     anchor: { x: 0, y: 1 }, size: { width: 72, height: 72 }, mask: Mask.Type.GRAPHICS_RECT,
                 }).node
-                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.zombie, async root => {
-                    const atlas = await modResources.asset('zombie_previews_cached', SpriteFrame)
-                    if (!atlas) throw new Error('Missing zombie portrait atlas')
-                    if (root.isValid) ui.image(root, getAtlasFrame(atlas, zombie.id, 76, 76, 8), { x: -2, y: -2 })
-                })
+                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.zombie)
                 ui.image(button.node, sprites.almanac_zombiewindow2)
                 const glow = ui.additiveImage(button.node, sprites.almanac_zombiewindow2, {}, 48)
                 const update = button.onStateChange!

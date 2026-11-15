@@ -4,7 +4,7 @@ import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import { animationFrame, animationFrames } from '@/client/render/AnimationAtlas'
-import { KernelBatch, loadKernelMaterial, type KernelQuadSource } from '@/client/render/KernelBatch'
+import { KernelBatch, loadKernelMaterial, pictureMaterial, type KernelQuadSource } from '@/client/render/KernelBatch'
 import { BLEND, Header, IMAGE, kernel, KEY, loadKernel, TRACK } from '@/shared/kernel/index'
 import {
     attachmentMatrix,
@@ -224,6 +224,7 @@ export class ReanimPlayer extends Component {
     private chilled = false
     private poseDirty = false
     private batches: KernelBatch[] = []
+    private supersampled = false
     /** Child nodes drawn right after a track; see drawAfterTrack. */
     private readonly followers = new Map<string, Node[]>()
     /** Kernel arrays are released when the node is destroyed, even if it was never activated. */
@@ -538,6 +539,19 @@ export class ReanimPlayer extends Component {
         return new Color(Math.min(255, extra.r + CHILL_COLOR), Math.min(255, extra.g + CHILL_COLOR), 255, 255)
     }
 
+    /**
+     * For a picture drawn much smaller than its art, a seed packet's: its images take four samples to a screen pixel
+     * (pictureMaterial), and those of the players attached to its tracks.
+     */
+    setSupersampled(): void {
+        if (!this.supersampled) {
+            this.supersampled = true
+            for (const batch of this.batches) batch?.setSupersampled(true)
+            this.applyPose()
+        }
+        for (const player of this.attachedPlayers()) player.setSupersampled()
+    }
+
     /** Also applies to players attached to this one's tracks, like the original color propagation. */
     setColorOverride(color: Color = Color.WHITE): void {
         if (!sameColor(this.colorOverride, color)) {
@@ -701,6 +715,7 @@ export class ReanimPlayer extends Component {
         if (!batch) {
             batch = uiNode({ name: 'ReanimBatch', parent: this.node, layer: this.node.layer }).node.addComponent(KernelBatch)
             batch.sizeMode = Sprite.SizeMode.CUSTOM
+            batch.setSupersampled(this.supersampled)
             this.batches[index] = batch
         }
         return batch
@@ -877,6 +892,7 @@ export class ReanimPlayer extends Component {
         view.skew!.setSkew(-appliedSkew, 0)
         node.setScale(pose.scaleX, scaleY, 1)
         sprite.spriteFrame = frame
+        if (this.supersampled && sprite.customMaterial !== pictureMaterial()) sprite.customMaterial = pictureMaterial()
         const trackColor = this.trackColors.get(trackId) ?? Color.WHITE
         setSpriteColor(sprite,
             Math.round(color.r * trackColor.r / 255),

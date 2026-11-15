@@ -1,6 +1,7 @@
 #include "pvz_png.h"
 
 #include <zlib.h>
+#include <climits>
 #include <cstdlib>
 #include <cstring>
 
@@ -75,24 +76,35 @@ int32_t pvz_png_decode_premultiplied(const uint8_t *png, int32_t length, uint8_t
             output[index + channel] = uint8_t(color > 255 ? 255 : color);
         }
     }
-    // Only originally visible pixels donate a color: a transparent pixel never beats alpha 0. Alpha stays unchanged.
-    for (uint32_t y = 0; y < height; y++) {
-        for (uint32_t x = 0; x < width; x++) {
-            uint8_t *pixel = output + (uint64_t(y) * width + x) * 4;
+    if (width > uint32_t(INT32_MAX) || height > uint32_t(INT32_MAX)) return PVZ_PNG_UNSUPPORTED;
+    pvz_sand_alpha_edges(output, int32_t(width), int32_t(height));
+    return PVZ_PNG_OK;
+}
+
+void pvz_sand_alpha_edges(uint8_t *rgba, int32_t width, int32_t height) {
+    if (!rgba || width <= 0 || height <= 0) return;
+    const int64_t stride = int64_t(width) * 4;
+    for (int32_t y = 0; y < height; y++) {
+        uint8_t *pixel = rgba + y * stride;
+        for (int32_t x = 0; x < width; x++, pixel += 4) {
             if (pixel[3]) continue;
-            const uint8_t *best = pixel;
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    const int64_t nx = int64_t(x) + dx, ny = int64_t(y) + dy;
-                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                    const uint8_t *neighbor = output + (uint64_t(ny) * width + uint64_t(nx)) * 4;
-                    if (neighbor[3] > best[3]) best = neighbor;
+            // Only visible texels give a color, and a sanded one stays transparent: the order of the pass does not matter.
+            uint32_t red = 0, green = 0, blue = 0, count = 0;
+            for (int32_t dy = -1; dy <= 1; dy += 2) {
+                if (y + dy < 0 || y + dy >= height) continue;
+                for (int32_t dx = -1; dx <= 1; dx++) {
+                    if (x + dx < 0 || x + dx >= width) continue;
+                    const uint8_t *visible = pixel + dy * stride + dx * 4;
+                    if (!visible[3]) continue;
+                    red += visible[0];
+                    green += visible[1];
+                    blue += visible[2];
+                    count++;
                 }
             }
-            pixel[0] = best[0];
-            pixel[1] = best[1];
-            pixel[2] = best[2];
+            pixel[0] = uint8_t(count ? red / count : 0);
+            pixel[1] = uint8_t(count ? green / count : 0);
+            pixel[2] = uint8_t(count ? blue / count : 0);
         }
     }
-    return PVZ_PNG_OK;
 }

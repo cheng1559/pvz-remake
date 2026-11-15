@@ -259,13 +259,12 @@ export interface ZombiePresentationDefinition {
     /** Zombie::DrawShadow's offset for a zombie walking right (mind-controlled); defaults to `shadowX`. */
     readonly shadowXBackwards?: number
     /**
-     * Its zombie seed's packet (SeedPacket::DrawSeedPacket for SEED_ZOMBIE_*): the cached zombie frame, posed at
-     * (40, 40), drawn at this offset and scale. `clip` names the animation whose first frame it shows, `idle` unless
-     * the original's cache takes another (the pole vaulter's anim_walk, ReanimatorCache::MakeCachedZombieFrame).
+     * Its zombie seed's packet (SeedPacket::DrawSeedPacket for SEED_ZOMBIE_*): where the original has the cached
+     * zombie frame, posed at (40, 40), drawn at this offset and scale. `clip` names the animation whose first frame
+     * it shows, `idle` unless the original's cache takes another (the pole vaulter's anim_walk,
+     * ReanimatorCache::MakeCachedZombieFrame).
      */
-    readonly packet?: {
-        readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string
-    }
+    readonly packet?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
     /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
     readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
     /** Original Y-down coordinates; defaults to 92. */

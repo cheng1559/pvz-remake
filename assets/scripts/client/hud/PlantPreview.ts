@@ -88,11 +88,10 @@ export class PlantPreview extends Component {
 
     private refresh(): void {
         if (this.plantId === undefined) return
-        // Held and grid previews follow /seedstyle too, without the packets' tilt.
+        // /tilted is a packet's; the held and grid previews are never tilted.
         if (!this.picture.sync(this.packetScale) && this.rendering !== undefined) return
-        const style = this.picture.style
-        // A plant drawn by its view; one named by its packet image alone (no plant behind it yet) keeps the cached picture.
-        const enabled = style !== 'standard' && typeof this.plantId === 'string' && PlantPreview.supports(this.definitions, this.plantId)
+        // A plant drawn by its view; one named by its packet image alone (no plant behind it yet) has the cached picture.
+        const enabled = typeof this.plantId === 'string' && PlantPreview.supports(this.definitions, this.plantId)
         if (this.rendering === enabled) {
             if (enabled) this.applyPlacement()
             return
@@ -144,7 +143,7 @@ export class PlantPreview extends Component {
     }
 
     private applyPlacement(): void {
-        placePacketPicture(this.rendered!, this.placement, this.packetScale, this.picture.style, PLANT_TILT)
+        placePacketPicture(this.rendered!, this.placement, this.packetScale, this.picture.tilted, PLANT_TILT)
     }
 
     private async load(root: Node, plantId: string): Promise<void> {
@@ -156,7 +155,11 @@ export class PlantPreview extends Component {
         // A plant its view does not draw off the board has the cached picture.
         if (!plant) { pose.destroy(); return this.loadCached(root, plantId) }
         const players = plant.view.players
-        for (const player of players) player.pause()
+        for (const player of players) {
+            player.pause()
+            // A packet's picture is much smaller than its art.
+            if (this.packetScale !== undefined) player.setSupersampled()
+        }
         this.players.push(...players)
     }
 

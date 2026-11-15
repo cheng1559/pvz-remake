@@ -16,7 +16,7 @@ export async function fontAreaMaterial(texture: Texture2D): Promise<Material> {
     const material = new Material()
     material.initialize({ effectAsset: asset })
     material.setProperty('atlasSize', new Vec4(texture.width, texture.height, 1 / texture.width, 1 / texture.height))
-    material.setProperty('fontParams', fontParams(GameDebugSettings.fontSharpness))
+    material.setProperty('fontParams', fontParams(GameDebugSettings.sharpness))
     materials.set(texture, material)
     return material
 }

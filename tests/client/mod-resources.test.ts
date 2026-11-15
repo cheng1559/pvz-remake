@@ -1,4 +1,5 @@
 import { decodePremultipliedPng } from '@/client/content/PremultipliedPng'
+import { loadKernel } from '@/shared/kernel/index'
 import { inflateSync,strFromU8,strToU8,unzipSync,zipSync } from 'fflate'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
@@ -55,6 +56,8 @@ function setup() {
     }
     const modDb = { ...db, archives: modArchives }
     const pendingDb = { ...db, archives: pendingArchives }
+    /** What the loader had sanded: pixels on the web, and on native the decoded data JavaScript cannot read. */
+    const sanded: unknown[] = []
     class Asset { name = '' }
     class JsonAsset extends Asset { json: any }
     class TextAsset extends Asset { text = '' }
@@ -67,7 +70,10 @@ function setup() {
         pixels?: Uint8Array
         reset(size: { width: number; height: number }) { this.width = size.width; this.height = size.height }
         uploadData(pixels: Uint8Array) { this.pixels = pixels.slice() }
-        set image(image: any) { this.width = image.width; this.height = image.height }
+        set image(image: any) {
+            assert.ok(sanded.includes(image.data._data), 'a native image is sanded where its decoded pixels are, before it is uploaded')
+            this.width = image.width; this.height = image.height
+        }
         setWrapMode() {}
         filters: number[] = []
         setFilters(min: number, mag: number) { this.filters = [min, mag] }
@@ -104,7 +110,7 @@ function setup() {
                     const value = asset(path)
                     if (options.ext === '.png' && value instanceof Uint8Array) {
                         const view = new DataView(value.buffer, value.byteOffset, value.byteLength)
-                        complete(null, { width: view.getUint32(16), height: view.getUint32(20) })
+                        complete(null, { width: view.getUint32(16), height: view.getUint32(20), data: { _data: {} } })
                         return
                     }
                     complete(null, /\.(mp3|wav)$/.test(options.ext ?? '') ? Object.assign(new AudioClip(), { nativeUrl: path }) : value)
@@ -113,6 +119,13 @@ function setup() {
         './SpriteDensity': { setSpriteDensity(texture: object, scale: number) { densities.set(texture, scale) },
             getTextureDensity: (texture: object) => densities.get(texture) ?? 1, applySpriteDensity(frame: any) { frame.normalized = true } },
         './PremultipliedPng': { decodePremultipliedPng },
+        '@/shared/kernel/index': { loadKernel: async () => {
+            const kernel = await loadKernel()
+            return { ...kernel, sandAlphaEdges(rgba: Uint8Array | object, width: number, height: number) {
+                sanded.push(rgba)
+                if (rgba instanceof Uint8Array) kernel.sandAlphaEdges(rgba, width, height)
+            } }
+        } },
         '@/client/font/FontAreaMaterial': { fontAreaMaterial: async (texture: object) => ({ areaSampled: texture }) },
     }
     const blobs = new Map<string, Blob>()

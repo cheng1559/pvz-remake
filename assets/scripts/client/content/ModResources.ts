@@ -108,8 +108,9 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
         }
         let image: ImageAsset | undefined
         try {
-            // The web may still be compiling the kernel that decodes premultiplied images.
-            let decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(await archiveFile(pack.files, file), await loadKernel()) : undefined
+            // The web may still be compiling the kernel, which sands every image as the original does when it loads one.
+            const api = await loadKernel()
+            let decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(await archiveFile(pack.files, file), api) : undefined
             if (!decoded) image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
             const result = new Texture2D()
             // Images past the GPU's size limit are halved until they fit, at a lower density.
@@ -127,10 +128,15 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
                 canvas.height = Math.ceil(image!.height / reduction)
                 const context = canvas.getContext('2d')!
                 context.drawImage(image!.data as CanvasImageSource, 0, 0, canvas.width, canvas.height)
-                const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
+                const data = context.getImageData(0, 0, canvas.width, canvas.height).data
+                const rgba = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+                // A canvas keeps no color under a transparent texel, whatever the file had there.
+                api.sandAlphaEdges(rgba, canvas.width, canvas.height)
                 result.reset({ width: canvas.width, height: canvas.height, format: Texture2D.PixelFormat.RGBA8888 })
-                result.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
+                result.uploadData(rgba)
             } else {
+                // Native keeps the decoded pixels behind the image element, where the kernel sands them.
+                api.sandAlphaEdges((image!.data as unknown as { _data: object })._data, image!.width, image!.height)
                 result.image = image!
             }
             result.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)

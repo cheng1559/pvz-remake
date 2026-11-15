@@ -12,6 +12,8 @@ CCEffect %{
           blendDst: one_minus_src_alpha
           blendSrcAlpha: one
           blendDstAlpha: one_minus_src_alpha
+      properties:
+        sharpen: { value: [1, 1, 0, 0] }
 }%
 
 CCProgram preview-vs %{
@@ -32,14 +34,38 @@ CCProgram preview-vs %{
 }%
 
 CCProgram preview-fs %{
+  #pragma extension([GL_OES_standard_derivatives, __VERSION__ < 300])
   precision highp float;
   #pragma builtin(local)
   layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  uniform Sharpen {
+    vec4 sharpen; // SHARPENED: the picture's width and height in pixels, and its sharpness
+  };
   in vec2 uv;
   in vec4 color;
   vec4 frag () {
+    vec2 at = uv;
+    #if SHARPENED
+      // A picture enlarged: the edge between two of its pixels blends over 1 - sharpness screen pixels instead of the
+      // whole pixel LINEAR filtering blends over. One LINEAR sample still, moved onto its pixel's center but for that
+      // band about the edge. A band a pixel wide, as of a picture not enlarged, leaves the sample where it is.
+      vec2 place = uv * sharpen.xy;
+      #if __VERSION__ < 300
+        #ifdef GL_OES_standard_derivatives
+          vec2 span = fwidth(place);
+        #else
+          vec2 span = vec2(1.0);
+        #endif
+      #else
+        vec2 span = fwidth(place);
+      #endif
+      vec2 band = clamp(span * (1.0 - sharpen.z), 0.0001, 1.0);
+      vec2 center = floor(place) + 0.5;
+      vec2 off = place - center;
+      at = (center + sign(off) * clamp((abs(off) - 0.5) / band + 0.5, 0.0, 0.5)) / sharpen.xy;
+    #endif
     // A transparent render target already contains premultiplied RGB.
-    vec4 pixel = texture(cc_spriteTexture, uv);
+    vec4 pixel = texture(cc_spriteTexture, at);
     return pixel * vec4(color.rgb * color.a, color.a);
   }
 }%

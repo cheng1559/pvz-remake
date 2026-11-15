@@ -4,7 +4,6 @@ const DEBUG_SETTINGS_KEY = 'pvz-remake:debug:settings'
 
 export type DebugCollectMode = 'auto' | 'click' | 'move'
 export type DebugPerfToggle = 'plants' | 'zombies' | 'particles' | 'sfx' | 'logic'
-export type SeedPacketStyle = 'standard' | 'rendered' | 'tilted'
 
 type DebugSettings = {
     rechargingEnabled: boolean
@@ -15,13 +14,23 @@ type DebugSettings = {
     fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
-    seedPacketStyle: SeedPacketStyle
+    /** `/tilted`: a seed packet's picture half as large again (a zombie's twice) and leaning out of its packet. */
+    tiltedSeedPackets: boolean
     mobileEnabled: boolean
     hotkeysEnabled: boolean
     hapticsEnabled: boolean
     originalCursorsEnabled: boolean
-    /** How crisp magnified pixel fonts are: 0 averages the atlas pixels (even strokes), 1 picks the nearest. */
-    fontSharpness: number
+    /**
+     * `/highresolution`: the game drawn at the window's own pixels. Off, it is drawn as the original draws it, at a
+     * pixel to a unit of its 800x600, and that picture enlarged over the window (OriginalResolution).
+     */
+    highResolutionEnabled: boolean
+    /**
+     * `/sharpness`: how crisp an enlarged pixel is. Its edge blends over 1 - sharpness screen pixels: a whole one at 0,
+     * none at 1 (the nearest pixel). The pixels are the picture's that is enlarged over the window; in
+     * /highresolution, where there is no such picture, the pixel fonts'.
+     */
+    sharpness: number
     perfPlantsVisible: boolean
     perfZombiesVisible: boolean
     perfParticlesEnabled: boolean
@@ -37,12 +46,13 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
-    seedPacketStyle: 'standard',
+    tiltedSeedPackets: false,
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
     hapticsEnabled: true,
     originalCursorsEnabled: true,
-    fontSharpness: 0.5,
+    highResolutionEnabled: false,
+    sharpness: 0.5,
     perfPlantsVisible: true,
     perfZombiesVisible: true,
     perfParticlesEnabled: true,
@@ -70,14 +80,14 @@ function loadDebugSettings(): DebugSettings {
             fpsVisible: typeof parsed.fpsVisible === 'boolean' ? parsed.fpsVisible : DEFAULT_DEBUG_SETTINGS.fpsVisible,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
-            seedPacketStyle: parsed.seedPacketStyle === 'standard' || parsed.seedPacketStyle === 'rendered' || parsed.seedPacketStyle === 'tilted'
-                ? parsed.seedPacketStyle : DEFAULT_DEBUG_SETTINGS.seedPacketStyle,
+            tiltedSeedPackets: typeof parsed.tiltedSeedPackets === 'boolean' ? parsed.tiltedSeedPackets : DEFAULT_DEBUG_SETTINGS.tiltedSeedPackets,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_DEBUG_SETTINGS.hapticsEnabled,
             originalCursorsEnabled: parsed.originalCursorsEnabled ?? DEFAULT_DEBUG_SETTINGS.originalCursorsEnabled,
-            fontSharpness: typeof parsed.fontSharpness === 'number' && parsed.fontSharpness >= 0 && parsed.fontSharpness <= 1
-                ? parsed.fontSharpness : DEFAULT_DEBUG_SETTINGS.fontSharpness,
+            highResolutionEnabled: typeof parsed.highResolutionEnabled === 'boolean' ? parsed.highResolutionEnabled : DEFAULT_DEBUG_SETTINGS.highResolutionEnabled,
+            sharpness: typeof parsed.sharpness === 'number' && parsed.sharpness >= 0 && parsed.sharpness <= 1
+                ? parsed.sharpness : DEFAULT_DEBUG_SETTINGS.sharpness,
             perfPlantsVisible: DEFAULT_DEBUG_SETTINGS.perfPlantsVisible,
             perfZombiesVisible: DEFAULT_DEBUG_SETTINGS.perfZombiesVisible,
             perfParticlesEnabled: DEFAULT_DEBUG_SETTINGS.perfParticlesEnabled,
@@ -166,10 +176,10 @@ export const GameDebugSettings = {
         return this.hitboxesVisible
     },
 
-    setSeedPacketStyle(style: SeedPacketStyle) {
-        this.seedPacketStyle = style
+    setTiltedSeedPackets(tilted: boolean) {
+        this.tiltedSeedPackets = tilted
         saveDebugSettings(this)
-        return this.seedPacketStyle
+        return this.tiltedSeedPackets
     },
 
     setMobileEnabled(enabled: boolean) {
@@ -195,10 +205,16 @@ export const GameDebugSettings = {
         return this.originalCursorsEnabled
     },
 
-    setFontSharpness(sharpness: number) {
-        this.fontSharpness = sharpness
+    setHighResolutionEnabled(enabled: boolean) {
+        this.highResolutionEnabled = enabled
         saveDebugSettings(this)
-        return this.fontSharpness
+        return this.highResolutionEnabled
+    },
+
+    setSharpness(sharpness: number) {
+        this.sharpness = sharpness
+        saveDebugSettings(this)
+        return this.sharpness
     },
 
     setPerfToggle(toggle: DebugPerfToggle, enabled: boolean) {

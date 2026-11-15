@@ -16496,27 +16496,6 @@
           0
         ]
       },
-      "pvz:packet_plants_cached": {
-        "file": "assets/images/packet_plants_cached.png",
-        "width": 400,
-        "height": 490,
-        "rect": [
-          5,
-          4,
-          395,
-          464
-        ],
-        "offset": [
-          2.5,
-          9
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "pvz:awardglow": {
         "file": "assets/images/particles/awardglow.png",
         "width": 32,
@@ -48807,27 +48786,6 @@
         "offset": [
           -60,
           -0.5
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "pvz:zombie_previews_cached": {
-        "file": "assets/images/zombie_previews_cached.png",
-        "width": 608,
-        "height": 304,
-        "rect": [
-          17,
-          13,
-          591,
-          291
-        ],
-        "offset": [
-          8.5,
-          -6.5
         ],
         "borders": [
           0,

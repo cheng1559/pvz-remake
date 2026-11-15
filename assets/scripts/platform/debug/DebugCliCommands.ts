@@ -1,6 +1,7 @@
 import { screen, sys } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { CursorManager } from '@/client/input/CursorManager'
+import { OriginalResolution } from '@/client/view/OriginalResolution'
 import { setFontSharpness } from '@/client/font/FontAreaMaterial'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
@@ -8,7 +9,7 @@ import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSwitchAdv
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
-import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
+import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
 
 export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
     return executor.execute(...args)
@@ -70,6 +71,12 @@ async function executeCommand(
             CursorManager.refresh()
             return debugSwitched(name, GameDebugSettings.originalCursorsEnabled)
         }
+        case 'highresolution': {
+            GameDebugSettings.setHighResolutionEnabled(!GameDebugSettings.highResolutionEnabled)
+            OriginalResolution.refresh()
+            return debugSwitched(name, GameDebugSettings.highResolutionEnabled)
+        }
+        case 'tilted': return debugSwitched(name, GameDebugSettings.setTiltedSeedPackets(!GameDebugSettings.tiltedSeedPackets))
         case 'cheatseed': {
             // A preference for the levels to come; in a level its chooser takes it up from the next one it opens.
             if (!running) return debugSwitched(name, GameDebugSettings.setCheatSeedsEnabled(!GameDebugSettings.cheatSeedsEnabled))
@@ -79,12 +86,12 @@ async function executeCommand(
         }
         case 'fps': return debugSwitched(name, (GameDebugSettings.setFpsVisible(!GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
         case 'hitboxes': return debugSwitched(name, (GameDebugSettings.setHitboxesVisible(!GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
-        case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
-        case 'fontsharpness': {
+        case 'sharpness': {
             const sharpness = Number(args[0])
-            if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Font sharpness must be between 0 and 1')
-            setFontSharpness(GameDebugSettings.setFontSharpness(sharpness))
-            return debugSuccess(`Font sharpness: ${sharpness}`)
+            if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Sharpness must be between 0 and 1')
+            // The fonts' materials hold it; the picture enlarged over the window reads it as it is drawn.
+            setFontSharpness(GameDebugSettings.setSharpness(sharpness))
+            return debugSuccess(`Sharpness: ${sharpness}`)
         }
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': {

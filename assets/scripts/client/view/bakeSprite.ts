@@ -2,13 +2,15 @@ import { Camera, Color, Director, director, EffectAsset, isValid, Material, Node
 import { getSpriteDensity } from '@/client/content/SpriteDensity'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { KernelBatch } from '@/client/render/KernelBatch'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { uiNode } from './uiNode'
 
 const CAPTURE_LAYER = 1 << 19
 let queue = Promise.resolve()
 let material: Promise<Material> | undefined
 
-function compositeMaterial(): Promise<Material> {
+/** Draws a render target's picture as it is: its RGB already holds what was blended into it. */
+export function compositeMaterial(): Promise<Material> {
     return material ??= new Promise((resolve, reject) => resources.load('effects/preview-composite', EffectAsset, (error, effect) => {
         if (error) { reject(error); return }
         const result = new Material()
@@ -46,7 +48,11 @@ export function bakeSprite(source: Node): Promise<Sprite | undefined> {
             const bottom = Math.floor(Math.min(...rects.map(rect => rect.y))) - 1
             const width = Math.ceil(Math.max(...rects.map(rect => rect.xMax))) + 1 - left
             const height = Math.ceil(Math.max(...rects.map(rect => rect.yMax))) + 1 - bottom
-            const density = Math.ceil(Math.max(1, view.getScaleX(), view.getScaleY(), ...sprites.map(sprite => getSpriteDensity(sprite.spriteFrame!))))
+            // As fine as it is shown. The scene is drawn at a pixel to a unit, and so is this: the parts are sampled as
+            // the lawn samples them, where a finer picture would be sampled a second time on its way into the scene. In
+            // /highresolution that is the window's pixels or the art's own, whichever is finer.
+            const density = !GameDebugSettings.highResolutionEnabled ? 1
+                : Math.ceil(Math.max(1, view.getScaleX(), view.getScaleY(), ...sprites.map(sprite => getSpriteDensity(sprite.spriteFrame!))))
             texture.reset({ width: Math.ceil(width * density), height: Math.ceil(height * density) })
             const cameraNode = new Node('PreviewCamera')
             stage.addChild(cameraNode)

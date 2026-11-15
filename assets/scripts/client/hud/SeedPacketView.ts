@@ -34,7 +34,7 @@ export interface SeedPacketViewArgs {
     loadSprite?: SeedPacketRenderArgs['loadSprite']
     /**
      * Where the packet's picture, cost and selection frame go, above every packet's background, so that a picture
-     * standing out of its packet (/seedstyle tilted) shows over its neighbours whichever way it leans. Without it
+     * standing out of its packet (/tilted) shows over its neighbours whichever way it leans. Without it
      * they stay in the packet, and packets to the left must draw last.
      */
     iconLayer?: Node
@@ -224,7 +224,7 @@ export class SeedPacketView {
         // A tilted picture stands out on either side (a plant to the right, a zombie to the left) and above; the shade
         // over it reaches as far, the packet's own background half no further than the packet. Without its own layer
         // the shade holds the dark background too, so it only reaches 25 to the right, as before.
-        const tilted = GameDebugSettings.seedPacketStyle === 'tilted'
+        const tilted = GameDebugSettings.tiltedSeedPackets
         const out = tilted && this.top ? TILTED_OVERHANG : 0
         const side = tilted && !this.top ? 25 : out
         const width = SEED_PACKET_WIDTH + out + side

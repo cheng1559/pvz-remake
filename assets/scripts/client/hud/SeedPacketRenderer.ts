@@ -18,7 +18,6 @@ export const SEED_PACKET_HEIGHT = 70
 
 const SEED_PACKET_ATLAS_COLUMNS = 9
 const PACKET_PLANTS_ATLAS_COLUMNS = 13
-const PACKET_PLANTS_CACHED_ATLAS_COLUMNS = 8
 const PLANT_PREVIEWS_CACHED_ATLAS_COLUMNS = 8
 const PLANT_PREVIEW_CACHE_CELL_WIDTH = 220
 const PLANT_PREVIEW_CACHE_CELL_HEIGHT = 160
@@ -207,14 +206,19 @@ export class SeedPacketRenderer {
         this.drawGrave(holder, args.layer, args.loadSprite ?? loadPacketSprite, GRAVE_PACKET.x * size, GRAVE_PACKET.y * size, GRAVE_PACKET.scale * size)
     }
 
+    /**
+     * A seed whose plant no view draws yet, as SeedPacket's DrawSeedPacket has it: a packet at its own size shows the
+     * seed's own packet picture where it has one (`seedPackets.plantCels`); any other, and any larger packet, the
+     * plant's cached frame scaled into the picture's place.
+     */
     private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
-        if (scale > 1) {
+        const packetPlantCel = args.definitions.seedPackets.plantCels[seedId]
+        if (scale > 1 || packetPlantCel == null) {
             await this._drawScaledCachedPlant(root, seedId, args, scale)
             return
         }
 
-        const packetPlantCel = args.definitions.seedPackets.plantCels[seedId]
-        const atlas = await (args.loadSprite ?? loadPacketSprite)(packetPlantCel != null ? 'packet_plants' : 'packet_plants_cached')
+        const atlas = await (args.loadSprite ?? loadPacketSprite)('packet_plants')
         if (!isValid(root, true)) return
 
         uiNode({
@@ -227,10 +231,10 @@ export class SeedPacketRenderer {
             sprite: {
                 frame: getAtlasFrame(
                     atlas,
-                    packetPlantCel ?? seedId,
+                    packetPlantCel,
                     SEED_PACKET_WIDTH,
                     SEED_PACKET_HEIGHT,
-                    packetPlantCel != null ? PACKET_PLANTS_ATLAS_COLUMNS : PACKET_PLANTS_CACHED_ATLAS_COLUMNS,
+                    PACKET_PLANTS_ATLAS_COLUMNS,
                 ),
                 sizeMode: Sprite.SizeMode.RAW,
                 trim: false,
