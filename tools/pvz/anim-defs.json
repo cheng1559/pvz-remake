@@ -1084,6 +1084,7 @@
       ],
       "animations": [
         "anim_idle",
+        "anim_idle2",
         "anim_walk",
         "anim_walk2",
         "anim_eat",
@@ -1092,6 +1093,7 @@
       ],
       "exports": {
         "anim_idle": "pvz:helm_zombie_idle",
+        "anim_idle2": "pvz:helm_zombie_idle2",
         "anim_walk": "pvz:helm_zombie_walk",
         "anim_walk2": "pvz:helm_zombie_walk2",
         "anim_eat": "pvz:helm_zombie_eat"
@@ -1114,6 +1116,7 @@
       ],
       "animations": [
         "anim_idle",
+        "anim_idle2",
         "anim_walk",
         "anim_walk2",
         "anim_eat",
@@ -1122,6 +1125,7 @@
       ],
       "exports": {
         "anim_idle": "pvz:door_zombie_idle",
+        "anim_idle2": "pvz:door_zombie_idle2",
         "anim_walk": "pvz:door_zombie_walk",
         "anim_walk2": "pvz:door_zombie_walk2",
         "anim_eat": "pvz:door_zombie_eat"
@@ -1154,6 +1158,7 @@
       ],
       "exports": {
         "anim_idle": "pvz:flag_idle",
+        "anim_idle2": "pvz:flag_idle2",
         "anim_walk": "pvz:flag_walk",
         "anim_walk2": "pvz:flag_walk2",
         "anim_eat": "pvz:flag_eat"

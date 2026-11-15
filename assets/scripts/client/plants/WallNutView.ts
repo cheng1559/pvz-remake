@@ -5,8 +5,8 @@ export class WallNutView extends PlantView {
     /** The cracks its face shows; none before the first sync, so a nut found cracked (a save) does not puff. */
     private crackStage = -1
 
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void {
-        super.sync(plant, world, particle, upgradeTarget, flash)
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
+        super.sync(plant, world, particle, flash)
         this.syncCracks(plant, particle)
     }
 

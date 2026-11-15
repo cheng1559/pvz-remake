@@ -264,7 +264,7 @@
     "graveBuster": {"landTicks": {"min": 47, "max": 70}, "eatTicks": 400},
     "animation": {
       "clips": {
-        "land": {"frames": 7, "fit": true, "hold": true},
+        "land": {"frames": 7, "fit": true, "fps": [10, 15], "hold": true},
         "body": {"frames": 28, "fps": 12}
       },
       "layers": {"body": "land"},

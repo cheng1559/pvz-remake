@@ -51015,7 +51015,10 @@
       "pvz:cherrybomb_idle": "assets/reanim/cherrybomb_idle.json",
       "pvz:helm_zombie_idle": "assets/reanim/helm_zombie_idle.json",
       "pvz:flag_idle": "assets/reanim/flag_idle.json",
-      "pvz:pole_vaulter_idle": "assets/reanim/pole_vaulter_idle.json"
+      "pvz:pole_vaulter_idle": "assets/reanim/pole_vaulter_idle.json",
+      "pvz:helm_zombie_idle2": "assets/reanim/helm_zombie_idle2.json",
+      "pvz:door_zombie_idle2": "assets/reanim/door_zombie_idle2.json",
+      "pvz:flag_idle2": "assets/reanim/flag_idle2.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

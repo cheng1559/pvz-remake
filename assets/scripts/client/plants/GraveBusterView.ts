@@ -6,8 +6,8 @@ import { PlantView, type PlantParticle } from './PlantView'
 
 /** Plant::UpdateGraveBuster: it lands, then chews and sinks while the grave disappears. */
 export class GraveBusterView extends PlantView {
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void {
-        super.sync(plant, world, particle, upgradeTarget, flash)
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
+        super.sync(plant, world, particle, flash)
         if (plant.ability?.state !== 'eating') return
         const { node, content } = this.context
         // AddAttachedParticle: the chewing particle belongs to the buster and goes away with it.

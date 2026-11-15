@@ -35,7 +35,7 @@ test('every almanac entry is a plant or a zombie its view can draw off the board
         assert.ok(gameplay.zombies[entry.zombie] && presentation, `${entry.key} has no zombie to show`)
         assert.ok(presentation.portrait, `${entry.key} has no small picture`)
         const clips = (presentation.animations ?? presentationFixture.zombies[presentation.animationsFrom!].animations!) as unknown as Record<string, unknown>
-        assert.ok(clips.idle && (!gameplay.zombies[entry.zombie].idle2 || clips.idle2), `${entry.key} cannot stand`)
+        assert.ok(clips.idle, `${entry.key} cannot stand`)
     }
 })
 
@@ -51,6 +51,10 @@ test('a plant off the board starts as on it and shows the clips it has there', (
     assert.deepEqual(shown('pvz:cherrybomb').animations, { body: { clip: 'idle', time: 0, rate: 10 } })
     assert.deepEqual(shown('pvz:sunshroom').animations, { body: { clip: 'body', time: 0, rate: 10 } })
     assert.deepEqual(shown('pvz:sunshroom', 'packet').animations, { body: { clip: 'small', time: 0, rate: 10 } })
+    // The grave buster stands at the 10 to 15 its landing goes at on the board, where that fits the ticks it lands in.
+    const buster = gameplay.plants['pvz:gravebuster'].animation!, standing = presentationFixture.plants['pvz:gravebuster'].offBoard
+    assert.deepEqual(startOffBoardPlant(buster, standing, random(1)).animations, { body: { clip: 'body', time: 0, rate: 15 } })
+    assert.deepEqual(shown('pvz:gravebuster').animations, { body: { clip: 'body', time: 0, rate: 10 } })
     // DrawSeedType poses the sunflower 0.15 of the way to its last frame.
     assert.deepEqual(shown('pvz:sunflower', 'packet').animations, { body: { clip: 'body', time: 24 * 0.15, rate: 10 } })
 })
@@ -67,9 +71,12 @@ test('a plant off the board goes on by the rules of the board: a clip of the pre
 })
 
 test('a zombie off the board stands, three times in four its second way when it has one', () => {
-    const normal = gameplay.zombies['pvz:normal'], cone = gameplay.zombies['pvz:conehead']
     // Zombie::LoadReanim: Rand(4) > 0, then the pace of the clip it took, then where in it it starts.
-    assert.deepEqual(offBoardZombieAnimation(normal, random(0.5, 1, 0.5)), { animation: 'anim_idle2', animationTime: 0, animationSpeed: 2, start: 0.495 })
-    assert.deepEqual(offBoardZombieAnimation(normal, random(0, 0.5, 0)), { animation: 'anim_idle', animationTime: 0, animationSpeed: 1.25, start: 0 })
-    assert.equal(offBoardZombieAnimation(cone, random(0.5, 0)).animation, 'anim_idle', 'a zombie with one way to stand takes it')
+    assert.deepEqual(offBoardZombieAnimation(true, random(0.5, 1, 0.5)), { animation: 'anim_idle2', animationTime: 0, animationSpeed: 2, start: 0.495 })
+    assert.deepEqual(offBoardZombieAnimation(true, random(0, 0.5, 0)), { animation: 'anim_idle', animationTime: 0, animationSpeed: 1.25, start: 0 })
+    assert.equal(offBoardZombieAnimation(false, random(0.5, 0)).animation, 'anim_idle', 'a zombie with one way to stand takes it')
+    // Zombie.reanim has anim_idle2, and so has every zombie drawn on it; the newspaper's and the pole vaulter's have not.
+    const second = (id: string) => 'idle2' in (presentationFixture.zombies[id].animations as object)
+    assert.deepEqual(['normal', 'flag', 'conehead', 'buckethead', 'screendoor', 'newspaper', 'pole_vaulter'].map(id => second(`pvz:${id}`)),
+        [true, true, true, true, true, false, false])
 })

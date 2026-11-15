@@ -264,7 +264,7 @@ export class PlantView {
         node.setPosition(at.x, at.y)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         this.flash = flash
-        this.sync(plant, world, particle, false, flash)
+        this.sync(plant, world, particle, flash)
         // A plant chilled by a hostile snow pea draws blue and animates at half speed. Its players are revisited every
         // frame while chilled, since a layer may start a new clip, and once more as it thaws.
         const chilled = (plant.chilledTicks ?? 0) > 0
@@ -329,7 +329,7 @@ export class PlantView {
      * The plant itself on the board, by the server's snapshot: its layers, a particle that follows its shot, its color
      * and its glow. A view adds what its plant does here.
      */
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void {
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
         this.show(plant)
         const cue = this.presentation.viewConfig?.fireParticle as unknown as FireParticle | undefined
         if (cue && this.shotTick !== undefined) {
@@ -345,7 +345,7 @@ export class PlantView {
         if (!body.loadedId) return
         const gray = Math.min(255, flash * 3)
         // The layers over the first are on its parts, so its colors reach them all.
-        body.setColorOverride(upgradeTarget ? upgradeFlashColor(world.gameplayTick) : this.tint ?? Color.WHITE)
+        body.setColorOverride(this.tint ?? Color.WHITE)
         body.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray, 255))
     }
 
@@ -383,10 +383,4 @@ export class PlantView {
         // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
         stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
     }
-}
-
-function upgradeFlashColor(tick: number): Color {
-    const age = tick % 90
-    const gray = Math.min(255, Math.trunc(200 * Math.abs(45 - age) / 45) + 55)
-    return new Color(gray, gray, gray, 255)
 }

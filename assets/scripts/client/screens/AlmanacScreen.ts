@@ -28,7 +28,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
     } else {
         const { plants, zombies } = await menuApi.getAlmanac()
         const names = page === 'plants'
-            ? ['almanac_imitater', 'particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
+            ? ['particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
             : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombieblank', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
         const frames = await Promise.all(names.map(async name => {
             const frame = await modResources.asset(name, SpriteFrame)
@@ -41,7 +41,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         // AlmanacDialog draws the selected entry itself; its buttons are widgets drawn above it. The holder, made at the
         // first selection (after the list, before the footer buttons), keeps a re-selected entry in that place.
         let detailsLayer: Node | null = null
-        const plantPosition = (id: number) => ({ x: id === 48 ? 20 : id % 8 * 52 + 26, y: id === 48 ? 23 : Math.floor(id / 8) * 78 + 92 })
+        const plantPosition = (id: number) => ({ x: id % 8 * 52 + 26, y: Math.floor(id / 8) * 78 + 92 })
         const select = (entry: AlmanacPlantDefinition | AlmanacZombieView) => {
             if (details) { details.active = false; details.destroy() }
             detailsLayer ??= uiNode({ name: 'Details', parent, anchor: { x: 0, y: 1 } }).node
@@ -56,11 +56,9 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION`), {
                     x: 485, y: 309 + header, width: 258, height: Math.max(20, 210 - header), scrollColors: PLANT_SCROLLBAR_COLORS,
                 })
-                if (plant.id !== 48) {
-                    drawAlmanacText(details, ui, `{KEYWORD}${ui.text('COST')}:{STAT} ${plant.cost}`, { x: 485, y: 520, width: 134 })
-                    const wait = ui.text(plant.refreshTime === 750 ? 'WAIT_TIME_SHORT' : plant.refreshTime === 3000 ? 'WAIT_TIME_LONG' : 'WAIT_TIME_VERY_LONG')
-                    drawAlmanacText(details, ui, `{KEYWORD}${ui.text('WAIT_TIME')}: {STAT}${wait}`, { x: 600, y: 520, width: 139, align: 'right' })
-                }
+                drawAlmanacText(details, ui, `{KEYWORD}${ui.text('COST')}:{STAT} ${plant.cost}`, { x: 485, y: 520, width: 134 })
+                const wait = ui.text(plant.refreshTime === 750 ? 'WAIT_TIME_SHORT' : plant.refreshTime === 3000 ? 'WAIT_TIME_LONG' : 'WAIT_TIME_VERY_LONG')
+                drawAlmanacText(details, ui, `{KEYWORD}${ui.text('WAIT_TIME')}: {STAT}${wait}`, { x: 600, y: 520, width: 139, align: 'right' })
             } else {
                 const zombie = entry as AlmanacZombieView
                 ui.image(details, sprites[zombie.iceGround ? 'almanac_groundice' : 'almanac_groundday'], { x: 518, y: 110 })
@@ -92,33 +90,23 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             for (const plant of drawOrder) {
                 const { x, y } = plantPosition(plant.id)
                 const button = ui.button(parent, {
-                    images: { normal: plant.id === 48 ? sprites.almanac_imitater : sprites['particles/seedpacketflash'] },
-                    x, y, width: plant.id === 48 ? 34 : 50, height: plant.id === 48 ? 46 : 70,
-                    imageBox: plant.id === 48 ? { width: 34, height: sprites.almanac_imitater.originalSize.height } : undefined,
+                    images: { normal: sprites['particles/seedpacketflash'] }, x, y, width: 50, height: 70,
                     pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), pressOffset: [0, 0],
                     onClick: () => choose(plant),
                 })
                 button.hapticsEnabled = false
                 button.node.name = plant.key
-                if (plant.id === 48) {
-                    const overlay = ui.image(button.node, sprites.almanac_imitater).node
-                    const update = button.onStateChange!
-                    button.onStateChange = state => { update(state); overlay.active = state === 'hover' || state === 'pressed' }
-                    button.onStateChange(button.isHovering ? 'hover' : 'normal')
-                } else {
-                    const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.seed, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
-                    packet.setSiblingIndex(0)
-                    const visual = button.node.getChildByName('Visual')!
-                    const update = button.onStateChange!
-                    button.onStateChange = state => { update(state); visual.active = state === 'hover' || state === 'pressed' }
-                    button.onStateChange(button.isHovering ? 'hover' : 'normal')
-                }
+                const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.seed, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
+                packet.setSiblingIndex(0)
+                const visual = button.node.getChildByName('Visual')!
+                const update = button.onStateChange!
+                button.onStateChange = state => { update(state); visual.active = state === 'hover' || state === 'pressed' }
+                button.onStateChange(button.isHovering ? 'hover' : 'normal')
             }
             select(plants.find(plant => plant.id === selection.plant) ?? plants[0])
         } else {
             for (const zombie of zombies) {
-                const index = zombie.id === 25 ? 27 : zombie.id
-                const x = index % 5 * 85 + 22, y = Math.floor(index / 5) * 80 + 86
+                const x = zombie.id % 5 * 85 + 22, y = Math.floor(zombie.id / 5) * 80 + 86
                 if (!zombie.shown) { ui.image(parent, sprites.almanac_zombieblank, { x, y }); continue }
                 // AlmanacDialog::DrawZombies draws the window image at its own size over the 76x76 button.
                 const windowSize = sprites.almanac_zombiewindow.originalSize

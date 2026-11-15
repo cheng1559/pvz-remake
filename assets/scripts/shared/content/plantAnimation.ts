@@ -45,7 +45,9 @@ function pace({ fps }: PlantClip, random: AnimationRandom): number {
 export function startPlantLayer(animation: PlantAnimationDefinition, plant: AnimatedPlant, clip: string, random: AnimationRandom): PlantLayerState {
     const definition = animation.clips[clip], { sync, fit, start, frames } = definition, layers = plant.animations!
     if (sync !== undefined) return { clip, time: layers[sync]?.time ?? 0, rate: layers[sync]?.rate ?? PLANT_ASSET_FPS }
-    if (fit) return { clip, time: 0, rate: plant.ability?.ticks ? frames * TICKS_PER_SECOND / plant.ability.ticks : PLANT_ASSET_FPS }
+    if (fit && plant.ability?.ticks) return { clip, time: 0, rate: frames * TICKS_PER_SECOND / plant.ability.ticks }
+    // With nothing to fit, a clip goes at its own pace if it has one.
+    if (fit && !definition.fps) return { clip, time: 0, rate: PLANT_ASSET_FPS }
     const rate = pace(definition, random)
     return { clip, time: start ? frames * (start.min + random.nextFloat() * (start.max - start.min)) : 0, rate }
 }

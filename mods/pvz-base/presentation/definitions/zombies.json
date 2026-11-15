@@ -46,6 +46,7 @@
     "flag": true,
     "animations": {
       "idle": {"reanimId": "pvz:flag_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:flag_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:flag_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:flag_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:flag_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -83,6 +84,7 @@
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -126,6 +128,7 @@
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -258,6 +261,7 @@
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:door_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:door_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:door_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:door_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:door_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},

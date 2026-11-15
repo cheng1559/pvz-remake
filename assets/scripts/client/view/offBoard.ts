@@ -70,7 +70,8 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     const game = await offBoardContent()
     const definition = game.definitions.zombies[typeId]
     if (!definition || !node.isValid) return null
-    const standing = options.pose === undefined ? offBoardZombieAnimation(definition, random)
+    const clips: Record<string, unknown> = game.animations.resolve(game.animations.sourceOf(typeId))
+    const standing = options.pose === undefined ? offBoardZombieAnimation(clips.idle2 !== undefined, random)
         : { animation: `anim_${options.pose}` as ZombieSnapshot['animation'], animationTime: 0, animationSpeed: 1, start: 0 }
     const { start, ...animation } = standing
     // Whole and at rest, with its own helm and shield worn: none of the rest of a snapshot is read off the board.

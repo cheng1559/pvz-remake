@@ -216,7 +216,10 @@ export interface PlantClip {
     fps?: { min: number; max: number }
     /** In place of `fps`: it starts where that layer is and goes at its rate (a pea shooter's head idles with its body). */
     sync?: string
-    /** In place of `fps`: it lasts the ticks its plant's ability has left as it starts (a grave buster's landing). */
+    /**
+     * It lasts the ticks its plant's ability has left as it starts (a grave buster's landing). With `fps` too, that is its
+     * pace where there is nothing to fit, off the board.
+     */
     fit?: true
     /** Plant::AnimateNuts: while zombies chew the plant it all but stops, and goes on at a rate drawn anew once they leave it. */
     chewed?: true
@@ -296,8 +299,6 @@ export interface ZombieDefinition {
     enrage?: { pauseTicks: number; speedPerTick: { min: number; max: number } }
     /** Explicit animation profile and variants; equipment does not imply animation support. */
     gait: string
-    /** Zombie::LoadReanim: it has a second way to stand (anim_idle2), which it takes three times in four off the board. */
-    idle2?: true
     tongueChance: number
     walk2Chance: number
     targetingInsets?: Record<string, number>
@@ -801,7 +802,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['idle2', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -817,7 +818,6 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         body: rect(source.body, `${name}.body`),
         attack: rect(source.attack, `${name}.attack`),
         gait: qualifiedId(source.gait, `${name}.gait`),
-        ...(source.idle2 === undefined ? {} : { idle2: flag(source.idle2, `${name}.idle2`) }),
         tongueChance: fraction(source.tongueChance, `${name}.tongueChance`),
         walk2Chance: fraction(source.walk2Chance, `${name}.walk2Chance`),
         bite: {
@@ -880,7 +880,8 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
     const clips = named(source.clips, `${name}.clips`, (entry, clipName): PlantClip => {
         const clip = exactObject(entry, ['frames'], clipName, ['fps', 'sync', 'fit', 'chewed', 'next', 'once', 'hold', 'start', 'tracks'])
         const frames = positiveInteger(clip.frames, `${clipName}.frames`)
-        if ([clip.fps, clip.sync, clip.fit].filter(pace => pace !== undefined).length !== 1) throw new Error(`${clipName} needs exactly one of fps, sync and fit`)
+        // One pace: its own or another layer's; or it fits, with a pace of its own only for where nothing is to fit.
+        if (clip.fit ? clip.sync !== undefined : (clip.fps === undefined) === (clip.sync === undefined)) throw new Error(`${clipName} needs exactly one of fps and sync, or fit`)
         if (clip.chewed !== undefined && clip.fps === undefined) throw new Error(`${clipName}.chewed needs fps`)
         for (const key of ['once', 'hold', 'fit', 'chewed']) if (clip[key] !== undefined && clip[key] !== true) throw new Error(`${clipName}.${key} must be true`)
         if ([clip.next, clip.once, clip.hold].filter(end => end !== undefined).length > 1) throw new Error(`${clipName} allows at most one of next, once and hold`)
