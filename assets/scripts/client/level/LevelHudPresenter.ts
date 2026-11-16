@@ -234,9 +234,10 @@ export class LevelHudPresenter {
     private adviceText(key: string): string { return key ? this.ui.text(key) : '' }
 
     private syncAdvice(snapshot: WorldSnapshot, events: ServerEvent[], elapsedTicks: number, introComplete: boolean): void {
-        // Board::ZombiesWon clears the advice; a win does not (Board::FadeOutLevel), so messages, such as achievements
-        // earned from the sun and coins collected after the award, show through the fade.
-        if (snapshot.result === 'lost') { this.advice.clear(); return }
+        // Board::ZombiesWon clears the advice (at once here, where the level stops updating it); a win does not
+        // (Board::FadeOutLevel), so messages, such as achievements earned from the sun and coins collected after the
+        // award, show through the fade.
+        if (snapshot.result === 'lost') { this.advice.clear(true); return }
         if (introComplete || this.presentation.adviceDuringIntro) {
             const message = this.adviceText(this.presentation.advice[snapshot.tutorial.step] ?? '')
             if (message !== this.adviceMessage) {
@@ -252,6 +253,13 @@ export class LevelHudPresenter {
                 if (typeof key === 'string') this.advice.show(this.adviceText(key), isAdviceStyle(style) ? style : 'tutorial-level1')
             } else if (event.type === 'achievementEarned' && event.data.announce === true && typeof event.data.titleKey === 'string') {
                 this.advice.show(this.ui.text('ACHIEVEMENT_ACHIEVED').replace('{ACHIEVEMENT}', this.ui.text(event.data.titleKey)), 'achievement')
+            } else if (event.type === 'hugeWave') {
+                // Board::UpdateZombieSpawning: DisplayAdviceAgain of the huge wave's message as its countdown starts,
+                this.advice.show(this.ui.text('ADVICE_HUGE_WAVE'), 'huge-wave')
+            } else if (event.type === 'nextWaveComing') {
+                // and ClearAdvice(ADVICE_HUGE_WAVE) as it ends, unless another message is waiting to take its place.
+                const shown = this.advice.snapshot()
+                if (shown?.style === 'huge-wave' && !shown.next) this.advice.clear()
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
                 if (typeof key === 'string' && this.advice.snapshot()?.message === this.adviceText(key)) this.advice.clear()

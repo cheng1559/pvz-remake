@@ -22,7 +22,7 @@ function snapshot(): any {
         end: { ticks: -1, finalWave: null },
         advice: {
             lastStatusMessage: 'Plant!', lastSyncedTick: 20,
-            widget: { message: 'Plant!', style: 'tutorial-level1', durationTicks: 100, pulseTick: 2 },
+            widget: { message: 'Plant!', style: 'tutorial-level1', durationTicks: 100, pulseTick: 2, shownTicks: 400 },
         },
         hud: {
             sunFlashTicks: 0, coinBankTicks: 0, progressWave: 1,

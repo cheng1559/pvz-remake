@@ -32,6 +32,7 @@ import {
 } from './LevelPresentationSnapshot'
 import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
+import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser, REPICK_END_TICK } from './LevelSeedChooser'
 import { LevelBoardHud } from './LevelBoardHud'
@@ -142,6 +143,7 @@ export class LevelView {
             LevelGameOverPresenter.loadAssets(presentation.board.gameOver),
             UI.load(),
             content.views.preload(content, level),
+            AdviceWidget.loadAssets(),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)
@@ -272,7 +274,7 @@ export class LevelView {
             content,
             entityLayer, coinLayer, awardLayer, intro, graveRise,
         )
-        const end = new LevelEndPresenter(content, overlayLayer, levelCompleteFade, audio, ui)
+        const end = new LevelEndPresenter(content, overlayLayer, levelCompleteFade, audio)
         entityRenderer.levelEndTicks = () => end.elapsed
         // The tutorial's arrow at a packet, over the HUD; a repick puts it under the bank it points at (raiseBankToChooser).
         const tutorialArrows = uiNode({ name: 'TutorialArrows', parent: coinLayer.parent! }).node

@@ -1343,6 +1343,14 @@
       }
     }
   },
+  "textfadeon": {
+    "default": {
+      "exports": {
+        "anim_enter": "pvz:textfadeon_enter",
+        "anim_leave": "pvz:textfadeon_leave"
+      }
+    }
+  },
   "hammer": {
     "default": {
       "animations": [

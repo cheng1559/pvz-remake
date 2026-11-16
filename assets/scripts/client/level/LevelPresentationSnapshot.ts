@@ -50,7 +50,6 @@ export interface LevelIntroSnapshot {
 export interface LevelEndSnapshot {
     ticks: number
     finalWave: ReanimPlaybackSnapshot | null
-    hugeWaveTicks?: number
 }
 
 export interface LevelAdviceSnapshot {
@@ -196,11 +195,10 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
 }
 
 function parseEnd(value: unknown): LevelEndSnapshot {
-    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks'])
+    const source = exact(value, ['ticks', 'finalWave'], 'Level end')
     return {
         ticks: finiteInRange(source.ticks, END_INACTIVE, END_COMPLETE, 'Level end.ticks'),
         finalWave: source.finalWave === null ? null : parseReanimPlaybackSnapshot(source.finalWave),
-        ...(source.hugeWaveTicks === undefined ? {} : { hugeWaveTicks: finiteInRange(source.hugeWaveTicks, 0, 750, 'Level end.hugeWaveTicks') }),
     }
 }
 

@@ -50338,6 +50338,8 @@
       "pvz:potatomine_glow": "assets/reanim/potatomine_glow.json",
       "pvz:potatomine_rise": "assets/reanim/potatomine_rise.json",
       "pvz:readysetplant": "assets/reanim/readysetplant.json",
+      "pvz:textfadeon_enter": "assets/reanim/textfadeon_enter.json",
+      "pvz:textfadeon_leave": "assets/reanim/textfadeon_leave.json",
       "pvz:repeater": "assets/reanim/repeater.json",
       "pvz:repeater_head_idle": "assets/reanim/repeater_head_idle.json",
       "pvz:repeater_shoot": "assets/reanim/repeater_shoot.json",
