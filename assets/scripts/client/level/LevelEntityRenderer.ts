@@ -4,7 +4,7 @@ import { ParticlePlayer, type ParticleSpawnArgs } from '@/client/particle/Partic
 import { uiNode } from '@/client/view/uiNode'
 import { levelStandsStill, type MowerSnapshot, type PlantSnapshot, type ServerEvent, type WorldSnapshot, type ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
-import type { LevelDefinition } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, type LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelIntro } from './LevelIntro'
 import { ZombieView } from '@/client/zombies/ZombieView'
 import { PlantView } from '@/client/plants/PlantView'
@@ -236,7 +236,7 @@ export class LevelEntityRenderer implements LevelStage {
 
     /** An entity's node, and its view from the registry of its kind, shown at once as it is now. */
     private async create(kind: EntityKind, entity: { entityId: number, typeId: string }): Promise<void> {
-        const id = entity.entityId, award = kind === 'item' && entity.typeId === this.level.award.id
+        const id = entity.entityId, award = kind === 'item' && entity.typeId === LEVEL_AWARD
         const positioned = kind === 'plant' || kind === 'zombie' || kind === 'projectile' || kind === 'mower' ? entity as Positioned : undefined
         const node = uiNode({
             name: `Entity-${id}`, parent: award ? this.awardLayer : kind === 'item' ? this.coinLayer : this.layer,

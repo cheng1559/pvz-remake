@@ -1,4 +1,4 @@
-import { type BoardDefinition, type GameplayDefinitions, type LevelDefinition, levelAwardSize } from '@/shared/content/gameplay'
+import { type BoardDefinition, type GameplayDefinitions, LEVEL_AWARD, type LevelDefinition, levelAwardSize } from '@/shared/content/gameplay'
 import type { ItemSnapshot } from '@/shared/protocol'
 
 export { levelAwardSize }
@@ -21,10 +21,11 @@ export function seedPacketX(index: number, slots: number): number {
 export function itemAt(items: readonly ItemSnapshot[], definitions: GameplayDefinitions['items'], level: LevelDefinition,
     padding: { readonly size: number, readonly height: number } | undefined, x: number, y: number, award = true): ItemSnapshot | undefined {
     for (let index = items.length - 1; index >= 0; index--) {
-        const item = items[index], definition = definitions[item.typeId]
-        if (!award && !definition) continue
-        const size = definition ?? levelAwardSize(level.award)
-        const extra = padding?.size ?? (definition ? 15 : 0), below = padding?.height ?? 0
+        const item = items[index], isAward = item.typeId === LEVEL_AWARD
+        if (!award && isAward) continue
+        const size = isAward ? levelAwardSize(level.award) : definitions[item.typeId]
+        if (!size) continue
+        const extra = padding?.size ?? (isAward ? 0 : 15), below = padding?.height ?? 0
         if (item.state !== 'collecting' && x >= item.x - extra && x < item.x + size.width + extra &&
             y >= item.y - extra && y < item.y + size.height + extra + below) return item
     }

@@ -19,10 +19,7 @@ import { getAvailableSun } from '@/server/level/items'
 import { startMower } from '@/server/level/mower'
 import { readyMowers } from '@/server/level/lawn'
 import { spawnZombie } from '@/server/zombies/spawn'
-import {
-parseGameplayDefinitions,
-parseGameplayLevels,
-} from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { isJsonValue,parseServerPacket,type StartSessionPacket, type WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -370,7 +367,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     const awardId = world.createEntity()
     world.add(awardId, PositionComponent, { x: 400, y: 300, row: -1 })
     world.add(awardId, ItemComponent, {
-        typeId: 'pvz:sunflower', value: 1, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
+        typeId: LEVEL_AWARD, value: 1, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
         groundY: 300, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
 

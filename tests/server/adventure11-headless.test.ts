@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -41,7 +41,7 @@ test('headless 1-1 reaches the same win for the same seed and commands', () => {
     let awardDroppedBeforeWin = false
     while (snapshot.result === 'playing' && snapshot.tick < 30000) {
         for (const item of snapshot.items) {
-            if (item.typeId === 'pvz:sunflower') {
+            if (item.typeId === LEVEL_AWARD) {
                 awardDroppedBeforeWin = true
                 assert.doesNotThrow(() => new IntegratedGameServer(definitions, levels).start({
                     ...start,

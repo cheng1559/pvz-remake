@@ -4,7 +4,7 @@ import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseServerSaveSnapshot } from '@/server/session/save'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -89,7 +89,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
     let frame: WorldSnapshot = original.snapshot()
     while (frame.result === 'playing' && frame.tick < 30000) {
         frame = tickBoth()
-        const award = frame.items.find(item => item.typeId === 'pvz:sunflower')
+        const award = frame.items.find(item => item.typeId === LEVEL_AWARD)
         if (award) commandBoth({ type: 'collectItemAt', itemId: award.entityId })
         frame = original.snapshot()
     }

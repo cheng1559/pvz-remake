@@ -2,7 +2,7 @@ import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -92,9 +92,9 @@ test('early adventure wave plans obey points, reserve conehead introductions and
         server.start({ ...options(index), save: save as unknown as JsonValue })
         server.tick()
         server.tick()
-        const award = server.snapshot().items.find(item => item.typeId === level.award.id)!
+        const award = server.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
         assert.ok(award)
-        assert.equal(award.typeId, index === 3 ? 'pvz:wallnut' : 'pvz:shovel')
+        assert.equal(level.award.id, index === 3 ? 'pvz:wallnut' : 'pvz:shovel')
         assert.equal(runCommand(server, { type: 'collectItemAt', itemId: award.entityId }), undefined)
         assert.equal(server.snapshot().result, 'won')
     }

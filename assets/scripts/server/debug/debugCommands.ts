@@ -17,6 +17,7 @@ import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
 import { levelAwardDropped, spawnLevelAward } from '../level/levelAward'
+import { LEVEL_AWARD } from '@/shared/content/gameplay'
 
 export const executor = { execute: executeCommand }
 
@@ -236,7 +237,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         }
         case 'item': {
             const award = ['award', 'levelaward', 'finalseedpacket'].includes(normalizeDebugName(args[0]))
-            const typeId = award ? level.definition.award.id : findType(definitions.items, args[0])
+            const typeId = award ? LEVEL_AWARD : findType(definitions.items, args[0])
             if (!typeId) return debugCondition('DEBUG_ITEM_NOT_INSTALLED', args[0])
             if (award && levelAwardDropped(world)) return debugCondition('DEBUG_AWARD_EXISTS')
             const grid = args.length === 3 ? position(args[1], args[2]) : undefined

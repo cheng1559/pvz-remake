@@ -1,7 +1,7 @@
 import type { World } from '@/ecs/index'
 import { getAvailableSun } from '@/server/level/items'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -155,7 +155,7 @@ test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb',
     server.start({ ...start, save: save as unknown as JsonValue })
     server.tick()
     server.tick()
-    const reward = server.snapshot().items.find(item => item.typeId === 'pvz:cherrybomb')!
+    const reward = server.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
     assert.ok(reward)
     assert.equal(runCommand(server, { type: 'collectItemAt', itemId: reward.entityId }), undefined)
     assert.equal(server.snapshot().result, 'won')

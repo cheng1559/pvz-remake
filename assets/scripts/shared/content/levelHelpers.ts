@@ -2,6 +2,12 @@ import type { BoardDefinition, GameplayLevels, LevelDefinition } from '@/shared/
 
 /** What the definitions of a level and its board give: where its mowers ride, the tools it has and its award's size. */
 
+/**
+ * Coin::IsLevelAward: the level's award on the lawn is an item of this type (COIN_FINAL_SEED_PACKET, COIN_NOTE and the
+ * rest), dropped, waiting and collected as items are; what it is, its look and its size are the level's `award`.
+ */
+export const LEVEL_AWARD = 'pvz:level-award'
+
 /** A seed packet's size (IMAGE_SEEDS' cel): in the bank, in the chooser, and a seed award's. */
 export const SEED_PACKET_SIZE = Object.freeze({ width: 50, height: 70 })
 

@@ -126,7 +126,7 @@ test('a tool does what its kind does: a Mod\'s shovel digs as the base\'s, and i
     assert.ok(server.drainEvents().some(event => event.type === 'plantShoveled'))
     assert.deepEqual(server.snapshot().plants, [])
 
-    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
+    const any = { draws: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
     const source = readPresentationSource()
     assert.throws(() => assertPresented(content, buildPresentationDefinitions(source), views), /Tool presentation is not installed: test:spade/)
     const look = buildPresentationDefinitions(source, [{ ownerId: 'test', data: { tools: { 'test:spade': source.tools['pvz:shovel'] } } }])

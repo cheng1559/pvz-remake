@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
@@ -135,7 +135,7 @@ test('with every grave being eaten and no zombie left, the award drops when the 
     for (let tick = 0; tick < 400 && dropped < 0; tick++) {
         const snapshot = server.tick()
         whackAll(server, snapshot)
-        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom')) dropped = tick
+        if (snapshot.items.some(item => item.typeId === LEVEL_AWARD)) dropped = tick
         else assert.ok(wave().nextWaveAtTick !== undefined, 'not before the final group is due')
     }
     assert.ok(dropped >= 0, 'the level does not stay stuck')
@@ -198,11 +198,11 @@ test('planting recharges the packet, and the award only drops once the final gro
         seen = Math.max(seen, snapshot.zombies.length)
         whackAll(server, snapshot)
         const state = (server.save() as unknown as { wave: { nextWaveAtTick?: number, index: number } }).wave
-        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom') && state.nextWaveAtTick !== undefined) awardBeforeEnd = true
-        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom')) break
+        if (snapshot.items.some(item => item.typeId === LEVEL_AWARD) && state.nextWaveAtTick !== undefined) awardBeforeEnd = true
+        if (snapshot.items.some(item => item.typeId === LEVEL_AWARD)) break
     }
     assert.equal(awardBeforeEnd, false)
-    assert.ok(server.snapshot().items.some(item => item.typeId === 'pvz:hypnoshroom'), 'the Hypno-shroom drops after the last group')
+    assert.ok(server.snapshot().items.some(item => item.typeId === LEVEL_AWARD), 'the Hypno-shroom drops after the last group')
     assert.ok(seen >= 3)
     // Challenge::MouseDownWhackAZombie clears the cursor after the killing blow, and with the award down it stays plain.
     assert.equal(hammer(server), false, 'the blow that drops the award puts the mallet away')

@@ -1,4 +1,5 @@
 import type { LevelDefinition } from '@/shared/content/gameplay'
+import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { baseQualified, Registry } from '@/shared/mod'
 
 /**
@@ -10,10 +11,15 @@ export type ViewPreload<Content> = (content: Content, level: LevelDefinition) =>
 /** The content in a view's context, which its class's preload gets. */
 type ContextContent<Context> = Context extends { content: infer Content } ? Content : never
 
-export class EntityViewRegistry<Context, View> {
+export class EntityViewRegistry<Context extends { content: { presentation: PresentationDefinitions } }, View> {
     private readonly views = new Registry<{ create: (context: Context) => View | Promise<View>, preload?: ViewPreload<ContextContent<Context>> }>()
 
-    constructor(private readonly selection: (context: Context) => { kind?: string, typeId: string }) {}
+    /**
+     * `kindOf`: the kind of view a type of the entity is drawn by, by its presentation (its `view`, or the registry's own
+     * kind without one); none for a type nothing draws. `typeOf`: the type of the entity a view is made for.
+     */
+    constructor(private readonly kindOf: (presentation: PresentationDefinitions, typeId: string) => string | undefined,
+        private readonly typeOf: (context: Context) => string) {}
 
     register(kind: string, create: (context: Context) => View | Promise<View>, preload?: ViewPreload<ContextContent<Context>>): void {
         if (typeof create !== 'function' || preload !== undefined && typeof preload !== 'function') throw new Error(`Invalid entity view factory: ${kind}`)
@@ -35,11 +41,17 @@ export class EntityViewRegistry<Context, View> {
     }
 
     has(kind: string): boolean { return !!this.views.get(this.qualify(kind)) }
+
+    /** A type of the entity is drawn: the view of its kind is installed (assertPresented). */
+    draws(presentation: PresentationDefinitions, typeId: string): boolean {
+        const kind = this.kindOf(presentation, typeId)
+        return kind !== undefined && this.has(kind)
+    }
     checkpoint(): () => void { return this.views.checkpoint() }
     freeze(): void { this.views.freeze() }
 
     async create(context: Context): Promise<View> {
-        const { kind, typeId } = this.selection(context)
+        const typeId = this.typeOf(context), kind = this.kindOf(context.content.presentation, typeId)
         const entry = kind && this.views.get(this.qualify(kind))
         if (!entry) throw new Error(`Entity view is not installed: ${typeId}`)
         return entry.create(context)

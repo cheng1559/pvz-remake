@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import { type GameplayDefinitions, levelAwardSize } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
 import { type EntityRemover, LevelStateResource, PositionComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { ItemComponent, WaveResource } from '../state/levelState'
@@ -9,15 +9,14 @@ import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
 
 /** Board::HasLevelAwardDropped: the level's award is on the lawn (falling, waiting or being collected). */
 export function levelAwardDropped(world: World): boolean {
-    const { definition } = world.resources.get(LevelStateResource)
-    return [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === definition.award.id)
+    return [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === LEVEL_AWARD)
 }
 
 /** Board::AddCoin of the level's award at (x, y), dropped like a coin (COIN_MOTION_COIN). */
 export function spawnLevelAward(world: World, x: number, y: number): number {
     const award = world.resources.get(LevelStateResource).definition.award
-    const entity = spawnItem(world, world, { typeId: award.id, value: 1, width: levelAwardSize(award).width, levelAward: true }, x, y, 'coin')
-    emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, typeId: award.id })
+    const entity = spawnItem(world, world, { typeId: LEVEL_AWARD, value: 1, width: levelAwardSize(award).width, levelAward: true }, x, y, 'coin')
+    emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, awardId: award.id })
     return entity
 }
 

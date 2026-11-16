@@ -1,5 +1,5 @@
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -148,7 +148,7 @@ test('each day level runs both flag warnings, restores the planned waves and col
         game.start({ ...options(index), save: saved as unknown as JsonValue })
         game.tick(); game.tick()
         const id = levels.levels[options(index).levelId].award.id
-        const award = game.snapshot().items.find(item => item.typeId === id)!
+        const award = game.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
         assert.ok(award)
         game.start({ ...options(index), save: game.save() as unknown as JsonValue })
         assert.equal(runCommand(game, { type: 'collectItemAt', itemId: award.entityId }), undefined)

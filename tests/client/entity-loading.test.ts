@@ -875,7 +875,7 @@ test("the level's award is collected by its own view: its sounds, the starburst,
     view.sync(item)
     const back = node.children.find(child => child.name === AwardView.BACK)!
     assert.deepEqual(back.children.map(child => child.name), ['pvz:seedpacket'], 'a landed seed packet glows')
-    AwardView.collected(stage, { eventId: 1, type: 'levelAwardCollected', data: { entityId: 5, typeId: 'test:seed', x: 100, y: 200 } }, {})
+    AwardView.collected(stage, { eventId: 1, type: 'levelAwardCollected', data: { entityId: 5, awardId: 'test:seed', x: 100, y: 200 } }, {})
     assert.deepEqual(played, ['seedlift', 'tap2'])
     assert.deepEqual(spawned.slice(1).map(({ id, parent }) => [id, parent.name]), [['pvz:starburst', 'AwardLayer'], ['pvz:award', AwardView.BACK]])
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'the glow goes as it is collected')

@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
-import { collectTarget, type GameplayDefinitions } from '@/shared/content/gameplay'
+import { collectTarget, type GameplayDefinitions, LEVEL_AWARD } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
@@ -36,7 +36,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
             for (const entity of world.query(PositionComponent, ItemComponent)) {
                 const position = world.get(entity, PositionComponent)!
                 const item = world.get(entity, ItemComponent)!
-                if (item.typeId === level.definition.award.id) {
+                if (item.typeId === LEVEL_AWARD) {
                     if (item.state === 'collecting') continue
                     if (position.y + item.velocityY < item.groundY) {
                         moveItemWithinHorizontalBounds(world, position, item)
@@ -133,12 +133,12 @@ export const items = {
 
         const level = world.resources.get(LevelStateResource)
         const events = world.resources.get(EventQueueResource)
-        if (item.typeId === level.definition.award.id) {
+        if (item.typeId === LEVEL_AWARD) {
             item.state = 'collecting'
             const position = world.get(itemId, PositionComponent)!
             emitServerEvent(events, 'levelAwardCollected', {
                 entityId: itemId,
-                typeId: item.typeId,
+                awardId: level.definition.award.id,
                 x: position.x,
                 y: position.y,
             })

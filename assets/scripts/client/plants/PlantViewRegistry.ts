@@ -4,14 +4,10 @@ import { CherryBombView } from './CherryBombView'
 import { ChomperView } from './ChomperView'
 import { WallNutView } from './WallNutView'
 import { GraveBusterView } from './GraveBusterView'
-import { plantDefinition } from './definitions'
 
 export class PlantViewRegistry extends EntityViewRegistry<PlantViewContext, PlantView> {
     constructor() {
-        super(context => ({
-            kind: plantDefinition(context.content.presentation, context.plant.typeId).view ?? 'plant',
-            typeId: context.plant.typeId,
-        }))
+        super((presentation, typeId) => presentation.plants[typeId] && (presentation.plants[typeId].view ?? 'plant'), context => context.plant.typeId)
         // Every plant is drawn by its animation, whatever its layers: one view shows them (`plant`, when its
         // presentation names none), and a few plants add to it.
         const views: Record<string, typeof PlantView> = {

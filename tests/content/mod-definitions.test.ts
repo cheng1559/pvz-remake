@@ -89,9 +89,10 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     const keep = (host: ModHost) => { hosts.push(host); return host }
     const gameplay = base()
     const presentation = parsePresentationDefinitions(readPresentationSource())
+    // Each registry draws a type by its table's `view`, or its own kind without one, as the client's do.
     class Views extends EntityViewRegistry<any, any> {
-        constructor() {
-            super(context => ({ kind: context.kind, typeId: context.typeId }))
+        constructor(table: string, own?: string) {
+            super((presentation: any, typeId) => presentation[table][typeId] && (presentation[table][typeId].view ?? own), context => context.typeId)
             const views = [...Object.values(presentation.plants).map((entry: any) => entry.view ?? 'plant'), ...Object.values(presentation.zombies).map((entry: any) => entry.view ?? 'zombie'),
                 ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view),
                 ...Object.values(presentation.items).map((entry: any) => entry.view ?? 'item'), 'award']
@@ -99,7 +100,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         }
     }
     class ClientViews {
-        plants = new Views(); zombies = new Views(); projectiles = new Views(); gridItems = new Views(); items = new Views()
+        plants = new Views('plants', 'plant'); zombies = new Views('zombies', 'zombie'); projectiles = new Views('projectiles', 'projectile')
+        gridItems = new Views('gridItems'); items = new Views('items', 'item')
         events = { register() {}, checkpoint: () => () => {}, freeze() {} }
         checkpoint() {
             const undo = [this.plants, this.zombies, this.projectiles, this.gridItems, this.items, this.events].map(registry => registry.checkpoint())
@@ -278,14 +280,14 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     const invalid = presentation()
     delete invalid.data.plants['example:rapid_pea'].clips.blink
     // What draws a plant has the pictures of every clip its animation plays.
-    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
+    const any = { draws: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
     assert.doesNotThrow(() => assertPresented(build(), installed, views))
     assert.throws(() => assertPresented(build(), buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
 })
 
 test('a Mod adds and overrides item, award and rule presentations, and one missing fails at load', () => {
     const source = readPresentationSource()
-    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
+    const any = { draws: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
     const sun = source.items['pvz:sun'], almanac = source.awards['pvz:almanac'], whack = source.rules['pvz:whack-a-zombie']
     // Like every other table: new IDs in the Mod's own namespace, anyone's through overrides.
     const plain = buildPresentationDefinitions(source, [presentation()])
@@ -381,7 +383,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         client.buttons[0].onClick()
         assert.match(client.dialogs[0].options.message, /example:charge/)
         const particles: unknown[][] = []
-        const view = await loaded.views.plants.create({ kind: 'example:beacon', typeId: 'example:beacon', content: {},
+        const view = await loaded.views.plants.create({ typeId: 'example:beacon', content: { presentation: { plants: { 'example:beacon': { view: 'example:beacon' } } } },
             particle: (...args: unknown[]) => particles.push(args) })
         assert.equal(view.body.loadedId, 'example:beacon')
         const world = { phase: 'gameplay', result: 'playing', paused: false, gameplayTick: 50, extensions: { 'example:charge': { '1': { remainingTicks: 200 } } } }

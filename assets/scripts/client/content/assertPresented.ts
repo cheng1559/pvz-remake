@@ -2,7 +2,8 @@ import { type GameplayDefinitions, type GameplayLevels, ZOMBIE_CLIPS } from '@/s
 import { PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind } from '@/shared/content/plantAbilities'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 
-interface Views { has(kind: string): boolean }
+/** A registry of views (EntityViewRegistry): whether it draws a type, by the kind its presentation names. */
+interface Views { draws(presentation: PresentationDefinitions, typeId: string): boolean }
 
 /** A zombie drawn without these still stands and falls: its first way, and with its plain death. */
 const SPARED: readonly string[] = [ZOMBIE_CLIPS.standing2, ZOMBIE_CLIPS.superLongDeath]
@@ -23,7 +24,7 @@ export function assertPresented(content: { definitions: Pick<GameplayDefinitions
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
         const definition = presentation.plants[id]
-        if (!definition || !views.plants.has(definition.view ?? 'plant')) throw new Error(`Plant presentation is not installed: ${id}`)
+        if (!definition || !views.plants.draws(presentation, id)) throw new Error(`Plant presentation is not installed: ${id}`)
         if (plant.animation) pictures(id, Object.keys(plant.animation.clips))
         // What it is drawn in a state of (its packet's picture, its shadow) is a state of its own ability.
         const kind = plantAbilityKind(plant), states: readonly string[] = kind ? PLANT_ABILITY_STATES_BY_KIND[kind] : []
@@ -33,19 +34,17 @@ export function assertPresented(content: { definitions: Pick<GameplayDefinitions
     }
     for (const [id, zombie] of Object.entries(definitions.zombies)) {
         const definition = presentation.zombies[id]
-        if (!definition || !views.zombies.has(definition.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
+        if (!definition || !views.zombies.draws(presentation, id)) throw new Error(`Zombie presentation is not installed: ${id}`)
         pictures(id, [...Object.keys(zombie.animation.clips).filter(clip => !SPARED.includes(clip)), ZOMBIE_CLIPS.mowered])
     }
     for (const id of Object.keys(definitions.projectiles)) {
-        const definition = presentation.projectiles[id]
-        if (!definition || !views.projectiles.has(definition.view ?? 'projectile')) throw new Error(`Projectile presentation is not installed: ${id}`)
+        if (!presentation.projectiles[id] || !views.projectiles.draws(presentation, id)) throw new Error(`Projectile presentation is not installed: ${id}`)
     }
-    for (const [id, item] of Object.entries(presentation.gridItems)) {
-        if (!views.gridItems.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
+    for (const id of Object.keys(presentation.gridItems)) {
+        if (!views.gridItems.draws(presentation, id)) throw new Error(`Grid item presentation is not installed: ${id}`)
     }
     for (const id of Object.keys(definitions.items)) {
-        const definition = presentation.items[id]
-        if (!definition || !views.items.has(definition.view ?? 'item')) throw new Error(`Item presentation is not installed: ${id}`)
+        if (!presentation.items[id] || !views.items.draws(presentation, id)) throw new Error(`Item presentation is not installed: ${id}`)
     }
     for (const id of Object.keys(definitions.tools)) {
         if (!presentation.tools[id]) throw new Error(`Tool presentation is not installed: ${id}`)

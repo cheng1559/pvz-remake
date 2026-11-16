@@ -7,7 +7,7 @@ import { EconomyStateResource, LevelStateResource, RandomResource } from '@/serv
 import { createEventQueue, EventQueueResource } from '@/server/state/events'
 import { ItemComponent, TutorialResource } from '@/server/state/levelState'
 import { spawnZombie } from '@/server/zombies/spawn'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
 import { TICK_SECONDS } from '@/shared/protocol'
 
@@ -70,7 +70,7 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
     const game = play21(0, false)
     for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
     game.debugCommand('/damage 5000')
-    const award = game.render().items.find(item => item.typeId === 'pvz:sunshroom')!
+    const award = game.render().items.find(item => item.typeId === LEVEL_AWARD)!
     game.command({ type: 'collectItemAt', itemId: award.entityId })
     game.update(0)
     game.drainEvents()
@@ -97,7 +97,7 @@ test('a first adventure drops money from level 11 on, also on levels without a s
         game.update(0)
         for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
         game.debugCommand('/damage 5000')
-        const award = game.render().items.find(item => item.typeId === level.award.id)!
+        const award = game.render().items.find(item => item.typeId === LEVEL_AWARD)!
         game.command({ type: 'collectItemAt', itemId: award.entityId })
         game.update(0)
         game.drainEvents()

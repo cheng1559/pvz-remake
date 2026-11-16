@@ -1,6 +1,6 @@
 import type { Component, World } from '@/ecs/index'
 import type { LayerState } from '@/shared/content/animation'
-import { MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { hasPlantAttack, PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind } from '@/shared/content/plantAbilities'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
@@ -251,7 +251,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
         // Items lie above the board (row -1): the level's award, or an item the content has.
         check: (item, { content, world, entity }) => {
-            if (item.typeId !== world.resources.get(LevelStateResource).definition.award.id && !content.definitions.items[item.typeId] || entity.position?.row !== -1) {
+            if (item.typeId !== LEVEL_AWARD && !content.definitions.items[item.typeId] || entity.position?.row !== -1) {
                 throw new Error(`Unknown saved item: ${item.typeId}`)
             }
         },
