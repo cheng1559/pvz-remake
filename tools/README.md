@@ -1,19 +1,27 @@
 # 开发脚本
 
-按用途分目录，根目录只保留说明和 Node 模块配置：
+按用途分目录，根目录只有说明、Node 模块配置 `package.json`，以及由 Git 忽略、需要自备的原版输入：
 
 ```text
 tools/
-├── mod/                    # Mod 初始化、打包、验证和配置读取
+├── build/
+│   └── clean-native-assets.ts  # 原生构建前清掉输出目录里旧的 data/assets（Windows 构建命令调用）
+├── installer/                  # Windows 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss
+├── kernel/build.ts             # C++ 内核编译为 Wasm
+├── mod/                        # Mod 初始化、打包、验证、宿主模块清单生成和配置读取
 │   ├── cli.ts
 │   ├── content.ts
+│   ├── hosts.ts
 │   └── test.ts
-├── pvz/                    # 原版 PAK 导入、转换、anim-defs.json 和 ui-strings.json
-├── resources/              # 音频压缩、字体和图片超分辨率、应用图标
-│   └── licenses/           # 资源处理工具的第三方许可
-├── kernel/build.ts         # C++ 内核编译为 Wasm
-├── profile/ios.ts          # iOS JS 性能采样
-└── local/                  # Git 忽略的本地资源包生成器及其打包接口 package_resources.py
+├── preview/check-imports.ts    # 检查 Cocos 预览的模块映射
+├── profile/ios.ts              # iOS JS 性能采样
+├── pvz/                        # 原版 PAK 导入、转换、anim-defs.json 和 ui-strings.json
+├── resources/                  # 应用图标、字体和图片超分辨率
+│   └── licenses/               # 资源处理工具的第三方许可
+├── local/                      # Git 忽略的本地资源包生成器及其打包接口 package_resources.py
+├── main.pak                    # Git 忽略：原版资源包，build:content 的默认输入
+├── PlantsVsZombies.exe         # Git 忽略：原版程序，导入时从中提取鼠标指针
+└── game.ico                    # Git 忽略：原版图标，build:icons 的默认输入
 ```
 
 常用入口：
@@ -22,6 +30,9 @@ tools/
 | --- | --- |
 | 从原版 PAK 和程序导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` |
 | 初始化、打包、验证 Mod | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
+| 重新生成 Mod 宿主模块清单 | `npm run mod:hosts` |
+| 检查 Cocos 预览的模块映射 | `npm run check:preview` |
+| 打包 Windows 安装程序 | `npm run package:windows` |
 | 编译共享 C++ 内核的 Wasm | `npm run build:kernel` |
 | 从原版图标生成网页和原生应用图标 | `npm run build:icons -- --ico /path/to/game.ico` |
 | 字体、图片超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |

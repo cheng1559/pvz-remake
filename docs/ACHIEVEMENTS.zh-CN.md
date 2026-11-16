@@ -30,7 +30,7 @@
 
 ## 定义
 
-21 条，顺序即 id，也是图集 `IMAGE_ACHEESEMENTS_ICONS`（每格 70×70，每行 7 个）的位置。表在 `0x7290d0`，每条为标题键、说明键、Steam 名称。现有 `achievementCatalog.ts` 的顺序与此一致。
+21 条，顺序即 id，也是图集 `IMAGE_ACHEESEMENTS_ICONS`（每格 70×70，每行 7 个）的位置。表在 `0x7290d0`，每条为标题键、说明键、Steam 名称。本体玩法定义的 `achievements` 表（`mods/pvz-base/gameplay/definitions/achievements.json`）按同样的顺序列出，图标的 `index` 就是这里的 id。
 
 | id | 键 | Steam 名称 |
 | --- | --- | --- |

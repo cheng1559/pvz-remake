@@ -2,8 +2,8 @@
 
 The built-in base package is authored and packed as a Mod. `content.json` declares gameplay tables, presentation tables, and every resource ID, including particles.
 
-- Edit authored rules and presentation in `gameplay/` and `presentation/`.
-- Runtime resources live in `assets/images/`, `fonts/`, `audio/`, `reanim/`, `particles/`, `music/`, `json/`, `text/` and `prefabs/`. Bitmap font configurations and atlases stay together in `assets/fonts/`. Converted resource directories are ignored by Git and packed directly from the Mod directory.
+- Edit authored rules and presentation in `gameplay/` (`definitions/` tables, `levels.json`, `settings.json`) and `presentation/definitions/`.
+- Runtime resources live in `assets/images/` (particle images in `images/particles/`), `fonts/`, `audio/` (`sfx/` and the music stems in `music/`), `reanim/`, `particles/`, `music/` (one resource per tune), `json/` (`strings.json`, the `pvz:strings` table) and `prefabs/` (`ui/level.prefab`). Bitmap font configurations and atlases stay together in `assets/fonts/`. Converted resource directories are ignored by Git and packed directly from the Mod directory.
 - `npm run build:content -- --pak /path/to/main.pak` extracts into a temporary directory and converts directly into these asset directories, updating the explicit resource mappings in `content.json`. Temporary files are removed even if conversion fails. The pipeline does not create a persistent raw/generated tree or an intermediate Bundle.
 - `npm run mod:pack -- pvz-base` uses the standard Mod packer and writes `dist/mods/pvz-base.zip`.
 - `npm run mod:test -- dist/mods/pvz-base` validates the packed content.

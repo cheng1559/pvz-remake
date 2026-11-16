@@ -59,9 +59,9 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象。每个种子必须写 `position`，即它在自己所属分组里的格子序号：按 8 列从左到右、从上到下数，从 0 开始，一页 48 格，同一分组里不能重号。分组有三类，依次是原版、各 Mod、隐藏卡：本体的种子属于原版组，就是选卡格子，序号即原版的植物种子编号，只能是 0–47 的植物（平时 5 排 0–39，拥有 40–47 号即原版升级植物中任一张时按原版 `Has7Rows` 改成 6 排，行距 70、首排 y=123；48 号是原版的模仿者）；本体种子写 `"hidden": true` 的属于隐藏卡组（爆炸坚果、两种保龄球坚果、各僵尸卡和墓碑卡）；Mod 的种子一律属于这个 Mod 自己的一组，从 0 自行编号，不会和本体或其他 Mod 冲突，也不能标 `hidden`。Mod 的种子不进选卡格子：开启 `/cheatseed` 时，选卡界面和图鉴在原版页之后按 Mod 的加载顺序给每个 Mod 单独排页，最后是隐藏卡页；平时由 `seedChooser.entries` 提供。没有卡的序号留作空位。和其他定义表一样，Mod 只能登记自己命名空间的种子；要挪动本体或其他 Mod 的卡，用 `overrides.seeds` 整条替换那颗种子的定义。配置按类别分文件。表现定义和玩法定义一样严格：每个对象只接受它自己的字段，多写、拼错或已经搬走的字段（例如僵尸表现里的 `vault`）都报 `… is not supported`；植物开火后跟着的粒子写在植物表现的 `fireParticle: {id, x, y, delayTicks}`（大喷菇的烟）。植物、僵尸、子弹、物品和格子物品的表现都可以写 `viewConfig`：一个任意的 JSON 对象，原样保留，给 `view` 指定的视图（通常是 Mod 自己注册的）读取和校验，本体只检查它是对象。关卡规则的表现（`rules`）里除 `graveRise` 外的字段归该规则自己的视图读取和校验。掉落物的点击范围是玩法：物品定义的 `clickPadding` 和关卡的 `itemClickPadding`，由服务端判断点中了哪个。
 
-成就写在玩法定义的 `achievements` 表里，ID 到 `{ titleKey, descriptionKey, icon: { sprite, index } }`，图标取 `sprite` 中按 70×70、每行 7 格切出的第 `index` 格。成就页和领奖页按本体在前、各 Mod 依次在后的顺序列出。服务端脚本通过宿主模块 `server/achievements` 的 `grantAchievement(world, id, announce)` 发放：玩家已有的不重复发放；`announce` 为 true 时在关卡里立即提示，否则留到过关后的领奖页列出。档案由客户端转交菜单接口保存。成就怎么获得写在它的 `trigger: { kind, ...设置 }` 里：游戏代码只发服务端事件，成就模块观察每个事件，按 `kind` 对应的触发类型判定。本体的触发类型有 `pvz:blast`（`plants`、`kills`）、`pvz:bowling`（`plants`、`hits`）、`pvz:coin-streak`（`items`、`coins`）、`pvz:sun-held`（`sun`）和 `pvz:win-planting`（`boards`、`skipRules`、`only` / `never`），详见 `docs/ACHIEVEMENTS.zh-CN.md`。Mod 的新成就可以直接用这些类型；需要新的判定方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`server/GameplayRegistry`），`observe` 收到事件、设置和这个成就在关卡里的状态（随存档保存）。要让本体成就认到 Mod 的植物，用 `overrides` 改它的 `trigger`。关卡定义写 `achievements: false` 时，这一关不发放任何成就，适合测试关卡。
+成就写在玩法定义的 `achievements` 表里，ID 到 `{ titleKey, descriptionKey, icon: { sprite, index } }`，图标取 `sprite` 中按 70×70、每行 7 格切出的第 `index` 格。成就页和领奖页按本体在前、各 Mod 依次在后的顺序列出。服务端脚本通过宿主模块 `server/achievements/achievements` 的 `grantAchievement(world, id, announce)` 发放：玩家已有的不重复发放；`announce` 为 true 时在关卡里立即提示，否则留到过关后的领奖页列出。档案由客户端转交菜单接口保存。成就怎么获得写在它的 `trigger: { kind, ...设置 }` 里：游戏代码只发服务端事件，成就模块观察每个事件，按 `kind` 对应的触发类型判定。本体的触发类型有 `pvz:blast`（`plants`、`kills`）、`pvz:bowling`（`plants`、`hits`）、`pvz:coin-streak`（`items`、`coins`）、`pvz:sun-held`（`sun`）和 `pvz:win-planting`（`boards`、`skipRules`、`only` / `never`），详见 `docs/ACHIEVEMENTS.zh-CN.md`。Mod 的新成就可以直接用这些类型；需要新的判定方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`registry` 是宿主模块 `gameplay/registry`，即 `server/registry/GameplayRegistry` 的实例），`observe` 收到事件、设置和这个成就在关卡里的状态（随存档保存）。要让本体成就认到 Mod 的植物，用 `overrides` 改它的 `trigger`。关卡定义写 `achievements: false` 时，这一关不发放任何成就，适合测试关卡。
 
-商店、图鉴和工具也是玩法定义表，和其他表一样，Mod 用自己的命名空间新增条目、用 `overrides` 改任何人的。`store` 按物品 ID 写商店物品：`{ page, place, cost 或 prices, message 或 messages, purchase, level?, completed?, requires?, seedSlots?, effect?, unlockChallenge? }`。物品 ID 同时是档案里购买计数的键，各 Mod 的物品互不占用。`page` 指向 `storePages` 表里的一页（`{ level? }` 或 `{ completed: true }`，即原版 `StoreScreen::IsPageShown`；页按登记顺序排列，本体四页在前，各 Mod 的依次在后），`place` 是这一页上下两排共 8 格中的第几格（0–7），同页同格只能有一件：Mod 可以放进本体页的空格，也可以登记自己的页。`prices`、`messages`、`seedSlots` 按已买次数取档；`requires` 里的 `anyPurchases`、`allPurchases` 写物品 ID。`purchase.kind` 为 `set`、`count`、`stock`、`timestamp`、`plant`（往禅境花园放一盆 `settings` 里 `zenGarden.template` 的植物）或 `seed`（卖一颗种子，可以是还没安装的升级植物）。全店必须恰好一件 `effect: "seedSlots"`，即戴夫在关卡里推销的卡槽升级。物品的外观写在表现定义的 `store` 表（同一 ID：`sprite`、`offset`、`highlight`、`quantity`；没有 `sprite` 时画所卖种子的卡包），商店界面的时间和戴夫的闲聊写在表现定义的 `storeDialogue`。
+商店、图鉴和工具也是玩法定义表，和其他表一样，Mod 用自己的命名空间新增条目、用 `overrides` 改任何人的。`store` 按物品 ID 写商店物品：`{ page, place, cost 或 prices, message 或 messages, purchase, level?, completed?, requires?, effect?, unlockChallenge? }`。物品 ID 同时是档案里购买计数的键，各 Mod 的物品互不占用。`page` 指向 `storePages` 表里的一页（`{ level? }` 或 `{ completed: true }`，即原版 `StoreScreen::IsPageShown`；页按登记顺序排列，本体四页在前，各 Mod 的依次在后），`place` 是这一页上下两排共 8 格中的第几格（0–7），同页同格只能有一件：Mod 可以放进本体页的空格，也可以登记自己的页。`prices`、`messages` 按已买次数取档；`requires` 里的 `anyPurchases`、`allPurchases` 写物品 ID。`purchase.kind` 为 `set`、`count`、`stock`、`timestamp`、`plant`（往禅境花园放一盆 `settings` 里 `zenGarden.template` 的植物）或 `seed`（卖一颗种子，可以是还没安装的升级植物）。全店必须恰好一件 `effect: "seedSlots"`（显示的槽位数按 `seedBank` 的 `baseSlots` 每买一次加一算，不超过 `maxSlots`），即戴夫在关卡里推销的卡槽升级。物品的外观写在表现定义的 `store` 表（同一 ID：`sprite`、`offset`、`highlight`；`stock` 类一次卖几个时写的“x5”来自玩法数据的 `amount`；没有 `sprite` 时画所卖种子的卡包），商店界面的时间和戴夫的闲聊写在表现定义的 `storeDialogue`。
 
 图鉴的植物页就是选卡格子（原版 `AlmanacDialog::GetSeedPosition`），不用写条目；`almanac` 表按僵尸 ID 写僵尸页的窗口 `{ place, startingLevel, spawnedOnly?, afterAdventure? }`，`place` 是每行 5 个从 0 数的位置，不能重复，键必须是已有的僵尸。植物或僵尸在图鉴里站的地面写在表现定义的 `almanac` 表，按植物或僵尸 ID：`ground` 为 `day`、`night`、`pool`、`nightpool`、`roof` 或 `ice`，植物可加 `upgrade: true`（升级植物的卡包底色）；没有条目时站在白天的地面上。
 
@@ -168,22 +168,22 @@ export function register({ host }) {
 }
 ```
 
-`debugSuccess`、`debugSyntax` 的消息只输出到控制台，直接写文字。`debugCondition` 表示条件不满足：调试窗口关闭并以 advice 显示在屏幕上，所以它的第一个参数是文本键，其余参数按顺序填入文本里的 `%s`／`%d`（如 `"example:cli_need_level": "Start a playing level first"`，写在 Mod 表现定义的 `strings` 中）；客户端用 `ui.format(key, args)` 查表，翻译包和 Mod 文本都能覆盖，服务端无需访问文本表。
+`debugSuccess`、`debugSyntax` 的消息只输出到控制台，直接写文字。`debugCondition` 表示条件不满足：调试窗口关闭并以 advice 显示在屏幕上，所以它的第一个参数是文本键，其余参数按顺序填入文本里的 `%s`／`%d`（如 `"example:cli_need_level": "Start a playing level first"`，写在 Mod 登记的 `pvz:strings` 文本资源里，见上文“文件定义”）；客户端用 `ui.format(key, args)` 查表，翻译包和 Mod 文本都能覆盖，服务端无需访问文本表。
 
 `parameters` 是提示和参数数量上限，`minimum` 是数量下限；可选 `values: { 0: ['a', 'b'] }` 同时提供第一个参数的校验和补全。名称使用小写，可带 Mod 命名空间。使用原解析器可以保留引号参数等语法。
 
 修改游戏状态的命令在服务端处理：两端入口执行相同的 `specs.list` 包装（可以抽到 Mod 的共享源码文件），客户端不添加对应的执行包装，正常入口会在有关卡时转发原始命令。集成运行时两端共享语法对象，上面的同名检查可避免补全重复。独立服务端也必须声明语法。
 
-服务端用 `server/debug/debugCommands` 中的 `executor`，收到的是经过服务端解析校验的命令，并且可以访问当前世界、定义、tick 和种植函数。例如将上面命令改为服务端返回消息时，保留语法包装，将执行包装移到服务端入口：
+服务端用 `server/debug/debugCommands` 中的 `executor`：`execute(session, command)` 收到本局 `session`（含 `world`、`definitions`、`gameplayTick` 等）和经过服务端解析校验的命令；种植等规则从 `server/seeds/planting` 等模块取用，第一个参数同样是 `session`。例如将上面命令改为服务端返回消息时，保留语法包装，将执行包装移到服务端入口：
 
 ```ts
 const cli = host.get('shared/debug/DebugCli')
 const { executor } = host.get('server/debug/debugCommands')
-host.around(executor, 'execute', function (next, world, definitions, tick, command, createPlant) {
+host.around(executor, 'execute', function (next, session, command) {
     if (command.name === 'example:hello') {
-        return cli.debugSuccess(`Hello ${command.args[0]}, tick: ${tick}`)
+        return cli.debugSuccess(`Hello ${command.args[0]}, tick: ${session.gameplayTick}`)
     }
-    return next(world, definitions, tick, command, createPlant)
+    return next(session, command)
 })
 ```
 
