@@ -103,7 +103,7 @@ npm run mod:test -- dist/mods/example
 
 只有 `mod:pack` 编译。它合并分类定义、收集资源和字体图集、生成内容哈希，输出 `dist/mods/<name>/` 与旁边的 ZIP；源码目录不产生编译文件。ZIP 的 `content.json` 保留资源映射，`gameplay`、`presentation` 则指向生成的合并 JSON。安装器验证清单、模块、文件路径、PNG 尺寸及字体图集。
 
-加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义植物/僵尸行为、视图或包装方法。`host.get(id)` 能取到该端的每一个模块，ID 就是模块在 `assets/scripts` 下的路径（不带扩展名，目录的 `index` 用目录名），如 `client/plants/PlantView`、`server/seeds/planting`、`shared/protocol`；客户端另有 `cc`（引擎）、`content/definitions`（定义来源）、`client/views`（视图注册表），服务端另有 `content/definitions` 和 `gameplay/registry`（玩法注册表）。模块挪了位置，ID 也随之改变。模块清单由 `npm run mod:hosts` 生成（`client/content/hostModules.ts`、`server/session/hostModules.ts`），新增、移动或删除模块后需重新生成，测试会检查。
+加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义植物/僵尸行为、视图或包装方法。`host.get(id)` 能取到该端的每一个模块，ID 就是模块在 `assets/scripts` 下的路径（不带扩展名，目录的 `index` 用目录名），如 `client/plants/PlantView`、`server/seeds/planting`、`shared/protocol`；客户端另有 `cc`（引擎）、`content/definitions`（定义来源）、`client/views`（视图注册表），服务端另有 `content/definitions` 和 `gameplay/registry`（玩法注册表）。自定义植物或僵尸视图继承 `PlantView` 或 `ZombieView`，用 `host.get('client/views').plants.registerView(类别, 类)`（僵尸用 `zombies`）注册，再在表现定义的 `view` 写这个类别、`viewConfig` 写它的参数。两者给子类开出同样的成员：`onBoard(实体, world)` 在场上每帧画实体本身（先调 `super.onBoard`），`pose` 摆出各层（场外也走它），`shown(层, 实体)` 决定一层显示哪个剪辑，`playable()` 列出要先载入的 Reanim；可用的有 `presentation`、`animation`（玩法里的动画定义）、`body`（主体的播放器）、`root`（各层所在的节点，移动它就移动整个画面）、`clip(名字)`、`ownFrames(reanimId)`、`particle(…)` 和 `flash`。模块挪了位置，ID 也随之改变。模块清单由 `npm run mod:hosts` 生成（`client/content/hostModules.ts`、`server/session/hostModules.ts`），新增、移动或删除模块后需重新生成，测试会检查。
 
 ```ts
 export function register({ host, assets }) {

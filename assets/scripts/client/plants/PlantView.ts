@@ -5,7 +5,7 @@ import { boardToLayer, type Content, type EntityView, type LevelStage, plantShad
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
-import { type LayerClips, LayerPlayers, type LayerShown, shownLayer } from '@/client/view/layerPlayback'
+import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
 import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
@@ -138,9 +138,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** How long one of its Reanim is, in the frames of its own pace (12 a second): what a Mod times a clip of its own by. */
     protected ownFrames(reanimId: string): number {
-        const seconds = ReanimPlayer.duration(reanimId)
-        if (seconds === undefined) throw new Error(`Plant Reanim is not loaded: ${reanimId}`)
-        return seconds * 12
+        return ownFrames(reanimId)
     }
 
     /**

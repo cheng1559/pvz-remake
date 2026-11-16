@@ -4,10 +4,21 @@ import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { AnimationClip } from '@/shared/content/gameplay'
 import type { ReanimKeyframe } from '@/shared/content/reanim'
+import { ASSET_FPS } from '@/shared/content/animation'
 
 /** Seconds of a clip's own pictures to a frame of an animation: at the pace they were made at (`fps`, 12 by default). */
 function secondsPerFrame(clip: ClientAnimationClip): number {
     return (clip.rateScale ?? 1) / (clip.fps ?? 12)
+}
+
+/**
+ * How long a loaded Reanim is, in the frames of its own pace (12 a second): what a view's Mod times a clip of its own
+ * by (PlantView.ownFrames, ZombieView.ownFrames).
+ */
+export function ownFrames(reanimId: string): number {
+    const seconds = ReanimPlayer.duration(reanimId)
+    if (seconds === undefined) throw new Error(`Reanim is not loaded: ${reanimId}`)
+    return seconds * ASSET_FPS
 }
 
 /** Within this of a clip's length, pictures are as long as the clip: their length is a sum of seconds. */
