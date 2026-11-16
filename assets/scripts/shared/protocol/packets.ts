@@ -1,4 +1,4 @@
-import { record, array, nonEmptyString, boolean, oneOf, nonNegativeInteger, uint32 } from '@/shared/validate'
+import { record, array, nonEmptyString, boolean, finite, oneOf, nonNegativeInteger, uint32 } from '@/shared/validate'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { TEAMS, validateServerEvent, validateWorldSnapshot, type EntityId, type ServerEvent, type Team, type WorldSnapshot } from '@/shared/protocol/snapshot'
 import { assertJsonValue, copyJson, jsonRoundTrip, type JsonObject, type JsonValue } from '@/shared/protocol/json'
@@ -28,7 +28,8 @@ export type GameCommand =
     | { type: 'selectTool'; toolId: string }
     | { type: 'placePlant'; row: number; column: number }
     | { type: 'useToolAt'; row: number; column: number }
-    | { type: 'collectItemAt'; itemId: EntityId }
+    /** Board::MouseDown on an item: the server collects the one there (itemAt); `award: false` passes the level's award over. */
+    | { type: 'collectItemAt'; x: number; y: number; award?: false }
     /** Challenge::MouseDown: a click on the board that hit nothing else, for the level's rules (the Whack-a-Zombie mallet). */
     | { type: 'boardClick'; x: number; y: number }
     | { type: 'clearCursor' }
@@ -310,7 +311,11 @@ const validateGameCommand = (value: unknown): void => {
             nonNegativeInteger(command.row, 'useToolAt.row')
             nonNegativeInteger(command.column, 'useToolAt.column')
             return
-        case 'collectItemAt': nonNegativeInteger(command.itemId, 'collectItemAt.itemId'); return
+        case 'collectItemAt':
+            finite(command.x, 'collectItemAt.x')
+            finite(command.y, 'collectItemAt.y')
+            if (command.award !== undefined && command.award !== false) throw new TypeError('collectItemAt.award must be false')
+            return
         case 'boardClick':
             nonNegativeInteger(command.x, 'boardClick.x')
             nonNegativeInteger(command.y, 'boardClick.y')

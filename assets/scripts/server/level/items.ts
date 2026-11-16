@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
-import { collectTarget, type GameplayDefinitions, LEVEL_AWARD } from '@/shared/content/gameplay'
+import { collectTarget, type GameplayDefinitions, itemAt, LEVEL_AWARD } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
@@ -125,6 +125,13 @@ function moveItemWithinHorizontalBounds(world: World, position: Position, item: 
 
 /** Picking up sun, money and the level award. Mods wrap these through `host.around(items, name, ...)`. */
 export const items = {
+    /** Board::MouseDown: the item at (x, y) is collected (itemAt, over the items as the snapshot lists them). */
+    collectAt(session: Session, x: number, y: number, award = true): CommandRejectionCode | undefined {
+        const { world, definitions } = session
+        const lying = [...world.query(PositionComponent, ItemComponent)].map(entity => ({ entity, ...world.get(entity, ItemComponent)!, ...world.get(entity, PositionComponent)! }))
+        const item = itemAt(lying, definitions.items, world.resources.get(LevelStateResource).definition, x, y, award)
+        return item ? items.collect(session, item.entity) : 'item-not-found'
+    },
     collect(session: Session, itemId: number): CommandRejectionCode | undefined {
         const { world, definitions } = session
         const item = world.get(itemId, ItemComponent)

@@ -28,9 +28,9 @@ interface WhackPresentation {
     readonly seedBankSlide: number
 }
 
-/** The rule's own presentation, beside the `graveRise` and `itemPadding` that parsePresentationDefinitions reads. */
+/** The rule's own presentation, beside the `graveRise` that parsePresentationDefinitions reads. */
 function parseConfig(config: LevelRulePresentation, name: string): WhackPresentation {
-    const { graveRise: _graveRise, itemPadding: _itemPadding, ...own } = config
+    const { graveRise: _graveRise, ...own } = config
     return allFields<WhackPresentation>(own, name, {
         hammer: (value, name) => allFields<WhackPresentation['hammer']>(value, name, { reanimId: nonEmptyString, x: finite, y: finite, fps: finite, swingTime: finite }),
         swingSounds: presentationSounds,

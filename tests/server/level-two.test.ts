@@ -58,7 +58,7 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     assert.equal(server.snapshot().projectiles.length, 0, 'a producer does not use shooter logic')
     const sun = server.save().entities.find(entity => entity.item?.accelerationY === 0.09)!
     assert.ok(sun.item!.scale > 0.4)
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId: sun.entityId }), undefined)
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: sun.position!.x + 1, y: sun.position!.y + 1 }), undefined)
     assert.equal(getAvailableSun((server as unknown as { requireSession(): { world: World } }).requireSession().world, definitions), 25)
 })
 
@@ -157,6 +157,6 @@ test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb',
     server.tick()
     const reward = server.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
     assert.ok(reward)
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId: reward.entityId }), undefined)
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: reward.x + 1, y: reward.y + 1 }), undefined)
     assert.equal(server.snapshot().result, 'won')
 })

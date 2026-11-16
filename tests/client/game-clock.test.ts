@@ -85,7 +85,7 @@ test('collecting sun while battle time is frozen does not hold back the next see
     assert.ok(sun, 'the sky drops a sun')
     // The D key freezes the clock: the level then only updates with a zero delta.
     const tick = game.render().gameplayTick
-    game.command({ type: 'collectItemAt', itemId: sun.entityId })
+    game.command({ type: 'collectItemAt', x: sun.x + 1, y: sun.y + 1 })
     game.update(0)
     assert.equal(game.render().items[0].state, 'collecting')
     game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })

@@ -260,8 +260,8 @@ test('1-1 tutorial collects two suns and starts its first wave 99 ticks after th
     while (gameplayTick(server) < 400) snapshot = server.tick()
     assert.equal(snapshot.items.length, 1)
     assert.equal(snapshot.tutorial.step, 'collect-first-sun')
-    const firstItemId = snapshot.items[0].entityId
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId: firstItemId }), undefined)
+    const firstItem = snapshot.items[0], firstItemId = firstItem.entityId
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: firstItem.x + 1, y: firstItem.y + 1 }), undefined)
     snapshot = server.snapshot()
     assert.equal(snapshot.sun, 50)
     assert.equal(snapshot.items[0].state, 'collecting')
@@ -273,7 +273,7 @@ test('1-1 tutorial collects two suns and starts its first wave 99 ticks after th
     const secondItem = snapshot.items.find(item => item.state === 'available')!
     assert.equal(snapshot.tutorial.step, 'collect-more-sun')
     server.drainEvents()
-    runCommand(server, { type: 'collectItemAt', itemId: secondItem.entityId })
+    runCommand(server, { type: 'collectItemAt', x: secondItem.x + 1, y: secondItem.y + 1 })
     snapshot = server.snapshot()
     assert.equal(snapshot.sun, 75)
     assert.equal(snapshot.items.find(item => item.entityId === secondItem.entityId)?.state, 'collecting')
@@ -324,8 +324,8 @@ test('collecting sun buys immediately but reaches the HUD only at the bank', () 
 
     let snapshot = server.snapshot()
     while (gameplayTick(server) < 750) snapshot = server.tick()
-    const itemId = snapshot.items.find(item => item.state === 'available')!.entityId
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId }), undefined)
+    const item = snapshot.items.find(item => item.state === 'available')!
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: item.x + 1, y: item.y + 1 }), undefined)
     snapshot = server.snapshot()
     assert.equal(snapshot.sun, 50)
     assert.equal(availableSun(), 100)
@@ -335,7 +335,7 @@ test('collecting sun buys immediately but reaches the HUD only at the bank', () 
     assert.equal(snapshot.sun, 0)
     assert.equal(availableSun(), 0)
 
-    while (snapshot.items.some(item => item.entityId === itemId)) snapshot = server.tick()
+    while (snapshot.items.some(lying => lying.entityId === item.entityId)) snapshot = server.tick()
     assert.equal(snapshot.sun, 0)
     assert.equal(availableSun(), 0)
 })
@@ -372,7 +372,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     })
 
     assert.equal(server.tick().items.length, 2)
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId: awardId }), undefined)
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: 401, y: 301 }), undefined)
     assert.equal(server.snapshot().items.find(item => item.entityId === sunId)?.state, 'collecting')
     const winTick = server.snapshot().tick
     const mowerX = mower(server.snapshot()).x

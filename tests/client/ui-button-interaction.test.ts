@@ -96,6 +96,8 @@ function setup() {
     const Button = load('assets/scripts/client/ui/UIButton.ts').UIButton
     modules['@/client/ui/UIButton'] = { UIButton: Button }
     modules['./LevelGeometry'] = load('assets/scripts/client/level/LevelGeometry.ts')
+    // The hit test the server collects by, which the presenter asks where a press goes.
+    modules['@/shared/content/gameplay'] = load('assets/scripts/shared/content/levelHelpers.ts')
     modules['@/client/plants/definitions'] = plantDefinitions
     modules['@/client/hud/SeedPacketView'] = { SeedPacketView: class {
         node: FakeNode; options: unknown
@@ -385,7 +387,8 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             if (command.type === 'selectSeed') world.cursor = { mode: 'seed', seedId: command.seedId }
             if (command.type === 'clearCursor' || command.type === 'placePlant' && !blocked) world.cursor = { mode: 'none', seedId: '' }
             for (const packet of world.seedPackets) packet.selected = packet.seedId === world.cursor.seedId
-            if (command.type === 'collectItemAt') world.items.find(item => item.entityId === command.itemId).state = 'collecting'
+            // The server collects the item at the point (itemAt): the sun here is 40 square.
+            if (command.type === 'collectItemAt') world.items.find(item => command.x >= item.x && command.x < item.x + 40 && command.y >= item.y && command.y < item.y + 40).state = 'collecting'
         },
     }, view = {
         introComplete: true, canOpenMenu: true, bindTools() { return [] }, level: { award: { kind: 'seed' } }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },

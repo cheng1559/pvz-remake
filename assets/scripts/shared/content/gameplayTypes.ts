@@ -516,6 +516,8 @@ export interface ItemDefinition {
     scale?: number
     /** Coin::GetDisappearTime: ticks on the ground before fading; 750 when omitted. */
     lifetimeTicks?: number
+    /** Coin::MouseHitTest's aExtraClickSize: it takes clicks this much further around (the sun's 15); none when omitted. */
+    clickPadding?: number
 }
 
 /**
@@ -543,6 +545,11 @@ export interface LevelRule { kind: string; count: number; settings: JsonObject }
 
 export interface LevelDefinition {
     adventureIndex: number
+    /**
+     * Coin::MouseHitTest in Whack-a-Zombie (IsWhackAZombieLevel): every item, the award too, takes clicks `size` further
+     * around and `height` more below, where it has no `clickPadding` of its own.
+     */
+    itemClickPadding?: { size: number; height: number }
     persistent?: boolean
     /** False: the level grants no achievements (debug and test levels). */
     achievements?: boolean

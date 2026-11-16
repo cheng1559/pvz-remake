@@ -548,7 +548,7 @@ export function parseProjectile(value: unknown, name: string): ProjectileDefinit
 }
 
 function parseItem(value: unknown, name: string): ItemDefinition {
-    const source = exact(value, ['value', 'width', 'height'], name, ['kind', 'scale', 'lifetimeTicks'])
+    const source = exact(value, ['value', 'width', 'height'], name, ['kind', 'scale', 'lifetimeTicks', 'clickPadding'])
     if (source.kind !== undefined && source.kind !== 'sun' && source.kind !== 'money') throw new Error(`${name}.kind must be sun or money`)
     return {
         ...(source.kind === undefined ? {} : { kind: source.kind as 'sun' | 'money' }),
@@ -557,6 +557,7 @@ function parseItem(value: unknown, name: string): ItemDefinition {
         width: positiveFinite(source.width, `${name}.width`),
         height: positiveFinite(source.height, `${name}.height`),
         ...(source.scale === undefined ? {} : { scale: positiveFinite(source.scale, `${name}.scale`) }),
+        ...(source.clickPadding === undefined ? {} : { clickPadding: nonNegativeFinite(source.clickPadding, `${name}.clickPadding`) }),
     }
 }
 
@@ -745,7 +746,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exact(value, [
         'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'award',
     ], name, ['tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
-        'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
+        'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools', 'itemClickPadding'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
@@ -892,6 +893,10 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
         ...(source.persistent === undefined ? {} : { persistent: source.persistent as boolean }),
+        ...(source.itemClickPadding === undefined ? {} : { itemClickPadding: (() => {
+            const padding = exact(source.itemClickPadding, ['size', 'height'], `${name}.itemClickPadding`)
+            return { size: nonNegativeFinite(padding.size, `${name}.itemClickPadding.size`), height: nonNegativeFinite(padding.height, `${name}.itemClickPadding.height`) }
+        })() }),
         ...(source.achievements === undefined ? {} : { achievements: source.achievements as boolean }),
         ...(source.nextLevel === undefined ? {} : { nextLevel: qualifiedId(source.nextLevel, `${name}.nextLevel`) }),
         board: boardId,

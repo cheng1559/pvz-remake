@@ -48,7 +48,7 @@ test('headless 1-1 reaches the same win for the same seed and commands', () => {
                     save: JSON.parse(JSON.stringify(first.save())),
                 }))
             }
-            command({ type: 'collectItemAt', itemId: item.entityId })
+            command({ type: 'collectItemAt', x: item.x + 1, y: item.y + 1 })
         }
         if (!secondPlanted && snapshot.sun >= 100 && snapshot.seedPackets[0]!.ready) {
             command({ type: 'selectSeed', seedId: 'pvz:peashooter' })

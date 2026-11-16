@@ -79,7 +79,7 @@ export const commands = {
             case 'selectConveyorPacket': return planting.selectConveyorPacket(session, command.packetId)
             case 'selectSeed': return planting.selectSeed(session, command.seedId, command.slot)
             case 'placePlant': return planting.placePlant(session, command.row, command.column)
-            case 'collectItemAt': return items.collect(session, command.itemId)
+            case 'collectItemAt': return items.collectAt(session, command.x, command.y, command.award !== false)
             case 'boardClick': {
                 // Challenge::MouseDown: a click that hit nothing else, while nothing is held.
                 const rule = levelRule(world)

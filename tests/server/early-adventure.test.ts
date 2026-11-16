@@ -95,7 +95,7 @@ test('early adventure wave plans obey points, reserve conehead introductions and
         const award = server.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
         assert.ok(award)
         assert.equal(level.award.id, index === 3 ? 'pvz:wallnut' : 'pvz:shovel')
-        assert.equal(runCommand(server, { type: 'collectItemAt', itemId: award.entityId }), undefined)
+        assert.equal(runCommand(server, { type: 'collectItemAt', x: award.x + 1, y: award.y + 1 }), undefined)
         assert.equal(server.snapshot().result, 'won')
     }
 })

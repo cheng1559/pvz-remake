@@ -449,7 +449,7 @@ test('/repick stands the level still and chooses the bank again, its cards still
     assert.equal(frozen.seedChooser?.warnings, undefined, 'no sun warning on a repick')
     for (let tick = 0; tick < 50; tick++) game.update(TICK_SECONDS)
     assert.equal(game.render().gameplayTick, frozen.gameplayTick, 'the level stands still')
-    game.command({ type: 'collectItemAt', itemId: 1 })
+    game.command({ type: 'collectItemAt', x: 0, y: 0 })
     game.update(0)
     assert.equal(game.lastRejection?.code, 'choosing-seeds', 'nothing but the choice goes on')
     assert.equal(game.debugCommand('/repick').ok, false, 'one repick at a time')

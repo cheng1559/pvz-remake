@@ -11,13 +11,12 @@ import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { levelRulePresentation } from './rules/LevelRuleView'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
 import { LevelSeedBank } from './LevelSeedBank'
-import { itemAt } from './LevelGeometry'
+import { itemAt } from '@/shared/content/gameplay'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { LevelPresentation } from './LevelPresentation'
@@ -269,8 +268,7 @@ export class LevelHudPresenter {
 
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {
         if (levelStandsStill(snapshot) || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
-        const padding = levelRulePresentation(this.content.presentation, this.level)?.itemPadding
-        return itemAt(snapshot.items, this.content.definitions.items, this.level, padding, this.pointer.x, this.pointer.y) !== undefined
+        return itemAt(snapshot.items, this.content.definitions.items, this.level, this.pointer.x, this.pointer.y) !== undefined
     }
 
     /** Board::OffsetYForPlanting for the seed being planted; a zombie seed's cell is the pointer's. */

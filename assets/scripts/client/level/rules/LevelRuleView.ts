@@ -52,7 +52,7 @@ export function createLevelRuleView(context: LevelRuleViewContext): Promise<Leve
     return factories.get(context.kind)?.(context)
 }
 
-/** The presentation of the level's rule, for the generic parts (`graveRise`, `itemPadding`). */
+/** The presentation of the level's rule, for the generic part (`graveRise`). */
 export function levelRulePresentation(definitions: PresentationDefinitions, level: LevelDefinition): LevelRulePresentation | undefined {
     return level.rules ? definitions.rules?.[level.rules.kind] : undefined
 }

@@ -332,14 +332,12 @@ export interface LevelPresentationDefinition {
     readonly plantingLine?: { readonly sprite: string; readonly offset: readonly [number, number]; readonly dialogs: readonly number[] }
 }
 /**
- * How a level rule (`rules.kind`) looks, by kind. The generic level view reads `graveRise` and `itemPadding`; the
+ * How a level rule (`rules.kind`) looks, by kind. The generic level view reads `graveRise`; the
  * rule's own view reads and checks the rest, as its server rule does the level's `rules` settings (WhackAZombieView).
  */
 export interface LevelRulePresentation {
     /** Zombie::RiseFromGrave: replaces `graves.rise` (Whack-a-Zombie's dirt). */
     readonly graveRise?: { readonly particle: string; readonly sounds: readonly PresentationSound[] }
-    /** Coin::MouseHitTest: items take clicks this much further around, and `height` more below. */
-    readonly itemPadding?: { readonly size: number; readonly height: number }
     readonly [key: string]: unknown
 }
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
@@ -781,11 +779,10 @@ function parseBoard(value: unknown, name: string): BoardPresentation {
 
 /** Its own view reads the rest of a rule's presentation (LevelRulePresentation). */
 function parseRule(value: unknown, name: string): LevelRulePresentation {
-    const { graveRise: rise, itemPadding, ...own } = record(value, name)
+    const { graveRise: rise, ...own } = record(value, name)
     return {
         ...own,
         ...rise === undefined ? {} : { graveRise: graveRise(rise, `${name}.graveRise`) },
-        ...itemPadding === undefined ? {} : { itemPadding: allFields<NonNullable<LevelRulePresentation['itemPadding']>>(itemPadding, `${name}.itemPadding`, { size: finite, height: finite }) },
     }
 }
 

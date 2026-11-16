@@ -1,4 +1,4 @@
-import type { BoardDefinition, GameplayLevels, LevelDefinition } from '@/shared/content/gameplayTypes'
+import type { BoardDefinition, GameplayLevels, ItemDefinition, LevelDefinition } from '@/shared/content/gameplayTypes'
 
 /** What the definitions of a level and its board give: where its mowers ride, the tools it has and its award's size. */
 
@@ -14,6 +14,26 @@ export const SEED_PACKET_SIZE = Object.freeze({ width: 50, height: 70 })
 /** The level award's size on the lawn (Coin::CoinInitialize's mWidth, mHeight): a seed award's is its packet's. */
 export function levelAwardSize(award: LevelDefinition['award']): { readonly width: number; readonly height: number } {
     return award.kind === 'seed' ? SEED_PACKET_SIZE : award
+}
+
+/**
+ * Board::MouseHitTest over Coin::MouseHitTest: the topmost item at (x, y) that is not being collected, the last listed
+ * (the order the server makes them in, which the snapshot keeps). An item takes clicks its `clickPadding` further around
+ * (the sun's), or the level's `itemClickPadding` (Whack-a-Zombie's, with more below). Without `award`, the level's award
+ * is passed over. The server collects what it finds; the client asks it only where a press goes.
+ */
+export function itemAt<Item extends { typeId: string, state: string, x: number, y: number }>(items: readonly Item[],
+    definitions: Readonly<Record<string, ItemDefinition>>, level: LevelDefinition, x: number, y: number, award = true): Item | undefined {
+    const padding = level.itemClickPadding
+    for (let index = items.length - 1; index >= 0; index--) {
+        const item = items[index], isAward = item.typeId === LEVEL_AWARD
+        if (!award && isAward) continue
+        const definition = isAward ? undefined : definitions[item.typeId], size = isAward ? levelAwardSize(level.award) : definition
+        if (!size || item.state === 'collecting') continue
+        const extra = definition?.clickPadding ?? padding?.size ?? 0, below = padding?.height ?? 0
+        if (x >= item.x - extra && x < item.x + size.width + extra && y >= item.y - extra && y < item.y + size.height + extra + below) return item
+    }
+    return undefined
 }
 
 /** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */

@@ -36,7 +36,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
 
     let snapshot = original.snapshot()
     while (snapshot.items.length === 0) snapshot = original.tick()
-    runCommand(original, { type: 'collectItemAt', itemId: snapshot.items[0].entityId })
+    runCommand(original, { type: 'collectItemAt', x: snapshot.items[0].x + 1, y: snapshot.items[0].y + 1 })
     snapshot = original.snapshot()
     while (snapshot.items.length === 0) snapshot = original.tick()
 
@@ -71,10 +71,8 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
     }
     snapshot = original.snapshot()
     while (!snapshot.items.some(item => item.state === 'available')) snapshot = tickBoth()
-    commandBoth({
-        type: 'collectItemAt',
-        itemId: snapshot.items.find(item => item.state === 'available')!.entityId,
-    })
+    const available = snapshot.items.find(item => item.state === 'available')!
+    commandBoth({ type: 'collectItemAt', x: available.x + 1, y: available.y + 1 })
     snapshot = original.snapshot()
     assert.equal(snapshot.sun, 75)
     const nextEntityId = original.save().allocator.nextEntity
@@ -90,7 +88,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
     while (frame.result === 'playing' && frame.tick < 30000) {
         frame = tickBoth()
         const award = frame.items.find(item => item.typeId === LEVEL_AWARD)
-        if (award) commandBoth({ type: 'collectItemAt', itemId: award.entityId })
+        if (award) commandBoth({ type: 'collectItemAt', x: award.x + 1, y: award.y + 1 })
         frame = original.snapshot()
     }
 

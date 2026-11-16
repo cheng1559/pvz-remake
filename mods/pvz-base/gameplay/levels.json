@@ -348,6 +348,7 @@
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],
     "startingSun": 0,
+    "itemClickPadding": {"size": 15, "height": 30},
     "seedPackets": ["pvz:potatomine", "pvz:gravebuster", "pvz:cherrybomb"],
     "openingRecharge": false,
     "tools": [],

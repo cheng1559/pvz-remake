@@ -62,8 +62,6 @@ export class LevelView {
     rule?: LevelRuleView
     /** The level's red line, when it has one with a look. */
     plantingLine?: PlantingLineView
-    /** Coin::MouseHitTest: the level rule widens every item's click area. */
-    itemPadding?: { readonly size: number; readonly height: number }
     private boardHud?: LevelBoardHud
     private seedChooser?: LevelSeedChooser
     private seedChooserSend: (command: GameCommand) => void = () => {}
@@ -306,7 +304,6 @@ export class LevelView {
         if (initial.tools || level.conveyor || initial.tutorial.dave) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
         }
-        view.itemPadding = rulePresentation?.itemPadding
         view.plantingLine = await PlantingLineView.create({ content, ui, ground: slots.sodClip, level, look: presentation.plantingLine, initial })
         if (level.rules) {
             view.rule = await createLevelRuleView({ kind: level.rules.kind, config: rulePresentation ?? {}, content, ui, initial, audio,

@@ -151,7 +151,7 @@ test('each day level runs both flag warnings, restores the planned waves and col
         const award = game.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
         assert.ok(award)
         game.start({ ...options(index), save: game.save() as unknown as JsonValue })
-        assert.equal(runCommand(game, { type: 'collectItemAt', itemId: award.entityId }), undefined)
+        assert.equal(runCommand(game, { type: 'collectItemAt', x: award.x + 1, y: award.y + 1 }), undefined)
         assert.equal(game.snapshot().result, 'won')
         const won = game.save()
         game.start({ ...options(index), save: won as unknown as JsonValue })

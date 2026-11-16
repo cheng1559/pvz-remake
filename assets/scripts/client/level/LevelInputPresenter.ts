@@ -5,7 +5,8 @@ import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
-import { boardCell, itemAt } from './LevelGeometry'
+import { boardCell } from './LevelGeometry'
+import { itemAt } from '@/shared/content/gameplay'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
 import { UIButton } from '@/client/ui/UIButton'
@@ -280,10 +281,13 @@ export class LevelInputPresenter {
         })
     }
 
-    /** Collects the item under (x, y), if there is one. */
+    /**
+     * Collects the item under (x, y), if there is one: the server finds it again and collects it; this frame's items
+     * only say whether the press is the item's, not the board's.
+     */
     private collectAt(x: number, y: number, includeAward = true): boolean {
-        const item = itemAt(this.game.render().items, this.game.definitions.items, this.view.level, this.view.itemPadding, x, y, includeAward)
-        if (item) this.game.command({ type: 'collectItemAt', itemId: item.entityId })
+        const item = itemAt(this.game.render().items, this.game.definitions.items, this.view.level, x, y, includeAward)
+        if (item) this.game.command({ type: 'collectItemAt', x, y, ...(includeAward ? {} : { award: false as const }) })
         return item !== undefined
     }
 

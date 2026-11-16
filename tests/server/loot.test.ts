@@ -52,7 +52,7 @@ test('2-1 guarantees a first coin with a pickup arrow after wave 5; collected mo
     assert.equal(first?.typeId, 'pvz:coin_silver', 'Board::DropLootPiece forces the roll to 1000 for the first coin')
     const before = game.render().money
     game.drainEvents()
-    game.command({ type: 'collectItemAt', itemId: first.entityId })
+    game.command({ type: 'collectItemAt', x: first.x + 1, y: first.y + 1 })
     for (let tick = 0; tick < 300 && game.render().items.some(item => item.entityId === first.entityId); tick++) game.update(TICK_SECONDS)
     assert.equal(game.render().money, before + 1)
     const advice = game.drainEvents().filter(event => event.type === 'advice').map(event => event.data.key)
@@ -71,7 +71,7 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
     for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
     game.debugCommand('/damage 5000')
     const award = game.render().items.find(item => item.typeId === LEVEL_AWARD)!
-    game.command({ type: 'collectItemAt', itemId: award.entityId })
+    game.command({ type: 'collectItemAt', x: award.x + 1, y: award.y + 1 })
     game.update(0)
     game.drainEvents()
     const purse = game.render().money + money(game).reduce((sum, item) => sum + definitions.items[item.typeId].value, 0)
@@ -98,7 +98,7 @@ test('a first adventure drops money from level 11 on, also on levels without a s
         for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
         game.debugCommand('/damage 5000')
         const award = game.render().items.find(item => item.typeId === LEVEL_AWARD)!
-        game.command({ type: 'collectItemAt', itemId: award.entityId })
+        game.command({ type: 'collectItemAt', x: award.x + 1, y: award.y + 1 })
         game.update(0)
         game.drainEvents()
         let scored = 0

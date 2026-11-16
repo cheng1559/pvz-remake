@@ -5,7 +5,6 @@
     "helmSounds": {"bucket": [{"audio": "pvz:shieldhit", "foley": true}], "cone": [{"audio": "pvz:plastichit", "foley": true}]},
     "bonk": {"sounds": [{"audio": "pvz:bonk", "foley": true, "pitchRange": 2}], "particle": "pvz:pow", "x": -3, "y": 9},
     "graveRise": {"particle": "pvz:whackazombierise", "sounds": [{"audio": "pvz:dirt_rise", "foley": true}]},
-    "itemPadding": {"size": 15, "height": 30},
     "seedBankSlide": 2
   }
 }

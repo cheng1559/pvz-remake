@@ -70,7 +70,7 @@ test('a potato mine that kills, a cherry bomb that takes out ten zombies and 800
     debug(sunny, '/sun set 7980')
     debug(sunny, '/item sun 3 3')
     const sun = sunny.snapshot().items.find(item => item.typeId === 'pvz:sun')!
-    assert.equal(runCommand(sunny, { type: 'collectItemAt', itemId: sun.entityId }), undefined)
+    assert.equal(runCommand(sunny, { type: 'collectItemAt', x: sun.x + 1, y: sun.y + 1 }), undefined)
     sunny.drainEvents()
     let sunEvents: unknown[][] = []
     tickUntil(sunny, 500, () => (sunEvents = earned(sunny)).length > 0)
@@ -83,7 +83,7 @@ test('thirty coins in a row grant Penny Pincher, and a silver coin fading away s
         for (let index = 0; index < count; index++) {
             debug(server, '/item coin_silver 3 3')
             const coin = server.snapshot().items.find(item => item.typeId === 'pvz:coin_silver' && item.state !== 'collecting')!
-            assert.equal(runCommand(server, { type: 'collectItemAt', itemId: coin.entityId }), undefined)
+            assert.equal(runCommand(server, { type: 'collectItemAt', x: coin.x + 1, y: coin.y + 1 }), undefined)
             tickUntil(server, 300, () => !server.snapshot().items.some(item => item.entityId === coin.entityId))
         }
     }
