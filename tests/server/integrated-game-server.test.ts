@@ -25,6 +25,7 @@ import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 import { framePosition } from '@/shared/content/animation'
 import { pickWeighted } from '@/shared/random'
+import { startFromSave } from './start-from-save'
 
 const source = readGameplaySource
 
@@ -244,7 +245,7 @@ test('a plant blinks on the server, and a save keeps its animation', () => {
 
     // A restored session goes on as this one does: the blink's 3 frames at 15 a second end 20 ticks after it began.
     const restored = new IntegratedGameServer(definitions, levels)
-    restored.restore(JSON.parse(JSON.stringify(server.save())))
+    startFromSave(restored, JSON.parse(JSON.stringify(server.save())))
     for (let tick = 1; tick <= 20; tick++) {
         snapshot = server.tick()
         assert.deepEqual(restored.tick().plants, snapshot.plants)

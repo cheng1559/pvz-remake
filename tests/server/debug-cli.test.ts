@@ -7,6 +7,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { TICK_SECONDS } from '@/shared/protocol'
+import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
@@ -38,7 +39,9 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     }
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
-    assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster', 'hypnoshroom', 'scaredyshroom'])
+    // Every installed plant seed, hidden ones too, by the name /plant takes: without the base namespace.
+    const plantSeeds = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].kind === 'plant')
+    assert.deepEqual(catalog.plants, plantSeeds.map(id => id.replace(/^pvz:/, '')))
     assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor', 'football'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
@@ -90,7 +93,7 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     finalSave.wave.hugeWaveAnnounced = true
     finalSave.level.paused = false
     const final = new IntegratedGameServer(definitions, levels)
-    final.restore(finalSave)
+    startFromSave(final, finalSave)
     for (let tick = 0; tick < 300; tick++) final.tick()
     assert.equal(final.snapshot().wave.index, final.snapshot().wave.total)
     assert.deepEqual(final.snapshot().gridItems, graves)
@@ -105,7 +108,7 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     rising.entities = rising.entities.flatMap((entity: any) => !entity.gridItem ? [entity] : !late.includes(entity.entityId) ? [] : [{ ...entity,
         gridItem: { ...entity.gridItem, riseAtTick: opensAt - entity.gridItem.riseDelay - 99 - late.indexOf(entity.entityId) } }])
     const partial = new IntegratedGameServer(definitions, levels)
-    partial.restore(rising)
+    startFromSave(partial, rising)
     for (let tick = 0; tick < 300; tick++) partial.tick()
     assert.deepEqual(partial.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined).map(zombie => zombie.row), [graves[1].row],
         'only the grave at counter 100 raises a zombie')
@@ -143,7 +146,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     save.wave.nextWaveAtTick = save.gameplayTick + 1
     save.wave.hugeWaveAnnounced = true
     const final = new IntegratedGameServer(definitions, levels)
-    final.restore(save)
+    startFromSave(final, save)
     for (let step = 0; step < 300; step++) final.tick()
     const risen = final.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined)
     assert.deepEqual(risen.map(zombie => [zombie.row, zombie.team]).sort(), [[1, 'plants'], [2, 'plants'], [2, undefined]].sort(),

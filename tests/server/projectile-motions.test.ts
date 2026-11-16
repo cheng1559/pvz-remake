@@ -14,6 +14,7 @@ import { LevelStateResource, PositionComponent, ProjectileComponent, RandomResou
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { spawnZombie } from '@/server/zombies/spawn'
+import { startFromSave } from './start-from-save'
 
 const LOB = PLANT_ATTACKS.lobber, HOMING = PLANT_ATTACKS.seeker
 
@@ -68,7 +69,7 @@ test("a lobber's pea arcs over to its target with the damage the plant gives it,
 
     // A save keeps it in flight: the restored server brings it down as the running game does.
     const loaded = new IntegratedGameServer(definitions, levels)
-    assert.deepEqual(loaded.restore(game.saveAtBoundary()).projectiles, game.currentSnapshot!.projectiles)
+    assert.deepEqual(startFromSave(loaded, game.saveAtBoundary()).projectiles, game.currentSnapshot!.projectiles)
     for (let step = 0; step < 300 && game.currentSnapshot!.zombies[0].health === 270; step++) { game.update(0.01); loaded.tick() }
     assert.equal(game.currentSnapshot!.zombies[0].health, 230, "it comes down on the zombie with this plant's damage for a pea")
     assert.deepEqual(loaded.snapshot().zombies, game.currentSnapshot!.zombies)

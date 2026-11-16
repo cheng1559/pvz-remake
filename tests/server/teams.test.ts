@@ -9,6 +9,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
 import { runCommand } from './run-command'
+import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -512,7 +513,7 @@ test('a zombie that chews an awake hypno-shroom comes over to the plants\u2019 s
     run(server, 100)
     assert.ok(zombies(server)[0].x > x, 'it walks right')
     const restored = new IntegratedGameServer(definitions, levels)
-    restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
+    startFromSave(restored, JSON.parse(JSON.stringify(server.save())) as JsonValue)
     assert.equal(restored.snapshot().zombies[0].mindControlled, true, 'a save keeps it mind-controlled')
     debug(server, '/zombie normal 3 4 plants')
     assert.equal(zombies(server).find(other => other.entityId !== zombie.entityId)!.mindControlled, undefined,
@@ -557,7 +558,7 @@ test('a chomper that bites an awake hostile hypno-shroom comes over to its side,
     const after = run(server, 800)
     assert.ok(!after.some(event => event.type === 'zombieChewedPlant' && event.data.plantId === chomper.entityId), 'its own side does not eat it')
     const restored = new IntegratedGameServer(definitions, levels)
-    restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
+    startFromSave(restored, JSON.parse(JSON.stringify(server.save())) as JsonValue)
     assert.equal(restored.snapshot().plants.find(plant => plant.entityId === chomper.entityId)?.mindControlled, true)
 })
 

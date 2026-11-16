@@ -12,6 +12,7 @@ import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
+import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -192,7 +193,7 @@ test('a game saved during the seed-slot pitch can still sell it after a restore'
     const server = start({ initialMoney: 75, packetUpgradeOffer: offer })
     for (let line = 0; line < 2; line++) runCommand(server, { type: 'advanceDialog' })
     const restored = new IntegratedGameServer(definitions, levels)
-    restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
+    startFromSave(restored, JSON.parse(JSON.stringify(server.save())) as JsonValue)
     assert.deepEqual(restored.snapshot().dialog, { index: 1503, question: { kind: 'pvz:packetUpgrade', cost: 75, slots: 7 } })
     assert.equal(runCommand(restored, { type: 'answerDialog', accept: true }), undefined)
     assert.equal(restored.snapshot().money, 0)

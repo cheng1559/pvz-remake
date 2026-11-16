@@ -7,6 +7,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { PlantBehavior } from '@/server/plants/behaviors'
 import { runCommand } from './run-command'
+import { startFromSave } from './start-from-save'
 
 const json = readGameplaySource
 const source = json('definitions')
@@ -88,9 +89,9 @@ test('per-plant state is isolated, follows simulation ticks, survives saves and 
     assert.equal(server.snapshot().plants[0].health, 300)
     ;(savedPlant.behaviorState!.history as { heals: number }).heals = 5
     assert.equal((server.snapshot().plants[0].behaviorState!.history as { heals: number }).heals, 0)
-    server.restore(saved, start.levelId, start.mods)
+    startFromSave(server, saved, { levelId: start.levelId, mods: start.mods })
     const restored = new IntegratedGameServer(definitions, levels, mods)
-    restored.restore(saved, start.levelId, start.mods)
+    startFromSave(restored, saved, { levelId: start.levelId, mods: start.mods })
     ;(savedPlant.behaviorState!.history as { heals: number }).heals = 999
     assert.equal((restored.snapshot().plants[0].behaviorState!.history as { heals: number }).heals, 5)
 
@@ -107,9 +108,9 @@ test('per-plant state is isolated, follows simulation ticks, survives saves and 
     const invalid = server.save()
     const invalidPlant = invalid.entities.find(entity => entity.plant?.typeId === 'test:plant')!.plant!
     invalidPlant.behaviorState!.ticks = -1
-    assert.throws(() => restored.restore(invalid), /Invalid test plant state/)
+    assert.throws(() => startFromSave(restored, invalid), /Invalid test plant state/)
     delete invalidPlant.behaviorState
-    assert.throws(() => restored.restore(invalid), /Invalid plant behavior state/)
+    assert.throws(() => startFromSave(restored, invalid), /Invalid plant behavior state/)
     server.enqueueDebugCommand(2000, '/removeplant 3 1')
     server.processBoundaryCommands()
     assert.equal(server.drainCommandResults()[0].debug?.ok, true)

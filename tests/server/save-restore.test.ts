@@ -8,6 +8,7 @@ import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/sh
 import type { GameCommand, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
+import { startFromSave } from './start-from-save'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'))
@@ -122,7 +123,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             wave: { ...saved.wave, zombieIds: [savedEntityId, savedEntityId] },
         }
         assert.throws(
-            () => new IntegratedGameServer(definitions, levels).restore(duplicateWaveZombie),
+            () => startFromSave(new IntegratedGameServer(definitions, levels), duplicateWaveZombie),
             /must be unique/,
         )
     }
@@ -133,7 +134,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             wave: { ...saved.wave, zombieIds: [plantId] },
         }
         assert.throws(
-            () => new IntegratedGameServer(definitions, levels).restore(nonZombieWaveEntity),
+            () => startFromSave(new IntegratedGameServer(definitions, levels), nonZombieWaveEntity),
             /is invalid/,
         )
     }
@@ -142,7 +143,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
         wave: { ...saved.wave, zombieIds: [saved.allocator.nextEntity] },
     }
     assert.throws(
-        () => new IntegratedGameServer(definitions, levels).restore(missingWaveEntity),
+        () => startFromSave(new IntegratedGameServer(definitions, levels), missingWaveEntity),
         /is invalid/,
     )
     const sun = saved.entities.findIndex(entity => entity.item)
@@ -160,7 +161,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             : entity),
     }
     assert.throws(
-        () => new IntegratedGameServer(definitions, levels).restore(twoKinds),
+        () => startFromSave(new IntegratedGameServer(definitions, levels), twoKinds),
         /exactly one domain component/,
     )
 })

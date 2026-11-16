@@ -5,6 +5,7 @@ import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/sh
 import type { JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
+import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -214,7 +215,7 @@ test('a game saved mid-wave restores its countdown and graves', () => {
     run(server, 2600)
     const saved = JSON.parse(JSON.stringify(server.save())) as JsonValue
     const restored = new IntegratedGameServer(definitions, levels)
-    restored.restore(saved)
+    startFromSave(restored, saved)
     assert.deepEqual(restored.snapshot().gridItems, server.snapshot().gridItems)
     run(server, 300)
     run(restored, 300)

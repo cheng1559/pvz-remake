@@ -7,6 +7,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import type { ZombieBehavior } from '@/server/zombies/behaviors'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { runCommand } from './run-command'
+import { startFromSave } from './start-from-save'
 
 const json = readGameplaySource
 const source = json('definitions')
@@ -62,7 +63,7 @@ test('CLI and wave zombies have isolated persisted state that stops during pause
     runCommand(server, { type: 'completeIntro' })
     const ready = server.save()
     ready.wave.nextWaveAtTick = 10000
-    server.restore(ready, start.levelId, start.mods)
+    startFromSave(server, ready, { levelId: start.levelId, mods: start.mods })
     debug(server, '/zombie test:zombie 3 7')
     for (let i = 0; i < 3; i++) server.tick()
     debug(server, '/nextwave')
@@ -78,9 +79,9 @@ test('CLI and wave zombies have isolated persisted state that stops during pause
     const history = savedZombie.behaviorState!.history as { heals: number }
     history.heals = 5
     assert.equal((server.snapshot().zombies[0].behaviorState!.history as { heals: number }).heals, 0)
-    server.restore(saved, start.levelId, start.mods)
+    startFromSave(server, saved, { levelId: start.levelId, mods: start.mods })
     const restored = new IntegratedGameServer(definitions, levels, mods)
-    restored.restore(saved, start.levelId, start.mods)
+    startFromSave(restored, saved, { levelId: start.levelId, mods: start.mods })
     history.heals = 999
     assert.equal((restored.snapshot().zombies[0].behaviorState!.history as { heals: number }).heals, 5)
     for (const target of [server, restored]) runCommand(target, { type: 'pause' })
@@ -96,9 +97,9 @@ test('CLI and wave zombies have isolated persisted state that stops during pause
     const invalid = server.save()
     const invalidZombie = invalid.entities.find(entity => entity.entityId === zombies[0].entityId)!.zombie!
     invalidZombie.behaviorState!.ticks = -1
-    assert.throws(() => restored.restore(invalid), /Invalid test zombie state/)
+    assert.throws(() => startFromSave(restored, invalid), /Invalid test zombie state/)
     delete invalidZombie.behaviorState
-    assert.throws(() => restored.restore(invalid), /Invalid zombie behavior state/)
+    assert.throws(() => startFromSave(restored, invalid), /Invalid zombie behavior state/)
     debug(server, '/kill')
     const dead = server.snapshot().zombies.map(zombie => zombie.behaviorState)
     for (let i = 0; i < 5; i++) server.tick()

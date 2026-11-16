@@ -374,10 +374,10 @@ test('native input keeps its caret and text through completion and repeated subm
     assert.equal(shown.at(-1)!.autocorrect, undefined, 'other Cocos inputs retain system correction defaults')
 })
 
-test('dialogs and wrapped text follow LawnDialog: 3px after the header, button height plus 8, integer centering', () => {
-    const font = { height: 20, ascentPadding: 0, lineSpacing: 20 }
+test('dialogs and wrapped text follow LawnDialog: 3px after the header, the body plus 30, integer centering', () => {
+    const font = { height: 20, ascentPadding: 0, lineSpacing: 20 }, wrapped = 40
     const { UI } = load('client/ui/UI', {
-        '@/client/font': { FontMetricsUtil: { getMetrics: () => font, measureTextWidth: () => 50, measureWordWrappedHeight: () => 40 } },
+        '@/client/font': { FontMetricsUtil: { getMetrics: () => font, measureTextWidth: () => 50, measureWordWrappedHeight: () => wrapped } },
     })
     const size = (width: number, height: number) => ({ originalSize: { width, height } })
     const ui = Object.assign(Object.create(UI.prototype), { assets: {
@@ -385,9 +385,12 @@ test('dialogs and wrapped text follow LawnDialog: 3px after the header, button h
         sprites: { dialog_topleft: size(10, 1), dialog_topright: size(10, 1), dialog_topmiddle: size(10, 1),
             dialog_bottomleft: size(10, 1), dialog_centerleft: size(10, 1) },
     } })
-    // 35 + 36 + 45 + 24 + 8, the header 20 + 3, the body 40 + 30; 1px center tiles leave it unrounded.
-    assert.equal(ui.dialogSize({ title: 'Title', message: 'Body' }).height, 148 + 23 + 70)
-    assert.equal(ui.dialogSize({ title: 'Title', message: 'Body', spaceAfterHeader: 155 }).height, 148 + 175 + 70)
+    // 1px center tiles leave the height unrounded, so each part adds to it exactly what it adds to the content.
+    const height = (options: object) => ui.dialogSize(options).height
+    const header = font.height - font.ascentPadding
+    assert.equal(height({ title: 'Title' }) - height({}), header + 3, 'LawnDialog::CalcSize: the header, then mSpaceAfterHeader')
+    assert.equal(height({ title: 'Title', spaceAfterHeader: 155 }) - height({}), header + 155, 'a dialog sets its own space after the header')
+    assert.equal(height({ title: 'Title', message: 'Body' }) - height({ title: 'Title' }), wrapped + 30, 'the body: its word-wrapped height plus 30')
 
     // Bare class decorators keep the class; decorator factories return an identity decorator.
     const decorator = (...args: unknown[]) => args.length === 1 && typeof args[0] === 'function' ? undefined : (value: unknown) => value

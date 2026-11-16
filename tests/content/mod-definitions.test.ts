@@ -26,7 +26,9 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { runCommand } from '../server/run-command'
 import { parseModContent, contentJson } from '@/shared/mod/content'
-import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/DebugCli'
+import { debugSuccess, getDebugCliCompletions, parseDebugCliCommand, type DebugCliCommand } from '@/shared/debug/DebugCli'
+import { executor } from '@/server/debug/debugCommands'
+import { startFromSave } from '../server/start-from-save'
 
 const base = () => readBaseContent().gameplay
 const gameplay = () => ({ ownerId: 'example', data: readModContent('mods/example/content.json').gameplay })
@@ -89,10 +91,10 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     const keep = (host: ModHost) => { hosts.push(host); return host }
     const gameplay = base()
     const presentation = parsePresentationDefinitions(readPresentationSource())
-    // Each registry draws a type by its table's `view`, or its own kind without one, as the client's do.
+    // Each registry draws a type by its table's `view`, or its own kind without one, for the entity in its context, as the client's do.
     class Views extends EntityViewRegistry<any, any> {
-        constructor(table: string, own?: string) {
-            super((presentation: any, typeId) => presentation[table][typeId] && (presentation[table][typeId].view ?? own), context => context.typeId)
+        constructor(table: string, own: string | undefined, entity: string) {
+            super((presentation: any, typeId) => presentation[table][typeId] && (presentation[table][typeId].view ?? own), context => context[entity].typeId)
             const views = [...Object.values(presentation.plants).map((entry: any) => entry.view ?? 'plant'), ...Object.values(presentation.zombies).map((entry: any) => entry.view ?? 'zombie'),
                 ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view),
                 ...Object.values(presentation.items).map((entry: any) => entry.view ?? 'item'), 'award']
@@ -100,8 +102,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         }
     }
     class ClientViews {
-        plants = new Views('plants', 'plant'); zombies = new Views('zombies', 'zombie'); projectiles = new Views('projectiles', 'projectile')
-        gridItems = new Views('gridItems'); items = new Views('items', 'item')
+        plants = new Views('plants', 'plant', 'plant'); zombies = new Views('zombies', 'zombie', 'zombie')
+        projectiles = new Views('projectiles', 'projectile', 'projectile'); gridItems = new Views('gridItems', undefined, 'item'); items = new Views('items', 'item', 'item')
         events = { register() {}, checkpoint: () => () => {}, freeze() {} }
         checkpoint() {
             const undo = [this.plants, this.zombies, this.projectiles, this.gridItems, this.items, this.events].map(registry => registry.checkpoint())
@@ -189,8 +191,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         const { specs } = host.get('shared/debug/DebugCli')
         host.around(specs, 'list', (next: any) => [...next(), { name: 'broken:leaked', parameters: [], minimum: 0 }])
         const { executor } = host.get('server/debug/debugCommands')
-        host.around(executor, 'execute', (next: any, ...args: any[]) =>
-            args[3].name === 'broken:leaked' ? { ok: true, message: 'Leaked command' } : next(...args))
+        host.around(executor, 'execute', (next: any, session: unknown, command: DebugCliCommand) =>
+            command.name === 'broken:leaked' ? debugSuccess('Leaked command') : next(session, command))
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
         const registry = host.get('gameplay/registry')
         const behavior = { createState: () => ({}), tick() {} }
@@ -206,9 +208,13 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
             registry.freeze()
         }
         host.around(target, 'value', (next: any) => next() * 10)
+        // Its server patches are live until it fails.
+        live = [parseDebugCliCommand('/broken:leaked'), executor.execute(undefined as never, { name: 'broken:leaked', args: [] })]
         await Promise.reject(new Error('client initialization failed'))
     })
     const last = installed('last', ({ assets }: any) => { registrations.push(assets.id) })
+    const execute = executor.execute
+    let live: unknown[] = []
     const loader = modLoader([first, old, dependent, broken, last])
     try {
         const result = await loader.load()
@@ -216,8 +222,10 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.deepEqual(registrations, ['first', 'last'])
         assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['first', 'last'])
         assert.equal(target.value(), 2, 'only the healthy Mod patch remains')
-        assert.deepEqual(getDebugCliCompletions('/test:leaked', undefined, true), [])
-        assert.equal((parseDebugCliCommand('/test:leaked') as { failure: string }).failure, 'syntax')
+        assert.deepEqual(live, [{ name: 'broken:leaked', args: [] }, debugSuccess('Leaked command')])
+        assert.deepEqual(getDebugCliCompletions('/broken:leaked', undefined, true), [])
+        assert.equal((parseDebugCliCommand('/broken:leaked') as { failure: string }).failure, 'syntax')
+        assert.equal(executor.execute, execute, 'the game command executor is unwrapped')
         assert.equal(result.gameplayDefinitions.length, 1)
         assert.equal(result.presentationDefinitions.length, 0)
         assert.deepEqual(result.gameplay.components.snapshot(new World()), {})
@@ -383,8 +391,9 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         client.buttons[0].onClick()
         assert.match(client.dialogs[0].options.message, /example:charge/)
         const particles: unknown[][] = []
-        const view = await loaded.views.plants.create({ typeId: 'example:beacon', content: { presentation: { plants: { 'example:beacon': { view: 'example:beacon' } } } },
-            particle: (...args: unknown[]) => particles.push(args) })
+        const view = await loaded.views.plants.create({ node: new client.Node(), plant: { typeId: 'example:beacon' },
+            content: { presentation: { plants: { 'example:beacon': { view: 'example:beacon' } } } },
+            stage: { particle: (...args: unknown[]) => particles.push(args) } })
         assert.equal(view.body.loadedId, 'example:beacon')
         const world = { phase: 'gameplay', result: 'playing', paused: false, gameplayTick: 50, extensions: { 'example:charge': { '1': { remainingTicks: 200 } } } }
         view.sync({ entityId: 1, x: 0, y: 0 }, world)
@@ -437,9 +446,9 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const savedZombie = saved.entities.find(entity => entity.entityId === summoned.entityId)!.zombie!
         assert.deepEqual(savedZombie.behaviorState, { ticks: 0 })
         savedZombie.health = 400
-        server.restore(saved, 'example:testing', mods)
+        startFromSave(server, saved, { levelId: 'example:testing', mods: mods })
         const restored = new IntegratedGameServer(definitions, levels, systems)
-        restored.restore(server.save(), 'example:testing', mods)
+        startFromSave(restored, server.save(), { levelId: 'example:testing', mods: mods })
         for (let tick = 0; tick < 100; tick++) assert.deepEqual(restored.tick(), server.tick())
         assert.equal(server.snapshot().plants[0].health, 110, 'the registered behavior must heal independently of shooting')
         assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === summoned.entityId)!.health, 410)
@@ -458,12 +467,12 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const chargeSave = server.save()
         const bad = structuredClone(chargeSave)
         bad.entities.find(entity => entity.entityId === beacon.entityId)!.extensions!['example:charge'] = { remainingTicks: 0 }
-        assert.throws(() => restored.restore(bad, 'example:testing', mods), /Invalid example charge/)
+        assert.throws(() => startFromSave(restored, bad, { levelId: 'example:testing', mods: mods }), /Invalid example charge/)
         assert.equal(runCommand(server, { type: 'pause' }), undefined)
         for (let i = 0; i < 20; i++) server.tick()
         assert.equal((server.snapshot().extensions['example:charge'] as any)[beacon.entityId].remainingTicks, 300)
         assert.equal(runCommand(server, { type: 'resume' }), undefined)
-        restored.restore(server.save(), 'example:testing', mods)
+        startFromSave(restored, server.save(), { levelId: 'example:testing', mods: mods })
         const sun = server.snapshot().sun
         for (let i = 0; i < 300; i++) assert.deepEqual(restored.tick(), server.tick())
         assert.equal(server.snapshot().sun, sun + 75, 'charged beacon earns three times its configured sun')

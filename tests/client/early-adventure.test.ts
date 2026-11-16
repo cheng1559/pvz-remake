@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
+import type { GameCommand, SeedPacketSnapshot, WorldSnapshot } from '@/shared/protocol'
 
 // The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
 const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
@@ -17,26 +18,34 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
     }
     const { LevelInputPresenter } = loadScript('assets/scripts/client/level/LevelInputPresenter.ts', (id: string) => modules[id] ?? shared[id] ?? {})
     const commands: any[] = []
-    const snapshot: any = { paused: false, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' },
-        seedPackets: [], conveyorPackets: [{ id: 17, seedId: 'nut' }] }
+    // The server marks the held belt packet selected.
+    const snapshot: any = { paused: false, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' }, seedPackets: [],
+        conveyorPackets: [{ id: 17, seedId: 'nut', x: 0, availability: {}, get selected() { return snapshot.cursor.packetId === 17 } }] }
+    type Packet = SeedPacketSnapshot & { command: GameCommand, x?: number }
+    // LevelSeedBank.packetAt on a belt: the snapshot's packet, ready unless held, picked by its ID.
+    const beltPacket = (packet: WorldSnapshot['conveyorPackets'][number]): Packet => ({ ...packet,
+        ready: !packet.selected, cooldownRemaining: 0, cooldownTotal: 0, command: { type: 'selectConveyorPacket', packetId: packet.id } })
     const input = new LevelInputPresenter({ isChildOf: (node: unknown) => node === page },
         { render: () => snapshot, command: (command: unknown) => commands.push(command), update() {} },
-        { introComplete: true, pointerOffsetY: () => 0, seedPacketAt: (_snapshot: unknown, index: number) => index === 0 ? {
-            selected: snapshot.cursor.packetId === 17,
-            cooldownRemaining: 0, canAfford: true, command: { type: 'selectConveyorPacket', packetId: 17 },
-        } : undefined, audio: { seedPacketSelected() {}, plantingCancelled() {} } })
+        { introComplete: true, pointerOffsetY: () => 0, seedPacketAt: (world: WorldSnapshot, index: number): Packet | undefined =>
+            world.conveyorPackets[index] && beltPacket(world.conveyorPackets[index]), audio: { seedPacketSelected() {}, plantingCancelled() {} } })
     input.enabled = true
     input.onKeyDown({ keyCode: 49 })
     assert.deepEqual({ ...commands.pop() }, { type: 'selectConveyorPacket', packetId: 17 })
     snapshot.cursor = { mode: 'seed', seedId: 'nut', packetId: 17 }
     input.onKeyDown({ keyCode: 49 })
     assert.equal(commands.pop().type, 'clearCursor')
-    for (const command of [{ type: 'selectSeed', seedId: 'pea' }, { type: 'selectConveyorPacket', packetId: 18 }]) {
+    // A bank packet in the second slot (LevelSeedBank.packetAt picks it by its seed and slot), or the belt's second packet.
+    const others: Packet[] = [
+        { seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {}, command: { type: 'selectSeed', seedId: 'pea', slot: 1 } },
+        beltPacket({ id: 18, seedId: 'pea', x: 60, selected: false, availability: {} }),
+    ]
+    for (const packet of others) {
         snapshot.cursor = { mode: 'seed', seedId: 'nut', packetId: 17 }
         const previous = input.view.seedPacketAt
-        input.view.seedPacketAt = () => ({ selected: false, availability: {}, command })
+        input.view.seedPacketAt = () => packet
         input.onKeyDown({ keyCode: 50 })
-        assert.deepEqual({ ...commands.pop() }, command, 'another slot replaces the held plant without clearing it first')
+        assert.deepEqual({ ...commands.pop() }, packet.command, 'another slot replaces the held plant without clearing it first')
         assert.equal(commands.length, 0)
         input.view.seedPacketAt = previous
     }

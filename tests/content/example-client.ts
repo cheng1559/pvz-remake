@@ -31,13 +31,17 @@ export function exampleClient() {
     }
     class MainMenuScreen { node = new Node(); ui = ui; initialized = 0; async initialize(_ui = ui) { this.initialized++ } }
     class Color { static WHITE = new Color(255, 255, 255); constructor(public r: number, public g: number, public b: number) {} }
+    // The members of client/plants/PlantView a Mod's view uses, with their signatures; the context is a PlantViewContext.
     class PlantView {
-        body = { loadedId: '', tint: Color.WHITE, setColorOverride(color: Color) { this.tint = color } }
-        constructor(readonly context: any) {}
-        async initialize() { this.body.loadedId = this.context.typeId }
-        sync(plant: any, world: any, flash = 0) { this.onBoard(plant, world, flash) }
-        onBoard(_plant: any, _world: any, _flash: number) {}
-        particle(...args: unknown[]) { this.context.particle(...args) }
+        private readonly player = { loadedId: '', tint: Color.WHITE, setColorOverride(color: Color) { this.tint = color } }
+        constructor(protected readonly context: any) {}
+        async initialize() { this.player.loadedId = this.context.plant.typeId }
+        protected get body() { return this.player }
+        sync(plant: any, world: any) { this.onBoard(plant, world) }
+        protected onBoard(_plant: any, _world: any) {}
+        protected particle(effect: string, x: number, y: number, order = 0, tint?: Color, mirrored?: boolean) {
+            this.context.stage?.particle(effect, x, y, order, tint, mirrored)
+        }
     }
     const executor = { execute: async (_input: string, _running: boolean, _run: (input: string) => any) => cli.debugCondition('DEBUG_NO_ACTIVE_GAME') }
     return { MainMenuScreen, buttons, dialogs, sounds, executor, Node, modules: {
