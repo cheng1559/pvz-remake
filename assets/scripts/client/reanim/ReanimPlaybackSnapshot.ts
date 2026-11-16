@@ -33,7 +33,8 @@ export function parseReanimPlaybackSnapshot(value: unknown): ReanimPlaybackSnaps
     const timeSeconds = finite(source.timeSeconds, 'reanim snapshot.timeSeconds')
     if (timeSeconds < 0) throw new Error('reanim snapshot.timeSeconds must be non-negative')
     const rate = finite(source.rate, 'reanim snapshot.rate')
-    if (rate <= 0) throw new Error('reanim snapshot.rate must be positive')
+    // 0 stands still: the body of a frozen plant or zombie.
+    if (rate < 0) throw new Error('reanim snapshot.rate must be non-negative')
 
     const colorSource = exactObject(
         source.extraAdditiveColor,

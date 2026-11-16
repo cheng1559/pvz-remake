@@ -393,7 +393,7 @@ export class ReanimPlayer extends Component {
         onFinish?: () => void
     } = {}): void {
         this.requireData()
-        if (options.rate != null) this.rate = positiveFinite(options.rate, 'reanim rate')
+        if (options.rate != null) this.setRate(options.rate)
         if (options.loop != null) this.loop = options.loop
         this.hideOnFinish = options.hideOnFinish ?? true
         this.onFinish = options.onFinish ?? null
@@ -406,6 +406,17 @@ export class ReanimPlayer extends Component {
     pause(): void {
         this.playing = false
     }
+
+    /**
+     * The rate it plays on at from here, where it is: 0 stands it still where it plays (a frozen plant's or zombie's
+     * body, whose server animation stops), and it goes on at the next rate.
+     */
+    setRate(rate: number): void {
+        if (!Number.isFinite(rate) || rate < 0) throw new Error('reanim rate must be finite and non-negative')
+        this.rate = rate
+    }
+
+    get playbackRate(): number { return this.rate }
 
     setOnFinish(callback: (() => void) | null): void {
         this.requireData()

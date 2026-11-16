@@ -772,6 +772,39 @@ test('a clip that ends plays over its own pictures and goes on where they end; a
     assert.deepEqual([cherry.once, cherry.frames], [true, undefined], 'its 14 pictures are as long as the clip')
 })
 
+test('a layer frozen when its view is made stands still at rate 0, and goes on at its rate once it thaws', () => {
+    // A plant or zombie frozen in a save: its view is made from a snapshot whose body goes at 0.
+    class Player {
+        node = { setPosition() {}, setScale() {} }; durationSeconds = 17 / 12; trackIds = []; fullLastFrame = false; rate = 1
+        calls: unknown[][] = []
+        get playbackRate() { return this.rate }
+        change() {} setTracksVisible() {} hide() {}
+        play(options: { rate: number }) { this.calls.push(['play', options.rate]); this.rate = options.rate }
+        setRate(rate: number) { this.calls.push(['rate', rate]); this.rate = rate }
+        seek(time: number) { this.calls.push(['seek', time]) }
+    }
+    const player = new Player()
+    const { LayerPlayers } = loadClientModule('view/layerPlayback', {
+        '@/client/view/uiNode': { uiNode: () => ({ node: { addComponent: () => player } }) },
+    })
+    const layers = new LayerPlayers({}, ['body'])
+    const clip = { reanimId: 'pvz:iceshroom' }
+    const show = (rate: number, time: number) => layers.show(() => ({ key: 'body', clip, time, rate }), { blend: () => 0, place() {} })
+    show(0, 3)
+    show(0, 3)
+    show(12, 3.12)
+    assert.deepEqual(player.calls, [['play', 0], ['seek', 0.25], ['rate', 1], ['seek', 0.26]], 'it takes the rate it goes at as it changes')
+
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
+    })
+    const real = Object.create(ReanimPlayer.prototype)
+    real.setRate(0)
+    assert.equal(real.playbackRate, 0, 'a player stands still at 0')
+    assert.throws(() => real.setRate(-1), /finite and non-negative/)
+})
+
 test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {
     // The base's handlers are the views' statics: any function stands in for them here.
     const statics = new Proxy({}, { get: () => () => {} })

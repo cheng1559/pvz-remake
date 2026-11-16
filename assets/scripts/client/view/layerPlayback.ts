@@ -171,10 +171,14 @@ export class LayerPlayers {
                 else player.setTracksVisible(this.alone, false)
             }
             const playback = layerPlayback(layer.offset ? { ...what, time: what.time + layer.offset } : what, player.durationSeconds)
-            // It plays on between two times it is shown, and is set right by each.
+            // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
+            // one's 0, a chilled one's half).
             if (what.hidden) { if (layer.shown) player.hide() }
             else if (started || !layer.shown) player.play({ ...playback, hideOnFinish: false })
-            else player.seek(playback.timeSeconds)
+            else {
+                if (player.playbackRate !== playback.rate) player.setRate(playback.rate)
+                player.seek(playback.timeSeconds)
+            }
             layer.key = what.key
             layer.time = what.time
             layer.shown = !what.hidden
