@@ -71,14 +71,13 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         paused: boolean(levelSource.paused, 'server save.level.paused'),
     }
 
-    const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'])
+    const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks'])
     const economy = {
         sun: integer(economySource.sun, 'server save.economy.sun'),
         money: integer(economySource.money, 'server save.economy.money'),
         pendingSunSpend: integer(economySource.pendingSunSpend, 'server save.economy.pendingSunSpend'),
         packetUpgrades: nonNegativeInteger(economySource.packetUpgrades, 'server save.economy.packetUpgrades'),
         ...(economySource.firstCoinDropped === undefined ? {} : { firstCoinDropped: trueFlag(economySource.firstCoinDropped, 'server save.economy.firstCoinDropped') }),
-        ...(economySource.diamonds === undefined ? {} : { diamonds: trueFlag(economySource.diamonds, 'server save.economy.diamonds') }),
         ...(economySource.mowerCoinTicks === undefined ? {} : { mowerCoinTicks: nonNegativeInteger(economySource.mowerCoinTicks, 'server save.economy.mowerCoinTicks') }),
     }
     const seedBank = parseSeedBank(save.seedBank)

@@ -5,7 +5,7 @@ import {
     type ClientPresentationSnapshot,
 } from '@/client/game/ClientPresentationSnapshot'
 import { parseServerSaveSnapshot, type ServerSaveSnapshot } from '@/server/session/save'
-import { jsonRoundTrip, type EnabledMod } from '@/shared/protocol/index'
+import { jsonRoundTrip, sameMods, type EnabledMod } from '@/shared/protocol/index'
 
 export interface ContentSetSnapshot {
     base: EnabledMod
@@ -28,11 +28,6 @@ export type GameSaveInput = Omit<GameSave, 'schemaVersion'>
 
 export function createGameSave(input: GameSaveInput): GameSave {
     return parseGameSave({ schemaVersion: 2, ...input })
-}
-
-export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod): boolean {
-    return saved.id === installed.id && saved.version === installed.version
-        && saved.contentHash === installed.contentHash
 }
 
 export function parseGameSave(value: unknown): GameSave {
@@ -64,7 +59,7 @@ export function parseGameSave(value: unknown): GameSave {
     if (client.transport.highestEventId + 1 !== firstPendingEventId) {
         throw new TypeError('game save server events must continue after the client event baseline')
     }
-    if (!sameContentSet(server.mods, contentSet.mods)) {
+    if (!sameMods(server.mods, contentSet.mods)) {
         throw new TypeError('game save contentSet.mods must match server mods')
     }
 
@@ -101,11 +96,3 @@ function parseContent(value: unknown, name: string): EnabledMod {
     }
 }
 
-function sameContentSet(left: EnabledMod[], right: EnabledMod[]): boolean {
-    if (left.length !== right.length) return false
-    const byId = new Map(right.map(mod => [mod.id, mod]))
-    return left.every(mod => {
-        const other = byId.get(mod.id)
-        return other?.version === mod.version && other.contentHash === mod.contentHash
-    })
-}

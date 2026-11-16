@@ -1,6 +1,6 @@
 import type { World } from '@/ecs/index'
 import type { EnabledMod } from '@/shared/protocol/index'
-import { jsonRoundTrip } from '@/shared/protocol/index'
+import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
 import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { EventQueueResource } from '../state/events'
@@ -38,7 +38,8 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
         level: { phase: level.phase, result: level.result, paused: level.paused },
-        economy: asSaved(world.resources.get(EconomyStateResource)),
+        // The upgrades owned are the profile's, which a restore takes again (EconomyState.ownedUpgrades).
+        economy: asSaved({ ...world.resources.get(EconomyStateResource), ownedUpgrades: undefined }),
         ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: asSaved(world.resources.get(PacketUpgradeOfferResource)) } : {}),
         // A repick is not saved (savedSeedBank).
         seedBank: asSaved(savedSeedBank(world.resources.get(SeedBankResource))),
@@ -111,7 +112,9 @@ export function restoreSession(
         board,
         ...save.level,
     })
-    world.resources.set(EconomyStateResource, { ...jsonRoundTrip(save.economy), sun: Math.min(definitions.economy.maxSun, save.economy.sun) })
+    world.resources.set(EconomyStateResource, {
+        ...jsonRoundTrip(save.economy), sun: Math.min(definitions.economy.maxSun, save.economy.sun), ownedUpgrades: 0,
+    })
     if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, jsonRoundTrip(save.packetUpgradeOffer))
     world.resources.set(RandomResource, DeterministicRng.restore(save.random))
     world.resources.set(SeedBankResource, jsonRoundTrip(save.seedBank))
@@ -156,9 +159,3 @@ function asSaved<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T
 }
 
-function sameMods(saved: readonly EnabledMod[], expected: readonly EnabledMod[]): boolean {
-    return saved.length === expected.length && saved.every((mod, index) => {
-        const other = expected[index]
-        return mod.id === other.id && mod.version === other.version && mod.contentHash === other.contentHash
-    })
-}

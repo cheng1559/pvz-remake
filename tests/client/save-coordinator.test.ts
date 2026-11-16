@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { createGameSave, isCompatibleBaseContent, parseGameSave } from '@/app/SaveCoordinator'
+import { createGameSave, parseGameSave } from '@/app/SaveCoordinator'
+import { sameMod } from '@/shared/protocol/index'
 import type { ServerSaveSnapshot } from '@/server/session/save'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { ModHost } from '@/shared/mod/ModHost'
@@ -20,10 +21,10 @@ const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions
 
 test('base save compatibility requires matching identity, version and content hash', () => {
     const installed = { id: 'pvz', version: '2.0.0', contentHash: 'hash' }
-    assert.equal(isCompatibleBaseContent(installed, installed), true)
-    assert.equal(isCompatibleBaseContent({ ...installed, id: 'other:base' }, installed), false)
-    assert.equal(isCompatibleBaseContent({ ...installed, version: '1.0.0' }, installed), false)
-    assert.equal(isCompatibleBaseContent({ ...installed, contentHash: 'different-gameplay' }, installed), false)
+    assert.equal(sameMod(installed, installed), true)
+    assert.equal(sameMod({ ...installed, id: 'other:base' }, installed), false)
+    assert.equal(sameMod({ ...installed, version: '1.0.0' }, installed), false)
+    assert.equal(sameMod({ ...installed, contentHash: 'different-gameplay' }, installed), false)
 })
 
 test('LocalIntegratedGame uses real systems wrapped through the host', () => {

@@ -4,7 +4,7 @@ import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { loadInstalledMods } from './ModLoader'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from '@/shared/menu'
-import { createGameSave, isCompatibleBaseContent, parseGameSave, type GameSave } from './SaveCoordinator'
+import { createGameSave, parseGameSave, type GameSave } from './SaveCoordinator'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { LevelView } from '@/client/level/LevelView'
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/client/level/LevelScene'
 import { uiNode } from '@/client/view/uiNode'
 import { menuApi } from '@/client/api/MenuApi'
-import { levelStandsStill, type EnabledMod, type JsonValue } from '@/shared/protocol/index'
+import { levelStandsStill, sameMod, sameMods, type EnabledMod, type JsonValue } from '@/shared/protocol/index'
 import type { ServerSaveSnapshot } from '@/server/session/save'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
@@ -111,7 +111,7 @@ export function createLevelController(
             const { base } = content
             if (save) {
                 if (save.profileId !== await profileId()) throw new Error('GameSave belongs to another player profile')
-                if (!isCompatibleBaseContent(save.contentSet.base, base)) {
+                if (!sameMod(save.contentSet.base, base)) {
                     throw new IncompatibleSaveError('GameSave base content does not match the installed content')
                 }
                 if (!sameMods(save.contentSet.mods, content.enabledMods)) {
@@ -358,9 +358,3 @@ export function installLevelProbe(controller: LevelController): void {
     ;(globalThis as ProbeGlobal).pvzLevel = controller
 }
 
-function sameMods(left: readonly EnabledMod[], right: readonly EnabledMod[]): boolean {
-    return left.length === right.length && left.every((mod, index) => {
-        const other = right[index]
-        return mod.id === other.id && mod.version === other.version && mod.contentHash === other.contentHash
-    })
-}

@@ -164,8 +164,12 @@ export interface EconomyState {
     pendingSunSpend: number
     /** Board::mDroppedFirstCoin. */
     firstCoinDropped?: true
-    /** Diamonds drop only after the first seed-slot upgrade; before it they become gold. From the profile, like money. */
-    diamonds?: true
+    /**
+     * Seed-slot upgrades the player owns now (PlayerInfo::mPurchases), which Board::DropLootPiece reads for a diamond:
+     * the profile's, put in at start, by the store while the level is up, with a restore and by an upgrade bought in the
+     * level. Not saved: a restore takes it from the profile.
+     */
+    ownedUpgrades: number
     /**
      * Seed-slot upgrades owned (PlayerInfo::mPurchases); the chooser adds a slot for each (Board::GetNumSeedsInBank).
      * From the profile at start; a save keeps the count its bank was chosen with.

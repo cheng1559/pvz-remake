@@ -154,7 +154,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         money: packet.initialMoney,
         pendingSunSpend: 0,
         packetUpgrades: packet.packetUpgrades ?? 0,
-        ...(packet.packetUpgrades ? { diamonds: true as const } : {}),
+        ownedUpgrades: packet.packetUpgrades ?? 0,
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))

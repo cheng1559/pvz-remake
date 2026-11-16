@@ -15,6 +15,16 @@ export interface EnabledMod {
     contentHash: string
 }
 
+/** One Mod, the same version with the same content. */
+export function sameMod(left: EnabledMod, right: EnabledMod): boolean {
+    return left.id === right.id && left.version === right.version && left.contentHash === right.contentHash
+}
+
+/** The same Mods in the same order: a later Mod's definitions replace an earlier one's, so the order is part of the game. */
+export function sameMods(left: readonly EnabledMod[], right: readonly EnabledMod[]): boolean {
+    return left.length === right.length && left.every((mod, index) => sameMod(mod, right[index]))
+}
+
 export type GameCommand =
     | { type: 'mod'; id: string; data: JsonObject }
     /** `slot` picks one bank packet when the bank holds the seed more than once. */

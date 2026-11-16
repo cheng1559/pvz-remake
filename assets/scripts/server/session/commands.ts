@@ -40,8 +40,7 @@ export const commands = {
             // (SeedBank::UpdateWidth); a bank already in play keeps its size until the next level.
             const economy = world.resources.get(EconomyStateResource)
             economy.money = Math.min(session.definitions.economy.maxMoney, command.money)
-            if (command.packetUpgrades > 0) economy.diamonds = true
-            else delete economy.diamonds
+            economy.ownedUpgrades = command.packetUpgrades
             const bank = world.resources.get(SeedBankResource)
             if (bank.choosing === true && !bank.repick && command.packetUpgrades > economy.packetUpgrades) {
                 economy.packetUpgrades = command.packetUpgrades

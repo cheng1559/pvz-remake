@@ -61,7 +61,7 @@ export function packetUpgradeOffers(upgrades: number): TutorialScript {
                 const economy = world.resources.get(EconomyStateResource)
                 economy.money -= offer.cost
                 economy.packetUpgrades++
-                economy.diamonds = true
+                economy.ownedUpgrades++
                 emitServerEvent(events, 'packetUpgradePurchased', { cost: offer.cost, upgrades: economy.packetUpgrades })
                 tutorial.dialogIndex = pitch.accepted[0]
             } else {

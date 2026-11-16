@@ -1,5 +1,5 @@
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
-import type { EnabledMod, GameCommand, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
+import type { GameCommand, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processBoundaryCommands, processCommandPhase } from './commands'
 import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
@@ -41,22 +41,12 @@ export class IntegratedGameServer {
         // The purse lives in the profile and may have changed in the store since this save; take it from the session.
         const economy = this.session.world.resources.get(EconomyStateResource)
         economy.money = packet.initialMoney
-        if (packet.packetUpgrades) economy.diamonds = true
-        else delete economy.diamonds
+        economy.ownedUpgrades = packet.packetUpgrades ?? 0
         return this.snapshot()
     }
 
     save(): ServerSaveSnapshot {
         return saveSession(this.requireSession())
-    }
-
-    restore(value: unknown, expectedLevelId?: string, expectedMods?: readonly EnabledMod[]): WorldSnapshot {
-        const earned = this.session?.world.resources.get(AchievementsResource).earned
-        const cheatSeeds = this.session ? getDebugRules(this.session.world).cheatSeeds : false
-        this.session = restoreSession(this.content, value, expectedLevelId, expectedMods)
-        if (earned) this.session.world.resources.get(AchievementsResource).earned = earned
-        if (cheatSeeds) this.setCheatSeeds(true)
-        return this.snapshot()
     }
 
     private setCheatSeeds(cheatSeeds: boolean): void {

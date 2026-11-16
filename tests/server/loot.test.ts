@@ -17,11 +17,11 @@ const money = (game: LocalIntegratedGame) => game.render().items.filter(item => 
 
 test('Zombie::DropLoot: a zombie the level does not pick still drops at its own value (mZombieValue)', () => {
     /** What a replay of 1-1 (whose pool has only the plain zombie) drops for `typeId` on a roll of `roll`. */
-    const drop = (typeId: string, roll: number) => {
+    const drop = (typeId: string, roll: number, ownedUpgrades = 0) => {
         const world = new World()
         world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
         world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
-        world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0 })
+        world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades })
         world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
         world.resources.set(EventQueueResource, createEventQueue())
         dropZombieLoot(world, definitions, spawnZombie(world, definitions, typeId, 2, 500, 0), world)
@@ -31,6 +31,9 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
     assert.deepEqual(drop('pvz:normal', 2500), [], 'a plain zombie, worth 1')
     assert.deepEqual(drop('pvz:buckethead', 2500), ['pvz:coin_silver'], 'a buckethead outside the pool, worth its 4')
     assert.deepEqual(drop('pvz:buckethead', 4 * 2500), [])
+    // A diamond below 14 times it, gold while the player owns no seed-slot upgrade (mPurchases, as the drop comes).
+    assert.deepEqual(drop('pvz:normal', 13), ['pvz:coin_gold'])
+    assert.deepEqual(drop('pvz:normal', 13, 1), ['pvz:diamond'])
 })
 
 function play21(initialMoney: number, firstAdventure = true) {

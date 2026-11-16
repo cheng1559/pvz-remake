@@ -57,7 +57,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
     let roll = world.resources.get(RandomResource).integer(0, 29999)
     if (rules?.firstCoinAfterWave !== undefined && !economy.firstCoinDropped && world.resources.get(WaveResource).index > rules.firstCoinAfterWave) roll = 1000
     if (levelRule(world)?.dropLoot?.(world, definitions, x, y, roll, factor)) return
-    const typeId = roll < 14 * factor ? (economy.diamonds ? DIAMOND : GOLD) : roll < 250 * factor ? GOLD : roll < 2500 * factor ? SILVER : undefined
+    const typeId = roll < 14 * factor ? (economy.ownedUpgrades > 0 ? DIAMOND : GOLD) : roll < 250 * factor ? GOLD : roll < 2500 * factor ? SILVER : undefined
     if (!typeId) return
     if (rules?.savingsCap !== undefined) {
         // 2-1 keeps the seed-slot upgrade out of reach until 2-2's dialogue: count coins in flight and a gold coin for

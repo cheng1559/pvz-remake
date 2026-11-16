@@ -325,7 +325,7 @@ test("at the level's end each ready mower turns into gold where it waits, the lo
     createMower(world, 4)
     const running = readyMowers(world).get(0)!
     startMower(world, definitions, running)
-    world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, mowerCoinTicks: 1 })
+    world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades: 0, mowerCoinTicks: 1 })
     const commands = new CommandBuffer(world), coins: Array<[number, number]> = []
     for (let tick = 0; tick < 200; tick++) {
         updateMowerCoins(world, definitions, commands)
