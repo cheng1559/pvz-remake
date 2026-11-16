@@ -101,6 +101,8 @@ export class ZombieSystem implements GameSystem {
             }
             if (zombie.chilledTicks > 0) zombie.chilledTicks--
             if (zombie.riseTicks) {
+                // Zombie::Update stops a rising zombie before UpdatePlaying moves it, but UpdateReanim still plays its walk.
+                stepZombie(zombie, animation, random)
                 zombie.riseTicks--
                 continue
             }

@@ -244,3 +244,15 @@ test('a zombie that stops eating sets off again as StartWalkAnim does: a new spe
     // StartWalkAnim fixes the flag zombie's variant at 0: anim_walk2, from its start too.
     assert.ok(flags.every(entity => before.get(entity)!.walkClip === 'walk2' && eating.world.get(entity, ZombieComponent)!.walkClip === 'walk2'))
 })
+
+test('a zombie rising from a grave plays its walk in place (Zombie::UpdateReanim) and sets off once it is up', () => {
+    const { world, run } = game()
+    const entity = spawnZombie(world, definitions, 'pvz:normal', 2, 400, 270)
+    const zombie = world.get(entity, ZombieComponent)!
+    zombie.riseTicks = 3
+    const start = zombie.animations.body.time, x = world.get(entity, PositionComponent)!.x
+    run()
+    run()
+    assert.ok(zombie.animations.body.time > start, 'its arms swing as it comes up')
+    assert.equal(world.get(entity, PositionComponent)!.x, x, 'it stays at its grave')
+})

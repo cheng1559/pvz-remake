@@ -196,7 +196,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const body = zombie.animations[ZOMBIE_BODY_LAYER], last = this.stepped
         this.stepped = body && { clip: body.clip, time: body.time }
         const clip = body && this.animation.clips[body.clip], stage = this.context.stage
-        if (!stage || !clip?.ground || zombie.state !== 'walking' || last?.clip !== body.clip) return
+        // Zombie::UpdateZombieWalking, which a zombie rising from a grave does not run yet.
+        if (!stage || !clip?.ground || zombie.state !== 'walking' || zombie.riseTicks || last?.clip !== body.clip) return
         const mirrored = zombie.team === 'plants'
         for (const mark of steps.marks) {
             if (!passedMark(clip, last.time, body.time, mark.at)) continue
