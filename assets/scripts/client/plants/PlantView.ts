@@ -52,7 +52,6 @@ const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
-/** LawnMoweredZombie's locator once loaded, by the content it is of. */
 /** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
 let locator: { track?: ReanimTrack } | undefined
 

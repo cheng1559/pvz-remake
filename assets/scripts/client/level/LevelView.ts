@@ -48,15 +48,12 @@ const HAPTIC_STRENGTH: readonly HapticStyle[] = ['light', 'medium', 'heavy', 'ex
 
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
-/** Profile values the level shows: the house name and Dave's quotes. */
-/** `upgradeCost` is the seed-slot price Dave quotes; `nextUpgradeCost` replaces it once the offer is bought. */
 /**
- * `almanacZombies`: the almanac's zombies (their IDs) once the player has the almanac (LawnApp::CanShowAlmanac);
- * `store`: the player has the store (LawnApp::CanShowStore).
+ * Profile values the level shows: the house name and Dave's quotes. `upgradeCost` is the seed-slot price Dave quotes;
+ * `nextUpgradeCost` replaces it once the offer is bought. `almanacZombies`: the almanac's zombies (their IDs) once the
+ * player has the almanac (LawnApp::CanShowAlmanac); `store`: the player has the store (LawnApp::CanShowStore).
  */
 export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCost: number; almanacZombies?: string[]; store?: boolean }
-
-/** CRAZY_DAVE_1503 ({NO_CLICK} "How's that sound?") asks to buy the seed-slot upgrade it just quoted. */
 
 export class LevelView {
     /** The level rule's own view (the Whack-a-Zombie mallet); input passes it unclaimed clicks, the planting preview asks its canPlantAt. */
@@ -83,8 +80,10 @@ export class LevelView {
     private money?: number
     /** Called when the server's purse changes (collected money, `/money`); the app saves it to the profile. */
     onMoneyChanged?: (money: number) => void
-    /** Crazy Dave's seed-slot offer was answered; the app records the upgrade or the refusal in the profile. */
-    /** With the level's coins after the answer, so the profile saves both at once. */
+    /**
+     * Crazy Dave's seed-slot offer was answered; the app records the upgrade or the refusal in the profile, with the
+     * level's coins after the answer, so the profile saves both at once.
+     */
     onPacketUpgradeAnswered?: (accepted: boolean, coins: number) => void
     /** The level granted an achievement the player did not have; `shown` when it was announced in the level. */
     onAchievementEarned?: (id: string, shown: boolean) => void

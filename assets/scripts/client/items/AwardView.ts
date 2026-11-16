@@ -11,10 +11,6 @@ import { uiNode } from '@/client/view/uiNode'
 import type { ItemSnapshot } from '@/shared/protocol/index'
 import type { ItemViewContext } from './ItemView'
 
-/**
- * The level's award, an item of its own (Coin::Draw for the award coins): its picture, or the packet of the seed it gives
- * with a larger one for when it is shown off, with the arrow or glow behind it once it has landed.
- */
 /** A packet's cost (SeedPacket::DrawSeedPacket's FONT_PICO129). */
 const PACKET_COST_FONT = 'pvz:pico129'
 /** Coin::UpdateCollected: the ticks a collected award flies to the screen's middle over (easing out). */
@@ -22,6 +18,10 @@ const AWARD_MOVE_TICKS = 350
 /** Coin::UpdateCollected: the ticks it grows to twice its size over (easing in and out). */
 const AWARD_GROW_TICKS = 400
 
+/**
+ * The level's award, an item of its own (Coin::Draw for the award coins): its picture, or the packet of the seed it gives
+ * with a larger one for when it is shown off, with the arrow or glow behind it once it has landed.
+ */
 export class AwardView implements EntityView<ItemSnapshot> {
     /** The effects behind it. */
     static readonly BACK = 'AwardBackEffects'
