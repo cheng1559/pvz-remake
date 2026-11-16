@@ -283,6 +283,7 @@
   "pvz:football": {
     "packet": {"x": -7, "y": -9, "scale": 0.33},
     "portrait": {"x": 6, "y": 13, "scale": 0.5},
+    "almanacOffset": [-10, 0],
     "nameKey": "FOOTBALL_ZOMBIE",
     "shadow": {"x": 41, "y": -92, "backwardsX": -11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": [], "arm": ["zombie_football_leftarm_lower", "zombie_football_leftarm_hand"], "upperArm": "zombie_football_leftarm_upper", "ground": "_ground", "helms": ["zombie_football_helmet"]},

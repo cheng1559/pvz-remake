@@ -39,10 +39,11 @@ export class AlmanacEntityView extends Component {
 
     private async load(kind: 'plants' | 'zombies', typeId: string): Promise<void> {
         const body = uiNode({ name: 'Entity', parent: this.node, active: false }).node
+        // AlmanacDialog::DrawPlants and DrawZombies move some away from the usual place (`almanacOffset`).
+        const [x, y] = (await loadIntegratedGameContent()).presentation[kind][typeId]?.almanacOffset ?? [0, 0]
+        if (!isValid(this.node, true)) return
+        this.node.setPosition(this.node.position.x + x, this.node.position.y - y)
         if (kind === 'plants') {
-            const [x, y] = (await loadIntegratedGameContent()).presentation.plants[typeId]?.almanacOffset ?? [0, 0]
-            if (!isValid(this.node, true)) return
-            this.node.setPosition(this.node.position.x + x, this.node.position.y - y)
             this.view = this.plant = await createOffBoardPlant(body, typeId) ?? undefined
             if (!this.plant && isValid(body, true)) throw new Error(`Almanac plant has no animation: ${typeId}`)
         } else {

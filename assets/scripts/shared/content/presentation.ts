@@ -245,6 +245,8 @@ export interface ZombiePresentationDefinition {
     readonly packet?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
     /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
     readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
+    /** AlmanacDialog::DrawZombies: how far from a zombie's usual place the almanac's card shows it, in original Y-down pixels (the football zombie's 10 left). */
+    readonly almanacOffset?: readonly [number, number]
     readonly parts: ZombieParts
     /** Zombie::TakeDamage's bare arm: the upper arm's sprite once the arm has dropped. */
     readonly damagedArmSprite: string
@@ -993,6 +995,7 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
             x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
         }),
         portrait: (value, name) => allFields<NonNullable<Zombie['portrait']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
+        almanacOffset: pair,
         parts: parseZombieParts,
         damagedArmSprite: nonEmptyString,
         enragedHead: (value, name) => allFields<NonNullable<Zombie['enragedHead']>>(value, name, { track: nonEmptyString, sprite: nonEmptyString }),
