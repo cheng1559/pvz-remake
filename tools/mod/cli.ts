@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { copyFile, cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zipSync, type Zippable } from 'fflate'
@@ -165,6 +166,17 @@ async function pack(input: string, output?: string, publish?: string) {
 
 async function test(input: string) {
     const root = await modRoot(input)
+    // A Mod's source (its tables indexed, its modules not built) is packed first, to a directory of its own, and its pack
+    // is what runs, as a player gets it.
+    if (await exists(join(root, 'src')) || await indexesTables(root)) {
+        // The pack's ZIP is written beside it, inside the same temporary directory.
+        const directory = await mkdtemp(join(tmpdir(), 'pvz-mod-test-')), packed = join(directory, basename(root))
+        try {
+            await pack(root, packed)
+            await test(packed)
+        } finally { await rm(directory, { recursive: true, force: true }) }
+        return
+    }
     const manifest = await manifestAt(root)
     for (const path of runtimePaths(manifest)) {
         const file = inside(root, path)
@@ -192,6 +204,14 @@ function runTsc(source: string, outDir: string, module: 'ES2022' | 'System', roo
     const result = spawnSync(process.execPath, args, { cwd: projectRoot, stdio: 'inherit' })
     if (result.error) throw result.error
     if (result.status !== 0) throw new Error(`TypeScript ${module} build failed`)
+}
+
+/** A source content.json indexes its tables (`gameplay: {definitions: ...}`); a pack's names one file. */
+async function indexesTables(root: string): Promise<boolean> {
+    const file = join(root, 'content.json')
+    if (!await exists(file)) return false
+    const { gameplay, presentation } = JSON.parse(await readFile(file, 'utf8'))
+    return [gameplay, presentation].some(tables => tables !== undefined && typeof tables !== 'string')
 }
 
 async function modRoot(input: string) {

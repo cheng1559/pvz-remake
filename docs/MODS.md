@@ -118,7 +118,7 @@ export function register({ host, assets }) {
 
 `ModAssets.json()` 读取归档配置；客户端 `assets.sprite(path)` 按路径直接读取本 Mod 的图片，复用统一资源解码与缓存，其他包无法替换；`assets.spriteResource(id)` 按资源 ID 读取，Mod 在自己的 `content.json` 登记 ID 后，优先级更高的包（如高清包）可用同一 ID 替换。纯资源、数据和脚本 Mod 使用同一个加载入口；注册失败会撤销该 Mod 的注册和方法包装，并跳过依赖它的 Mod。
 
-`mod:test` 校验已打包目录的真实服务端注册，不重新编译，不代替客户端或真机画面验收。修改后需要重新打包、安装并重启。
+`mod:test` 校验已打包目录的真实服务端注册，不重新编译；给它 Mod 源码（如 `npm run mod:test -- example`）时先打包到临时目录、校验那份包。它不代替客户端或真机画面验收。修改后需要重新打包、安装并重启。
 
 ## 修改服务端规则
 
