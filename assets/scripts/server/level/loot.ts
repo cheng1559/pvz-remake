@@ -1,8 +1,9 @@
 import type { CommandBuffer, World } from '@/ecs/index'
-import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
 } from '../state/components'
+import { readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from './itemSpawn'
@@ -61,7 +62,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
     if (rules?.savingsCap !== undefined) {
         // 2-1 keeps the seed-slot upgrade out of reach until 2-2's dialogue: count the mowers' gold and coins in flight.
         let money = economy.money + definitions.items[typeId].value
-        money += world.resources.get(LevelStateResource).mowerRows.length * definitions.items[GOLD].value
+        money += readyMowers(world).size * definitions.items[GOLD].value
         for (const entity of world.query(ItemComponent)) {
             const item = world.get(entity, ItemComponent)!
             if (item.state === 'collecting' && definitions.items[item.typeId]?.kind === 'money') money += item.value
@@ -87,15 +88,19 @@ export function spawnLoot(world: World, definitions: GameplayDefinitions, comman
     return entity
 }
 
-/** Board::UpdateLevelEndSequence: 200 ticks after the award, the lowest unused mower turns into gold every 40 ticks. */
+/**
+ * Board::UpdateLevelEndSequence: 200 ticks after the award, the lowest ready mower (GetBottomLawnMower) turns into gold
+ * every 40 ticks, where it waits, and is gone (LawnMower::Die).
+ */
 export function updateMowerCoins(world: World, definitions: GameplayDefinitions, commands: CommandBuffer): void {
     const economy = world.resources.get(EconomyStateResource)
     if (economy.mowerCoinTicks === undefined || --economy.mowerCoinTicks > 0) return
-    const level = world.resources.get(LevelStateResource)
-    if (!level.mowerRows.length) { delete economy.mowerCoinTicks; return }
+    const ready = readyMowers(world)
+    if (!ready.size) { delete economy.mowerCoinTicks; return }
     economy.mowerCoinTicks = 40
-    const row = Math.max(...level.mowerRows)
-    spawnLoot(world, definitions, commands, GOLD, MOWER_READY_X + 40, mowerY(level.board, row) + 40, false, true)
-    emitServerEvent(world.resources.get(EventQueueResource), 'mowerScored', { row, remaining: level.mowerRows.length })
-    level.mowerRows = level.mowerRows.filter(waiting => waiting !== row)
+    const row = Math.max(...ready.keys()), mower = ready.get(row)!, { x, y } = world.get(mower, PositionComponent)!
+    spawnLoot(world, definitions, commands, GOLD, x + 40, y + 40, false, true)
+    // CountUntriggerLawnMowers, as the coin's note is pitched by it, still counts this one.
+    emitServerEvent(world.resources.get(EventQueueResource), 'mowerScored', { row, remaining: ready.size })
+    commands.destroyEntity(mower)
 }

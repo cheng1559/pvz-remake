@@ -13,6 +13,7 @@
         "mod:init": "tsx tools/mod/cli.ts init",
         "mod:test": "tsx tools/mod/cli.ts test",
         "mod:pack": "tsx tools/mod/cli.ts pack",
+        "mod:hosts": "tsx tools/mod/cli.ts hosts",
         "typecheck:server": "tsc -p tsconfig.server.json",
         "test:server": "npm run typecheck:server && tsx --tsconfig tsconfig.server.json --test \"tests/**/*.test.ts\"",
         "test:tools": "python3 -m unittest discover -s tests/tools",

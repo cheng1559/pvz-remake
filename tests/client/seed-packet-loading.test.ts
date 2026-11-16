@@ -57,7 +57,7 @@ test('namespaced Mod packets keep their ID and are drawn by their plant view', a
     let view: { players: any[] } | null = { players: [{ pause() { paused.push('body') } }, { pause() { paused.push('head') } }] }
     modules['@/client/view/offBoard'].createOffBoardPlant = async (_node: Node, typeId: string, options: unknown) => {
         drawn.push([typeId, options])
-        return view && { view }
+        return view
     }
     const preview = new classes.PlantPreview(), root = new Node()
     Object.assign(preview, { definitions, rendered: root })

@@ -28,7 +28,7 @@ export class MenuApi {
     selectUser(id: number) { return this.request('selectUser', { id }) }
     deleteUser(id: number) { return this.request('deleteUser', { id }) }
     getStore() { return this.request('getStore', {}) }
-    purchase(userId: number, itemId: number, expectedCost: number) { return this.request('purchase', { userId, itemId, expectedCost }) }
+    purchase(userId: number, itemId: string, expectedCost: number) { return this.request('purchase', { userId, itemId, expectedCost }) }
     getSettings() { return this.request('getSettings', {}) }
     updateSettings(patch: Partial<Omit<MenuSettings, 'version'>>) { return this.request('updateSettings', { patch }) }
     getChallenges(page: MenuEndpoints['getChallenges']['args']['page']) { return this.request('getChallenges', { page }) }

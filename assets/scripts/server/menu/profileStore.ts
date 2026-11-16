@@ -1,4 +1,6 @@
 import type { MenuStorage } from '@/shared/menu'
+import type { ZenGardenPlant } from '@/shared/content/gameplay'
+import { isQualifiedId } from '@/shared/mod'
 
 const PROFILE_VERSION = 1
 const PROFILE_REGISTRY_KEY = 'pvz-remake:profiles:registry'
@@ -6,24 +8,11 @@ const PROFILE_DATA_KEY_PREFIX = 'pvz-remake:profiles:'
 const DEFAULT_PROFILE_NAME = 'Player'
 const MAX_PROFILES = 200
 const CHALLENGE_RECORD_COUNT = 100
-const PURCHASE_COUNT = 80
 
-export interface PersistedPottedPlant {
-    /** The potted plant's ID. */
-    plant: string
-    whichZenGarden: string
+/** A potted plant in its spot of its garden. */
+export interface PersistedPottedPlant extends ZenGardenPlant {
     x: number
     y: number
-    facing: 'left' | 'right'
-    lastWateredTime: number
-    drawVariation: string
-    plantAge: string
-    timesFed: number
-    feedingsPerGrow: number
-    plantNeed: string
-    lastNeedFulfilledTime: number
-    lastFertilizedTime: number
-    lastChocolateTime: number
 }
 
 export interface PlayerProfile {
@@ -35,7 +24,8 @@ export interface PlayerProfile {
     coins: number
     finishedAdventure: number
     challengeRecords: number[]
-    purchases: number[]
+    /** PlayerInfo::mPurchases: what each store item's purchases left, by the item's ID (none for one never bought). */
+    purchases: Record<string, number>
     /**
      * The seeds the player owns beyond the starting ones (LawnApp::HasSeedType): level awards add theirs when the level
      * is won, and the store adds the plants it sells.
@@ -109,11 +99,16 @@ export function createProfileStore(storage: MenuStorage) {
         return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
     }
 
+    function purchases(value: unknown): Record<string, number> {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+        return Object.fromEntries(Object.entries(value).flatMap(([id, count]) => isQualifiedId(id) && Number(count) ? [[id, Number(count)]] : []))
+    }
+
     function cloneProfile(profile: PlayerProfile): PlayerProfile {
         return {
             ...profile,
             challengeRecords: [...profile.challengeRecords],
-            purchases: [...profile.purchases],
+            purchases: { ...profile.purchases },
             seeds: [...profile.seeds],
             unlocks: [...profile.unlocks],
             pottedPlants: profile.pottedPlants.map((plant) => ({ ...plant })),
@@ -140,7 +135,7 @@ export function createProfileStore(storage: MenuStorage) {
             coins: 0,
             finishedAdventure: 0,
             challengeRecords: createArray(CHALLENGE_RECORD_COUNT, 0),
-            purchases: createArray(PURCHASE_COUNT, 0),
+            purchases: {},
             seeds: [],
             unlocks: [],
             playTimeActivePlayer: 0,
@@ -182,9 +177,7 @@ export function createProfileStore(storage: MenuStorage) {
         profile.challengeRecords = [
             ...createArray(CHALLENGE_RECORD_COUNT, 0).map((_, index) => Number(raw.challengeRecords?.[index] ?? 0) || 0),
         ]
-        profile.purchases = [
-            ...createArray(PURCHASE_COUNT, 0).map((_, index) => Number(raw.purchases?.[index] ?? 0) || 0),
-        ]
+        profile.purchases = purchases(raw.purchases)
         profile.seeds = ids(raw.seeds)
         profile.unlocks = ids(raw.unlocks)
         profile.playTimeActivePlayer = Number(raw.playTimeActivePlayer ?? 0) || 0

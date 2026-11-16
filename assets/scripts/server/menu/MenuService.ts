@@ -4,7 +4,7 @@ import type { AlmanacCatalog } from './almanacCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
 import { createProfileStore, type PlayerProfile } from './profileStore'
-import { packetSeed, type StoreCatalog } from './storeCatalog'
+import type { StoreCatalog } from './storeCatalog'
 
 function userView(profile: PlayerProfile | null): UserView | null {
     if (!profile) return null
@@ -216,19 +216,16 @@ export class MenuService {
         return user ? { ok: true, user: userView(user) } : { ok: false, code: 'duplicateName' }
     }
 
+    /** The seed-slot upgrade, the store's one item with that effect (checked as the store is read). */
     private get packetUpgrade() {
-        const upgrade = this.storeCatalog.STORE_PAGES.flat().find(item => item.effect === 'seedSlots')
-        if (!upgrade) throw new Error('Store has no seed-slot upgrade')
-        return upgrade
+        return this.storeCatalog.items.find(item => item.effect === 'seedSlots')!
     }
 
     private purse(): PurseView {
         const profile = this.profiles.getCurrentProfile()
         if (!profile) throw new Error('Coins require a player profile')
         const upgrade = this.packetUpgrade, owned = profile.purchases[upgrade.id] ?? 0
-        const purchases = [...profile.purchases]
-        purchases[upgrade.id] = owned + 1
-        const next = { ...profile, purchases }
+        const next = { ...profile, purchases: { ...profile.purchases, [upgrade.id]: owned + 1 } }
         return {
             coins: profile.coins, packetUpgrades: owned, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile),
             nextPacketUpgradeCost: this.storeCatalog.itemCost(upgrade, next), declinedPacketUpgrades: profile.declinedPacketUpgrades,
@@ -237,32 +234,27 @@ export class MenuService {
     }
 
     private store(): StoreView {
-        const { STORE_PAGES, storePages, itemCost, itemState, itemDetails } = this.storeCatalog
+        const { storePages, itemCost, itemState, itemDetails } = this.storeCatalog
         const profile = this.profiles.getCurrentProfile()
         if (!profile) throw new Error('Store requires a player profile')
         return {
-            userId: profile.id, playerName: profile.name, coins: profile.coins,
-            speech: this.storeCatalog.speech(profile),
-            pages: storePages(profile).map(id => ({ id, items: STORE_PAGES[id].map((item): StoreItemView => ({
-                id: item.id,
-                ...(item.sprite !== undefined && { sprite: item.sprite }),
-                ...(packetSeed(item) !== undefined && { seed: packetSeed(item) }),
-                ...(item.offset !== undefined && { offset: item.offset }),
-                highlight: item.highlight ?? (packetSeed(item) !== undefined ? { type: 'seedPacket' }
-                    : item.sprite ? { type: 'additive', opacity: 96 } : { type: 'none' }),
+            userId: profile.id, playerName: profile.name, coins: profile.coins, finishedAdventure: profile.finishedAdventure > 0,
+            pages: storePages(profile).map(page => ({ id: page.id, items: page.items.map((item): StoreItemView => ({
+                id: item.id, place: item.place,
+                ...(item.purchase.kind === 'seed' && { seed: item.purchase.id }),
                 cost: itemCost(item, profile), affordable: profile.coins >= itemCost(item, profile), state: itemState(item, profile, this.now()),
                 ...itemDetails(item, profile),
             })) })),
         }
     }
 
-    private purchase(args: { userId: number, itemId: number, expectedCost: number }) {
-        const { STORE_PAGES, storePages, itemState, itemCost, purchaseItem, purchaseEffect } = this.storeCatalog
+    private purchase(args: { userId: number, itemId: string, expectedCost: number }) {
+        const { storePages, itemState, itemCost, purchaseItem, purchaseEffect } = this.storeCatalog
         const profile = this.profiles.getCurrentProfile()
         if (!profile || profile.id !== args.userId) return { ok: false as const, code: 'profileChanged' as const }
-        const item = STORE_PAGES.flat().find(item => item.id === args.itemId)
+        const item = this.storeCatalog.item(args.itemId)
         const reject = (code: 'notAvailable' | 'insufficientFunds' | 'priceChanged') => ({ ok: false as const, code, store: this.store() })
-        if (!item || !storePages(profile).some(page => STORE_PAGES[page].includes(item)) || itemState(item, profile, this.now()) !== 'available') return reject('notAvailable')
+        if (!item || !storePages(profile).some(page => page.items.includes(item)) || itemState(item, profile, this.now()) !== 'available') return reject('notAvailable')
         if (itemCost(item, profile) !== args.expectedCost) return reject('priceChanged')
         if (!purchaseItem(item, profile, this.now())) return reject('insufficientFunds')
         this.profiles.saveProfile(profile)

@@ -11,8 +11,8 @@ import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
 import { chooserOffer, seedBankStart } from '../seeds/seedChooser'
-import { TUTORIALS } from '../tutorials'
-import { createMowerSystem } from '../level/mower'
+import { levelTutorial, TutorialsResource } from '../tutorials'
+import { createMower, createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
 import { createPlantChillSystem } from '../plants/chill'
@@ -82,6 +82,7 @@ export function createWorld(content: ServerContent): World {
     const world = new World()
     world.resources.set(ZombieBehaviorsResource, content.gameplay.zombieBehaviors)
     world.resources.set(ProjectileMotionsResource, content.gameplay.projectileMotions)
+    world.resources.set(TutorialsResource, content.gameplay.tutorials)
     world.resources.set(AchievementsResource, {
         definitions: content.definitions.achievements, earned: new Set<string>(), progress: {},
     })
@@ -147,7 +148,6 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         phase: 'intro',
         result: 'playing',
         paused: false,
-        mowerRows: [...level.activeRows],
     })
     world.resources.set(EconomyStateResource, {
         sun: Math.min(definitions.economy.maxSun, level.startingSun),
@@ -177,6 +177,8 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         world.resources.get(SeedBankResource).conveyor = { nextId: 1, spawnAtTick: level.conveyor.spawnDelay[0].ticks, moveTicks: 0, packets: [] }
     }
     for (const plant of level.initialPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column, plant.team)
-    if (packet.firstAdventure) for (const plant of TUTORIALS[level.tutorial]?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
+    if (packet.firstAdventure) for (const plant of levelTutorial(world)?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
+    // CutScene::PlaceLawnItems: a mower for every row in play (Board::InitLawnMowers), which the intro rolls in.
+    for (const row of level.activeRows) createMower(world, row)
     return session
 }

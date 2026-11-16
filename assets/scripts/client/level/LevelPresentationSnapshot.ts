@@ -37,7 +37,7 @@ export interface LevelIntroPreviewSnapshot {
     y: number
     z: number
     hasTongue: boolean
-    /** What its view keeps (ZombieView.snapshot's data), read back by the view. */
+    /** What its view keeps (ZombieView.playbackSnapshot), read back by the view (restorePlayback). */
     view: JsonObject
 }
 
@@ -118,7 +118,7 @@ export interface LevelParticleSnapshot {
 }
 
 export interface LevelPresentationSnapshot {
-    schemaVersion: 4
+    schemaVersion: 5
     flow: LevelFlowSnapshot
     intro: LevelIntroSnapshot
     end: LevelEndSnapshot
@@ -126,6 +126,8 @@ export interface LevelPresentationSnapshot {
     hud: LevelHudSnapshot
     audio: LevelAudioSnapshot
     entities: LevelEntitySnapshot[]
+    /** The board's plant and zombie flashes (EntityFlashes), by entity. */
+    flashes: FlashSnapshot[]
     particles: LevelParticleSnapshot[]
     extensions: Record<string, JsonValue>
 }
@@ -134,9 +136,9 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
     assertJsonValue(value)
     const source = exact(value, [
         'schemaVersion', 'flow', 'intro', 'end', 'advice', 'hud',
-        'audio', 'entities', 'particles', 'extensions',
+        'audio', 'entities', 'flashes', 'particles', 'extensions',
     ], 'Level presentation')
-    if (source.schemaVersion !== 4) throw new TypeError('Level presentation.schemaVersion must be 4')
+    if (source.schemaVersion !== 5) throw new TypeError('Level presentation.schemaVersion must be 5')
 
     const flow = parseFlow(source.flow)
     const intro = parseIntro(source.intro)
@@ -148,7 +150,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
     }
 
     return {
-        schemaVersion: 4,
+        schemaVersion: 5,
         flow,
         intro,
         end,
@@ -156,6 +158,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
         hud: parseHud(source.hud),
         audio: parseAudio(source.audio),
         entities,
+        flashes: parseFlashes(source.flashes),
         particles,
         extensions: parseExtensions(source.extensions),
     }
@@ -271,20 +274,22 @@ export function viewSaveData(snapshot: LevelEntitySnapshot, keys: readonly strin
     return exact(snapshot.data, keys, `${snapshot.kind} ${snapshot.entityId} view data`, optional)
 }
 
-/** A flash a view keeps (EntityFlashes), if it kept one. */
-export function parseSavedFlash(value: unknown, name: string): FlashSnapshot | undefined {
-    return value === undefined ? undefined : parseFlash(value, name)
-}
-
 /** A Reanim player's place in its clip, or none. */
 export function parseSavedPlayback(value: unknown): ReanimPlaybackSnapshot | null {
     return value === null ? null : parseReanimPlaybackSnapshot(value)
 }
 
+function parseFlashes(value: unknown): FlashSnapshot[] {
+    const flashes = array(value, 'Level flashes').map((value, index) => parseFlash(value, `Level flashes[${index}]`))
+    unique(flashes.map(flash => flash.entityId), 'Level flash entity ID')
+    return flashes.sort((left, right) => left.entityId - right.entityId)
+}
+
 function parseFlash(value: unknown, name: string): FlashSnapshot {
-    const flash = exact(value, ['tick', 'ticks'], name, ['through', 'past'])
+    const flash = exact(value, ['entityId', 'tick', 'ticks'], name, ['through', 'past'])
     for (const key of ['through', 'past']) if (flash[key] !== undefined && flash[key] !== true) throw new TypeError(`${name}.${key} must be true`)
     return {
+        entityId: positiveInteger(flash.entityId, `${name}.entityId`),
         tick: nonNegativeInteger(flash.tick, `${name}.tick`),
         ticks: nonNegativeInteger(flash.ticks, `${name}.ticks`),
         ...(flash.through ? { through: true as const } : {}),

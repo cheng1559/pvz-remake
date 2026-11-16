@@ -1,0 +1,15 @@
+{
+  "readyDelay": 1.2,
+  "descriptionDuration": 1,
+  "ambient": {
+    "initialDelay": 2,
+    "interval": [5, 10],
+    "duration": 8,
+    "messages": [
+      {"message": 2015, "weight": 100},
+      {"message": 2016, "weight": 100},
+      {"message": 2017, "weight": 100},
+      {"message": 2018, "weight": 20, "completed": true}
+    ]
+  }
+}

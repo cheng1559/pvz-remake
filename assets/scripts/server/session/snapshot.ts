@@ -1,6 +1,10 @@
-import type { JsonObject, PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
+import type { World } from '@/ecs/index'
+import type { PlantSnapshot, ProjectileSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
-import { EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent, type Plant, type Position } from '../state/components'
+import {
+    EconomyStateResource, LevelStateResource, MowedPlantComponent, MowerComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent,
+    SeedBankResource, ZombieComponent, type Plant, type Position,
+} from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { heightOverRow, ProjectileMotionsResource } from '../combat/motions'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
@@ -80,15 +84,13 @@ export const snapshot = {
                 ...position,
             }
         })
-        const motions = world.resources.get(ProjectileMotionsResource)
-        const projectiles = [...world.query(PositionComponent, ProjectileComponent)].map(entity => {
-            const position = world.get(entity, PositionComponent)!
-            const projectile = world.get(entity, ProjectileComponent)!
-            const motion = motions.of(projectile)
-            const height = motion.height?.(projectile.motionState) ?? heightOverRow(world, projectile.definition, position), facing = motion.facing?.(projectile.motionState)
-            const lift = motion.lift?.(projectile.motionState) ?? 0
-            return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}),
-                ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }) }
+        // A mower set off runs as a projectile, but is listed with the mowers it is, as it waited.
+        const projectiles = [...world.query(PositionComponent, ProjectileComponent)].filter(entity => !world.has(entity, MowerComponent))
+            .map(entity => projectileSnapshot(world, entity))
+        const mowers: WorldSnapshot['mowers'] = [...world.query(PositionComponent, MowerComponent)].map(entity => {
+            const { state } = world.get(entity, MowerComponent)!
+            return state === 'triggered' ? { ...projectileSnapshot(world, entity), state }
+                : { entityId: entity, typeId: level.definition.lawnMower, ...world.get(entity, PositionComponent)!, state }
         })
         const items = [...world.query(PositionComponent, ItemComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -111,7 +113,6 @@ export const snapshot = {
         const owned = tools.owned(session), script = getActiveTutorial(world)
         const question = tutorial.dialogIndex === undefined ? undefined : script?.dialogQuestion?.(world, definitions)
         const ruleSnapshot = levelRule(world)?.snapshot?.(world)
-        const dialog: JsonObject | undefined = tutorial.dialogIndex === undefined ? undefined : { index: tutorial.dialogIndex, ...(question ? { question } : {}) }
         return {
             levelId: level.id,
             tick,
@@ -142,28 +143,47 @@ export const snapshot = {
             zombies,
             projectiles,
             items,
-            mowerRows: [...level.mowerRows],
+            mowers,
             tutorial: { step: tutorial.step, ...(script?.dave ? { dave: true } : {}), ...(script?.toolsInIntro ? { toolsInIntro: true } : {}) },
+            ...(owned.length ? { tools: { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),
+            ...(seedBank.conveyor ? { conveyor: { ticks: seedBank.conveyor.moveTicks } } : {}),
+            ...(tutorial.dialogIndex === undefined ? {} : { dialog: { index: tutorial.dialogIndex, ...(question ? { question } : {}) } }),
+            ...(world.resources.has(DebugRulesResource) ? { debug: { ...getDebugRules(world) } } : {}),
             extensions: { ...gameplay.components.snapshot(world),
-                ...(owned.length ? { 'pvz:tools': { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),
-                ...(seedBank.conveyor ? { 'pvz:conveyor': { ticks: seedBank.conveyor.moveTicks } } : {}),
-                ...(dialog ? { 'pvz:dialog': dialog } : {}),
-                ...(ruleSnapshot ? { [level.definition.rules!.kind]: ruleSnapshot } : {}),
-                ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
+                ...(ruleSnapshot ? { [level.definition.rules!.kind]: ruleSnapshot } : {}) },
         }
     },
 }
 
+/** A projectile as a view draws it: where it is, and how high, how far thrown and which way it points, by its motion. */
+function projectileSnapshot(world: World, entity: number): ProjectileSnapshot {
+    const position = world.get(entity, PositionComponent)!
+    const projectile = world.get(entity, ProjectileComponent)!
+    const motion = world.resources.get(ProjectileMotionsResource).of(projectile)
+    const height = motion.height?.(projectile.motionState) ?? heightOverRow(world, projectile.definition, position), facing = motion.facing?.(projectile.motionState)
+    const lift = motion.lift?.(projectile.motionState) ?? 0
+    return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}),
+        ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }) }
+}
+
 /**
- * A plant as a view draws it, standing or mowed: the server's own counters (its blink, its last bite) left out, its
- * layers at the rates a view plays them at (a chilled plant's are halved).
+ * A plant as a view draws it, standing or mowed, field by field: the server's own counters (its seed, its blink, its
+ * last bite) stay on the server, and its layers go at the rates a view plays them at (a chilled plant's are halved).
  */
-function plantSnapshot(entityId: number, source: Plant, position: Position): PlantSnapshot {
-    const { chilledTicks, seedId: _seed, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant } = source
+function plantSnapshot(entityId: number, plant: Plant, position: Position): PlantSnapshot {
     return {
-        entityId, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
+        entityId,
+        typeId: plant.typeId,
+        x: position.x,
+        y: position.y,
+        row: position.row,
+        column: plant.column,
+        health: plant.health,
+        maxHealth: plant.maxHealth,
         ...(plant.ability ? { ability: { ...plant.ability } } : {}),
-        ...(plant.animations ? { animations: pacedLayers(plant.animations, () => plantPace(source)) } : {}),
+        ...(plant.team === undefined ? {} : { team: plant.team }),
+        ...(plant.chilledTicks ? { chilledTicks: plant.chilledTicks } : {}),
+        ...(plant.animations ? { animations: pacedLayers(plant.animations, () => plantPace(plant)) } : {}),
         ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
     }
 }

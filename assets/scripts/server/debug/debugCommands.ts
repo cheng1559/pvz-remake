@@ -10,7 +10,8 @@ import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../level/graves'
 import { startRepick } from '../seeds/seedChooser'
-import { startMower } from '../level/mower'
+import { createMower, startMower } from '../level/mower'
+import { readyMowers } from '../level/lawn'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
@@ -206,12 +207,13 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         case 'lawnmower': {
             const row = args[1] === undefined ? undefined : position(args[1])?.row
             if (args[1] !== undefined && row === undefined) return invalidPosition()
-            // `trigger` sets the rows' waiting mowers off; `reset` puts one back where it has gone, whatever it is doing.
-            const trigger = args[0].toLowerCase() === 'trigger', level = world.resources.get(LevelStateResource)
-            const rows = level.definition.activeRows.filter(active => (row === undefined || active === row) && level.mowerRows.includes(active) === trigger)
+            // `trigger` sets the rows' waiting mowers off; `reset` puts a new one down where one has gone, whatever that
+            // one is doing.
+            const trigger = args[0].toLowerCase() === 'trigger', level = world.resources.get(LevelStateResource), ready = readyMowers(world)
+            const rows = level.definition.activeRows.filter(active => (row === undefined || active === row) && ready.has(active) === trigger)
             for (const changed of rows) {
-                if (trigger) startMower(world, definitions, changed)
-                else level.mowerRows = [...level.mowerRows, changed].sort((left, right) => left - right)
+                if (trigger) startMower(world, definitions, ready.get(changed)!)
+                else createMower(world, changed)
             }
             return rows.length ? debugSuccess(`Changed ${rows.length} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')
         }

@@ -8,9 +8,10 @@ import { ItemView } from '@/client/items/ItemView'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { ZombieView } from '@/client/zombies/ZombieView'
 import { renderOrder } from '@/shared/content/renderOrder'
+import { EntityFlashes } from './EntityFlashes'
 import { boardToLayer, type StageEvent } from './LevelStage'
 
-/** Whether a handler hears of its event before the frame's entities go, or once the frame is drawn. */
+/** Whether a handler hears of its event before the frame's entities go and its views draw it, or once the frame is drawn. */
 export type StageEventTime = 'before' | 'after'
 
 /**
@@ -27,7 +28,8 @@ const planted: StageEvent = (stage, event, world) => {
 /**
  * Who hears of an event of the server on the board: the views whose entity it is about (their static handlers), and the
  * board's own effects. What falls off a zombie is heard of `before` the frame's entities go, so it leaves from the
- * zombie as it was; the rest once the frame is drawn. Mods add handlers for their own events or the base's.
+ * zombie as it was, and a flash (EntityFlashes) before the views draw the frame, which shows it; the rest once the frame
+ * is drawn. Mods add handlers for their own events or the base's.
  */
 export class StageEventRegistry {
     private readonly handlers = new Map<string, Record<StageEventTime, StageEvent[]>>()
@@ -36,6 +38,8 @@ export class StageEventRegistry {
     constructor() {
         const before: Record<string, StageEvent> = {
             zombieHelmDropped: ZombieView.armorDropped, zombieShieldDropped: ZombieView.armorDropped, zombiePartDropped: ZombieView.partDropped,
+            zombieChewedPlant: EntityFlashes.plantHit, plantHit: EntityFlashes.plantHit, sunProduced: EntityFlashes.produced, sunDrained: EntityFlashes.produced,
+            zombieHit: EntityFlashes.zombieHit, zombieBurned: EntityFlashes.zombieBurned,
         }
         const after: Record<string, StageEvent> = {
             plantPlaced: planted, zombiePlaced: planted, gravePlaced: planted,

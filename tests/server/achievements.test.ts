@@ -21,7 +21,7 @@ function debug(server: IntegratedGameServer, command: string) {
 function begin(levelId: string, packet: Partial<StartSessionPacket> = {}) {
     const server = new IntegratedGameServer(definitions, levels)
     server.start({ ...options, levelId, ownedSeeds: adventureSeeds(levels, levelId), ...packet })
-    while (server.snapshot().extensions['pvz:dialog']) runCommand(server, { type: 'advanceDialog' })
+    while (server.snapshot().dialog) runCommand(server, { type: 'advanceDialog' })
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
     return server
 }

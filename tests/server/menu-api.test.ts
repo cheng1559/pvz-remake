@@ -1,5 +1,6 @@
 import { readBaseContent } from '../../tools/mod/content'
 import { readGameplaySource } from '../../tools/mod/content'
+import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
@@ -9,7 +10,7 @@ import { createProfileStore } from '@/server/menu/profileStore'
 import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { createStoreCatalog } from '@/server/menu/storeCatalog'
 import { SFX_VOLUME_SCALE, type MenuStorage } from '@/shared/menu'
-import type { GameplayLevels, LevelDefinition } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, type GameplayLevels, type LevelDefinition } from '@/shared/content/gameplay'
 
 function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () => boolean) {
     const data = new Map<string, string>()
@@ -21,35 +22,40 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
         get length() { return data.size },
     }
     const profiles = createProfileStore(storage)
-    const catalog = createStoreCatalog(readGameplaySource('store'))
-    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog, createAlmanacCatalog(readGameplaySource('almanac')),
-        readGameplaySource('definitions')))
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
+    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, createStoreCatalog(definitions), createAlmanacCatalog(definitions),
+        definitions))
     return { data, storage, profiles, api }
 }
 
-test('shop rules, tiers and purchase effects follow JSON after changing the item ID', async () => {
-    const definition = readGameplaySource('store')
-    const upgrade = definition.pages[0].items[0]
-    upgrade.id = 39
-    upgrade.prices[0] = 123
-    upgrade.messages[0] = 9000
-    upgrade.seedSlots[0] = 8
+test('shop rules, tiers and purchase effects follow the store table, for a Mod\'s item as for the base\'s', async () => {
+    const upgrade = readGameplaySource('definitions').store['pvz:packet-upgrade']
+    // A Mod sells its own seed-slot upgrade in the base's place, and moves the base's off the store.
+    const { definitions } = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
+        store: { 'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001], seedSlots: [8, 9] } },
+        overrides: { store: { 'pvz:packet-upgrade': { page: 'test:page', place: 0, cost: 1, message: 1, purchase: { kind: 'set', value: 1 } } } },
+        storePages: { 'test:page': { completed: true } },
+    } }])
     const { storage, profiles } = fixture()
     const profile = profiles.createProfile('Alice')!
     profile.coins = 10000
     profiles.saveProfile(profile)
-    const api = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, createStoreCatalog(definition)))
-    const item = (await api.getStore()).pages[0].items.find(item => item.id === 39)!
+    const api = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, createStoreCatalog(definitions)))
+    const store = await api.getStore()
+    assert.deepEqual(store.pages.map(page => page.id), ['pvz:slot-upgrades'], 'a page shows by its own rule')
+    const item = store.pages[0].items.find(item => item.id === 'test:upgrade')!
+    assert.equal(item.place, 0)
     assert.equal(item.cost, 123)
     assert.equal(item.message, 9000)
     assert.equal(item.seedSlots, 8)
-    const result = await api.purchase(profile.id, 39, 123)
+    const result = await api.purchase(profile.id, 'test:upgrade', 123)
     assert.equal(result.ok, true)
     if (!result.ok) return
     assert.equal(result.effect, 'seedSlots')
     assert.equal(result.seedSlots, 8)
-    assert.equal(profiles.getCurrentProfile()!.purchases[39], 1)
+    assert.deepEqual(profiles.getCurrentProfile()!.purchases, { 'test:upgrade': 1 }, 'the profile counts purchases by item ID')
     assert.equal(result.store.coins, 9877)
+    assert.equal(result.store.pages[0].items.find(item => item.id === 'test:upgrade')!.message, 9001)
 })
 
 test('user APIs validate names on the backend, preserve IDs and old saves, and isolate deletion', async () => {
@@ -87,32 +93,31 @@ test('shop APIs own prices, availability and charging; copied UI data cannot alt
     profiles.saveProfile(profile)
     const offer = await api.getStore()
     assert.equal(offer.pages.length, 1)
-    const item = offer.pages[0].items.find(item => item.id === 0)!
-    assert.deepEqual(item.highlight, { type: 'seedPacket' })
-    const slots = offer.pages[0].items.find(item => item.id === 21)!
+    const item = offer.pages[0].items.find(item => item.id === 'pvz:gatlingpea')!
+    assert.deepEqual([item.place, item.seed], [4, 'pvz:gatlingpea'])
+    const slots = offer.pages[0].items.find(item => item.id === 'pvz:packet-upgrade')!
     assert.equal(slots.seedSlots, 7)
-    assert.deepEqual(slots.highlight, { type: 'additive', opacity: 32 })
-    assert.deepEqual(offer.pages[0].items.find(item => item.id === 22)!.highlight, { type: 'additive', opacity: 96 })
+    assert.equal(offer.finishedAdventure, false)
     item.cost = 0
     offer.coins = 999999
     assert.equal((await api.getStore()).coins, 2000)
-    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 0)!.cost, 500)
-    assert.deepEqual((await api.purchase(profile.id, 0, 0)).ok, false)
-    assert.equal((await api.purchase(profile.id, 27, 1000)).ok, false, 'a locked shop page cannot be purchased through the API')
-    const results = await Promise.all([api.purchase(profile.id, 0, 500), api.purchase(profile.id, 0, 500)])
+    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 'pvz:gatlingpea')!.cost, 500)
+    assert.deepEqual((await api.purchase(profile.id, 'pvz:gatlingpea', 0)).ok, false)
+    assert.equal((await api.purchase(profile.id, 'pvz:tree-of-wisdom', 1000)).ok, false, 'a locked shop page cannot be purchased through the API')
+    const results = await Promise.all([api.purchase(profile.id, 'pvz:gatlingpea', 500), api.purchase(profile.id, 'pvz:gatlingpea', 500)])
     assert.equal(results.filter(result => result.ok).length, 1)
     assert.equal((await api.getStore()).coins, 1500)
     assert.deepEqual(profiles.getCurrentProfile()!.seeds, ['pvz:gatlingpea'])
-    assert.equal((await api.purchase(profile.id, 21, 75)).ok, true)
-    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 21)!.seedSlots, 8)
-    const stale = await api.purchase(profile.id, 21, 75)
+    assert.equal((await api.purchase(profile.id, 'pvz:packet-upgrade', 75)).ok, true)
+    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 'pvz:packet-upgrade')!.seedSlots, 8)
+    const stale = await api.purchase(profile.id, 'pvz:packet-upgrade', 75)
     assert.equal(stale.ok, false)
     if (stale.ok === false) assert.equal(stale.code, 'priceChanged')
     const before = (await api.getStore()).coins
     await api.createUser('Bob')
-    assert.deepEqual(await api.purchase(profile.id, 1, 500), { ok: false, code: 'profileChanged' })
+    assert.deepEqual(await api.purchase(profile.id, 'pvz:twinsunflower', 500), { ok: false, code: 'profileChanged' })
     const bob = (await api.getCurrentUser())!
-    const insufficient = await api.purchase(bob.id, 0, 500)
+    const insufficient = await api.purchase(bob.id, 'pvz:gatlingpea', 500)
     assert.equal(insufficient.ok, false)
     if (insufficient.ok === false) assert.equal(insufficient.code, 'insufficientFunds')
     assert.equal((await api.getStore()).coins, 0)
@@ -121,9 +126,11 @@ test('shop APIs own prices, availability and charging; copied UI data cannot alt
     const completed = profiles.getCurrentProfile()!
     completed.finishedAdventure = 1
     profiles.saveProfile(completed)
-    const items = (await api.getStore()).pages.flatMap(page => page.items)
-    assert.deepEqual(items.find(item => item.id === 8)!.highlight, { type: 'seedPacket' }, 'Imitater uses packet highlighting despite having a sprite icon')
-    assert.deepEqual(items.find(item => item.id === 10)!.highlight, { type: 'none' })
+    const finished = await api.getStore()
+    assert.deepEqual([finished.finishedAdventure, finished.pages.map(page => page.id)],
+        [true, ['pvz:slot-upgrades', 'pvz:plant-upgrades', 'pvz:zen-garden-1', 'pvz:zen-garden-2']], 'every page, in their order')
+    const marigold = finished.pages[2].items.find(item => item.id === 'pvz:potted-marigold-1')!
+    assert.deepEqual([marigold.place, marigold.seed, marigold.state], [0, undefined, 'available'])
 })
 
 test('settings, challenge progress and almanac data are supplied by the backend and survive reconnect', async () => {
@@ -167,9 +174,9 @@ test('the almanac shows the plants the player has and the zombies met so far', a
     const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, seeds: ['pvz:hypnoshroom', 'pvz:imitater'] })
     assert.deepEqual(finished.plants, [0, 12], 'an owned seed that is not installed (the Imitater) is left out')
     assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.place === 12),
-        { seed: 'pvz:hypnoshroom', place: 12, cost: 75, refreshTime: 3000, ground: 'night' }, "place, cost and recharge are the seed definition's")
+        { seed: 'pvz:hypnoshroom', place: 12, cost: 75, refreshTime: 3000 }, "place, cost and recharge are the seed definition's")
     assert.deepEqual(finished.zombie('pvz:screendoor'), [true, true], 'a finished adventure has met them all')
-    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.id === 0)!.zombie, 'pvz:normal', 'an entry names the zombie it shows')
+    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.place === 0)!.zombie, 'pvz:normal', 'a window names the zombie it shows')
 })
 
 test('achievement entries keep the original order and expose only the active user’s unlocks', async () => {

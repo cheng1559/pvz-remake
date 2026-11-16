@@ -1,8 +1,8 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/ecs/index'
 import {
-    LevelStateResource, MowedPlantComponent, type Plant, PlantAttackComponent, PlantComponent, type Position, PositionComponent, type Projectile,
-    ProjectileComponent, RandomResource, type Zombie, ZombieComponent,
+    LevelStateResource, MowedPlantComponent, MowerComponent, type Plant, PlantAttackComponent, PlantComponent, type Position, PositionComponent,
+    type Projectile, ProjectileComponent, RandomResource, type Zombie, ZombieComponent,
 } from '../state/components'
 import { startLayer, stepLayers } from '@/shared/content/animation'
 import { ZOMBIE_CLIPS } from '@/shared/content/gameplay'
@@ -14,7 +14,8 @@ import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { isHostile, type Team, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { getDebugRules } from '../debug/debugRules'
-import { launchProjectile, STRAIGHT } from '../combat/motions'
+import { setOffProjectile, STRAIGHT } from '../combat/motions'
+import { readyMowers } from './lawn'
 
 /** LawnMower::mChompCounter: a mower a zombie sets off chews on it for less than on the ones it runs into after. */
 const CHOMP_READY_TICKS = 25
@@ -25,10 +26,21 @@ const CHOMP_SPEED_SCALE = 1 / 3.33
 type MowTarget = { entity: number, position: Position, zombie: Zombie }
 
 /**
- * The level's mowers. One waits at each active row's end (LevelState.mowerRows) until a zombie with its head reaches
- * it, and then sets off as the level's mowing projectile (startMower), which the projectile system flies like any
- * other: the rest of this is what `mow` does to what such a projectile hits (ProjectileDefinition.mow), a level's or
- * a shooter's.
+ * Board::InitLawnMowers (from CutScene::PlaceLawnItems): a row's mower, ready where it waits at the row's house end. The
+ * intro rolls it in there on the client (LevelIntro.mowerArrival), which the server, not running the intro's time,
+ * does not see; `/lawnmower reset` puts a new one down this way too.
+ */
+export function createMower(world: World, row: number): number {
+    const entity = world.createEntity()
+    world.add(entity, PositionComponent, { x: MOWER_READY_X, y: mowerY(world.resources.get(LevelStateResource).board, row), row })
+    world.add(entity, MowerComponent, { state: 'ready' })
+    return entity
+}
+
+/**
+ * The level's mowers. One waits at each active row's end (createMower) until a zombie with its head reaches it, and
+ * then sets off as the level's mowing projectile (startMower), which the projectile system flies like any other: the
+ * rest of this is what `mow` does to what such a projectile hits (ProjectileDefinition.mow), a level's or a shooter's.
  */
 export function createMowerSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -36,14 +48,18 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
-            const waiting = definitions.projectiles[level.definition.lawnMower].hitbox, left = MOWER_READY_X + waiting.x
-            if (level.mowerRows.length) for (const entity of [...world.query(PositionComponent, ZombieComponent)]) {
+            const waiting = definitions.projectiles[level.definition.lawnMower].hitbox
+            const ready = readyMowers(world)
+            if (ready.size) for (const entity of [...world.query(PositionComponent, ZombieComponent)]) {
                 const position = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+                const mower = ready.get(position.row)
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
-                if (!level.mowerRows.includes(position.row) || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
+                if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
                 const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
+                const left = world.get(mower, PositionComponent)!.x + waiting.x
                 if (Math.min(left + waiting.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
-                    startMower(world, definitions, position.row, { entity, position, zombie })
+                    ready.delete(position.row)
+                    startMower(world, definitions, mower, { entity, position, zombie })
                 }
             }
             // A mowed plant is squashed as a mowed zombie is, by the driver it plays, then gone.
@@ -58,21 +74,20 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
 }
 
 /**
- * LawnMower::StartMower: the row's mower sets off, a mowing projectile from where it waited, crushing the zombie that
- * reached it (`trigger`) first; `/lawnmower trigger` sets one off with none.
+ * LawnMower::StartMower: a ready mower sets off (MOWER_TRIGGERED), running on from where it waited as the level's
+ * mowing projectile, and crushes the zombie that reached it (`trigger`) first; `/lawnmower trigger` sets one off with
+ * none (Board::mWaveRowGotLawnMowered: its row's zombies are picked less for a while).
  */
-export function startMower(world: World, definitions: GameplayDefinitions, row: number, trigger?: MowTarget): void {
-    const level = world.resources.get(LevelStateResource)
-    level.mowerRows = level.mowerRows.filter(waiting => waiting !== row)
+export function startMower(world: World, definitions: GameplayDefinitions, entity: number, trigger?: MowTarget): void {
+    const level = world.resources.get(LevelStateResource), position = world.get(entity, PositionComponent)!
+    world.get(entity, MowerComponent)!.state = 'triggered'
     if (world.resources.has(WaveResource)) {
         const wave = world.resources.get(WaveResource)
-        const picks = wave.rowPicks?.find(state => state.row === row)
+        const picks = wave.rowPicks?.find(state => state.row === position.row)
         if (picks) picks.mowedAtWave = wave.index
     }
-    const entity = launchProjectile(world, definitions, world, {
-        typeId: level.definition.lawnMower, position: { x: MOWER_READY_X, y: mowerY(level.board, row), row }, motion: STRAIGHT,
-    })
-    emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', { entityId: entity, row })
+    setOffProjectile(world, definitions, world, entity, { typeId: level.definition.lawnMower, position, motion: STRAIGHT })
+    emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', { entityId: entity, row: position.row })
     if (!trigger) return
     const mower = world.get(entity, ProjectileComponent)!
     mowZombie(world, definitions, entity, mower, trigger)

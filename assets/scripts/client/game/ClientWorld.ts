@@ -75,6 +75,8 @@ export class ClientWorld {
             zombies: interpolate(current.zombies, previous?.zombies, t,
                 (before, after) => before.state !== 'vaulting' || after.state === 'vaulting'),
             projectiles: interpolateProjectiles(current.projectiles, previous?.projectiles, t),
+            // A mower set off runs as a projectile (one waiting stays put).
+            mowers: interpolateProjectiles(current.mowers, previous?.mowers, t),
             items: interpolateItems(current.items, previous?.items, t),
         }
         this.rendered = { current, previous, t, frame }
@@ -83,7 +85,7 @@ export class ClientWorld {
 }
 
 /** A projectile's height goes with its position: what lies on the ground under it stays there as it rises and falls. */
-function interpolateProjectiles(current: ProjectileSnapshot[], previous: ProjectileSnapshot[] | undefined, alpha: number): ProjectileSnapshot[] {
+function interpolateProjectiles<T extends ProjectileSnapshot>(current: T[], previous: T[] | undefined, alpha: number): T[] {
     const previousById = byId(previous)
     return interpolate(current, previous, alpha).map(projectile => {
         const before = previousById.get(projectile.entityId), from = before?.height ?? 0, to = projectile.height ?? 0
@@ -104,11 +106,13 @@ function interpolateItems(current: ItemSnapshot[], previous: ItemSnapshot[] | un
     })
 }
 
-function entityIds(snapshot: WorldSnapshot): Set<EntityId> {
+/** Every entity a frame shows, of every kind: what a client's views and its saved presentation are of. */
+export function entityIds(snapshot: WorldSnapshot): Set<EntityId> {
     return new Set([
         ...snapshot.plants,
         ...snapshot.zombies,
         ...snapshot.projectiles,
+        ...snapshot.mowers,
         ...snapshot.items,
         ...snapshot.gridItems ?? [],
     ].map(entity => entity.entityId))

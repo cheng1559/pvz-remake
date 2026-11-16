@@ -9,6 +9,7 @@ import {
     parseLevelPresentationSnapshot,
     type LevelPresentationSnapshot,
 } from '@/client/level/LevelPresentationSnapshot'
+import { entityIds } from './ClientWorld'
 
 export interface ClientTransportSnapshot {
     sequence: number
@@ -18,7 +19,7 @@ export interface ClientTransportSnapshot {
 }
 
 export interface ClientPresentationSnapshot {
-    schemaVersion: 2
+    schemaVersion: 3
     transport: ClientTransportSnapshot
     level: LevelPresentationSnapshot
 }
@@ -26,7 +27,7 @@ export interface ClientPresentationSnapshot {
 export function parseClientPresentationSnapshot(value: unknown): ClientPresentationSnapshot {
     assertJsonValue(value)
     const save = exact(value, ['schemaVersion', 'transport', 'level'], 'client presentation')
-    if (save.schemaVersion !== 2) throw new TypeError('client presentation.schemaVersion must be 2')
+    if (save.schemaVersion !== 3) throw new TypeError('client presentation.schemaVersion must be 3')
     const source = exact(
         save.transport,
         ['sequence', 'highestEventId', 'previous', 'current'],
@@ -46,7 +47,7 @@ export function parseClientPresentationSnapshot(value: unknown): ClientPresentat
     validateLevel(level, current)
 
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         level,
         transport: {
             sequence: nonNegativeInteger(source.sequence, 'client presentation.transport.sequence'),
@@ -76,14 +77,14 @@ function validateLevel(snapshot: LevelPresentationSnapshot, current: WorldSnapsh
     }
 
     // Both halves of a save must describe the same frame: every presentation entry needs its entity in it.
-    const worldIds = new Set([
-        ...current.plants, ...current.zombies, ...current.projectiles,
-        ...current.items, ...current.gridItems ?? [],
-    ].map(entity => entity.entityId))
+    const worldIds = entityIds(current)
     for (const entity of snapshot.entities) {
         if (!worldIds.has(entity.entityId)) {
             throw new TypeError(`client presentation Level ${entity.kind} ${entity.entityId} is not in the current frame`)
         }
+    }
+    for (const { entityId } of snapshot.flashes) {
+        if (!worldIds.has(entityId)) throw new TypeError(`client presentation Level flash of ${entityId} is not in the current frame`)
     }
     for (const particle of snapshot.particles) {
         if (particle.owner.kind === 'entity' && !worldIds.has(particle.owner.entityId)) {

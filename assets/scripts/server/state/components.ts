@@ -3,7 +3,7 @@ import type { PlantAbilityState } from '@/shared/content/plantAbilities'
 import type { BoardDefinition, LevelDefinition, ProjectileDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { EntityBehaviorState, GraveSnapshot, GridItemSnapshot, JsonObject, Team } from '@/shared/protocol'
+import type { EntityBehaviorState, GraveSnapshot, GridItemSnapshot, JsonObject, MowerState, Team } from '@/shared/protocol'
 import type { LayerState } from '@/shared/content/animation'
 
 export interface Position {
@@ -97,6 +97,14 @@ export interface Projectile {
     hits?: number[]
 }
 
+/**
+ * A row's lawn mower (the original's LawnMower), from the level's start, where it waits at its row's house end
+ * (MOWER_READY_X), to its end. Set off (`triggered`), it also runs as the level's mowing projectile
+ * (LevelDefinition.lawnMower, ProjectileComponent), which the projectile system flies; a ready one turns into gold
+ * once the level is won (updateMowerCoins). See level/mower.ts.
+ */
+export interface Mower { state: MowerState }
+
 /** A bank packet is picked by slot, so a bank may hold the same seed twice with separate recharges. */
 export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
     | { mode: 'conveyor'; packetId: number } | { mode: 'tool'; toolId: string }
@@ -165,8 +173,6 @@ export interface LevelState {
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
-    /** The rows whose mower still waits at the house end, in order; one set off is a mowing projectile (mower.ts). */
-    mowerRows: number[]
 }
 
 export const PositionComponent = defineComponent<Position>('pvz:position')
@@ -196,6 +202,8 @@ export type Grave = Omit<GraveSnapshot, 'entityId'>
 export const GridItemComponent = defineComponent<GridItem>('pvz:grid_item')
 
 export const ProjectileComponent = defineComponent<Projectile>('pvz:projectile')
+
+export const MowerComponent = defineComponent<Mower>('pvz:mower')
 
 export const LevelStateResource = defineResource<LevelState>('pvz:level-state')
 

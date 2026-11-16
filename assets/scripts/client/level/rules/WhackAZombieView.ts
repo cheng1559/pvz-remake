@@ -5,9 +5,11 @@ import { uiNode } from '@/client/view/uiNode'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import type { LevelRulePresentation, PresentationSound } from '@/shared/content/presentation'
+import { presentationSounds, type LevelRulePresentation, type PresentationSound } from '@/shared/content/presentation'
+import { allFields, finite, named, nonEmptyString, positiveFinite } from '@/shared/validate'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
 import type { LevelRuleView, LevelRuleViewContext } from './LevelRuleView'
+import { boolean, record } from '@/shared/validate'
 
 /** Converted Reanim clips play at 12 frames per second at rate 1. */
 const CLIP_FPS = 12
@@ -26,19 +28,16 @@ interface WhackPresentation {
     readonly seedBankSlide: number
 }
 
-function parseConfig(config: LevelRulePresentation): WhackPresentation {
-    const fail = (field: string) => { throw new TypeError(`rules.pvz:whack-a-zombie.${field} is invalid`) }
-    const object = (value: unknown, field: string) => typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? value as Record<string, unknown> : fail(field)
-    const number = (value: unknown, field: string) => typeof value === 'number' && Number.isFinite(value) ? value : fail(field)
-    const hammer = object(config.hammer, 'hammer'), bonk = object(config.bonk, 'bonk')
-    if (typeof hammer.reanimId !== 'string' || typeof bonk.particle !== 'string') fail('hammer')
-    for (const key of ['x', 'y', 'fps', 'swingTime']) number(hammer[key], `hammer.${key}`)
-    for (const key of ['x', 'y']) number(bonk[key], `bonk.${key}`)
-    if (!Array.isArray(config.swingSounds) || !Array.isArray(bonk.sounds)) fail('sounds')
-    object(config.helmSounds, 'helmSounds')
-    if (number(config.seedBankSlide, 'seedBankSlide') <= 0) fail('seedBankSlide')
-    return config as unknown as WhackPresentation
+/** The rule's own presentation, beside the `graveRise` and `itemPadding` that parsePresentationDefinitions reads. */
+function parseConfig(config: LevelRulePresentation, name: string): WhackPresentation {
+    const { graveRise: _graveRise, itemPadding: _itemPadding, ...own } = config
+    return allFields<WhackPresentation>(own, name, {
+        hammer: (value, name) => allFields<WhackPresentation['hammer']>(value, name, { reanimId: nonEmptyString, x: finite, y: finite, fps: finite, swingTime: finite }),
+        swingSounds: presentationSounds,
+        helmSounds: (value, name) => named(value, name, presentationSounds),
+        bonk: (value, name) => allFields<WhackPresentation['bonk']>(value, name, { sounds: presentationSounds, particle: nonEmptyString, x: finite, y: finite }),
+        seedBankSlide: positiveFinite,
+    })
 }
 
 /**
@@ -67,7 +66,7 @@ export class WhackAZombieView implements LevelRuleView {
 
     static async create(context: LevelRuleViewContext): Promise<WhackAZombieView> {
         const { content } = context
-        const config = parseConfig(context.config)
+        const config = parseConfig(context.config, `rules.${context.kind}`)
         const isSun = (typeId: string) => content.definitions.items[typeId] !== undefined && content.definitions.items[typeId].kind !== 'money'
         const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, isSun, context.bankHeight)
         const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 }, active: false }).node
@@ -129,7 +128,7 @@ export class WhackAZombieView implements LevelRuleView {
 
     /** The server's CURSOR_TYPE_HAMMER, put away once the award has dropped (Challenge::ClearCursor). */
     private hammerOut(snapshot: WorldSnapshot): boolean {
-        return (snapshot.extensions[this.kind] as { hammer?: boolean } | undefined)?.hammer === true
+        return parseSnapshot(snapshot.extensions[this.kind], this.kind).hammer
     }
 
     /** mSunMoney + CountSunBeingCollected(). */
@@ -151,4 +150,15 @@ export class WhackAZombieView implements LevelRuleView {
         this.bank.active = true
         this.bank.setPosition(this.bank.position.x, y)
     }
+}
+
+/** What the server's rule shows the client (its `snapshot`), the snapshot's `extensions["pvz:whack-a-zombie"]`. */
+interface WhackSnapshot {
+    /** The empty cursor is the mallet (CURSOR_TYPE_HAMMER), until the award puts it away. */
+    readonly hammer: boolean
+}
+
+function parseSnapshot(value: unknown, kind: string): WhackSnapshot {
+    const name = `snapshot.extensions.${kind}`
+    return { hammer: boolean(record(value, name).hammer, `${name}.hammer`) }
 }

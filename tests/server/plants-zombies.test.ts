@@ -42,7 +42,6 @@ function game(config = definitions) {
         phase: 'gameplay',
         result: 'playing' as const,
         paused: false,
-        mowerRows: [],
     })
     const schedule = new Schedule()
     schedule.add('plant', createPlantAttackSystem(config))

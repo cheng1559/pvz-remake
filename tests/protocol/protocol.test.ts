@@ -128,7 +128,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         items: [{
             entityId: 5, typeId: 'pvz:sun', state: 'available', x: 100, y: 60, scale: 1, alpha: 255,
         }],
-        mowerRows: [2],
+        mowers: [{ entityId: 1, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2, state: 'ready' }],
         tutorial: { step: 'pick-first-seed' }, extensions: {},
     }
     const packet = { protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot }
@@ -145,6 +145,12 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     snapshot.items[0].alpha = -1
     assert.throws(() => parseServerPacket(packet), /non-negative/)
     snapshot.items[0].alpha = 255
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        mowers: [{ ...snapshot.mowers[0], state: 'rolling-in' }],
+    } }), /mowers\[0\]\.state/, 'LawnMowerState: ready or triggered')
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        mowers: [{ ...snapshot.mowers[0], x: Number.NaN }],
+    } }), /mowers\[0\]\.x/, 'a mower is placed as a projectile is')
 
     const frame = {
         protocolVersion: 1, type: 'frame', serverTick: 1, acknowledgedSequence: 1,

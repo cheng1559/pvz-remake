@@ -111,6 +111,15 @@ export function framePosition(clip: AnimationClip, time: number): number {
 }
 
 /**
+ * Reanimation::GetTrackVelocity on `_ground`: how far what walks on a clip's ground goes this tick, the way it faces (a
+ * zombie walking, a bowled nut rolling): the ground between the two frames the layer is at, at its rate times `pace`.
+ */
+export function groundStep(clip: AnimationClip, state: LayerState, pace = 1): number {
+    const ground = clip.ground!, at = Math.min(clip.frames - 2, Math.floor(framePosition(clip, state.time)))
+    return (ground[at + 1] - ground[at]) * state.rate * pace / TICKS_PER_SECOND
+}
+
+/**
  * Reanimation::ShouldTriggerTimedEvent: whether a clip came to a part of its length (`mark`, of 1) between two of its
  * times, in frames; a loop comes to it each time round.
  */

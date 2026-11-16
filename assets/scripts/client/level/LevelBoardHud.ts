@@ -2,7 +2,7 @@ import { modResources } from '@/client/content/ModResources'
 import { syncTutorialArrow } from './tutorialArrow'
 import type { ToolPresentation } from '@/shared/content/presentation'
 import { Color, Mask, Node, Sprite, Vec3 } from 'cc'
-import type { JsonObject, WorldSnapshot } from '@/shared/protocol'
+import type { DialogQuestion, WorldSnapshot } from '@/shared/protocol'
 import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
@@ -14,11 +14,6 @@ import type { LevelSeedBank } from './LevelSeedBank'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { seedBankExtraWidth } from './LevelGeometry'
-
-/** The tools the server gives this game; a level does not list them. */
-export function ownedTools(snapshot: WorldSnapshot): string[] {
-    return (snapshot.extensions['pvz:tools'] as { owned: string[] } | undefined)?.owned ?? []
-}
 
 /** Optional board tools, opening dialogue and conveyor layout. Packet input belongs to LevelSeedBank. */
 export class LevelBoardHud {
@@ -38,9 +33,9 @@ export class LevelBoardHud {
         const result = new LevelBoardHud(root, content, ui, player)
         const level = content.levels.levels[initial.levelId]
         const slots = level.conveyor?.capacity ?? initial.seedChooser?.slots ?? initial.seedPackets.length
-        for (const toolId of ownedTools(initial)) {
+        for (const toolId of initial.tools?.owned ?? []) {
+            // Every tool has its look (assertPresented).
             const look = content.presentation.tools[toolId]
-            if (!look) throw new Error(`Tool presentation is not installed: ${toolId}`)
             const [bankFrame, frame] = await Promise.all([look.bank, look.sprite].map(id => modResources.sprite(id)))
             const bank = ui.image(bankLayer, bankFrame, { x: look.x + seedBankExtraWidth(slots), y: 0 }).node
             const image = ui.image(bank, frame, { x: look.imageOffset[0], y: look.imageOffset[1] }).node
@@ -86,8 +81,8 @@ export class LevelBoardHud {
 
     private constructor(private root: Node, private content: LoadedContent, private ui: UI, private player: LevelPlayer) {}
 
-    /** The line asks a Yes/No question (`pvz:dialog`'s `question`); the level answers it (CutScene::CrazyDaveDialogDone). */
-    onQuestion?: (question: JsonObject) => void
+    /** The line asks a Yes/No question (`dialog.question`); the level answers it (CutScene::CrazyDaveDialogDone). */
+    onQuestion?: (question: DialogQuestion) => void
 
     /** Board::GetSeedBankExtraWidth: the tools' banks move right as the seed bank widens. */
     setSeedBankSlots(slots: number): void {
@@ -108,7 +103,7 @@ export class LevelBoardHud {
 
     sync(snapshot: WorldSnapshot): void {
         this.snapshot = snapshot
-        const dialog = snapshot.extensions['pvz:dialog'] as { index: number; question?: JsonObject } | undefined
+        const { dialog } = snapshot
         if (this.dave && this.delay >= this.content.presentation.dave.delay && dialog?.index !== this.daveDialog) {
             this.daveDialog = dialog?.index
             const line = dialog && this.ui.text(`CRAZY_DAVE_${dialog.index}`)
@@ -117,7 +112,7 @@ export class LevelBoardHud {
             else this.dave.leave()
             if (dialog?.question) this.onQuestion?.(dialog.question)
         }
-        const available = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available ?? []
+        const available = snapshot.tools?.available ?? []
         let arrow: { x: number, y: number } | undefined
         for (const tool of this.tools) {
             const { look, bank } = tool
@@ -142,7 +137,7 @@ export class LevelBoardHud {
         if (this.conveyor) {
             this.conveyor.active = snapshot.result !== 'lost' && (snapshot.phase === 'gameplay' || !this.blocksIntro)
             this.conveyor.setPosition(layout.x, snapshot.phase === 'gameplay' ? 0 : Math.max(0, layout.height * (1 - (this.introTicks - layout.introStart) / layout.introDuration)))
-            const ticks = (snapshot.extensions['pvz:conveyor'] as { ticks: number }).ticks
+            const ticks = snapshot.conveyor?.ticks ?? 0
             this.belt!.spriteFrame = this.beltFrames[Math.floor(ticks / layout.frameTicks) % this.beltFrames.length]
         }
     }

@@ -8,7 +8,7 @@ import { levelTools } from '@/shared/content/gameplay'
 import { clearCursor } from './cursor'
 import { canShovel } from '@/shared/content/planting'
 
-/** Cursor tools such as the shovel. Mods wrap these through `host.around(tools, name, ...)`. */
+/** Cursor tools such as the shovel, each doing what its definition's `kind` does. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
     /** The tools this game has, whether usable now or not. */
     owned(session: Session): string[] {
@@ -17,8 +17,8 @@ export const tools = {
 
     available(session: Session, toolId: string): boolean {
         const level = session.world.resources.get(LevelStateResource)
-        return toolId === 'pvz:shovel' && tools.owned(session).includes(toolId) && !level.paused && level.result === 'playing' &&
-            (level.phase === 'gameplay' || getActiveTutorial(session.world)?.canSelectTool?.(session.world, toolId) === true)
+        return tools.owned(session).includes(toolId) && !level.paused && level.result === 'playing' &&
+            (level.phase === 'gameplay' || getActiveTutorial(session.world)?.canSelectTool?.(session.world, session.definitions.tools[toolId]) === true)
     },
 
     select(session: Session, toolId: string): CommandRejectionCode | undefined {
@@ -32,8 +32,10 @@ export const tools = {
     use(session: Session, row: number, column: number): CommandRejectionCode | undefined {
         const { world, definitions } = session
         const bank = world.resources.get(SeedBankResource)
-        if (bank.selection.mode !== 'tool' || bank.selection.toolId !== 'pvz:shovel') return 'unsupported-command'
-        // Board::ToolHitTestHelper: the cell's plant, unless the shovel cannot dig it up (canShovel).
+        const tool = bank.selection.mode === 'tool' ? definitions.tools[bank.selection.toolId] : undefined
+        if (tool?.kind !== 'shovel') return 'unsupported-command'
+        // Board::MouseDownWithTool for a shovel, Board::ToolHitTestHelper: the cell's plant, unless the shovel cannot dig
+        // it up (canShovel).
         const found = planting.findPlantAt(session, row, column)
         const plant = found === undefined ? undefined : world.get(found, PlantComponent)!
         const entity = plant && canShovel(definitions.plants, plant) ? found : undefined

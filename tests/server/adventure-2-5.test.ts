@@ -49,13 +49,13 @@ test('2-5 opens on nine graves from column 4 with three ready packets, no sun an
     assert.deepEqual(snapshot.seedPackets.map(packet => [packet!.seedId, packet!.ready]),
         [['pvz:potatomine', true], ['pvz:gravebuster', true], ['pvz:cherrybomb', true]])
     assert.equal(snapshot.sun, 0)
-    assert.equal(snapshot.extensions['pvz:tools'], undefined, 'CutScene::ShowShovel: no shovel')
+    assert.equal(snapshot.tools, undefined, 'CutScene::ShowShovel: no shovel')
 })
 
 test('a first adventure hears Dave out first', () => {
     const server = start({ firstAdventure: true })
     for (let index = 401; index <= 406; index++) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         runCommand(server, { type: 'advanceDialog' })
     }
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
@@ -220,4 +220,41 @@ test('a game saved mid-wave restores its countdown and graves', () => {
     run(restored, 300)
     assert.deepEqual(restored.snapshot().zombies.map(zombie => [zombie.typeId, zombie.x, zombie.row]),
         server.snapshot().zombies.map(zombie => [zombie.typeId, zombie.x, zombie.row]))
+})
+
+test("the rule keeps Challenge's numbers unless a level writes its own, and checks those it writes", () => {
+    // The base level writes only its zombies and its sun.
+    assert.deepEqual(Object.keys(levels.levels['pvz:adventure-2-5'].rules!.settings).sort(), ['sun', 'zombies'])
+    const variant = (settings: Record<string, unknown>) => {
+        const source = structuredClone(readGameplaySource('levels')), level = source.levels['pvz:adventure-2-5']
+        level.rules = { ...level.rules, ...settings }
+        return new IntegratedGameServer(definitions, parseGameplayLevels(source, definitions))
+    }
+    for (const [settings, error, message] of [
+        [{ graveCount: 9 }, /rules\.graveCount is not supported/],
+        [{ hammerRadius: 0 }, /rules\.hammerRadius must be positive/],
+        [{ chances: { double: [0, 30] } }, /rules\.chances\.double must have a chance for each of the 6 phases/],
+        [{ chances: { treble: [0, 0, 0, 0, 0, 0] } }, /rules\.chances\.treble is not supported/],
+        [{ chances: { pail: [0, 0, 0, 80, 15, 15] } }, /add up to at most 100 in phase 3/],
+        [{ refillTicks: 2000 }, /does not fit its waves/],
+        [{ finalGroupDelayTicks: 1702 }, /does not fit its waves/, 'the final group would never rise'],
+    ] as const) assert.throws(() => variant(settings), error, message)
+    // A variant: 4 graves from column 7, groups of three from the first wave on, and a mallet that breaks a pail.
+    const server = variant({ graves: 4, firstGraveColumn: 6, hammerDamage: 1100,
+        chances: { triple: [100, 100, 100, 100, 100, 100], double: [0, 0, 0, 0, 0, 0] } })
+    server.start(options)
+    assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
+    const graves = server.snapshot().gridItems!
+    assert.equal(graves.length, 4)
+    assert.ok(graves.every(grave => grave.column >= 6))
+    let risen = server.snapshot().zombies
+    for (let tick = 0; tick < 200 && !risen.length; tick++) risen = server.tick().zombies
+    assert.equal(risen.length, 3)
+    whackAll(server, server.snapshot())
+    assert.equal(server.snapshot().zombies.length, 0)
+    assert.equal(debug(server, '/zombie buckethead 3 7')?.ok, true)
+    whackAll(server, server.snapshot())
+    const [pail] = server.snapshot().zombies
+    assert.equal(pail.helmHealth, 0, "TakeHelmDamage of the level's own 1100")
+    assert.equal(pail.health, definitions.zombies['pvz:buckethead'].maxHealth)
 })

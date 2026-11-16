@@ -26,7 +26,7 @@ test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original
         const server = game(index, true)
         const initial = server.snapshot()
         assert.equal(initial.sun, 50)
-        assert.equal(initial.mowerRows.length, index === 3 ? 3 : 5)
+        assert.deepEqual(initial.mowers.map(mower => [mower.row, mower.state]), (index === 3 ? [1, 2, 3] : [0, 1, 2, 3, 4]).map(row => [row, 'ready']))
         assert.deepEqual(initial.seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', ...index === 4 ? ['pvz:wallnut'] : []],
             'Board::InitLevel fills the bank with the available seeds in order')
         assert.equal(initial.wave.countdown, 1800)

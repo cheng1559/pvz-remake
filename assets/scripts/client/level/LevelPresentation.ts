@@ -30,8 +30,6 @@ export interface LevelIntroContext {
     bank: Node
     houseName: Node
     audio: LevelAudioPresenter
-    /** The rows' waiting mowers, by row. */
-    mowers: () => ReadonlyMap<number, Node>
     previewZombies: Readonly<Record<string, number>>
     hasOpeningDialog?: boolean
 }

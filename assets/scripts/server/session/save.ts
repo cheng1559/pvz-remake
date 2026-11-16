@@ -4,8 +4,8 @@ import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
-import type { GridItem, MowedPlant, Plant, PlantAttack, Position, Projectile, SeedBankState, SeedPacketState, Zombie } from '../state/components'
-import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type WaveState } from '../state/levelState'
+import type { GridItem, MowedPlant, Mower, Plant, PlantAttack, Position, Projectile, SeedBankState, SeedPacketState, Zombie } from '../state/components'
+import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type TutorialStep, type WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
 import { SAVED_COMPONENTS } from './savedComponents'
 
@@ -18,20 +18,22 @@ export interface SavedEntity {
     plantAttack?: PlantAttack
     zombie?: Zombie
     projectile?: Projectile
+    /** A row's mower: a ready one alone, a triggered one with the projectile it runs as. */
+    mower?: Mower
     item?: Item
     /** What stands in a cell: it has no position. */
     gridItem?: GridItem
 }
 
 export interface ServerSaveSnapshot {
-    schemaVersion: 2
+    schemaVersion: 3
     levelId: string
     mods: EnabledMod[]
     tick: number
     gameplayTick: number
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
-    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, mowerRows: number[] }
+    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean }
     economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
@@ -51,7 +53,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
         'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', 'entities',
     ], 'server save', ['packetUpgradeOffer'])
-    if (save.schemaVersion !== 2) throw new TypeError('server save.schemaVersion must be 2')
+    if (save.schemaVersion !== 3) throw new TypeError('server save.schemaVersion must be 3')
 
     const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
     const allocator = { nextEntity: positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity') }
@@ -62,12 +64,11 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     } as DeterministicRngState
     DeterministicRng.restore(random)
 
-    const levelSource = exact(save.level, ['phase', 'result', 'paused', 'mowerRows'], 'server save.level')
+    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level')
     const level = {
         phase: oneOf(levelSource.phase, ['intro', 'gameplay'] as const, 'server save.level.phase'),
         result: oneOf(levelSource.result, ['playing', 'won', 'lost'] as const, 'server save.level.result'),
         paused: boolean(levelSource.paused, 'server save.level.paused'),
-        mowerRows: array(levelSource.mowerRows, 'server save.level.mowerRows').map(row => integer(row, 'server save.level.mowerRows[]')),
     }
 
     const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'])
@@ -112,7 +113,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     if (gameplayTick > tick) throw new TypeError('server save.gameplayTick must not exceed tick')
 
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         levelId: nonEmptyString(save.levelId, 'server save.levelId'),
         mods,
         tick,
@@ -191,7 +192,7 @@ function parseTutorial(value: unknown): TutorialState {
     const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex'])
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
-        step: oneOf(source.step, TUTORIAL_STEPS, 'server save.tutorial.step'),
+        step: isQualifiedId(source.step) ? source.step as TutorialStep : oneOf(source.step, TUTORIAL_STEPS, 'server save.tutorial.step'),
         displayedAdvice: array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
             .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]')),
         ...(source.dialogIndex === undefined ? {} : { dialogIndex: nonNegativeInteger(source.dialogIndex, 'tutorial.dialogIndex') }),

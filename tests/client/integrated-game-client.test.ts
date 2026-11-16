@@ -36,7 +36,7 @@ test('integrated client hides channel packets behind start, command, update, and
 
     game.requestSave()
     game.update(0)
-    assert.equal((game.lastSave as { schemaVersion: number }).schemaVersion, 2)
+    assert.equal((game.lastSave as { schemaVersion: number }).schemaVersion, 3)
 })
 
 test('integrated client receives every authority-changing boundary command at a newer tick', () => {

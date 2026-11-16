@@ -55,13 +55,12 @@ export class GraveView implements GridItemView {
         this.dirt = dirt.node
         this.stoneSize = stone.transform
         this.dirtSize = dirt.transform
-        this.show()
-    }
-
-    /** The grave off the board: risen. */
-    show(): void {
+        // Risen, as it stands off the board, until the board's frame (sync) says how far.
         this.layout(Infinity, 0)
     }
+
+    /** All it draws is in its node. */
+    destroy(): void {}
 
     sync(grave: GraveSnapshot, world: WorldSnapshot): void {
         const { stage, node, content } = this.context

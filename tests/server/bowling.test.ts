@@ -3,6 +3,7 @@ import { type World } from '@/ecs'
 import { PlantComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
+import { groundStep } from '@/shared/content/animation'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
 import { parseServerPacket,type JsonValue,type StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'
@@ -19,16 +20,15 @@ const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, 
 function restore(server: IntegratedGameServer): void {
     server.start({ ...options, save: server.save() as unknown as JsonValue })
 }
-function begin(): IntegratedGameServer {
-    const server = new IntegratedGameServer(definitions, levels)
+function begin(server = new IntegratedGameServer(definitions, levels)): IntegratedGameServer {
     server.start({ ...options, firstAdventure: false })
-    while (server.snapshot().extensions['pvz:dialog']) runCommand(server, { type: 'advanceDialog' })
+    while (server.snapshot().dialog) runCommand(server, { type: 'advanceDialog' })
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
     return server
 }
 /** A game past 1-5's intro with a wall-nut just put down in row 2 to roll. */
-function rollNut() {
-    const server = begin()
+function rollNut(started?: IntegratedGameServer) {
+    const server = begin(started)
     runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
     runCommand(server, { type: 'placePlant', row: 2, column: 1 })
     const world = (server as unknown as { session: { world: World } }).session.world
@@ -54,7 +54,7 @@ test('1-5 requires Dave, three shovel digs and the second dialogue before gamepl
     assert.deepEqual(server.snapshot().plants.map(plant => [plant.row, plant.column]), [[1, 5], [2, 7], [3, 6]])
     assert.equal(runCommand(server, { type: 'completeIntro' }), 'intro-not-complete')
     for (let index = 2400; index <= 2406; index++) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         restore(server)
         assert.equal(runCommand(server, { type: 'advanceDialog' }), undefined)
     }
@@ -67,7 +67,7 @@ test('1-5 requires Dave, three shovel digs and the second dialogue before gamepl
     }
     assert.equal(server.snapshot().plants.length, 0)
     for (let index = 2410; index <= 2415; index++) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         runCommand(server, { type: 'advanceDialog' })
     }
     assert.equal(server.snapshot().tutorial.step, 'complete')
@@ -251,4 +251,43 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
             assert.equal(zombie.health, zombie.maxHealth, `${typeId} ${bounced}`)
         }
     }
+})
+
+test("a nut rolls on its roll clip's ground as a zombie walks on its walk's (Reanimation::GetTrackVelocity)", () => {
+    const { server, world, plant } = rollNut()
+    const nut = world.get(plant.entityId, PlantComponent)!, position = world.get(plant.entityId, PositionComponent)!
+    const clip = definitions.plants['pvz:bowling-wallnut'].animation!.clips.body
+    assert.ok(nut.animations!.body.rate >= 12 && nut.animations!.body.rate <= 18, 'Plant::PlantInitialize: RandRangeFloat(12, 18)')
+    for (let tick = 0; tick < 100; tick++) {
+        const roll = { ...nut.animations!.body }, x = position.x
+        server.tick()
+        assert.ok(Math.abs(position.x - x - groundStep(clip, roll)) < 1e-9, `tick ${tick}`)
+    }
+})
+
+test("a bowled nut takes Plant::UpdateBowling's numbers unless it writes its own, checked as the content loads", () => {
+    // The base nuts write none of them; the explode-o-nut, which strikes no blow, writes nothing of its blows.
+    assert.deepEqual(definitions.plants['pvz:bowling-explodenut'].behavior, { kind: 'bowling', attack: { x: 0, width: 60 } })
+    const variant = (behavior: Record<string, unknown>, change?: (nut: any) => void) => {
+        const changed = structuredClone(source('definitions')), nut = changed.plants['pvz:bowling-wallnut']
+        nut.behavior = { ...nut.behavior, ...behavior }
+        change?.(nut)
+        const parsed = parseGameplayDefinitions(changed)
+        return { definitions: parsed, server: new IntegratedGameServer(parsed, parseGameplayLevels(source('levels'), parsed)) }
+    }
+    for (const [behavior, error] of [
+        [{ groundDeltas: [17.2] }, /behavior\.groundDeltas is not supported/],
+        [{ damage: 0 }, /behavior\.damage must be positive/],
+        [{ helmDamage: 1.5 }, /behavior\.helmDamage must be a non-negative safe integer/],
+        [{ bounceSpeed: -2 }, /behavior\.bounceSpeed must be positive/],
+        [{ bouncedBreaks: 'door' }, /behavior\.bouncedBreaks must be an array/],
+    ] as const) assert.throws(() => variant(behavior), error)
+    assert.throws(() => variant({}, nut => { delete nut.animation.clips.body.ground }), /fps and the ground it rolls on/)
+    // A nut that writes its own blow strikes with it.
+    const { definitions: changed, server } = variant({ damage: 100 })
+    const { world, plant } = rollNut(server)
+    const id = spawnZombie(world, changed, 'pvz:normal', 2, plant.x + 20, plant.y - 30)
+    server.tick()
+    const zombie = world.get(id, ZombieComponent)!
+    assert.equal(zombie.health, zombie.maxHealth - 100)
 })

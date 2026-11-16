@@ -4,6 +4,7 @@ import type { GameSystem, SystemContext } from '@/ecs/index'
 import type { GameplayDefinitions, ProjectileDefinition } from '@/shared/content/gameplay'
 import {
     LevelStateResource,
+    MowerComponent,
     type Plant,
     PlantComponent,
     type Position,
@@ -149,7 +150,13 @@ export class ProjectileSystem implements GameSystem {
             const definition = definitions.plants[plant.typeId]
             add({ entity, position, plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
         }
-        for (const entity of world.query(PositionComponent, ProjectileComponent)) this.update(context, entity)
+        // Board::UpdateGameObjects: the projectiles, then the lawn mowers, a level's of which runs as one once set off.
+        const mowers: number[] = []
+        for (const entity of world.query(PositionComponent, ProjectileComponent)) {
+            if (world.has(entity, MowerComponent)) mowers.push(entity)
+            else this.update(context, entity)
+        }
+        for (const entity of mowers) this.update(context, entity)
     }
     update({ world, commands }: SystemContext, entity: number): void {
         const definitions = this.definitions

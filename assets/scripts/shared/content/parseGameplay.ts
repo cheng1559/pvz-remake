@@ -1,10 +1,10 @@
-import { record, array, nonEmptyString, finite, nonNegativeFinite, positiveFinite, nonNegativeInteger, positiveInteger, exact, trueFlag } from '@/shared/validate'
+import { record, array, nonEmptyString, finite, nonNegativeFinite, positiveFinite, integer, nonNegativeInteger, positiveInteger, exact, trueFlag, named, oneOf, pair, point, range } from '@/shared/validate'
 import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
 import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
-import { CHOOSER_PLACES, PLANT_ATTACKS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type Point, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type UnlockedEntry, type ZombieDefinition } from '@/shared/content/gameplayTypes'
+import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
 
@@ -18,10 +18,7 @@ const PROJECTILE_ATTRIBUTES: Record<keyof ProjectileOverrides, (value: unknown, 
     flightTicks: positiveInteger,
     landingOffset: finite,
     rotation: finite,
-    spin(value, name) {
-        if (!Array.isArray(value) || value.length !== 2 || !value.every(Number.isFinite) || value[0] > value[1]) throw new Error(`${name} must be two ordered finite numbers`)
-        return [value[0], value[1]]
-    },
+    spin: range,
     homingSpeed: positiveFinite,
     turn: positiveFinite,
 }
@@ -35,10 +32,11 @@ function parseProjectileAttributes(source: Record<string, unknown>, name: string
 export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const source = exact(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'achievements', 'seedBank',
+        'projectiles', 'items', 'achievements', 'seedBank', 'tools', 'store', 'storePages', 'almanac', 'zenGarden',
     ], 'gameplay definitions')
     const economy = exact(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
     const seedBank = exact(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
+    const zenGarden = exact(source.zenGarden, ['columns', 'capacity', 'template'], 'gameplay definitions.zenGarden')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
     const definitions: GameplayDefinitions = {
@@ -53,9 +51,24 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         achievements: mapped(source.achievements, 'achievements', parseAchievement),
         seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots'),
             startingSeeds: qualifiedIdArray(seedBank.startingSeeds, 'seedBank.startingSeeds') },
+        tools: mapped(source.tools, 'tools', parseTool),
+        store: mapped(source.store, 'store', parseStoreItem),
+        storePages: mapped(source.storePages, 'storePages', parseStorePage),
+        almanac: mapped(source.almanac, 'almanac', parseAlmanacZombie),
+        zenGarden: { columns: positiveInteger(zenGarden.columns, 'zenGarden.columns'), capacity: positiveInteger(zenGarden.capacity, 'zenGarden.capacity'),
+            template: parseZenGardenPlant(zenGarden.template, 'zenGarden.template') },
     }
     if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
     for (const id of definitions.seedBank.startingSeeds) reference(id, definitions.seeds, 'seedBank.startingSeeds')
+    checkStore(definitions)
+    // AlmanacDialog's zombie page: a window per zombie, each at a place of its own.
+    const windows = new Map<number, string>()
+    for (const [id, { place }] of Object.entries(definitions.almanac)) {
+        reference(id, definitions.zombies, 'almanac key')
+        const other = windows.get(place)
+        if (other) throw new Error(`almanac.${other} and almanac.${id} share place ${place}`)
+        windows.set(place, id)
+    }
 
     // Each group numbers its places on its own (seedGroups): the original seeds are the chooser's grid of plants.
     const places = new Map<string, string>()
@@ -364,7 +377,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     // Its body first, walking; over it what it carries, on its own clips (a flag, a balloon's propeller).
     if (Object.keys(layers)[0] !== ZOMBIE_BODY_LAYER || layers[ZOMBIE_BODY_LAYER] !== clip.walk) throw new Error(`${name}.animation.layers must start with ${ZOMBIE_BODY_LAYER}: ${clip.walk}`)
     for (const [layer, carried] of Object.entries(layers)) if (layer !== ZOMBIE_BODY_LAYER && carried === null) throw new Error(`${name}.animation.layers.${layer} must start a clip`)
-    for (const id of [clip.walk, ...(result.walk2Chance > 0 ? [clip.walk2] : []), ...(result.vault ? [clip.run] : [])]) needs(id, walked => walked.ground, 'walks on its ground')
+    for (const id of [clip.walk, ...(result.walk2Chance > 0 ? [clip.walk2] : []), ...(result.vault ? [clip.run] : [])]) needs(id, walked => walked.ground && !walked.fps, 'walks on its ground at its speed, without fps')
     needs(clip.eat, eaten => eaten.fps && eaten.marks, 'has fps and marks its bites')
     for (const id of [clip.death, clip.death2, clip.superLongDeath]) {
         if (id === clip.death || clips[id]) needs(id, death => death.fps && death.hold && death.marks?.length === 1, 'is held, has fps and marks its fall')
@@ -380,8 +393,10 @@ function parseAnimation(source: Record<string, unknown>, name: string): Animatio
         const clip = exact(entry, ['frames'], clipName, ['fps', 'sync', 'fit', 'chewed', 'next', 'once', 'hold', 'start', 'tracks', 'ground', 'marks'])
         const frames = positiveInteger(clip.frames, `${clipName}.frames`)
         // One pace: its own, another layer's or its ground's; or it fits, with a pace of its own only for where nothing is to fit.
+        // A clip of its own pace may have a ground too, for what it rolls along (a bowled nut).
         if (clip.fit ? clip.sync !== undefined || clip.ground !== undefined
-            : [clip.fps, clip.sync, clip.ground].filter(pace => pace !== undefined).length !== 1) throw new Error(`${clipName} needs exactly one of fps, sync and ground, or fit`)
+            : clip.sync !== undefined ? clip.fps !== undefined || clip.ground !== undefined
+            : clip.fps === undefined && clip.ground === undefined) throw new Error(`${clipName} needs exactly one of fps, sync and ground (fps may have a ground), or fit`)
         if (clip.chewed !== undefined && clip.fps === undefined) throw new Error(`${clipName}.chewed needs fps`)
         const ground = clip.ground === undefined ? undefined : groundTrack(clip.ground, `${clipName}.ground`)
         if (ground && ground.length !== frames) throw new Error(`${clipName}.ground must have a place for each of the clip's ${frames} frames`)
@@ -407,9 +422,9 @@ function parseAnimation(source: Record<string, unknown>, name: string): Animatio
             ...(ground ? { ground } : {}),
             ...(marks ? { marks } : {}),
             ...(clip.tracks === undefined ? {} : { tracks: named(clip.tracks, `${clipName}.tracks`, (track, trackName) => {
-                const points = array(track, trackName).map((pair, index) => {
-                    if (!Array.isArray(pair) || pair.length !== 2) throw new Error(`${trackName}[${index}] must be [x, y]`)
-                    return { x: finite(pair[0], `${trackName}[${index}]`), y: finite(pair[1], `${trackName}[${index}]`) }
+                const points = array(track, trackName).map((entry, index) => {
+                    const [x, y] = pair(entry, `${trackName}[${index}]`)
+                    return { x, y }
                 })
                 if (points.length !== frames) throw new Error(`${trackName} must have a point for each of the clip's ${frames} frames`)
                 return points
@@ -466,11 +481,6 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
         }
     }
     return result
-}
-
-/** The entries of an object under names of the content's own (a plant's clips and layers), not qualified ids. */
-function named<T>(value: unknown, name: string, parse: (entry: unknown, entryName: string) => T): Record<string, T> {
-    return Object.fromEntries(Object.entries(record(value, name)).map(([id, entry]) => [id, parse(entry, `${name}.${id}`)]))
 }
 
 function parsePlantTargeting(value: unknown, name: string): PlantTargeting {
@@ -550,6 +560,128 @@ function parseAchievement(value: unknown, name: string): AchievementDefinition {
     }
 }
 
+function parseTool(value: unknown, name: string): ToolDefinition {
+    const source = exact(value, ['kind'], name)
+    return { kind: oneOf(source.kind, TOOL_KINDS, `${name}.kind`) }
+}
+
+/** A store page or item shows from adventure level `level`, or with `completed` only after the adventure, never both. */
+function storeVisibility(source: Record<string, unknown>, name: string): Pick<StorePageDefinition, 'level' | 'completed'> {
+    if (source.level !== undefined && source.completed !== undefined) throw new Error(`${name} allows at most one of level and completed`)
+    return {
+        ...(source.level === undefined ? {} : { level: positiveInteger(source.level, `${name}.level`) }),
+        ...(source.completed === undefined ? {} : { completed: trueFlag(source.completed, `${name}.completed`) }),
+    }
+}
+
+function parseStorePage(value: unknown, name: string): StorePageDefinition {
+    return storeVisibility(exact(value, [], name, ['level', 'completed']), name)
+}
+
+function parseStoreItem(value: unknown, name: string): StoreItemDefinition {
+    const source = exact(value, ['page', 'place', 'purchase'], name,
+        ['cost', 'prices', 'message', 'messages', 'level', 'completed', 'requires', 'seedSlots', 'effect', 'unlockChallenge'])
+    // A price and Dave's line each come once, or by the number bought (StoreScreen::GetItemCost, the upgrade's lines).
+    for (const [one, tiers] of [['cost', 'prices'], ['message', 'messages']]) {
+        if ((source[one] === undefined) === (source[tiers] === undefined)) throw new Error(`${name} needs exactly one of ${one} and ${tiers}`)
+    }
+    const tiers = (key: string, parse: (value: unknown, name: string) => number) => {
+        const values = array(source[key], `${name}.${key}`).map((entry, index) => parse(entry, `${name}.${key}[${index}]`))
+        if (!values.length) throw new Error(`${name}.${key} must not be empty`)
+        return values
+    }
+    const item: StoreItemDefinition = {
+        page: qualifiedId(source.page, `${name}.page`),
+        place: nonNegativeInteger(source.place, `${name}.place`),
+        ...(source.cost === undefined ? {} : { cost: nonNegativeInteger(source.cost, `${name}.cost`) }),
+        ...(source.prices === undefined ? {} : { prices: tiers('prices', nonNegativeInteger) }),
+        ...(source.message === undefined ? {} : { message: nonNegativeInteger(source.message, `${name}.message`) }),
+        ...(source.messages === undefined ? {} : { messages: tiers('messages', nonNegativeInteger) }),
+        ...storeVisibility(source, name),
+        purchase: parseStorePurchase(source.purchase, `${name}.purchase`),
+        ...(source.seedSlots === undefined ? {} : { seedSlots: tiers('seedSlots', positiveInteger) }),
+        ...(source.effect === undefined ? {} : { effect: oneOf(source.effect, ['seedSlots', 'tree'] as const, `${name}.effect`) }),
+    }
+    if (item.place >= STORE_PAGE_PLACES) throw new Error(`${name}.place must be below ${STORE_PAGE_PLACES}, on its page`)
+    if (item.effect === 'seedSlots' && !item.seedSlots) throw new Error(`${name}.effect seedSlots needs seedSlots`)
+    if (source.requires !== undefined) {
+        const requires = exact(source.requires, [], `${name}.requires`, ['anyPurchases', 'allPurchases', 'minimumStored', 'finishedAdventure'])
+        item.requires = {
+            ...(requires.anyPurchases === undefined ? {} : { anyPurchases: qualifiedIdArray(requires.anyPurchases, `${name}.requires.anyPurchases`) }),
+            ...(requires.allPurchases === undefined ? {} : { allPurchases: qualifiedIdArray(requires.allPurchases, `${name}.requires.allPurchases`) }),
+            ...(requires.minimumStored === undefined ? {} : { minimumStored: nonNegativeInteger(requires.minimumStored, `${name}.requires.minimumStored`) }),
+            ...(requires.finishedAdventure === undefined ? {} : { finishedAdventure: trueFlag(requires.finishedAdventure, `${name}.requires.finishedAdventure`) }),
+        }
+    }
+    if (source.unlockChallenge !== undefined) {
+        const unlock = exact(source.unlockChallenge, ['index', 'value'], `${name}.unlockChallenge`)
+        item.unlockChallenge = { index: nonNegativeInteger(unlock.index, `${name}.unlockChallenge.index`), value: integer(unlock.value, `${name}.unlockChallenge.value`) }
+    }
+    return item
+}
+
+function parseStorePurchase(value: unknown, name: string): StorePurchase {
+    const { kind } = record(value, name)
+    switch (kind) {
+        case 'set': return { kind, value: positiveInteger(exact(value, ['kind', 'value'], name).value, `${name}.value`) }
+        case 'count': {
+            const source = exact(value, ['kind', 'amount', 'limit'], name)
+            return { kind, amount: positiveInteger(source.amount, `${name}.amount`), limit: nonNegativeInteger(source.limit, `${name}.limit`) }
+        }
+        case 'stock': {
+            const source = exact(value, ['kind', 'minimum', 'amount', 'limit'], name)
+            return { kind, minimum: nonNegativeInteger(source.minimum, `${name}.minimum`), amount: positiveInteger(source.amount, `${name}.amount`),
+                limit: nonNegativeInteger(source.limit, `${name}.limit`) }
+        }
+        case 'timestamp': case 'plant': exact(value, ['kind'], name); return { kind }
+        // The seed need not be installed: the store sells the upgrade plants before they are (they stay hidden till then).
+        case 'seed': return { kind, id: qualifiedId(exact(value, ['kind', 'id'], name).id, `${name}.id`) }
+        default: throw new Error(`${name}.kind must be set, count, stock, timestamp, plant or seed`)
+    }
+}
+
+/** Each item at a place of its own on an installed page; what it requires is sold too; one seed-slot upgrade (Dave offers it). */
+function checkStore(definitions: GameplayDefinitions): void {
+    const places = new Map<string, string>()
+    for (const [id, item] of Object.entries(definitions.store)) {
+        reference(item.page, definitions.storePages, `store.${id}.page`)
+        const place = `${item.page} ${item.place}`, other = places.get(place)
+        if (other) throw new Error(`store.${other} and store.${id} share place ${item.place} of ${item.page}`)
+        places.set(place, id)
+        for (const key of ['anyPurchases', 'allPurchases'] as const) {
+            item.requires?.[key]?.forEach((required, index) => reference(required, definitions.store, `store.${id}.requires.${key}[${index}]`))
+        }
+    }
+    if (Object.values(definitions.store).filter(item => item.effect === 'seedSlots').length !== 1) {
+        throw new Error('store needs exactly one item with the seedSlots effect, the seed-slot upgrade')
+    }
+}
+
+function parseAlmanacZombie(value: unknown, name: string): AlmanacZombieEntry {
+    const source = exact(value, ['place', 'startingLevel'], name, ['spawnedOnly', 'afterAdventure'])
+    return {
+        place: nonNegativeInteger(source.place, `${name}.place`),
+        startingLevel: positiveInteger(source.startingLevel, `${name}.startingLevel`),
+        ...(source.spawnedOnly === undefined ? {} : { spawnedOnly: trueFlag(source.spawnedOnly, `${name}.spawnedOnly`) }),
+        ...(source.afterAdventure === undefined ? {} : { afterAdventure: trueFlag(source.afterAdventure, `${name}.afterAdventure`) }),
+    }
+}
+
+function parseZenGardenPlant(value: unknown, name: string): ZenGardenPlant {
+    const source = exact(value, ['plant', 'whichZenGarden', 'facing', 'lastWateredTime', 'drawVariation', 'plantAge', 'timesFed',
+        'feedingsPerGrow', 'plantNeed', 'lastNeedFulfilledTime', 'lastFertilizedTime', 'lastChocolateTime'], name)
+    const word = (key: string) => nonEmptyString(source[key], `${name}.${key}`)
+    const time = (key: string) => nonNegativeFinite(source[key], `${name}.${key}`)
+    return {
+        plant: qualifiedId(source.plant, `${name}.plant`), whichZenGarden: word('whichZenGarden'),
+        facing: oneOf(source.facing, ['left', 'right'] as const, `${name}.facing`), lastWateredTime: time('lastWateredTime'),
+        drawVariation: word('drawVariation'), plantAge: word('plantAge'),
+        timesFed: nonNegativeInteger(source.timesFed, `${name}.timesFed`), feedingsPerGrow: positiveInteger(source.feedingsPerGrow, `${name}.feedingsPerGrow`),
+        plantNeed: word('plantNeed'), lastNeedFulfilledTime: time('lastNeedFulfilledTime'), lastFertilizedTime: time('lastFertilizedTime'),
+        lastChocolateTime: time('lastChocolateTime'),
+    }
+}
+
 function parseLevelWaves(value: unknown[], name: string, definitions: GameplayDefinitions): LevelWave[] {
     if (value.length === 0) throw new Error(`${name}.waves must not be empty`)
     return value.map((wave, waveIndex) => {
@@ -595,8 +727,8 @@ function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefin
 
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exact(value, [
-        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'tutorial', 'award',
-    ], name, ['waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
+        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'award',
+    ], name, ['tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
         'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
@@ -681,6 +813,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     }
     if (source.openingRecharge !== undefined && source.openingRecharge !== false) throw new Error(`${name}.openingRecharge can only be false`)
     const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
+    tools?.forEach((id, index) => reference(id, definitions.tools, `${name}.tools[${index}]`))
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
     reference(lawnMower, definitions.projectiles, `${name}.lawnMower`)
     if (!definitions.projectiles[lawnMower].mow) throw new Error(`${name}.lawnMower must be a projectile that mows`)
@@ -717,7 +850,10 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
             titleKey: nonEmptyString(award.titleKey, `${name}.award.titleKey`), nameKey: nonEmptyString(award.nameKey, `${name}.award.nameKey`),
             descriptionKey: nonEmptyString(award.descriptionKey, `${name}.award.descriptionKey`),
             width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
-        if (award.kind === 'tool') parsedAward = { kind: 'tool', ...fields }
+        if (award.kind === 'tool') {
+            reference(fields.id, definitions.tools, `${name}.award.id`)
+            parsedAward = { kind: 'tool', ...fields }
+        }
         else {
             let opens: AwardOpens | undefined
             if (award.opens !== undefined) {
@@ -759,7 +895,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         ...(rules === undefined ? {} : { rules }),
         ...(zombiePool === undefined ? {} : { zombiePool }),
         ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),
-        tutorial: qualifiedId(source.tutorial, `${name}.tutorial`),
+        // The tutorial is a server script: GameplayRegistry checks it is installed (TutorialRegistry.validate).
+        ...(source.tutorial === undefined ? {} : { tutorial: qualifiedId(source.tutorial, `${name}.tutorial`) }),
         award: parsedAward,
     }
 }
@@ -780,11 +917,6 @@ function mapped<T>(
 
 function qualifiedIdArray(value: unknown, name: string): string[] {
     return array(value, name).map((entry, index) => qualifiedId(entry, `${name}[${index}]`))
-}
-
-function point(value: unknown, name: string): Point {
-    const source = exact(value, ['x', 'y'], name)
-    return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`) }
 }
 
 function rect(value: unknown, name: string): Rect {

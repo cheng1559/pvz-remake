@@ -16,8 +16,10 @@ export interface GridItemViewContext {
     stage?: LevelStage
 }
 
-/** What draws a thing of a cell (the original's GridItem): a grave; a crater to come. */
+/**
+ * What draws a thing of a cell (the original's GridItem): a grave; a crater to come. Off the board (offBoard.ts) it
+ * draws the thing as it stands once there (a grave risen), and goes with `destroy` as any off the board.
+ */
 export interface GridItemView extends EntityView<GridItemSnapshot> {
-    /** The thing off the board, as it stands. */
-    show(): void
+    destroy(): void
 }

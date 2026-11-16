@@ -2,7 +2,8 @@ import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
 import { mirrorInPacket, type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
 import { flattenTranslucent } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { createOffBoardZombie, holdStill, type OffBoardZombie } from '@/client/view/offBoard'
+import { createOffBoardZombie, holdStill } from '@/client/view/offBoard'
+import type { ZombieView } from '@/client/zombies/ZombieView'
 import { uiNode } from '@/client/view/uiNode'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 
@@ -35,7 +36,8 @@ export class ZombiePreview extends Component {
     private players: ReanimPlayer[] = []
     /** A translucent zombie drawn whole (flattenTranslucent), as PlantPreview draws a plant. */
     private composite?: Sprite
-    private zombie?: OffBoardZombie
+    /** The zombie's view, off the board. */
+    private view?: ZombieView
     /** Whether a packet's picture is tilted, and the clip a tilted one draws through. */
     private picture?: PacketPictureStyle
 
@@ -71,10 +73,11 @@ export class ZombiePreview extends Component {
     setZombie(typeId: string | undefined): void {
         if (this.typeId === typeId) return
         this.typeId = typeId
+        this.view?.destroy()
         if (this.root?.isValid) this.root.destroy()
         this.root = null
         this.players = []
-        this.zombie = undefined
+        this.view = undefined
         this.composite = undefined
         if (!typeId) return
         const root = uiNode({ name: 'RestingZombie', parent: this.node, active: false }).node
@@ -142,10 +145,8 @@ export class ZombiePreview extends Component {
         const mirrorBody = this.mirrored && !packet
         if (packet) mirrorInPacket(this.node, this.mirrored, packetScale)
         placePacketPicture(this.root, this.placement, packetScale, this.picture?.tilted, ZOMBIE_TILT)
-        const zombie = this.zombie
-        if (!zombie || this.composite) return
-        zombie.zombie = { ...zombie.zombie, team: mirrorBody ? 'plants' : undefined }
-        zombie.view.show(zombie.zombie)
+        if (!this.view || this.composite) return
+        this.view.turn(mirrorBody)
         this.root.getChildByName('Zombie')?.setPosition(mirrorBody ? this.placement.facingRightOffsetX ?? 0 : 0, 0)
     }
 
@@ -154,13 +155,13 @@ export class ZombiePreview extends Component {
         if (!isValid(root, true) || root !== this.root) return
         // ReanimatorCache::MakeCachedZombieFrame poses most zombies on anim_idle, the pole vaulter on anim_walk.
         const pose = packet?.clip ?? 'idle'
-        const zombie = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId, {
+        const view = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId, {
             pose, mirrored: this.mirrored && this.placement.packetScale === undefined,
             draw: { shadow: false, ...(this.placement.from === 'reanim' ? { position: { x: 0, y: 0 } } : {}) },
         })
-        if (!zombie || !isValid(root, true) || root !== this.root) return
-        this.zombie = zombie
-        this.players = zombie.view.players
+        if (!view || !isValid(root, true) || root !== this.root) { view?.destroy(); return }
+        this.view = view
+        this.players = view.players
         // A packet's picture is much smaller than its art.
         holdStill(this.players, this.placement.packetScale !== undefined)
         this.place()

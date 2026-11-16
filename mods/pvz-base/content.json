@@ -8,6 +8,10 @@
     "projectiles": "gameplay/definitions/projectiles.json",
     "items": "gameplay/definitions/items.json",
     "achievements": "gameplay/definitions/achievements.json",
+    "tools": "gameplay/definitions/tools.json",
+    "store": "gameplay/definitions/store.json",
+    "storePages": "gameplay/definitions/store-pages.json",
+    "almanac": "gameplay/definitions/almanac.json",
     "levels": "gameplay/levels.json"
   },
   "presentation": {
@@ -28,7 +32,10 @@
     "zombies": "presentation/definitions/zombies.json",
     "seedPackets": "presentation/definitions/seed-packets.json",
     "projectiles": "presentation/definitions/projectiles.json",
-    "items": "presentation/definitions/items.json"
+    "items": "presentation/definitions/items.json",
+    "store": "presentation/definitions/store.json",
+    "storeDialogue": "presentation/definitions/store-dialogue.json",
+    "almanac": "presentation/definitions/almanac.json"
   },
   "resources": {
     "sprites": {
@@ -50287,9 +50294,7 @@
       "pvz:night_moongrains_main": "assets/audio/music/night_moongrains_main.mp3"
     },
     "json": {
-      "pvz:strings": "assets/json/strings.json",
-      "pvz:gameplay/store": "gameplay/store.json",
-      "pvz:gameplay/almanac": "gameplay/almanac.json"
+      "pvz:strings": "assets/json/strings.json"
     },
     "reanim": {
       "pvz:cherrybomb_explode": "assets/reanim/cherrybomb_explode.json",

@@ -21,6 +21,11 @@ export interface EntityBehavior<Key extends string, Data, Definition, State exte
     tick(context: EntityBehaviorContext<Key, Data, Definition, State>): void
     /** Throw on an incompatible state; no save migration is performed. */
     validateState?(state: State, definition: Readonly<Definition>): void
+    /**
+     * Throw on a definition's `behavior` the behaviour does not take (an unknown key included), so content is rejected
+     * as it is loaded, before any of its entities exists: run for each type the behaviour is registered for.
+     */
+    validateConfig?(definition: Readonly<Definition>, definitions: Readonly<GameplayDefinitions>, name: string): void
 }
 
 /** Shared registration, per-entity state and simulation dispatch for gameplay entities. */
@@ -40,15 +45,20 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
     register<State extends JsonObject>(ownerId: string, typeId: string, behavior: EntityBehavior<Key, Data, Definition, State>): void {
         if (!isModId(ownerId) || !isQualifiedId(typeId) || !behavior ||
             typeof behavior.createState !== 'function' || typeof behavior.tick !== 'function' ||
-            behavior.validateState !== undefined && typeof behavior.validateState !== 'function') {
+            behavior.validateState !== undefined && typeof behavior.validateState !== 'function' ||
+            behavior.validateConfig !== undefined && typeof behavior.validateConfig !== 'function') {
             throw new Error(`Invalid ${this.kind} behavior: ${typeId}`)
         }
         this.behaviors.register(typeId, Object.freeze(behavior) as unknown as EntityBehavior<Key, Data, Definition>, ownerId)
     }
 
+    /** Every behaviour targets a definition and takes its `behavior`, and every definition with one has its behaviour. */
     validate(definitions: GameplayDefinitions): void {
         const table = this.definitions(definitions)
-        for (const [id] of this.behaviors.entries()) if (!table[id]) throw new Error(`Behavior targets unknown ${this.kind}: ${id}`)
+        for (const [id, behavior] of this.behaviors.entries()) {
+            if (!table[id]) throw new Error(`Behavior targets unknown ${this.kind}: ${id}`)
+            behavior.validateConfig?.(table[id], definitions, `${this.kind}s.${id}.behavior`)
+        }
         for (const [id, definition] of Object.entries(table)) {
             if (definition.behavior !== undefined && !this.behaviors.has(id)) throw new Error(`${this.kind} behavior is not installed: ${id}`)
         }

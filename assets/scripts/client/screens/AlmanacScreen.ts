@@ -12,7 +12,8 @@ import { menuApi } from '@/client/api/MenuApi'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { packetSubject, plantPacket } from '@/client/plants/definitions'
 import { zombieDefinition } from '@/client/zombies/definitions'
-import type { AlmanacGroupCard, AlmanacPlantDefinition, AlmanacZombieView } from '@/shared/menu'
+import type { AlmanacCard, AlmanacZombieView } from '@/shared/menu'
+import { ALMANAC_GROUNDS, almanacGround } from '@/shared/content/presentation'
 import { drawAlmanacText, drawMiddleAlmanacText } from './AlmanacText'
 import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
@@ -24,8 +25,8 @@ import { uiAreaEdge } from '@/client/view/ClientViewport'
 /** What the almanac has selected: the plant (its place on its page), the plant page it is on, and the zombie. */
 export interface AlmanacSelection { plant: number, zombie: number, plantPage?: number }
 
-/** A card of a plant page: the first page's are the almanac's own entries (`entry`), the later pages' a group's seeds. */
-type PlantCard = AlmanacGroupCard & { entry?: AlmanacPlantDefinition }
+/** A card of a plant page: the first page's are the chooser's grid (`grid`), the later pages' a group's seeds. */
+type PlantCard = AlmanacCard & { grid?: true }
 
 /** AlmanacDialog's ALMANAC_PLANT_POSITION: where the plants' page shows a plant (the corner of its cell). */
 const ALMANAC_PLANT = { x: 578, y: 140 }
@@ -44,9 +45,11 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
     } else {
         // `/cheatseed` opens the whole almanac, with the other seed groups' pages after the plants' (AlmanacView).
         const { plants, zombies, groupPages = [] } = await menuApi.getAlmanac(GameDebugSettings.cheatSeedsEnabled)
+        // Either page may show any of the grounds (the presentation's `almanac`).
+        const grounds = ALMANAC_GROUNDS.map(ground => `almanac_ground${ground}`)
         const names = page === 'plants'
-            ? ['pvz:seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
-            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombieblank', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
+            ? ['pvz:seedpacketflash', 'almanac_plantcard', ...grounds]
+            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombieblank', 'almanac_zombiecard', ...grounds]
         const [frames, seeds] = await Promise.all([
             Promise.all(names.map(async name => [name, await modResources.sprite(name)] as const)),
             // A group's seed is drawn as the chooser draws its card, from its definition.
@@ -71,12 +74,11 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             })
         }
         const showPlant = (card: PlantCard) => {
-            const { entry } = card
             const node = newDetails(card.seed)
-            if (entry) {
-                const { nameKey } = plantPacket(ui.assets.presentation, entry.seed)
-                ui.image(node, sprites[`almanac_ground${entry.ground}`], { x: 521, y: 107 })
-                AlmanacEntityView.create(node, 'plants', entry.seed, ALMANAC_PLANT.x, ALMANAC_PLANT.y)
+            if (card.grid) {
+                const { nameKey } = plantPacket(ui.assets.presentation, card.seed)
+                ui.image(node, sprites[`almanac_ground${almanacGround(ui.assets.presentation, card.seed)}`], { x: 521, y: 107 })
+                AlmanacEntityView.create(node, 'plants', card.seed, ALMANAC_PLANT.x, ALMANAC_PLANT.y)
                 ui.image(node, sprites.almanac_plantcard, { x: 459, y: 86 })
                 ui.label(node, { text: ui.text(nameKey), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
                 describe(node, `${nameKey}_DESCRIPTION_HEADER`, `${nameKey}_DESCRIPTION`)
@@ -86,8 +88,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 // lower) or the grave (its corner 4 left of and 9 above the cell). The card's frame hides what stands
                 // out.
                 const seed = seeds![card.seed], subject = packetSubject(ui.assets.presentation, seed)
-                const { x, y } = ALMANAC_PLANT
-                ui.image(node, sprites.almanac_groundday, { x: 521, y: 107 })
+                const { x, y } = ALMANAC_PLANT, ground = seed.kind === 'grave' ? 'day' : almanacGround(ui.assets.presentation, seed.id)
+                ui.image(node, sprites[`almanac_ground${ground}`], { x: 521, y: 107 })
                 if (seed.kind === 'plant') AlmanacEntityView.create(node, 'plants', seed.id, x, y)
                 else if (seed.kind === 'zombie') AlmanacEntityView.create(node, 'zombies', seed.id, x - 30, y - 30 + ALMANAC_ZOMBIE_DROP)
                 else SeedPacketRenderer.drawGrave(node, undefined, x - 4, y - 9, 1)
@@ -108,7 +110,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         const showZombie = (zombie: AlmanacZombieView) => {
             const { nameKey } = zombieDefinition(ui.assets.presentation, zombie.zombie)
             const node = newDetails(zombie.zombie)
-            ui.image(node, sprites[zombie.iceGround ? 'almanac_groundice' : 'almanac_groundday'], { x: 518, y: 110 })
+            ui.image(node, sprites[`almanac_ground${almanacGround(ui.assets.presentation, zombie.zombie)}`], { x: 518, y: 110 })
             AlmanacEntityView.create(node, 'zombies', zombie.zombie, 559, 175, { x: 517, y: 124, width: 197, height: 187 })
             ui.image(node, sprites.almanac_zombiecard, { x: 455, y: 78 })
             ui.label(node, { text: ui.text(nameKey), font: 'button', color: new Color(190, 255, 235), x: 613, y: 362, baseline: true, align: 'center' })
@@ -129,7 +131,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         let turn: ((step: number) => void) | undefined
         if (page === 'plants') {
             const pages: PlantCard[][] = [
-                plants.map(entry => ({ seed: entry.seed, place: entry.place, cost: entry.cost, refreshTime: entry.refreshTime, entry })),
+                plants.map(card => ({ ...card, grid: true as const })),
                 ...groupPages,
             ]
             // The cards of the page shown, under the selected entry, layered as the chooser's (SeedPacketView's
@@ -161,8 +163,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     })
                     button.hapticsEnabled = false
                     button.node.name = card.seed
-                    const subject = card.entry ? undefined : packetSubject(ui.assets.presentation, seeds![card.seed])
-                    const look = card.entry ? { plant: plantPacket(ui.assets.presentation, card.entry.seed).plant, upgrade: card.entry.upgrade }
+                    const subject = card.grid ? undefined : packetSubject(ui.assets.presentation, seeds![card.seed])
+                    const look = card.grid ? { plant: plantPacket(ui.assets.presentation, card.seed).plant, upgrade: ui.assets.presentation.almanac[card.seed]?.upgrade }
                         : { plant: subject!.plant, zombie: subject!.zombie, grave: subject!.grave }
                     new SeedPacketView({ definitions: ui.assets.presentation, name: `Card-${button.node.name}`, parent: cards, layer: parent.layer,
                         x: button.node.position.x, y: button.node.position.y, ...look, cost: card.cost, costFont: ui.assets.fonts.packetCost,
@@ -183,14 +185,14 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             if (pages.length > 1) turn = step => showPage((shownPage + step + pages.length) % pages.length)
         } else {
             for (const zombie of zombies) {
-                const x = zombie.id % 5 * 85 + 22, y = Math.floor(zombie.id / 5) * 80 + 86
+                const x = zombie.place % 5 * 85 + 22, y = Math.floor(zombie.place / 5) * 80 + 86
                 if (!zombie.shown) { ui.image(parent, sprites.almanac_zombieblank, { x, y }); continue }
                 // AlmanacDialog::DrawZombies draws the window image at its own size over the 76x76 button.
                 const windowSize = sprites.almanac_zombiewindow.originalSize
                 const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x, y, width: 76, height: 76,
                     imageBox: { width: windowSize.width, height: windowSize.height }, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => {
-                        if (selection.zombie === zombie.id) return
-                        selection.zombie = zombie.id
+                        if (selection.zombie === zombie.place) return
+                        selection.zombie = zombie.place
                         showZombie(zombie)
                         tap()
                     } })
@@ -208,7 +210,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 button.onStateChange = state => { update(state); underlay.node.active = glow.node.active = state === 'hover' || state === 'pressed' }
                 button.onStateChange(button.isHovering ? 'hover' : 'normal')
             }
-            showZombie(zombies.find(zombie => zombie.shown && zombie.id === selection.zombie) ?? zombies[0])
+            showZombie(zombies.find(zombie => zombie.shown && zombie.place === selection.zombie) ?? zombies[0])
         }
         // Footer buttons keep their margins from the UI area's edges.
         ui.button(uiAreaEdge(parent, 'left'), { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })

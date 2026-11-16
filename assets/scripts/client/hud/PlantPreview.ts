@@ -93,6 +93,7 @@ export class PlantPreview extends Component {
             return
         }
         this.rendering = drawn
+        this.view?.destroy()
         if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
         this.rendered = null
         this.view = undefined
@@ -138,14 +139,14 @@ export class PlantPreview extends Component {
         // Plant::DrawSeedType: where and how big its packet has the plant, without its shadow, held on its pose.
         const packet = this.definitions.plants[plantId]?.packet
         const pose = uiNode({ name: 'Pose', parent: root, position: { x: packet?.x ?? 0, y: -(packet?.y ?? 0) } }).node
-        const plant = await createOffBoardPlant(pose, plantId, { packet: true, draw: { position: { x: 0, y: 0 }, scale: packet?.scale ?? 1, shadow: false } })
-        if (!isValid(root, true) || root !== this.rendered) return
+        const view = await createOffBoardPlant(pose, plantId, { packet: true, draw: { position: { x: 0, y: 0 }, scale: packet?.scale ?? 1, shadow: false } })
+        if (!isValid(root, true) || root !== this.rendered) { view?.destroy(); return }
         // A plant its view does not draw off the board (it has no animation) shows nothing.
-        if (!plant) { pose.destroy(); return }
+        if (!view) { pose.destroy(); return }
         // A packet's picture is much smaller than its art.
-        holdStill(plant.view.players, this.packetScale !== undefined)
-        this.view = plant.view
-        this.players.push(...plant.view.players)
+        holdStill(view.players, this.packetScale !== undefined)
+        this.view = view
+        this.players.push(...view.players)
     }
 
     /** The preview's shade over the plant's own colors, as its view draws them. */

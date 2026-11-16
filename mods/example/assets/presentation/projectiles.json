@@ -2,13 +2,11 @@
   "example:pea": {
     "sprite": "example:orb",
     "impact": {
-      "kind": "particle",
       "id": "example:sparks",
       "yRange": [
         20,
         100
-      ],
-      "duration": 0.21
+      ]
     },
     "fireSounds": [
       {

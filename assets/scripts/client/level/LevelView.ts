@@ -16,7 +16,7 @@ import { seedBankExtraWidth } from './LevelGeometry'
 import type { UIButton } from '@/client/ui/UIButton'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import type { GameCommand, JsonObject, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { DialogQuestion, GameCommand, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { getLevelPresentation } from './LevelPresentation'
@@ -34,7 +34,7 @@ import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser, REPICK_END_TICK } from './LevelSeedChooser'
-import { LevelBoardHud, ownedTools } from './LevelBoardHud'
+import { LevelBoardHud } from './LevelBoardHud'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { PlantingLineView } from './PlantingLineView'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
@@ -112,9 +112,9 @@ export class LevelView {
     private constructor(
         private readonly root: Node,
         readonly audio: LevelAudioPresenter,
-        private readonly intro: LevelIntro,
+        readonly intro: LevelIntro,
         private readonly end: LevelEndPresenter,
-        private readonly gameOver: LevelGameOverPresenter,
+        readonly gameOver: LevelGameOverPresenter,
         private readonly entityRenderer: LevelEntityRenderer,
         private readonly hud: LevelHudPresenter,
         private readonly particles: LevelParticlePresenter,
@@ -261,18 +261,16 @@ export class LevelView {
         }
         const seedChooser = initial.seedChooser === undefined ? undefined : await createSeedChooser(initial.seedChooser)
         let view!: LevelView
-        let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
             almanacZombies: player.almanacZombies, openAlmanacZombie: zombie => view.onOpenAlmanac?.(zombie),
             chooserPages: player.almanacZombies !== undefined || player.store === true,
             seedChooser: seedChooser !== undefined,
-            mowers: () => entityRenderer.mowers(),
             previewZombies: initial.wave.previewZombies ?? {},
-            hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,
+            hasOpeningDialog: initial.dialog !== undefined,
         })
-        entityRenderer = new LevelEntityRenderer(
+        const entityRenderer = new LevelEntityRenderer(
             content,
             entityLayer, coinLayer, awardLayer, intro, graveRise,
         )
@@ -305,7 +303,7 @@ export class LevelView {
         entityRenderer.shake = (x, y, haptic) => view.shakeBoard(x, y, haptic)
         view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
-        if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave) {
+        if (initial.tools || level.conveyor || initial.tutorial.dave) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
         }
         view.itemPadding = rulePresentation?.itemPadding
@@ -485,7 +483,7 @@ export class LevelView {
     bindDialogAnswer(send: (accept: boolean) => void): void { this.answerDialog = send }
 
     /** CutScene's DIALOG_PURCHASE_PACKET_SLOT: the price, the slot count, and the purse beside it. */
-    private askDialogQuestion(ui: UI, question: JsonObject): void {
+    private askDialogQuestion(ui: UI, question: DialogQuestion): void {
         if (question.kind !== 'pvz:packetUpgrade') return
         this.hud.showCoinBank(100)
         const dialog = ui.dialog(this.root, {
@@ -626,20 +624,20 @@ export class LevelView {
 
     async snapshot(flow: LevelFlowSnapshot): Promise<LevelPresentationSnapshot> {
         const hud = this.hud.snapshot()
-        const [entities, particles] = await Promise.all([
+        const [board, particles] = await Promise.all([
             this.entityRenderer.snapshot(),
             this.particles.snapshot(),
         ])
         // Typed, so the format it is written in is the one it is read in; parsed, so it is saved only if it reads back.
         const snapshot: LevelPresentationSnapshot = {
-            schemaVersion: 4,
+            schemaVersion: 5,
             flow,
             intro: this.intro.snapshot(),
             end: this.end.snapshot(),
             advice: hud.advice,
             hud: hud.hud,
             audio: this.audio.snapshot(),
-            entities,
+            ...board,
             particles,
             extensions: {},
         }
@@ -649,7 +647,7 @@ export class LevelView {
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
         // The board, graves rising with the intro included, is shown as it was, quietly.
-        await this.entityRenderer.restore(snapshot.entities)
+        await this.entityRenderer.restore(snapshot)
         this.syncSeedChooserIntro()
         this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete, this.menuVisible)
         await Promise.all([this.end.restore(snapshot.end, snapshot.flow.completionStarted), this.audio.restore(snapshot.audio)])

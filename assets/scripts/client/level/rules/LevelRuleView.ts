@@ -28,7 +28,8 @@ export interface LevelRuleViewContext {
 /**
  * The client side of a level rule (the server's LevelRuleDefinition): what the mode draws and how it takes input.
  * The generic level view only calls these. Its `canPlantAt` (the shared LevelPlantingRule) is the same function as
- * the server rule's, which the planting preview asks.
+ * the server rule's, which the planting preview asks. What the server rule shows it (its `snapshot`, the snapshot's
+ * `extensions[kind]`) is the view's own to parse.
  */
 export interface LevelRuleView extends LevelPlantingRule {
     setPointer?(pointer?: { x: number; y: number }): void

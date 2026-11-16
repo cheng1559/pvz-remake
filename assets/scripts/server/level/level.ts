@@ -3,7 +3,7 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { updateSkySun } from './sun'
-import { getActiveTutorial, TUTORIALS } from '../tutorials'
+import { getActiveTutorial, levelTutorial } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
 import { seedAffordable } from '../seeds/seedBank'
@@ -11,7 +11,7 @@ import { createGraves } from './graves'
 
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition
-    const script = TUTORIALS[level.tutorial]
+    const script = levelTutorial(world)
     const blocked = firstAdventure && script?.blocksStart
     world.resources.set(TutorialResource, {
         firstAdventure,

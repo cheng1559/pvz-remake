@@ -1,4 +1,4 @@
-import { boolean, exact, integer, nonEmptyString, nonNegativeInteger, positiveInteger } from '@/shared/validate'
+import { array, boolean, exact, integer, integerInRange, nonEmptyString, nonNegativeInteger, positiveFinite, positiveInteger } from '@/shared/validate'
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
 import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
@@ -19,14 +19,47 @@ import { nextWaveComing } from '../level/waves'
 import { clearCursor } from '../seeds/cursor'
 import type { LevelRuleDefinition } from './registry'
 
+type Parse = (value: unknown, name: string) => number
+
 /**
- * `rules: {kind: "pvz:whack-a-zombie", count, ...}` (Challenge::WhackAZombieSpawning): zombies rise from graves,
- * `graves` of them placed from `firstGraveColumn` on at the start and topped up to `refillGraves` before each later
- * wave; the first wave comes the level's `firstWaveTicks` in (Challenge::StartLevel) and the next ones `waveTicks` apart. `zombies` are the plain, cone and
- * pail zombies the groups pick from, and `sun` the item a whacked zombie may drop three of.
+ * The rule's numbers, each with its check and the original's value, which it keeps unless the level writes its own.
+ * `graves` are placed from `firstGraveColumn` on at the start and topped up to `refillGraves` `refillTicks` before each
+ * later wave; the first wave comes the level's `firstWaveTicks` in (Challenge::StartLevel) and the next ones `waveTicks`
+ * apart. Groups rise while the next wave is at least `spawnCutoffTicks` away, each zombie over `riseTicks`, and the
+ * final wave's group of `finalGroup` comes `finalGroupDelayTicks` into it; earlier waves' first groups come at once.
+ * The mallet hits a circle of `hammerRadius` for `hammerDamage`.
  */
-interface WhackSettings {
-    graves: number; refillGraves: number; firstGraveColumn: number; waveTicks: number
+const NUMBERS = {
+    // Board::InitLevel: WhackAZombiePlaceGraves(9); WhackAZombiePlaceGraves: from column 3.
+    graves: [positiveInteger, 9], firstGraveColumn: [nonNegativeInteger, 3],
+    // Challenge::WhackAZombieSpawning: at mZombieCountDown 100, 5 graves less those there (at least one).
+    refillGraves: [positiveInteger, 5], refillTicks: [positiveInteger, 100],
+    // Challenge::WhackAZombieSpawning: mZombieCountDown = 2000 for each wave; no group under 300.
+    waveTicks: [positiveInteger, 2000], spawnCutoffTicks: [nonNegativeInteger, 300],
+    // Challenge::WhackAZombieSpawning: the final wave's 20 zombies, mChallengeStateCounter = 300 ticks into it.
+    finalGroup: [positiveInteger, 20], finalGroupDelayTicks: [positiveInteger, 300],
+    // Challenge::WhackAZombieSpawning: mPhaseCounter = 50, Zombie::RiseFromGrave's 150-tick rise cut short.
+    riseTicks: [positiveInteger, 50],
+    // Challenge::MouseDownWhackAZombie: a circle of 45, 20 above the click; TakeHelmDamage(900).
+    hammerRadius: [positiveFinite, 45], hammerDamage: [positiveInteger, 900],
+} satisfies Record<string, readonly [Parse, number]>
+type WhackNumber = keyof typeof NUMBERS
+
+/** Challenge::WhackAZombieSpawning's chances out of 100 in each of its phases: a group of 2 or 3, and a pail or cone zombie. */
+const CHANCES = {
+    double: [0, 30, 10, 10, 15, 18], triple: [0, 0, 0, 0, 10, 13], pail: [0, 0, 0, 10, 15, 15], cone: [0, 0, 30, 30, 30, 30],
+}
+type WhackChance = keyof typeof CHANCES
+/** Challenge::WhackAZombieSpawning's phases: aPhase is clamped to 0-5. */
+const PHASES = 6
+
+/**
+ * `rules: {kind: "pvz:whack-a-zombie", count, zombies, sun, ...}` (Challenge::WhackAZombieSpawning): zombies rise from
+ * graves. `zombies` are the plain, cone and pail zombies the groups pick from, and `sun` the item a whacked zombie may
+ * drop three of; the level may also write any of NUMBERS and of the `chances` (CHANCES), each a list of the phases'.
+ */
+interface WhackSettings extends Record<WhackNumber, number> {
+    chances: Record<WhackChance, number[]>
     zombies: { plain: string; cone: string; pail: string }
     sun: string
 }
@@ -40,12 +73,27 @@ interface WhackState { groupTicks: number; hammer: boolean }
 const parsed = new WeakMap<LevelRule, WhackSettings>()
 
 function parseSettings(rule: LevelRule, name: string): WhackSettings {
-    const source = exact(rule.settings, ['graves', 'refillGraves', 'firstGraveColumn', 'waveTicks', 'zombies', 'sun'], name)
+    const numbers = Object.keys(NUMBERS) as WhackNumber[], chanceKeys = Object.keys(CHANCES) as WhackChance[]
+    const source = exact(rule.settings, ['zombies', 'sun'], name, [...numbers, 'chances'])
     const types = exact(source.zombies, ['plain', 'cone', 'pail'], `${name}.zombies`)
+    const written = source.chances === undefined ? {} : exact(source.chances, [], `${name}.chances`, chanceKeys)
+    const chances = Object.fromEntries(chanceKeys.map(key => {
+        if (written[key] === undefined) return [key, CHANCES[key]]
+        const phases = array(written[key], `${name}.chances.${key}`)
+        if (phases.length !== PHASES) throw new TypeError(`${name}.chances.${key} must have a chance for each of the ${PHASES} phases`)
+        return [key, phases.map((chance, phase) => integerInRange(chance, 0, 100, `${name}.chances.${key}[${phase}]`))]
+    })) as WhackSettings['chances']
+    for (let phase = 0; phase < PHASES; phase++) {
+        if (chances.triple[phase] + chances.double[phase] > 100 || chances.pail[phase] + chances.cone[phase] > 100) {
+            throw new TypeError(`${name}.chances must add up to at most 100 in phase ${phase}`)
+        }
+    }
     return {
-        graves: positiveInteger(source.graves, `${name}.graves`), refillGraves: positiveInteger(source.refillGraves, `${name}.refillGraves`),
-        firstGraveColumn: nonNegativeInteger(source.firstGraveColumn, `${name}.firstGraveColumn`),
-        waveTicks: positiveInteger(source.waveTicks, `${name}.waveTicks`),
+        ...Object.fromEntries(numbers.map(key => {
+            const [parse, original] = NUMBERS[key]
+            return [key, source[key] === undefined ? original : parse(source[key], `${name}.${key}`)]
+        })) as Record<WhackNumber, number>,
+        chances,
         zombies: Object.fromEntries((['plain', 'cone', 'pail'] as const).map(key => [key, nonEmptyString(types[key], `${name}.zombies.${key}`)])) as WhackSettings['zombies'],
         sun: nonEmptyString(source.sun, `${name}.sun`),
     }
@@ -65,23 +113,6 @@ function awardDropped(world: World): boolean {
     return world.resources.get(LevelStateResource).result !== 'playing' || levelAwardDropped(world)
 }
 
-/** Challenge::WhackAZombieSpawning's chances out of 100 per phase: 2 or 3 zombies, and a pail or cone zombie. */
-const DOUBLE_CHANCE = [0, 30, 10, 10, 15, 18]
-const TRIPLE_CHANCE = [0, 0, 0, 0, 10, 13]
-const PAIL_CHANCE = [0, 0, 0, 10, 15, 15]
-const CONE_CHANCE = [0, 0, 30, 30, 30, 30]
-/** The final wave raises this many zombies at once, all cone or pail zombies at speed up to 2. */
-const FINAL_GROUP = 20
-/** The final wave's group comes this long after it starts; earlier waves start at once. */
-const FINAL_GROUP_DELAY = 300
-/** Groups only spawn while the next wave is at least this far away. */
-const SPAWN_CUTOFF = 300
-/** Zombie::RiseFromGrave's 150-tick rise, cut to 50 on this level. */
-const RISE_TICKS = 50
-/** Challenge::MouseDownWhackAZombie: the mallet hits a circle of this radius, 20 above the click. */
-const HAMMER_RADIUS = 45
-/** What a blow takes: off a helm (Zombie::TakeHelmDamage), and off a body or a plant that has more than it. */
-const HAMMER_DAMAGE = 900
 /** The mallet is the player's, on the plants' side: it only meets what is hostile to that. */
 const HAMMER_TEAM: Team = 'plants'
 
@@ -121,8 +152,8 @@ function placeWhackGraves(world: World, definitions: GameplayDefinitions, count:
 }
 
 /**
- * Challenge::WhackAZombieSpawning: each wave lasts `waveTicks`; groups of zombies rise from graves until 300 ticks
- * before the next, sooner and faster as the waves go on, and graves are topped up 100 ticks before a wave.
+ * Challenge::WhackAZombieSpawning: each wave lasts `waveTicks`; groups of zombies rise from graves until `spawnCutoffTicks`
+ * before the next, sooner and faster as the waves go on, and graves are topped up `refillTicks` before a wave.
  */
 function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -136,7 +167,7 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             // The waves' mZombieCountDown, counted down by the gameplay ticks: none once the final group has risen.
             if (waves.nextWaveAtTick === undefined) return
             const countdown = waves.nextWaveAtTick - tick
-            if (countdown === 100 && waves.index > 0) {
+            if (countdown === rules.refillTicks && waves.index > 0) {
                 placeWhackGraves(world, definitions, Math.max(1, rules.refillGraves - lawnGraves(world).length), tick)
             }
             // Board::NextWaveComing, whose siren goes before the last wave here.
@@ -144,8 +175,8 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             if (countdown <= 0) {
                 waves.nextWaveAtTick = tick + rules.waveTicks
                 if (waves.index < waves.plan.length) waves.index++
-                state.groupTicks = waves.index === waves.plan.length ? FINAL_GROUP_DELAY : 1
-            } else if (countdown < SPAWN_CUTOFF) return
+                state.groupTicks = waves.index === waves.plan.length ? rules.finalGroupDelayTicks : 1
+            } else if (countdown < rules.spawnCutoffTicks) return
             if (--state.groupTicks !== 0) return
             raiseGroup(world, definitions, commands)
         },
@@ -154,17 +185,17 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
 
 function raiseGroup(world: World, definitions: GameplayDefinitions, remover: EntityRemover): void {
     const { definition } = world.resources.get(LevelStateResource)
-    const zombies = whackSettings(definition.rules!).zombies
+    const { zombies, chances, finalGroup, riseTicks } = whackSettings(definition.rules!)
     const waves = world.resources.get(WaveResource)
     const state = whackState(world)
     const random = world.resources.get(RandomResource)
     const wave = waves.index
     const final = wave === waves.plan.length
-    const phase = Math.min(5, Math.max(0, Math.trunc((wave - 1) * 6 / 12)))
+    const phase = Math.min(PHASES - 1, Math.max(0, Math.trunc((wave - 1) * 6 / 12)))
     const numberHit = random.integer(0, 99), typeHit = random.integer(0, 99)
-    let count = final ? FINAL_GROUP : numberHit < TRIPLE_CHANCE[phase] ? 3 : numberHit < TRIPLE_CHANCE[phase] + DOUBLE_CHANCE[phase] ? 2 : 1
-    let typeId = typeHit < PAIL_CHANCE[phase] && count < 3 ? zombies.pail
-        : typeHit < PAIL_CHANCE[phase] + CONE_CHANCE[phase] ? zombies.cone : zombies.plain
+    let count = final ? finalGroup : numberHit < chances.triple[phase] ? 3 : numberHit < chances.triple[phase] + chances.double[phase] ? 2 : 1
+    let typeId = typeHit < chances.pail[phase] && count < 3 ? zombies.pail
+        : typeHit < chances.pail[phase] + chances.cone[phase] ? zombies.cone : zombies.plain
     // A grave a grave buster is eating raises nothing.
     const plants = [...world.query(PositionComponent, PlantComponent)]
     const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
@@ -177,7 +208,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
             typeId = random.integer(0, 1) === 0 ? zombies.cone : zombies.pail
             maxSpeed = 2
         }
-        const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, RISE_TICKS), ZombieComponent)!
+        const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, riseTicks), ZombieComponent)!
         zombie.speedPerTick = 0.5 + random.nextFloat() * (maxSpeed - 0.5)
         startWalk(zombie, definitions.zombies[typeId].animation, zombie.walkClip, random)
     }
@@ -193,16 +224,17 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
 
 /**
  * Challenge::MouseDownWhackAZombie: the mallet hits the front one under it of the other side's zombies and plants, and
- * passes over its own side's. A helm takes 900 damage and only the helm, as in the original, whatever shield is held.
- * A bare zombie with no more health than that dies at once with its loot (`killed`, the POW), and the cursor is
- * cleared (Board::ClearCursor): every zombie of the original, which kills any. One with more only takes the 900, past
- * its shield. A plant, which the original's mallet never meets, takes the 900 the same way.
+ * passes over its own side's. A helm takes `hammerDamage` (900) and only the helm, as in the original, whatever shield
+ * is held. A bare zombie with no more health than that dies at once with its loot (`killed`, the POW), and the cursor is
+ * cleared (Board::ClearCursor): every zombie of the original, which kills any. One with more only takes the blow, past
+ * its shield. A plant, which the original's mallet never meets, takes the blow the same way.
  */
 function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: number, remover: EntityRemover): void {
+    const { hammerRadius, hammerDamage } = whackSettings(world.resources.get(LevelStateResource).definition.rules!)
     // Lower rows draw in front; within a row a zombie is over a plant, and the later of two alike over the earlier.
     let top: { entity: number; row: number; plant?: true } | undefined
     const reached = (position: { x: number; y: number }, body: { x: number; y: number; width: number; height: number }) =>
-        circleRectOverlap(x, y - 20, HAMMER_RADIUS, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })
+        circleRectOverlap(x, y - 20, hammerRadius, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })
     for (const entity of world.query(PositionComponent, PlantComponent)) {
         const plant = world.get(entity, PlantComponent)!, position = world.get(entity, PositionComponent)!
         if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(position, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))) continue
@@ -218,7 +250,7 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     if (!top) return
     const events = world.resources.get(EventQueueResource)
     if (top.plant) {
-        damagePlant(world, definitions, top.entity, HAMMER_DAMAGE, remover)
+        damagePlant(world, definitions, top.entity, hammerDamage, remover)
         // What is left says whether the blow ended it: a plant kept from harm (`/plantinvincible`) is not.
         const left = world.get(top.entity, PlantComponent), killed = !left || left.health === 0
         emitServerEvent(events, 'plantWhacked', { plantId: top.entity, x, y, ...(killed ? { killed } : {}) })
@@ -227,12 +259,12 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     const zombie = world.get(top.entity, ZombieComponent)!
     if (zombie.helmHealth > 0) {
         emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm!.type })
-        damageZombie(world, definitions, top.entity, HAMMER_DAMAGE, { helmOnly: true }, remover)
+        damageZombie(world, definitions, top.entity, hammerDamage, { helmOnly: true }, remover)
         return
     }
-    if (zombie.health > HAMMER_DAMAGE) {
+    if (zombie.health > hammerDamage) {
         emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y })
-        damageZombie(world, definitions, top.entity, HAMMER_DAMAGE, { bypassShield: true }, remover)
+        damageZombie(world, definitions, top.entity, hammerDamage, { bypassShield: true }, remover)
         return
     }
     emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, killed: true })
@@ -250,8 +282,12 @@ export const whackAZombieRule: LevelRuleDefinition = {
         }
         if (!definitions.items[settings.sun]) throw new Error(`${name}.sun: unknown item ${settings.sun}`)
         if (level.firstWaveTicks === undefined) throw new Error(`${name} needs the level's firstWaveTicks`)
-        if (settings.firstGraveColumn >= definitions.boards[level.board].columns || settings.waveTicks <= SPAWN_CUTOFF) {
-            throw new Error(`${name} does not fit the lawn`)
+        if (settings.firstGraveColumn >= definitions.boards[level.board].columns) throw new Error(`${name} does not fit the lawn`)
+        // A wave has room for groups, its refill comes within it, and the final group rises before the cutoff (else the
+        // level never ends).
+        const { waveTicks, spawnCutoffTicks, refillTicks, finalGroupDelayTicks } = settings
+        if (waveTicks <= spawnCutoffTicks || refillTicks >= waveTicks || finalGroupDelayTicks > waveTicks - spawnCutoffTicks + 1) {
+            throw new Error(`${name} does not fit its waves`)
         }
     },
     /** Board::InitZombieWaves sets 8 waves, each without planned zombies: the groups rise while the wave runs. */

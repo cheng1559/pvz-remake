@@ -64,7 +64,7 @@ test('a thing of a cell is drawn by its view like any entity: made when it comes
     } } })
     board.syncLayerOrder = () => {}
     const grave = { entityId: 4, typeId: 'pvz:grave', row: 2, column: 1 }
-    const snapshot = { levelId: 'test:level', gameplayTick: 0, plants: [], zombies: [], projectiles: [], items: [], mowerRows: [], gridItems: [grave], cursor: { mode: 'none' } }
+    const snapshot = { levelId: 'test:level', gameplayTick: 0, plants: [], zombies: [], projectiles: [], items: [], mowers: [], gridItems: [grave], cursor: { mode: 'none' } }
     board.sync(snapshot, { added: [4], removed: [] }, [])
     await board.creationTasks.get(4)
     assert.equal(made.length, 1)
@@ -257,7 +257,7 @@ test('every particle of the board is drawn at its order among the entities, one 
     board.reorderParticle(trail, board.projectileOrder('test:pea', 3))
     assert.deepEqual([trail.node.parent, trail.renderOrder], [holder(renderOrderModule.renderOrder('projectile', 3)), renderOrderModule.renderOrder('projectile', 3)])
     assert.equal(holder(order)!.children.length, 0)
-    const snapshot = { levelId: 'test:level', plants: [], zombies: [], projectiles: [], items: [], mowerRows: [] }
+    const snapshot = { levelId: 'test:level', plants: [], zombies: [], projectiles: [], items: [], mowers: [] }
     assert.deepEqual([...board.collectLayerEntries(snapshot)].map((entry: any) => [entry.node.name, entry.order]),
         [500, order, renderOrderModule.renderOrder('projectile', 3)].map(value => [`BoardParticles-${value}`, value]), 'each order once, at its order')
     // A save's particle of the board's layer goes back into the node of its order.
@@ -339,7 +339,7 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     board.syncLayerOrder = () => {}
     const plant = { entityId: 1, typeId: 'test:plant', x: 40, y: 280, health: 300 }
     const snapshot = { levelId: 'test:level', gameplayTick: 0, paused: true, plants: [], zombies: [], [kind + 's']: [plant], projectiles: [],
-        items: [], mowerRows: [], cursor: { mode: 'none' } }
+        items: [], mowers: [], cursor: { mode: 'none' } }
     const changes = { added: [1], removed: [] }
     board.sync(snapshot, changes, [])
     const creation = board.creationTasks.get(1)
@@ -351,8 +351,9 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     await creation
     assert.equal(node.active, false, 'factory completion alone does not show it')
     assert.deepEqual(synced, [current], 'a view made is shown as its entity is now, not as it was when it was asked for')
-    await board.restore([{ kind, entityId: 1 }])
+    await board.restore({ entities: [{ kind, entityId: 1 }], flashes: [{ entityId: 1, tick: 0, ticks: 25 }] })
     assert.equal(restored, true)
+    assert.equal(board.flashes.zombie(1, 5).flash, 20, 'the board takes back its flashes with what its views kept')
     assert.deepEqual(synced, [current, current])
     assert.equal(node.active, true, 'paused restore must reveal entities without waiting for another tick')
     settings.perfPlantsVisible = settings.perfZombiesVisible = false
@@ -388,7 +389,7 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     const view = Object.assign(Object.create(ZombieView.prototype), {
         context: { content: {} }, node: new Node(), shadowNode: new Node(), layers: { player: () => ({ loadedId: null }), shown: [], show() {} }, animation: 'walk',
         attachments: new EntityAttachments(), mirrored: false,
-        presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
+        presentation: presentationFixture.zombies['pvz:newspaper'], gameplay: {}, applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
     view.armorDropped('shield')
     await new Promise(resolve => setImmediate(resolve))
@@ -794,4 +795,107 @@ test('a Mod hears of an event after the base, at the time it asks, and a Mod tha
     assert.equal(registry.of('example:zap', 'before').length, 0)
     registry.freeze()
     assert.throws(() => registry.register('example:late', mine), /frozen/)
+})
+
+test("the board's flashes are raised by their handlers before the frame's views draw it, and saved once, with the board", async () => {
+    const node = { isValid: true, active: true, setPosition() {}, destroy() { this.isValid = false } }
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', { '@/client/view/uiNode': { uiNode: () => ({ node }) } })
+    const { EntityFlashes } = clientStubs['./EntityFlashes'] as any
+    const { ZombieView } = clientStubs['@/client/zombies/ZombieView'] as any
+    const { PlantView } = clientStubs['@/client/plants/PlantView'] as any
+    const drawn: number[] = []
+    const board = renderer(LevelEntityRenderer, { zombies: { create(context: any) {
+        return Object.assign(new ZombieView(), { sync(zombie: any, world: any) { drawn.push(context.stage.flashes.zombie(zombie.entityId, world.gameplayTick).flash) } })
+    } } })
+    board.content.views.events = { of: (type: string, time: string) => type === 'zombieHit' && time === 'before' ? [EntityFlashes.zombieHit] : [] }
+    board.syncLayerOrder = () => {}
+    const zombie = { entityId: 1, typeId: 'test:zombie', row: 0, x: 500, y: 100 }
+    const snapshot = { levelId: 'test:level', gameplayTick: 10, plants: [], zombies: [zombie], projectiles: [], items: [], mowers: [], cursor: { mode: 'none' } }
+    board.sync(snapshot, { added: [1], removed: [] }, [])
+    await board.creationTasks.get(1)
+    assert.ok(board.view(1, ZombieView), "an entity's view of the class asked for")
+    assert.equal(board.view(1, PlantView), undefined, 'and none of another')
+    assert.equal(board.view(1), board.view(1, ZombieView))
+    // Entity 9 came and went between two frames: its flash is no entity's.
+    board.sync({ ...snapshot, gameplayTick: 12 }, { added: [], removed: [] }, [
+        { eventId: 1, type: 'zombieHit', data: { entityId: 1 } }, { eventId: 2, type: 'zombieHit', data: { entityId: 9 } }])
+    assert.deepEqual(drawn.slice(-1), [25], 'a hit shows in the frame it comes in')
+    assert.deepEqual(JSON.parse(JSON.stringify(await board.snapshot())), { entities: [], flashes: [{ entityId: 1, tick: 12, ticks: 25 }] })
+})
+
+test('the winner of a lost level takes its shadow with it into the house, and shows both', () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', {})
+    const parent = {}, node = (name: string) => ({ name, parent: {}, active: false, setParent(to: object) { this.parent = to } })
+    const view = Object.assign(Object.create(ZombieView.prototype), { node: node('zombie'), shadowNode: node('shadow'), layers: { player: () => ({ loadedId: null }) } })
+    view.syncGameOverWalk({ entityId: 1 }, parent, 0, 300)
+    assert.deepEqual([view.node.parent, view.node.active, view.shadowNode.parent, view.shadowNode.active], [parent, true, parent, true])
+})
+
+test("the level's award is collected by its own view: its sounds, the starburst, its glow gone and its own effect behind it", async () => {
+    class FakeNode {
+        isValid = true
+        active = true
+        children: FakeNode[] = []
+        components: any[] = []
+        constructor(readonly name = '', public parent?: FakeNode) { parent?.children.push(this) }
+        setPosition() {}
+        setScale() {}
+        getComponent(type: any) { return this.components.find(component => component instanceof type) ?? null }
+        getComponentsInChildren(type: any): any[] { return this.children.flatMap(child => [...child.components.filter(component => component instanceof type), ...child.getComponentsInChildren(type)]) }
+        destroy() { this.isValid = false; this.parent!.children.splice(this.parent!.children.indexOf(this), 1) }
+    }
+    const spawned: { id: string, parent: FakeNode }[] = [], played: string[] = []
+    class ParticlePlayer {
+        constructor(readonly id: string, readonly node: FakeNode) {}
+        overrideScale() {}
+        static spawn({ parent, id }: { parent: FakeNode, id: string }) {
+            const node = new FakeNode(id, parent)
+            node.components.push(new ParticlePlayer(id, node))
+            spawned.push({ id, parent })
+            return { node }
+        }
+    }
+    const { AwardView } = loadClientModule('items/AwardView', {
+        cc: { Sprite: { SizeMode: { RAW: 0 } } },
+        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? new FakeNode(options.name, options.parent) }) },
+        '@/client/particle/ParticlePlayer': { ParticlePlayer },
+        '@/client/sound/SoundSystem': { SoundEffect: { SeedLift: 'seedlift', Drop: 'tap2' }, SoundSystem: { play(effect: string) { played.push(effect) } } },
+        '@/client/content/ModResources': { modResources: { font: async () => ({}) } },
+        '@/client/hud/SeedPacketRenderer': { SEED_PACKET_WIDTH: 50, SEED_PACKET_HEIGHT: 70, SeedPacketRenderer: { drawSeedPacket: ({ parent, name }: any) => new FakeNode(name, parent) } },
+        '@/client/level/LevelGeometry': { levelAwardSize: () => ({ width: 50, height: 70 }) },
+        '@/client/plants/definitions': { plantPacket: () => ({ plant: {} }) },
+        '@/client/view/GameScreenMath': { easeInOutCurve: (value: number) => value },
+    })
+    const layer = new FakeNode('AwardLayer'), node = new FakeNode('Entity-5', layer)
+    const stage: any = { level: { award: { id: 'test:seed', kind: 'seed' } }, levelEndTicks: () => -1 }
+    const view = new AwardView({ node, stage, content: { presentation: {}, definitions: { seeds: { 'test:seed': { sunCost: 50 } } } } })
+    await view.initialize()
+    stage.view = (entityId: number, type: any) => entityId === 5 && view instanceof type ? view : undefined
+    const item = { entityId: 5, x: 100, y: 200, scale: 1, alpha: 255, landed: true, state: 'available' }
+    view.sync(item)
+    const back = node.children.find(child => child.name === AwardView.BACK)!
+    assert.deepEqual(back.children.map(child => child.name), ['pvz:seedpacket'], 'a landed seed packet glows')
+    AwardView.collected(stage, { eventId: 1, type: 'levelAwardCollected', data: { entityId: 5, typeId: 'test:seed', x: 100, y: 200 } }, {})
+    assert.deepEqual(played, ['seedlift', 'tap2'])
+    assert.deepEqual(spawned.slice(1).map(({ id, parent }) => [id, parent.name]), [['pvz:starburst', 'AwardLayer'], ['pvz:award', AwardView.BACK]])
+    assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'the glow goes as it is collected')
+    view.sync({ ...item, state: 'collecting' })
+    assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'and nothing else takes what is behind it away')
+    AwardView.collected(stage, { eventId: 2, type: 'levelAwardCollected', data: { entityId: 6, x: 0, y: 0 } }, {})
+    assert.deepEqual(played, ['seedlift', 'tap2', 'seedlift', 'tap2'], 'heard even before its view is made')
+})
+
+test('each flash event is heard once by its flash handler, before the frame is drawn', () => {
+    const statics = new Proxy({}, { get: () => () => {} })
+    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'],
+        ['zombies/ZombieView', 'ZombieView'], ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+        ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
+    const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
+    const { EntityFlashes } = clientStubs['./EntityFlashes'] as any
+    const registry = new StageEventRegistry()
+    for (const [type, handler] of [['zombieChewedPlant', 'plantHit'], ['plantHit', 'plantHit'], ['sunProduced', 'produced'], ['sunDrained', 'produced'],
+        ['zombieHit', 'zombieHit'], ['zombieBurned', 'zombieBurned']]) {
+        assert.deepEqual([...registry.of(type, 'before')], [EntityFlashes[handler]], type)
+        assert.ok(!registry.of(type, 'after').includes(EntityFlashes[handler]), type)
+    }
 })

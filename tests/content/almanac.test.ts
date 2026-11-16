@@ -2,7 +2,7 @@ import { readGameplaySource } from '../../tools/mod/content'
 import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseGameplayDefinitions } from '@/shared/content/gameplay'
+import { chooserSeeds, parseGameplayDefinitions } from '@/shared/content/gameplay'
 import type { AnimationRandom } from '@/shared/content/animation'
 import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { startOffBoardZombie } from '@/shared/content/zombieAnimation'
@@ -10,7 +10,6 @@ import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import type { PlayerProfile } from '@/server/menu/profileStore'
 
 const gameplay = parseGameplayDefinitions(readGameplaySource('definitions'))
-const almanac = readGameplaySource('almanac') as { plants: Array<{ id: number, key: string, seed: string }>, zombies: Array<{ id: number, key: string, zombie: string }> }
 /** Draws in turn from the values given, the last one from then on. */
 const random = (...values: number[]): AnimationRandom => {
     const next = () => values.length > 1 ? values.shift()! : values[0]
@@ -22,23 +21,27 @@ const shown = (id: string, picture: 'offBoard' | 'packet' = 'offBoard') => {
         random(0), picture === 'packet' ? presentation.packet?.time : 0)
 }
 
-test('every almanac entry is a plant or a zombie its view can draw off the board', () => {
-    for (const entry of almanac.plants) {
-        const plant = gameplay.plants[entry.seed], presentation = presentationFixture.plants[entry.seed]
-        assert.ok(plant?.animation && presentation, `${entry.key} has no plant to show`)
+test('every almanac card and window is a plant or a zombie its view can draw off the board, on its ground', () => {
+    // The plant page is the chooser's grid; the zombie windows are the `almanac` table's.
+    for (const seed of chooserSeeds(gameplay)) {
+        const plant = gameplay.plants[seed], presentation = presentationFixture.plants[seed]
+        assert.ok(plant?.animation && presentation, `${seed} has no plant to show`)
+        assert.ok(presentationFixture.almanac[seed], `${seed} has no almanac ground`)
         const clips = presentation.clips!
         for (const picture of ['offBoard', 'packet'] as const) {
-            const layers = shown(entry.seed, picture).animations!
-            assert.ok(Object.keys(plant.animation.layers)[0] in layers, `${entry.key}: nothing on its first layer`)
-            for (const state of Object.values(layers)) assert.ok(state.clip in clips, `${entry.key}: no pictures for ${state.clip}`)
+            const layers = shown(seed, picture).animations!
+            assert.ok(Object.keys(plant.animation.layers)[0] in layers, `${seed}: nothing on its first layer`)
+            for (const state of Object.values(layers)) assert.ok(state.clip in clips, `${seed}: no pictures for ${state.clip}`)
         }
     }
-    for (const entry of almanac.zombies) {
-        const presentation = presentationFixture.zombies[entry.zombie]
-        assert.ok(gameplay.zombies[entry.zombie] && presentation, `${entry.key} has no zombie to show`)
-        assert.ok(presentation.portrait, `${entry.key} has no small picture`)
+    assert.deepEqual(chooserSeeds(gameplay).filter(seed => presentationFixture.almanac[seed].ground === 'night'),
+        ['pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom'])
+    for (const zombie of Object.keys(gameplay.almanac)) {
+        const presentation = presentationFixture.zombies[zombie]
+        assert.ok(presentation && presentationFixture.almanac[zombie], `${zombie} has no zombie to show`)
+        assert.ok(presentation.portrait, `${zombie} has no small picture`)
         const clips = presentation.clips as unknown as Record<string, unknown>
-        assert.ok(clips.idle, `${entry.key} cannot stand`)
+        assert.ok(clips.idle, `${zombie} cannot stand`)
     }
 })
 
@@ -90,7 +93,7 @@ test('a zombie off the board stands, three times in four its second way when it 
 })
 
 test('/cheatseed opens the whole almanac, with each Mod\'s seeds and then the hidden cards on the plant pages after the first', () => {
-    const catalog = createAlmanacCatalog(readGameplaySource('almanac'))
+    const catalog = createAlmanacCatalog(gameplay)
     const fresh = { adventureLevel: 1, finishedAdventure: 0 } as PlayerProfile
     const plain = catalog.view(fresh, ['pvz:peashooter'], gameplay.seeds)
     assert.deepEqual([plain.plants.map(plant => plant.seed), plain.zombies.some(zombie => zombie.described), plain.groupPages],
@@ -99,7 +102,7 @@ test('/cheatseed opens the whole almanac, with each Mod\'s seeds and then the hi
     const seeds = { ...gameplay.seeds, 'test:pea': { ...gameplay.seeds['pvz:peashooter'], id: 'test:pea', position: 3 },
         'test:walker': { ...zombie, id: 'test:walker', position: 0 } }
     const cheating = catalog.view(fresh, ['pvz:peashooter'], seeds, true)
-    assert.deepEqual(cheating.plants.map(plant => plant.seed), almanac.plants.map(plant => plant.seed), 'every plant, owned or not')
+    assert.deepEqual(cheating.plants.map(plant => plant.seed), chooserSeeds(gameplay), 'every plant, owned or not')
     assert.ok(cheating.zombies.every(entry => entry.shown && entry.described), 'every zombie, described')
     const [mod, hidden] = cheating.groupPages!
     assert.deepEqual(mod, [

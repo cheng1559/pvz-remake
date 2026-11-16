@@ -59,6 +59,13 @@ test('plant behavior registration rejects conflicts, unknown targets, missing ha
     unknown.plantBehaviors.register('test', 'test:missing', behavior)
     assert.throws(() => new IntegratedGameServer(definitions, levels, unknown), /unknown plant/)
     assert.throws(() => new IntegratedGameServer(definitions, levels), /not installed: test:plant/)
+    // A behaviour's config is checked as the content loads, for every type it is registered for, before any is planted.
+    const config = new GameplayRegistry()
+    config.plantBehaviors.register('test', 'test:plant', { ...behavior, validateConfig(definition, _definitions, name) {
+        if (definition.behavior!.intervalTicks !== 5) throw new Error(`${name}.intervalTicks must be 5`)
+    } })
+    assert.throws(() => new IntegratedGameServer(definitions, levels, config), /plants\.test:plant\.behavior\.intervalTicks must be 5/)
+    assert.throws(() => new GameplayRegistry().plantBehaviors.register('test', 'test:plant', { ...behavior, validateConfig: true as never }), /Invalid plant behavior/)
     const invalid = new GameplayRegistry()
     invalid.plantBehaviors.register('test', 'test:plant', { createState: () => ({ ticks: NaN }), tick() {} })
     new IntegratedGameServer(definitions, levels, invalid)

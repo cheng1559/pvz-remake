@@ -1,67 +1,38 @@
-import type { StoreItemHighlight, StoreSpeech } from '@/shared/menu'
-import type { PersistedPottedPlant, PlayerProfile } from './profileStore'
+import type { GameplayDefinitions, StoreItemDefinition } from '@/shared/content/gameplay'
+import type { PlayerProfile } from './profileStore'
 
-type Purchase = { kind: 'set'; value: number } | { kind: 'count'; amount: number; limit: number }
-    | { kind: 'stock'; minimum: number; amount: number; limit: number } | { kind: 'timestamp' | 'plant' }
-    /** A seed the player then owns (the profile's `seeds`), sold once. */
-    | { kind: 'seed'; id: string }
+/** A store item with its ID, the key of its count in the profile's `purchases`. */
+export interface StoreItem extends StoreItemDefinition { id: string }
 
-export interface StoreItem {
-    id: number
-    cost: number
-    sprite?: string
-    offset?: readonly [number, number]
-    highlight?: StoreItemHighlight
-    message: number
-    level?: number
-    completed?: boolean
-    purchase: Purchase
-    requires?: { anyPurchases?: number[]; allPurchases?: number[]; minimumStored?: number; finishedAdventure?: boolean }
-    prices?: number[]
-    messages?: number[]
-    seedSlots?: number[]
-    quantity?: number
-    effect?: 'seedSlots' | 'tree'
-    unlockChallenge?: { index: number; value: number }
-}
-
-/** The seed an item with no picture of its own shows, as its packet: the seed it sells. */
-export function packetSeed(item: StoreItem): string | undefined {
-    return item.sprite === undefined && item.purchase.kind === 'seed' ? item.purchase.id : undefined
-}
-
-interface StoreDefinition {
-    dialogue: Omit<StoreSpeech, 'ambient'> & {
-        ambient: Omit<StoreSpeech['ambient'], 'messages'> & { messages: { message: number, weight: number, completed?: boolean }[] }
-    }
-    pages: { level?: number; completed?: boolean; items: StoreItem[] }[]
-    garden: { columns: number; capacity: number; template: Omit<PersistedPottedPlant, 'x' | 'y'> }
-}
+/** A store page with its ID and its items in place order. */
+export interface StorePage { id: string; level?: number; completed?: true; items: StoreItem[] }
 
 const currentDay = (now: number) => Math.floor((now - Date.UTC(2000, 0, 1)) / 86400000)
 
-/** The server's JSON rules determine purchases; no behavior depends on a specific item ID. */
-export function createStoreCatalog(value: unknown) {
-    validateStore(value)
-    const data = value as StoreDefinition
-    const STORE_PAGES = data.pages.map(page => page.items)
+/**
+ * The store from the gameplay definitions' `store` and `storePages` (checked as they were read): the rules determine
+ * purchases; no behavior depends on a specific item ID.
+ */
+export function createStoreCatalog(definitions: Pick<GameplayDefinitions, 'store' | 'storePages' | 'zenGarden'>) {
+    const items = Object.entries(definitions.store).map(([id, item]): StoreItem => ({ id, ...item }))
+    const pages = Object.entries(definitions.storePages).map(([id, page]): StorePage => ({
+        id, ...page, items: items.filter(item => item.page === id).sort((a, b) => a.place - b.place),
+    }))
+    const garden = definitions.zenGarden
     const tier = (item: StoreItem, profile: PlayerProfile) => profile.purchases[item.id] ?? 0
-    const atTier = (values: number[], index: number) => values[Math.max(0, Math.min(values.length - 1, index))]
+    const atTier = (values: readonly number[], index: number) => values[Math.max(0, Math.min(values.length - 1, index))]
 
-    function speech(profile: PlayerProfile): StoreSpeech {
-        const { ambient, ...timing } = data.dialogue
-        return { ...timing, ambient: { ...ambient, messages: ambient.messages.map(({ message, weight, completed }) => ({
-            message, weight: completed && !profile.finishedAdventure ? 0 : weight,
-        })) } }
+    function item(id: string): StoreItem | undefined {
+        return items.find(item => item.id === id)
     }
 
-    function storePages(profile: PlayerProfile): number[] {
-        return data.pages.flatMap((page, id) => profile.finishedAdventure > 0 ||
-            !page.completed && profile.adventureLevel >= (page.level ?? 1) ? [id] : [])
+    /** StoreScreen::IsPageShown: the pages the player can turn to. */
+    function storePages(profile: PlayerProfile): StorePage[] {
+        return pages.filter(page => profile.finishedAdventure > 0 || !page.completed && profile.adventureLevel >= (page.level ?? 1))
     }
 
     function itemCost(item: StoreItem, profile: PlayerProfile): number {
-        return item.prices ? atTier(item.prices, tier(item, profile)) : item.cost
+        return item.prices ? atTier(item.prices, tier(item, profile)) : item.cost!
     }
 
     function itemState(item: StoreItem, profile: PlayerProfile, now = Date.now()): 'available' | 'hidden' | 'comingSoon' | 'soldOut' {
@@ -74,7 +45,7 @@ export function createStoreCatalog(value: unknown) {
         const soldOut = rule.kind === 'count' ? count >= rule.limit
             : rule.kind === 'stock' ? count > rule.limit
             : rule.kind === 'seed' ? profile.seeds.includes(rule.id)
-            : rule.kind === 'plant' ? profile.pottedPlants.filter(plant => plant.whichZenGarden === data.garden.template.whichZenGarden).length >= data.garden.capacity || count === currentDay(now)
+            : rule.kind === 'plant' ? profile.pottedPlants.filter(plant => plant.whichZenGarden === garden.template.whichZenGarden).length >= garden.capacity || count === currentDay(now)
             : count > 0
         return soldOut ? 'soldOut' : 'available'
     }
@@ -92,7 +63,7 @@ export function createStoreCatalog(value: unknown) {
             case 'timestamp': profile.purchases[item.id] = Math.max(1, Math.floor(now / 1000)); break
             case 'seed': profile.seeds.push(rule.id); break
             case 'plant': {
-                const { columns, capacity, template } = data.garden
+                const { columns, capacity, template } = garden
                 const occupied = new Set(profile.pottedPlants.filter(plant => plant.whichZenGarden === template.whichZenGarden).map(plant => plant.y * columns + plant.x))
                 const spot = Array.from({ length: capacity }, (_, index) => index).find(index => !occupied.has(index))!
                 profile.pottedPlants.push({ ...template, x: spot % columns, y: Math.floor(spot / columns) })
@@ -108,9 +79,8 @@ export function createStoreCatalog(value: unknown) {
     function itemDetails(item: StoreItem, profile: PlayerProfile) {
         const count = tier(item, profile)
         return {
-            message: item.messages ? atTier(item.messages, count) : item.message,
+            message: item.messages ? atTier(item.messages, count) : item.message!,
             ...(item.seedSlots && { seedSlots: atTier(item.seedSlots, count) }),
-            ...(item.quantity !== undefined && { quantity: item.quantity }),
         }
     }
 
@@ -120,41 +90,7 @@ export function createStoreCatalog(value: unknown) {
         } : {}
     }
 
-    return { STORE_PAGES, storePages, itemCost, itemState, purchaseItem, itemDetails, purchaseEffect, speech }
+    return { items, item, storePages, itemCost, itemState, purchaseItem, itemDetails, purchaseEffect }
 }
 
 export type StoreCatalog = ReturnType<typeof createStoreCatalog>
-
-function validateStore(value: unknown): asserts value is StoreDefinition {
-    const data = value as StoreDefinition
-    if (!data || !Array.isArray(data.pages) || !data.garden || !Number.isInteger(data.garden.columns) || data.garden.columns <= 0 ||
-        !Number.isInteger(data.garden.capacity) || data.garden.capacity <= 0 || !data.garden.template?.whichZenGarden) throw new Error('Invalid store definition')
-    const dialogue = data.dialogue
-    // The chatter's weights are whole numbers, as PvzpPickFromWeightedArray's are.
-    if (!dialogue || !dialogue.ambient ||
-        !Array.isArray(dialogue.ambient.interval) || !Array.isArray(dialogue.ambient.messages) ||
-        [dialogue.readyDelay, dialogue.descriptionDuration,
-            dialogue.ambient.initialDelay, dialogue.ambient.duration, ...dialogue.ambient.interval].some(value => !Number.isFinite(value) || value <= 0) ||
-        dialogue.ambient.interval.length !== 2 || dialogue.ambient.interval[0] > dialogue.ambient.interval[1] ||
-        !dialogue.ambient.messages.length || dialogue.ambient.messages.some(entry => !Number.isInteger(entry.message) || !Number.isSafeInteger(entry.weight) || entry.weight < 0)) throw new Error('Invalid store dialogue')
-    const ids = new Set<number>()
-    for (const page of data.pages) {
-        if (!Array.isArray(page.items)) throw new Error('Invalid store page')
-        for (const item of page.items) {
-            if (!Number.isInteger(item.id) || item.id < 0 || ids.has(item.id) || !Number.isFinite(item.cost) || item.cost < 0 ||
-                !Number.isInteger(item.message) || !item.purchase) throw new Error('Invalid or duplicate store item')
-            ids.add(item.id)
-            for (const values of [item.prices, item.messages, item.seedSlots]) if (values &&
-                (!values.length || values.some(value => !Number.isFinite(value) || value < 0))) throw new Error(`Invalid store tiers: ${item.id}`)
-            const rule = item.purchase
-            if (rule.kind === 'set') { if (!Number.isInteger(rule.value) || rule.value <= 0) throw new Error('Invalid store purchase value') }
-            else if (rule.kind === 'count' || rule.kind === 'stock') {
-                if (!Number.isInteger(rule.amount) || rule.amount <= 0 || !Number.isInteger(rule.limit) || rule.limit < 0 ||
-                    rule.kind === 'stock' && (!Number.isInteger(rule.minimum) || rule.minimum < 0)) throw new Error('Invalid store purchase limits')
-            } else if (rule.kind === 'seed') {
-                if (typeof rule.id !== 'string' || !rule.id) throw new Error('Invalid store seed purchase')
-            } else if (rule.kind !== 'timestamp' && rule.kind !== 'plant') throw new Error('Unknown store purchase rule')
-            if (item.effect === 'seedSlots' && !item.seedSlots) throw new Error('Missing store seed slots')
-        }
-    }
-}

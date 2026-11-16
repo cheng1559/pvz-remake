@@ -52,7 +52,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
     assert.deepEqual(restore(server.save()).snapshot().gridItems, initial.gridItems, 'the special stone survives a save')
     assert.equal(runCommand(server, { type: 'chooseSeed', seedId: 'pvz:puffshroom' }), 'intro-not-complete')
     for (let index = 201; index <= 207; index++) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         assert.equal(runCommand(server, { type: 'advanceDialog' }), undefined)
     }
     for (const seedId of ['puffshroom', 'sunflower', 'peashooter', 'wallnut', 'cherrybomb', 'potatomine']) {
@@ -111,7 +111,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
 function worldFor(night: boolean) {
     const world = new World()
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false })
     withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world
@@ -315,7 +315,7 @@ test('zombies eat grave busters like other plants', () => {
 test('a /seed swap to a locked seed after choosing still restores; /seed waits for the chooser', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
-    while (game.render().extensions['pvz:dialog']) { game.command({ type: 'advanceDialog' }); game.update(0) }
+    while (game.render().dialog) { game.command({ type: 'advanceDialog' }); game.update(0) }
     for (const seedId of ['puffshroom', 'sunflower', 'peashooter', 'wallnut', 'cherrybomb', 'potatomine']) game.command({ type: 'chooseSeed', seedId: `pvz:${seedId}` })
     game.update(0)
     assert.equal(game.debugCommand('/seed 1 gravebuster').ok, false, 'the chooser owns the bank until it is confirmed')

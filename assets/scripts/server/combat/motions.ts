@@ -114,18 +114,29 @@ export function heightOverRow(world: World, definition: ProjectileDefinition, po
 /** Straight along the row: how a level's mower runs. */
 export const STRAIGHT = PLANT_ATTACKS.shooter
 
-/**
- * Sets a projectile off at `position`, flying by its launcher's `motion` (a registered kind): its type's definition
- * with the launcher's `overrides`, a mowing one ready to chew, with the state the motion starts with.
- */
+/** What a projectile sets off as: its type, where, by which motion, and its launcher's side, aim and `overrides`. */
+export interface ProjectileLaunch { typeId: string, position: Position, motion: string, overrides?: ProjectileOverrides, team?: Team, target?: number }
+
+/** Sets a new projectile off (setOffProjectile). */
 export function launchProjectile(world: World, definitions: GameplayDefinitions, creator: Pick<CommandBuffer, 'createEntity' | 'add'>,
-    launch: { typeId: string, position: Position, motion: string, overrides?: ProjectileOverrides, team?: Team, target?: number }): number {
+    launch: ProjectileLaunch): number {
+    const entity = creator.createEntity()
+    setOffProjectile(world, definitions, creator, entity, launch)
+    return entity
+}
+
+/**
+ * `entity` sets off as a projectile at `position`, flying by its launcher's `motion` (a registered kind): its type's
+ * definition with the launcher's `overrides`, a mowing one ready to chew, with the state the motion starts with. It is
+ * a new one (launchProjectile), or what was already there and runs on as one: a level's mower (startMower).
+ */
+export function setOffProjectile(world: World, definitions: GameplayDefinitions, creator: Pick<CommandBuffer, 'add'>, entity: number,
+    launch: ProjectileLaunch): void {
     const team = launch.team ?? 'plants'
     const definition = launch.overrides ? { ...definitions.projectiles[launch.typeId], ...launch.overrides } : definitions.projectiles[launch.typeId]
     const position = { ...launch.position }
     const state = world.resources.get(ProjectileMotionsResource).resolve(launch.motion)
         .launch?.({ world, definitions, definition, position, team, target: launch.target })
-    const entity = creator.createEntity()
     creator.add(entity, PositionComponent, position)
     creator.add(entity, ProjectileComponent, {
         typeId: launch.typeId,
@@ -135,7 +146,6 @@ export function launchProjectile(world: World, definitions: GameplayDefinitions,
         ...(definition.mow ? { chompCounter: 0 } : {}),
         ...(state === undefined ? {} : { motionState: state }),
     })
-    return entity
 }
 
 function numbers<Key extends string>(state: unknown, keys: readonly Key[], name: string): Record<Key, number> {

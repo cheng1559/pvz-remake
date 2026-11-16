@@ -12,58 +12,77 @@ import { hostilePlants } from '../combat/targets'
 import { damagePlant, detonatePlant } from './damage'
 import { rectOverlap } from '../combat/collision'
 import { TutorialResource } from '../state/levelState'
+import { groundStep } from '@/shared/content/animation'
+import { array, exact, finite, nonEmptyString, positiveFinite, positiveInteger } from '@/shared/validate'
 
 /** `hits`: Plant::mLaunchCounter, the nut's zombie impacts so far. */
 interface State { [key: string]: number; direction: number; hits: number }
 /**
- * Plant::UpdateBowling moves the nut by its body's `_ground` track: the layer whose clip rolls it along, a frame of
- * the clip taking it one of `groundDeltas`.
+ * Plant::UpdateBowling moves the nut by its body's `_ground` track: the layer whose clip (with a pace of its own) it
+ * rolls on, as a zombie walks on its walk's (groundStep).
  */
 const ROLL_LAYER = 'body'
 /**
- * `attack`: Plant::GetPlantAttackRect on Wall-nut Bowling, the rect its blows land with; its body is GetPlantRect.
- * `shieldDamage`: the blow a shield takes alone; `bouncedBreaks`: the shields (the screen door) a nut that has
- * bounced strikes with its full blow instead.
+ * A bowling plant's `behavior: {kind, attack, ...}`. `attack`: Plant::GetPlantAttackRect on Wall-nut Bowling, the
+ * rect its blows land with; its body is GetPlantRect. `bounceSpeed`: how far it goes up or down a tick on a slant,
+ * and how near its row it must be to strike or turn; `damage`, `helmDamage`, `shieldDamage`: its blow, and the blows a
+ * helm and a shield take alone; `bouncedBreaks`: the shields (the screen door) a nut that has bounced strikes with its
+ * full blow instead, none when omitted. A nut that blows up on contact (`deathExplosion`) strikes no blow.
  */
 interface Rules {
-    attack: { x: number; width: number }; groundDeltas: number[]; bounceSpeed: number
+    attack: { x: number; width: number }; bounceSpeed: number
     damage: number; helmDamage: number; shieldDamage: number; bouncedBreaks: string[]
+}
+/** Plant::UpdateBowling's own: mY goes 2 a tick on a slant; TakeDamage(1800), TakeHelmDamage(900), TakeShieldDamage(400). */
+const DEFAULT_RULES = { bounceSpeed: 2, damage: 1800, helmDamage: 900, shieldDamage: 400 } as const
+
+const parsed = new WeakMap<Readonly<PlantDefinition>, Rules>()
+
+function parseRules(definition: Readonly<PlantDefinition>, name: string): Rules {
+    const source = exact(definition.behavior, ['kind', 'attack'], name, [...Object.keys(DEFAULT_RULES), 'bouncedBreaks'])
+    nonEmptyString(source.kind, `${name}.kind`)
+    const attack = exact(source.attack, ['x', 'width'], `${name}.attack`)
+    const clip = definition.animation?.clips[definition.animation.layers[ROLL_LAYER] ?? '']
+    if (!clip?.ground || !clip.fps) throw new Error(`${name}: the animation's ${ROLL_LAYER} layer must start a clip with fps and the ground it rolls on`)
+    const setting = (key: keyof typeof DEFAULT_RULES, parse: (value: unknown, name: string) => number) =>
+        source[key] === undefined ? DEFAULT_RULES[key] : parse(source[key], `${name}.${key}`)
+    return {
+        attack: { x: finite(attack.x, `${name}.attack.x`), width: positiveFinite(attack.width, `${name}.attack.width`) },
+        bounceSpeed: setting('bounceSpeed', positiveFinite),
+        damage: setting('damage', positiveInteger), helmDamage: setting('helmDamage', positiveInteger), shieldDamage: setting('shieldDamage', positiveInteger),
+        bouncedBreaks: source.bouncedBreaks === undefined ? []
+            : array(source.bouncedBreaks, `${name}.bouncedBreaks`).map((type, index) => nonEmptyString(type, `${name}.bouncedBreaks[${index}]`)),
+    }
+}
+
+/** The nut's rules, as validateConfig accepted them when the content was loaded. */
+function bowlingRules(definition: Readonly<PlantDefinition>): Rules {
+    let rules = parsed.get(definition)
+    if (!rules) parsed.set(definition, rules = parseRules(definition, 'behavior'))
+    return rules
 }
 
 /** A separate moving plant; it shares no stationary wall-nut health or chewing behavior. */
 export const bowlingBehavior: PlantBehavior<State> = {
     tickAfterWin: true,
     createState: () => ({ direction: 0, hits: 0 }),
-    validateState(state, definition) {
-        const rules = definition.behavior as unknown as Rules
-        if (!definition.animation?.layers[ROLL_LAYER] || ![-1, 0, 1].includes(state.direction) ||
-            !Number.isSafeInteger(state.hits) || state.hits < 0 ||
-            !Array.isArray(rules.groundDeltas) || rules.groundDeltas.length === 0 || rules.groundDeltas.some(delta => !Number.isFinite(delta) || delta <= 0) ||
-            ![rules.bounceSpeed, rules.damage, rules.helmDamage, rules.shieldDamage].every(value => Number.isFinite(value) && value > 0) ||
-            !Array.isArray(rules.bouncedBreaks) || rules.bouncedBreaks.some(type => typeof type !== 'string') ||
-            !Number.isFinite(rules.attack?.x) || !(rules.attack.width > 0)) {
-            throw new Error('Invalid bowling plant state or configuration')
-        }
+    validateConfig(definition, _definitions, name) { parsed.set(definition, parseRules(definition, name)) },
+    validateState(state) {
+        if (![-1, 0, 1].includes(state.direction) || !Number.isSafeInteger(state.hits) || state.hits < 0) throw new Error('Invalid bowling plant state')
     },
     tick({ world, commands, definitions, entity, plant, definition, position, state }) {
-        const rules = definition.behavior as unknown as Rules
+        const rules = bowlingRules(definition)
         const board = world.resources.get(LevelStateResource).board
         const random = world.resources.get(RandomResource)
         const roll = plant.animations?.[ROLL_LAYER]
         if (!roll) return
-        // Use the original _ground displacement curve, rather than a separate constant travel speed: the frames the
-        // roll goes on this tick (the animation system moves it on after the plants have acted).
-        const next = roll.time + roll.rate / 100
-        const travel = (frame: number) => {
-            const cycle = rules.groundDeltas.reduce((sum, delta) => sum + delta, 0)
-            const whole = Math.floor(frame), index = whole % rules.groundDeltas.length
-            return Math.floor(whole / rules.groundDeltas.length) * cycle + rules.groundDeltas.slice(0, index).reduce((sum, delta) => sum + delta, 0)
-                + (frame - whole) * rules.groundDeltas[index]
-        }
-        // A nut on the zombies' side rolls left.
-        const team = plantTeam(plant), forward = teamDirection(team) > 0
-        position.x += (forward ? 1 : -1) * (travel(next) - travel(roll.time))
-        if (forward ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
+        // Plant::UpdateBowling: a clip with a `_ground` track rolls the nut as far as its ground goes at the clip's rate
+        // (Reanimation::GetTrackVelocity), between the frames it is at before the animation system moves it on after the
+        // plants have acted. A chilled nut is slowed by the ticks it sits out (chill.ts), not here. A nut on the zombies'
+        // side rolls left.
+        const clip = definition.animation!.clips[roll.clip], team = plantTeam(plant), facing = teamDirection(team)
+        if (clip?.ground) position.x += facing * groundStep(clip, roll)
+        if (facing > 0 ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
             commands.destroyEntity(entity)
             return
         }
@@ -144,7 +163,7 @@ function strike(world: World, definitions: GameplayDefinitions, remover: EntityR
     // A nut gone by the other's blast takes no blow.
     const typeId = world.get(target, PlantComponent)?.typeId
     if (typeId === undefined) return
-    damagePlant(world, definitions, target, (nut.definition.behavior as unknown as Rules).damage, remover)
+    damagePlant(world, definitions, target, bowlingRules(nut.definition).damage, remover)
     emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
         entityId: target, typeId, target: 'plant', helm: false, shield: false, plantId: nut.entity, plantTypeId: nut.plant.typeId, hits: nut.state.hits,
     })

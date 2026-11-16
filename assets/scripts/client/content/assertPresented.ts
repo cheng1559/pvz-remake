@@ -9,10 +9,11 @@ const SPARED: readonly string[] = [ZOMBIE_CLIPS.standing2, ZOMBIE_CLIPS.superLon
 /**
  * Everything the gameplay defines can be drawn: each plant, zombie, projectile and item has a presentation whose view
  * is installed, and a plant's or a zombie's has the pictures of every clip its animation plays (the mower's driver too,
- * for a zombie); each level's award has its picture (`awards`, with its pages for a note), or for a seed its plant's.
+ * for a zombie); each tool has its bank and picture (`tools`); each level's award has its picture (`awards`, with its
+ * pages for a note), or for a seed its plant's.
  * Checked as content is put together, so that a Mod missing some fails to load, not a level to draw.
  */
-export function assertPresented(content: { definitions: Pick<GameplayDefinitions, 'plants' | 'zombies' | 'projectiles' | 'items'>, levels: GameplayLevels },
+export function assertPresented(content: { definitions: Pick<GameplayDefinitions, 'plants' | 'zombies' | 'projectiles' | 'items' | 'tools'>, levels: GameplayLevels },
     presentation: PresentationDefinitions, views: { plants: Views, zombies: Views, projectiles: Views, gridItems: Views, items: Views }): void {
     const { definitions, levels } = content
     const pictures = (id: string, clips: readonly string[]) => {
@@ -39,6 +40,9 @@ export function assertPresented(content: { definitions: Pick<GameplayDefinitions
     for (const id of Object.keys(definitions.items)) {
         const definition = presentation.items[id]
         if (!definition || !views.items.has(definition.view ?? 'item')) throw new Error(`Item presentation is not installed: ${id}`)
+    }
+    for (const id of Object.keys(definitions.tools)) {
+        if (!presentation.tools[id]) throw new Error(`Tool presentation is not installed: ${id}`)
     }
     // AwardView draws a seed's packet by its plant, any other award by its picture; the award screen a note by its pages.
     for (const [levelId, { award }] of Object.entries(levels.levels)) {

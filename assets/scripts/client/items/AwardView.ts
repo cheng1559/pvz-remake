@@ -26,6 +26,8 @@ export class AwardView implements EntityView<ItemSnapshot> {
     /** The effects behind it. */
     static readonly BACK = 'AwardBackEffects'
     particleAnchors?: Readonly<Record<string, Node>>
+    /** Its effects behind it: the pickup arrow or seed packet glow once it has landed, the award's own once collected. */
+    private back?: Node
     /** Its picture, or its packet at 1x and the 2x one it turns into as it grows. */
     private image?: Node
     private packets?: { readonly normal: Node, readonly large: Node }
@@ -42,7 +44,8 @@ export class AwardView implements EntityView<ItemSnapshot> {
         const { node, content, stage } = this.context, award = stage.level.award, size = levelAwardSize(award)
         uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
         // The pickup arrow or seed packet glow is added here once the award lands.
-        this.particleAnchors = { 'award-back-effects': uiNode({ name: AwardView.BACK, parent: node }).node }
+        const back = this.back = uiNode({ name: AwardView.BACK, parent: node }).node
+        this.particleAnchors = { 'award-back-effects': back }
         if (award.kind !== 'seed') {
             const visual = content.presentation.awards?.[award.id]
             if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
@@ -82,18 +85,32 @@ export class AwardView implements EntityView<ItemSnapshot> {
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: collected && award.kind === 'note' ? Math.round(item.alpha * Math.max(0, 1 - ticks / 15)) : item.alpha })
-        this.syncScale(Math.max(0.001, scale), item.state === 'collecting')
+        this.syncScale(Math.max(0.001, scale))
         // Coin::Update adds the bouncy arrow once an award lands (CoinInitialize only sets mNeedsBouncyArrow): the seed
         // packet glow for seed packets (PARTICLE_SEED_PACKET), the pickup arrow for every other award. Collecting removes
-        // it; a restored game brings back its saved one.
-        const back = this.particleAnchors?.['award-back-effects']
+        // it (collect); a restored game brings back its saved one.
+        const back = this.back
         if (!back || !item.landed || item.state !== 'available') return
         const id = award.kind === 'seed' ? 'pvz:seedpacket' : 'pvz:awardpickuparrow'
         if (!back.children.some(child => child.getComponent(ParticlePlayer)?.id === id)) ParticlePlayer.spawn({ parent: back, id, x: 0, y: 60, z: -1 })
     }
 
-    /** Its picture or packet at `scale` about its middle, its effects with it; a collected packet loses its glow. */
-    private syncScale(scale: number, collecting: boolean): void {
+    /**
+     * Coin::Collect of the level's award, picked up at (`x`, `y`): a starburst where it was, its arrow or glow gone
+     * (AttachmentDetachCrossFadeParticleType), and its own effect behind it (PARTICLE_AWARD; a note's PARTICLE_PRESENT_PICKUP).
+     */
+    collect(x: number, y: number): void {
+        const { node, stage } = this.context, back = this.back
+        if (!node.isValid || !back) return
+        ParticlePlayer.spawn({ parent: node.parent!, id: 'pvz:starburst', x: x + 30, y: -(y + 30), z: 1 })
+        for (const particle of back.getComponentsInChildren(ParticlePlayer)) {
+            if (particle.id === 'pvz:seedpacket' || particle.id === 'pvz:awardpickuparrow') particle.node.destroy()
+        }
+        ParticlePlayer.spawn({ parent: back, id: stage.level.award.kind === 'note' ? 'pvz:presentpickup' : 'pvz:award', x: 0, y: 0, z: -1 })
+    }
+
+    /** Its picture or packet at `scale` about its middle, its effects with it. */
+    private syncScale(scale: number): void {
         this.image?.setScale(scale, scale, 1)
         if (this.packets) {
             const { normal, large } = this.packets, x = -SEED_PACKET_WIDTH * scale / 2, y = SEED_PACKET_HEIGHT * scale / 2
@@ -104,25 +121,15 @@ export class AwardView implements EntityView<ItemSnapshot> {
             large.setPosition(x, y)
             large.setScale(scale / 2, scale / 2, 1)
         }
-        for (const particle of this.context.node.getComponentsInChildren(ParticlePlayer)) {
-            particle.overrideScale(scale)
-            if (collecting && particle.id === 'pvz:seedpacket') particle.node.destroy()
-        }
+        for (const particle of this.context.node.getComponentsInChildren(ParticlePlayer)) particle.overrideScale(scale)
     }
 
-    /**
-     * Coin::Collect of the level's award: a starburst where it was, its arrow or glow gone, and the award's own effect
-     * behind it (PARTICLE_AWARD; a note's PARTICLE_PRESENT_PICKUP).
-     */
+    /** Coin::Collect of the level's award: SOUND_SEEDLIFT and SOUND_TAP2, and what the award's view shows of it (collect). */
     static readonly collected: StageEvent = (stage, event) => {
+        void SoundSystem.play(SoundEffect.SeedLift)
+        void SoundSystem.play(SoundEffect.Drop)
         const { entityId, x, y } = event.data
-        const node = typeof entityId === 'number' ? stage.node(entityId) : undefined
-        if (!node?.isValid || typeof x !== 'number' || typeof y !== 'number') return
-        ParticlePlayer.spawn({ parent: node.parent!, id: 'pvz:starburst', x: x + 30, y: -(y + 30), z: 1 })
-        for (const particle of node.getComponentsInChildren(ParticlePlayer)) {
-            if (particle.id === 'pvz:seedpacket' || particle.id === 'pvz:awardpickuparrow') particle.node.destroy()
-        }
-        ParticlePlayer.spawn({ parent: node.getChildByName(AwardView.BACK) ?? node, id: stage.level.award.kind === 'note' ? 'pvz:presentpickup' : 'pvz:award', x: 0, y: 0, z: -1 })
+        if (typeof entityId === 'number' && typeof x === 'number' && typeof y === 'number') stage.view(entityId, AwardView)?.collect(x, y)
     }
 
     /** Zombie::TrySpawnLevelAward throws it (FOLEY_SPAWN_SUN). */

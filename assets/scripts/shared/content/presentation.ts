@@ -1,7 +1,9 @@
-import { record, finite, positiveFinite } from '@/shared/validate'
+import {
+    allFields, array, boolean, fields, type FieldParsers, finite, integer, integerInRange, named, nonEmptyString, nonEmptyStrings, nonNegativeFinite,
+    nonNegativeInteger, oneOf, pair, point, positiveFinite, positiveInteger, range, record, trueFlag,
+} from '@/shared/validate'
 import { withFrom } from './from'
 import type { MusicTuneId } from './music'
-import type { JsonObject } from '@/shared/protocol'
 import { isQualifiedId } from '@/shared/mod'
 import { isRenderLayer, type RenderLayer } from './renderOrder'
 
@@ -55,7 +57,8 @@ export interface PlantParts {
 }
 
 export interface PlantPresentationDefinition {
-    readonly viewConfig?: Readonly<JsonObject>
+    /** A particle that follows its shot, `delayTicks` into it, at `x`, `y` from the plant (the Fume-shroom's cloud). */
+    readonly fireParticle?: { readonly id: string; readonly x: number; readonly y: number; readonly delayTicks: number }
     /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
     readonly layer?: RenderLayer
     /** Plant::DrawShadow: where its shadow lies; a plant without one (the grave buster) has none. */
@@ -136,7 +139,6 @@ export interface GridItemPresentationDefinition {
 export interface ProjectilePresentationDefinition {
     /** Its view (ProjectileViewRegistry): `projectile` when omitted, a mower's `mower`. */
     readonly view?: string
-    readonly viewConfig?: Readonly<JsonObject>
     readonly sprite?: string
     /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
     readonly reanim?: { readonly id: string; readonly x: number; readonly y: number; readonly scale: number; readonly rate: number }
@@ -228,7 +230,6 @@ export interface ZombiePresentationDefinition {
     readonly enrageSounds?: readonly PresentationSound[]
     /** Unavailable cells in the 5x5 street-preview grid. */
     readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
-    readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
     /** The gameplay `helm`, worn on the head. */
     readonly helm?: ZombieArmorPresentation & {
@@ -319,7 +320,7 @@ export interface LevelPresentationDefinition {
 }
 /**
  * How a level rule (`rules.kind`) looks, by kind. The generic level view reads `graveRise` and `itemPadding`; the
- * rule's own view reads the rest.
+ * rule's own view reads and checks the rest, as its server rule does the level's `rules` settings (WhackAZombieView).
  */
 export interface LevelRulePresentation {
     /** Zombie::RiseFromGrave: replaces `graves.rise` (Whack-a-Zombie's dirt). */
@@ -435,6 +436,46 @@ export interface ToolPresentation {
     readonly arrowOffset: readonly [number, number]
 }
 
+/** A store item's look by its ID (StoreScreen::DrawItemIcon); an item without a `sprite` shows the packet of the seed it sells. */
+export interface StoreItemPresentation {
+    readonly sprite?: string
+    /** Where the sprite goes in the item's 50x70 box. */
+    readonly offset?: readonly [number, number]
+    /**
+     * How it lights up under the pointer: the packet's flash, its sprite drawn additively at `opacity`, or not at all.
+     * Without, a seed's packet flashes and a sprite lights at 96.
+     */
+    readonly highlight?: { readonly type: 'none' | 'seedPacket' } | { readonly type: 'additive'; readonly opacity: number }
+    /** The count written over it, as `x5` (fertilizer, bug spray). */
+    readonly quantity?: number
+}
+
+/**
+ * StoreScreen's timing, in seconds: the items take clicks `readyDelay` in; a description stays `descriptionDuration`
+ * after the pointer leaves; Dave's chatter starts `initialDelay` in, comes every `interval` and stays `duration`, a line
+ * by weight (never the last again, StoreScreen::Update), the `completed` ones only once the adventure is finished.
+ */
+export interface StoreDialoguePresentation {
+    readonly readyDelay: number
+    readonly descriptionDuration: number
+    readonly ambient: {
+        readonly initialDelay: number; readonly interval: readonly [number, number]; readonly duration: number
+        readonly messages: readonly { readonly message: number; readonly weight: number; readonly completed?: true }[]
+    }
+}
+
+/** The almanac's backgrounds behind a plant or a zombie (IMAGE_ALMANAC_GROUND*). */
+export const ALMANAC_GROUNDS = ['day', 'night', 'pool', 'nightpool', 'roof', 'ice'] as const
+export type AlmanacGround = typeof ALMANAC_GROUNDS[number]
+
+/** How the almanac shows a plant or a zombie, by its ID: its ground, and an upgrade plant's packet (SeedPacket::DrawSeedPacket). */
+export interface AlmanacPresentation { readonly ground: AlmanacGround; readonly upgrade?: true }
+
+/** The almanac's ground behind a plant or a zombie: its entry's, the day's without one. */
+export function almanacGround(presentation: Pick<PresentationDefinitions, 'almanac'>, id: string): AlmanacGround {
+    return presentation.almanac[id]?.ground ?? 'day'
+}
+
 export interface PresentationDefinitions {
     readonly mainMenu: MainMenuDefinition
     readonly conveyor: {
@@ -446,6 +487,11 @@ export interface PresentationDefinitions {
     readonly foley: Readonly<Record<string, FoleyDefinition>>
     /** The board's tools by ID (the shovel), for those a game gives the player. */
     readonly tools: Readonly<Record<string, ToolPresentation>>
+    /** The store's items' looks by item ID. */
+    readonly store: Readonly<Record<string, StoreItemPresentation>>
+    readonly storeDialogue: StoreDialoguePresentation
+    /** By the plant (the seed of a card) or zombie shown. */
+    readonly almanac: Readonly<Record<string, AlmanacPresentation>>
     /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
     readonly graves: { readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] } }
     readonly dave: {
@@ -481,404 +527,454 @@ export interface PresentationDefinitions {
     }
 }
 
+/**
+ * Reading the presentation definitions, each checked as it is read, as the gameplay ones are (parseGameplay): a field
+ * that is not one of its object's is not supported, and the result has only what was read.
+ */
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
-    const source = record(value, 'presentation definitions')
-    // A plant's or a zombie's clips may start as another's (withFrom).
-    const data: Record<string, unknown> = { ...source, plants: withFrom(record(source.plants, 'presentation definitions.plants'), 'clips', 'plants'),
-        zombies: withFrom(record(source.zombies, 'presentation definitions.zombies'), 'clips', 'zombies') }
-    for (const [id, layers] of Object.entries(record(data.screens ?? {}, 'presentation screens'))) {
-        if (!Array.isArray(layers)) throw new TypeError(id + ' screen animations must be an array')
-        const names = new Set<string>()
-        for (const entry of layers) {
-            const layer = record(entry, id)
-            text(layer.name, id + '.name'); text(layer.reanimId, id + '.reanimId')
-            if (names.has(layer.name as string)) throw new TypeError(id + ' has duplicate animation names')
-            names.add(layer.name as string)
-            point(layer, id); positiveFinite(layer.rate, id + '.rate')
-            if (layer.playback !== 'loop' && layer.playback !== 'last') throw new TypeError(id + '.playback is invalid')
-            if (layer.randomPhase !== undefined && (typeof layer.randomPhase !== 'boolean' || layer.playback !== 'loop')) throw new TypeError(id + '.randomPhase requires loop playback')
-            if (layer.visibleTracks !== undefined) texts(layer.visibleTracks, id + '.visibleTracks')
-        }
-    }
-    for (const [id, entry] of Object.entries(record(data.challenges ?? {}, 'presentation challenges'))) {
-        const page = record(entry, 'challenges.' + id)
-        finite(page.x, `challenges.${id}.x`); finite(page.y, `challenges.${id}.y`)
-        positiveFinite(page.columnSpacing, `challenges.${id}.columnSpacing`); positiveFinite(page.rowSpacing, `challenges.${id}.rowSpacing`)
-        positiveFinite(page.buttonWidth, `challenges.${id}.buttonWidth`); positiveFinite(page.buttonHeight, `challenges.${id}.buttonHeight`)
-        const thumbnails = record(page.thumbnails, `challenges.${id}.thumbnails`)
-        text(thumbnails.sprite, `challenges.${id}.thumbnails.sprite`)
-        for (const key of ['columns', 'rows']) {
-            if (!Number.isInteger(thumbnails[key]) || (thumbnails[key] as number) < 1) throw new TypeError(`challenges.${id}.thumbnails.${key} must be a positive integer`)
-        }
-        const cels = (thumbnails.columns as number) * (thumbnails.rows as number)
-        for (const [key, icon] of Object.entries(record(page.icons, `challenges.${id}.icons`))) {
-            if (!Number.isInteger(icon) || (icon as number) < 0 || (icon as number) >= cels) throw new TypeError(`challenges.${id}.icons.${key} is not a thumbnail cel`)
-        }
-    }
-    parseMainMenu(record(data.mainMenu, 'mainMenu'))
-    const conveyor = record(data.conveyor, 'conveyor')
-    for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
-    for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positiveFinite(conveyor[key], 'conveyor.' + key)
-    const graveRise = record(record(data.graves, 'graves').rise, 'graves.rise')
-    text(graveRise.particle, 'graves.rise.particle'); sounds(graveRise.sounds, 'graves.rise.sounds', true)
-    for (const [id, entry] of Object.entries(record(data.foley ?? {}, 'foley'))) {
-        const sound = record(entry, 'foley.' + id)
-        if (sound.pitchRange !== undefined) finite(sound.pitchRange, 'foley.' + id + '.pitchRange')
-        if (sound.variants !== undefined) texts(sound.variants, 'foley.' + id + '.variants')
-    }
-    for (const [id, entry] of Object.entries(record(data.tools, 'tools'))) {
-        const tool = record(entry, 'tools.' + id)
-        for (const key of ['bank', 'sprite', 'tooltipKey']) text(tool[key], 'tools.' + id + '.' + key)
-        if (tool.hotkey !== undefined && (typeof tool.hotkey !== 'string' || !/^[A-Z]$/.test(tool.hotkey))) throw new TypeError('tools.' + id + '.hotkey must be a letter A-Z')
-        if (tool.arrowStep !== undefined) text(tool.arrowStep, 'tools.' + id + '.arrowStep')
-        finite(tool.x, 'tools.' + id + '.x')
-        for (const key of ['imageOffset', 'cursorOffset', 'arrowOffset']) pair(tool[key], 'tools.' + id + '.' + key)
-    }
-    const dave = record(data.dave, 'dave'), clips = record(dave.clips, 'dave.clips')
-    for (const key of ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink']) text(clips[key], 'dave.clips.' + key)
-    for (const key of ['sourceFps', 'transitionFps', 'talkFps', 'blinkFps', 'idleBlend', 'talkBlend', 'delay']) positiveFinite(dave[key], 'dave.' + key)
-    pair(dave.blinkSeconds, 'dave.blinkSeconds'); pair(dave.talkLengths, 'dave.talkLengths')
-    const bubble = record(dave.bubble, 'dave.bubble'), hand = record(dave.hand, 'dave.hand')
-    text(bubble.sprite, 'dave.bubble.sprite')
-    for (const key of ['x', 'y', 'textX', 'textY', 'continueX', 'continueY', 'shake']) finite(bubble[key], 'dave.bubble.' + key)
-    positiveFinite(bubble.textWidth, 'dave.bubble.textWidth'); positiveFinite(bubble.textHeight, 'dave.bubble.textHeight')
-    text(hand.reanim, 'dave.hand.reanim'); text(hand.track, 'dave.hand.track'); positiveFinite(hand.scale, 'dave.hand.scale')
-    finite(hand.x, 'dave.hand.x'); finite(hand.y, 'dave.hand.y')
-    const daveParts = record(dave.parts, 'dave.parts')
-    text(daveParts.mouth, 'dave.parts.mouth'); texts(daveParts.eyes, 'dave.parts.eyes'); text(daveParts.head, 'dave.parts.head')
-    for (const [key, value] of Object.entries(record(dave.mouths, 'dave.mouths'))) text(value, 'dave.mouths.' + key)
-    for (const [id, entry] of Object.entries(record(data.boards ?? {}, 'presentation boards'))) {
-        const board = record(entry, id), music = record(board.music, id + '.music'), over = record(board.gameOver, id + '.gameOver')
-        text(board.background, id + '.background'); finite(board.backgroundX, id + '.backgroundX')
-        if (board.plantShadow !== undefined) text(board.plantShadow, id + '.plantShadow')
-        text(music.choosing, id + '.music.choosing'); text(music.gameplay, id + '.music.gameplay')
-        texts(over.images, id + '.gameOver.images')
-        if ((over.images as unknown[]).length !== 3) throw new TypeError(id + '.gameOver.images must contain three images')
-        point(over.interior, id + '.gameOver.interior'); point(over.doorway, id + '.gameOver.doorway')
-        for (const field of ['clipX', 'winnerY', 'panX']) finite(over[field], id + '.gameOver.' + field)
-    }
-    for (const [id, entry] of Object.entries(record(data.levels ?? {}, 'presentation levels'))) {
-        const level = record(entry, id), intro = record(level.intro, id + '.intro')
-        positiveFinite(intro.previewCapacity, id + '.intro.previewCapacity')
-        if (!Number.isInteger(intro.previewCapacity)) throw new TypeError(id + '.intro.previewCapacity must be an integer')
-        text(intro.sod, id + '.intro.sod')
-        finite(intro.x, id + '.intro.x'); finite(intro.y, id + '.intro.y'); positiveFinite(intro.width, id + '.intro.width')
-        if (intro.sourceX !== undefined) finite(intro.sourceX, id + '.intro.sourceX')
-        if (typeof intro.readySetPlant !== 'boolean' || !Array.isArray(intro.rolls)) throw new TypeError(id + ' has invalid intro settings')
-        for (const value of intro.rolls) {
-            const roll = record(value, id + '.intro.rolls')
-            for (const field of ['x', 'y', 'particleY']) finite(roll[field], id + '.intro.rolls.' + field)
-        }
-        if (intro.existingSod !== undefined) {
-            const sod = record(intro.existingSod, id + '.intro.existingSod')
-            text(sod.sprite, id + '.intro.existingSod.sprite'); point(sod, id + '.intro.existingSod')
-        }
-        record(level.advice, id + '.advice')
-        if (level.adviceDuringIntro !== undefined && typeof level.adviceDuringIntro !== 'boolean') throw new TypeError(id + '.adviceDuringIntro must be boolean')
-        if (level.adviceStyle !== undefined && level.adviceStyle !== 'hint-stay' && level.adviceStyle !== 'tutorial-level1-stay') throw new TypeError(id + '.adviceStyle is invalid')
-        texts(level.seedGuideSteps, id + '.seedGuideSteps'); texts(level.lawnGuideSteps, id + '.lawnGuideSteps')
-        if (level.seedGuideArrow !== undefined && level.seedGuideArrow !== false) throw new TypeError(id + '.seedGuideArrow can only be false')
-        if (level.plantingLine !== undefined) {
-            const line = record(level.plantingLine, id + '.plantingLine')
-            text(line.sprite, id + '.plantingLine.sprite')
-            if (!Array.isArray(line.offset) || line.offset.length !== 2) throw new TypeError(id + '.plantingLine.offset must be [x, y]')
-            for (const value of line.offset) finite(value, id + '.plantingLine.offset')
-            if (!Array.isArray(line.dialogs) || line.dialogs.some(dialog => !Number.isInteger(dialog))) throw new TypeError(id + '.plantingLine.dialogs must list dialog IDs')
-        }
-    }
-    for (const [id, entry] of Object.entries(record(data.rules ?? {}, 'presentation rules'))) {
-        const rule = record(entry, 'rules.' + id)
-        if (rule.graveRise !== undefined) {
-            const rise = record(rule.graveRise, 'rules.' + id + '.graveRise')
-            text(rise.particle, 'rules.' + id + '.graveRise.particle'); sounds(rise.sounds, 'rules.' + id + '.graveRise.sounds', true)
-        }
-        if (rule.itemPadding !== undefined) {
-            const padding = record(rule.itemPadding, 'rules.' + id + '.itemPadding')
-            finite(padding.size, 'rules.' + id + '.itemPadding.size'); finite(padding.height, 'rules.' + id + '.itemPadding.height')
-        }
-    }
-    for (const [id, entry] of Object.entries(record(data.awards ?? {}, 'presentation awards'))) {
-        const award = record(entry, id)
-        text(award.sprite, id + '.sprite'); positiveFinite(award.scale, id + '.scale')
-        for (const field of ['x', 'y', 'pageY']) finite(award[field], id + '.' + field)
-        if (award.pageImages !== undefined) {
-            if (!Array.isArray(award.pageImages) || !award.pageImages.length) throw new TypeError(id + '.pageImages must not be empty')
-            for (const value of award.pageImages) {
-                const image = record(value, id + '.pageImages')
-                text(image.sprite, id + '.pageImages.sprite'); point(image, id + '.pageImages')
-                for (const field of ['width', 'height']) if (image[field] !== undefined) positiveFinite(image[field], id + '.pageImages.' + field)
-            }
-        }
-    }
-    for (const [id, entry] of Object.entries(record(data.items, 'presentation items'))) {
-        const item = record(entry, id)
-        if (item.view !== undefined) text(item.view, id + '.view')
-        text(item.reanim, id + '.reanim'); pair(item.offset, id + '.offset'); range(item.rate, id + '.rate', true)
-        if (item.flight !== undefined) { const flight = record(item.flight, id + '.flight'); text(flight.sprite, id + '.flight.sprite'); pair(flight.offset, id + '.flight.offset') }
-        if (item.glow !== undefined) {
-            const glow = record(item.glow, id + '.glow')
-            text(glow.sprite, id + '.glow.sprite'); pair(glow.offset, id + '.glow.offset')
-            if (glow.inFlight !== undefined && typeof glow.inFlight !== 'boolean') throw new TypeError(id + '.glow.inFlight must be boolean')
-        }
-        if (item.arrow !== undefined) { const arrow = record(item.arrow, id + '.arrow'); text(arrow.particle, id + '.arrow.particle'); pair(arrow.offset, id + '.arrow.offset') }
-        for (const field of ['spawnSounds', 'landSounds', 'collectSounds']) sounds(item[field], id + '.' + field)
-    }
-    const plants = record(data.plants, 'presentation definitions.plants')
-    const zombies = record(data.zombies, 'presentation definitions.zombies')
-    for (const [id, entry] of Object.entries(plants)) {
-        const plant = record(entry, id), visual = record(plant.visual, id + '.visual')
-        if (plant.viewConfig !== undefined) record(plant.viewConfig, id + '.viewConfig')
-        if (visual.packetPlant !== undefined) text(visual.packetPlant, id + '.visual.packetPlant')
-        if (plant.shadow !== undefined) {
-            point(plant.shadow, id + '.shadow')
-            if ((plant.shadow as Record<string, unknown>).scale !== undefined) positiveFinite((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
-        }
-        positiveFinite(plant.scale, id + '.scale')
-        if (plant.layer !== undefined && !isRenderLayer(plant.layer)) throw new TypeError(id + '.layer is not a render layer')
-        if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
-        if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
-        if (plant.parts !== undefined) {
-            const parts = record(plant.parts, id + '.parts')
-            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'prey'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
-            if (parts.eyes !== undefined) texts(parts.eyes, id + '.parts.eyes')
-            if (parts.face !== undefined) text(parts.face, id + '.parts.face')
-            if (parts.prey !== undefined) texts(parts.prey, id + '.parts.prey')
-        }
-        text(visual.nameKey, id + '.visual.nameKey')
-        if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
-        if (plant.view !== undefined) text(plant.view, id + '.view')
-        const packet = plant.packet === undefined ? {} : record(plant.packet, id + '.packet')
-        for (const [field, clips] of [['offBoard', plant.offBoard], ['packet.clips', packet.clips]] as const) {
-            if (clips !== undefined) for (const [layer, clip] of Object.entries(record(clips, id + '.' + field))) text(clip, id + '.' + field + '.' + layer)
-        }
-        for (const key of ['x', 'y', 'time']) if (packet[key] !== undefined) finite(packet[key], id + '.packet.' + key)
-        if (packet.scale !== undefined) positiveFinite(packet.scale, id + '.packet.scale')
-        if (packet.placement !== undefined) placement(packet.placement, id + '.packet.placement')
-        if (plant.almanacOffset !== undefined) pair(plant.almanacOffset, id + '.almanacOffset')
-        if (plant.crackedFaces !== undefined) {
-            if (!Array.isArray(plant.crackedFaces) || plant.crackedFaces.length !== 2) throw new TypeError(id + '.crackedFaces must be two sprites')
-            texts(plant.crackedFaces, id + '.crackedFaces')
-        }
-        sounds(plant.plantedSounds, id + '.plantedSounds')
-        sounds(plant.explosionSounds, id + '.explosionSounds')
-        sounds(plant.fireSounds, id + '.fireSounds')
-        if (plant.explosion !== undefined) {
-            const explosion = record(plant.explosion, id + '.explosion')
-            text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
-            if (!isRenderLayer(explosion.layer)) throw new TypeError(id + '.explosion.layer is not a render layer')
-        }
-    }
-    for (const [id, entry] of Object.entries(zombies)) {
-        const zombie = record(entry, id), parts = record(zombie.parts, id + '.parts')
-        text(zombie.nameKey, id + '.nameKey')
-        text(zombie.damagedArmSprite, id + '.damagedArmSprite')
-        if (zombie.enragedHead !== undefined) {
-            const head = record(zombie.enragedHead, id + '.enragedHead')
-            text(head.track, id + '.enragedHead.track')
-            text(head.sprite, id + '.enragedHead.sprite')
-        }
-        sounds(zombie.enrageSounds, id + '.enrageSounds')
-        if (zombie.view !== undefined) text(zombie.view, id + '.view')
-        if (zombie.previewBlockedCells !== undefined) {
-            if (!Array.isArray(zombie.previewBlockedCells)) throw new TypeError(id + '.previewBlockedCells must be an array')
-            for (const value of zombie.previewBlockedCells) {
-                const cell = record(value, id + '.previewBlockedCells[]')
-                for (const key of ['column', 'row']) {
-                    if (!Number.isInteger(cell[key]) || (cell[key] as number) < 0 || (cell[key] as number) > 4) {
-                        throw new TypeError(id + '.previewBlockedCells[].' + key + ' must be an integer between 0 and 4')
-                    }
-                }
-            }
-        }
-        point(zombie.shadow, id + '.shadow')
-        if ((zombie.shadow as Record<string, unknown>).backwardsX !== undefined) finite((zombie.shadow as Record<string, unknown>).backwardsX, id + '.shadow.backwardsX')
-        if (zombie.packet !== undefined) {
-            const packet = record(zombie.packet, id + '.packet')
-            finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positiveFinite(packet.scale, id + '.packet.scale')
-            if (packet.clip !== undefined) text(packet.clip, id + '.packet.clip')
-        }
-        if (zombie.portrait !== undefined) {
-            const portrait = record(zombie.portrait, id + '.portrait')
-            finite(portrait.x, id + '.portrait.x'); finite(portrait.y, id + '.portrait.y'); positiveFinite(portrait.scale, id + '.portrait.scale')
-        }
-        for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
-        text(parts.upperArm, id + '.parts.upperArm')
-        text(parts.ground, id + '.parts.ground')
-        if (parts.held !== undefined) texts(parts.held, id + '.parts.held')
-        if (parts.flagArm !== undefined) {
-            const flagArm = record(parts.flagArm, id + '.parts.flagArm')
-            texts(flagArm.holding, id + '.parts.flagArm.holding')
-            texts(flagArm.free, id + '.parts.flagArm.free')
-            text(flagArm.front, id + '.parts.flagArm.front')
-        }
-        if (parts.shieldArms !== undefined) {
-            const shieldArms = record(parts.shieldArms, id + '.parts.shieldArms')
-            texts(shieldArms.holding, id + '.parts.shieldArms.holding')
-            texts(shieldArms.free, id + '.parts.shieldArms.free')
-            if (zombie.shield === undefined) throw new TypeError(id + '.parts.shieldArms requires a shield')
-        }
-        record(zombie.clips, id + '.clips')
-        for (const [part, value] of Object.entries(record(zombie.drops, id + '.drops'))) {
-            const drop = record(value, id + '.drops.' + part)
-            text(drop.track, id + '.drops.' + part + '.track')
-            text(drop.effect, id + '.drops.' + part + '.effect')
-            pair(drop.offset, id + '.drops.' + part + '.offset')
-            sounds(drop.sounds, id + '.drops.' + part + '.sounds')
-        }
-        for (const slot of ['helm', 'shield'] as const) {
-            if (zombie[slot] === undefined) continue
-            const name = `${id}.${slot}`
-            const armor = record(zombie[slot], name)
-            text(armor.track, name + '.track')
-            text(armor.effect, name + '.effect')
-            texts(armor.damagedSprites, name + '.damagedSprites')
-            if ((armor.damagedSprites as string[]).length !== 2) throw new TypeError(name + '.damagedSprites must have two entries')
-            if (!(parts.helms as string[]).includes(armor.track as string)) throw new TypeError(name + '.track is missing from parts.helms')
-            pair(armor.offset, name + '.offset')
-            if (slot === 'shield' && armor.showsHair !== undefined) throw new TypeError(name + '.showsHair is only for a helm')
-            if (armor.showsHair !== undefined && typeof armor.showsHair !== 'boolean') throw new TypeError(name + '.showsHair must be boolean')
-            if (armor.dropReanim !== undefined) {
-                const reanim = record(armor.dropReanim, name + '.dropReanim')
-                text(reanim.reanimId, name + '.dropReanim.reanimId')
-                pair(reanim.offset, name + '.dropReanim.offset')
-            }
-            sounds(armor.impactSounds, name + '.impactSounds', true)
-            if (armor.muffles !== undefined && armor.muffles !== true) throw new TypeError(name + '.muffles must be true')
-            sounds(armor.bowlingImpactSounds, name + '.bowlingImpactSounds')
-            sounds(armor.dropSounds, name + '.dropSounds')
-        }
-        if (zombie.helm !== undefined && zombie.shield !== undefined &&
-            (zombie.helm as { track?: unknown }).track === (zombie.shield as { track?: unknown }).track) throw new TypeError(id + ' draws its helm and shield on one track')
-    }
+    const definitions = fields<PresentationDefinitions>(value, 'presentation', [
+        'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
+        'gridItems', 'seedPackets',
+    ], {
+        mainMenu: parseMainMenu,
+        conveyor: (value, name) => allFields<PresentationDefinitions['conveyor']>(value, name, {
+            x: finite, backdropX: finite, clipX: finite, width: positiveFinite, height: positiveFinite,
+            packetX: finite, packetY: finite, beltY: finite, beltWidth: positiveFinite, beltHeight: positiveFinite,
+            frames: positiveFinite, frameTicks: positiveFinite, introStart: finite, introDuration: positiveFinite,
+        }),
+        foley: table((value, name) => fields<FoleyDefinition>(value, name, [], { pitchRange: finite, variants: nonEmptyStrings })),
+        tools: table(parseTool),
+        store: table(parseStoreItem),
+        storeDialogue: parseStoreDialogue,
+        almanac: table((value, name) => fields<AlmanacPresentation>(value, name, ['ground'], {
+            ground: (value, name) => oneOf(value, ALMANAC_GROUNDS, name), upgrade: trueFlag,
+        })),
+        graves: (value, name) => allFields<PresentationDefinitions['graves']>(value, name, { rise: graveRise }),
+        dave: parseDave,
+        boards: table(parseBoard),
+        rules: table(parseRule),
+        screens: table(parseScreen),
+        levels: table(parseLevel),
+        awards: table(parseAward),
+        challenges: table(parseChallengePage),
+        items: table(parseItem),
+        // A plant's or a zombie's clips may start as another's (withFrom).
+        plants: (value, name) => named(withFrom(record(value, name), 'clips', 'plants'), name, parsePlant),
+        zombies: (value, name) => named(withFrom(record(value, name), 'clips', 'zombies'), name, parseZombie),
+        projectiles: table(parseProjectile),
+        gridItems: table((value, name) => fields<GridItemPresentationDefinition>(value, name, ['view', 'layer'], { view: nonEmptyString, layer, offset: finite })),
+        seedPackets: (value, name) => allFields<PresentationDefinitions['seedPackets']>(value, name, {
+            flash: (value, name) => allFields<PresentationDefinitions['seedPackets']['flash']>(value, name, { id: nonEmptyString }),
+            selection: (value, name) => allFields<PresentationDefinitions['seedPackets']['selection']>(value, name, { color }),
+            defaultPlacement: placement,
+            grave: placement,
+        }),
+    })
+    const { plants, zombies } = definitions
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
     for (const id of Object.keys(plants)) if (Object.hasOwn(zombies, id)) throw new TypeError('Duplicate presentation target: ' + id)
-    for (const [id, value] of Object.entries(record(data.gridItems, 'gridItems'))) {
-        const item = record(value, id)
-        text(item.view, id + '.view')
-        if (!isRenderLayer(item.layer)) throw new TypeError(id + '.layer is not a render layer')
-        if (item.offset !== undefined) finite(item.offset, id + '.offset')
-    }
-    for (const [id, value] of Object.entries(record(data.projectiles, 'projectiles'))) {
-        const projectile = record(value, id)
-        if (projectile.view !== undefined) text(projectile.view, id + '.view')
-        if (projectile.viewConfig !== undefined) record(projectile.viewConfig, id + '.viewConfig')
-        if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(id + ' needs exactly one of sprite and reanim')
-        if (projectile.sprite !== undefined) text(projectile.sprite, id + '.sprite')
-        if (projectile.reanim !== undefined) {
-            const reanim = record(projectile.reanim, id + '.reanim')
-            text(reanim.id, id + '.reanim.id'); point(reanim, id + '.reanim')
-            positiveFinite(reanim.scale, id + '.reanim.scale'); positiveFinite(reanim.rate, id + '.reanim.rate')
-        }
-        if (projectile.plantShadow !== undefined) point(projectile.plantShadow, id + '.plantShadow')
-        if (projectile.layer !== undefined && !isRenderLayer(projectile.layer)) throw new TypeError(id + '.layer is not a render layer')
-        if (projectile.shadow !== undefined) {
-            const shadow = record(projectile.shadow, id + '.shadow')
-            text(shadow.sprite, id + '.shadow.sprite'); point(shadow.offset, id + '.shadow.offset')
-            positiveFinite(shadow.scale, id + '.shadow.scale')
-            if (!Number.isInteger(shadow.columns) || (shadow.columns as number) < 1 || !Number.isInteger(shadow.cell)
-                || (shadow.cell as number) < 0 || (shadow.cell as number) >= (shadow.columns as number)) throw new TypeError(id + '.shadow has invalid atlas cells')
-        }
-        if (projectile.impact !== undefined) {
-            const impact = record(projectile.impact, id + '.impact')
-            text(impact.id, id + '.impact.id')
-            if (impact.shotOffset !== undefined) pair(impact.shotOffset, id + '.impact.shotOffset')
-            if (impact.lobOffset !== undefined) pair(impact.lobOffset, id + '.impact.lobOffset')
-            if (impact.free !== undefined && impact.free !== true) throw new TypeError(id + '.impact.free must be true')
-            if (!impact.free || impact.yRange !== undefined) range(impact.yRange, id + '.impact.yRange', true)
-        }
-        if (projectile.trail !== undefined) {
-            const trail = record(projectile.trail, id + '.trail')
-            text(trail.id, id + '.trail.id')
-            point(trail, id + '.trail')
-        }
-        sounds(projectile.fireSounds, id + '.fireSounds', true)
-        sounds(projectile.impactSounds, id + '.impactSounds', true)
-        if (projectile.loud !== undefined && projectile.loud !== true) throw new TypeError(id + '.loud must be true')
-    }
-    const packets = record(data.seedPackets, 'seedPackets')
-    const flash = record(packets.flash, 'seedPackets.flash')
-    text(flash.id, 'seedPackets.flash.id')
-    const selection = record(packets.selection, 'seedPackets.selection')
-    if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
-    placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
-    placement(packets.grave, 'seedPackets.grave')
-    return data as unknown as PresentationDefinitions
+    return definitions
 }
 
-function text(value: unknown, name: string): void {
-    if (typeof value !== 'string' || value.length === 0) throw new TypeError(name + ' must be a non-empty string')
-}
-
-function parseMainMenu(menu: Record<string, unknown>): void {
-    if (!Array.isArray(menu.buttons) || menu.buttons.length === 0) throw new TypeError('mainMenu.buttons must be a non-empty array')
-    const names = new Set<string>()
-    for (const [index, entry] of menu.buttons.entries()) {
-        const name = 'mainMenu.buttons[' + index + ']', button = record(entry, name)
-        for (const key of ['name', 'track', 'image', 'highlight']) text(button[key], name + '.' + key)
-        if (names.has(button.name as string)) throw new TypeError(name + '.name is duplicated')
-        names.add(button.name as string)
-        if (button.target !== undefined) text(button.target, name + '.target')
-        for (const key of ['replace', 'sign', 'mode']) if (button[key] !== undefined && typeof button[key] !== 'boolean') throw new TypeError(name + '.' + key + ' must be a boolean')
-        for (const key of ['x', 'y', 'imageX', 'imageY']) if (button[key] !== undefined) finite(button[key], name + '.' + key)
-        for (const key of ['width', 'height']) if (button[key] !== undefined) positiveFinite(button[key], name + '.' + key)
-        if (button.polygon !== undefined) {
-            if (!Array.isArray(button.polygon) || button.polygon.length < 3) throw new TypeError(name + '.polygon needs three points')
-            button.polygon.forEach(point => pair(point, name + '.polygon[]'))
-        }
-    }
-    texts(menu.images, 'mainMenu.images'); texts(menu.clouds, 'mainMenu.clouds')
-    if (!Array.isArray(menu.flowers)) throw new TypeError('mainMenu.flowers must be an array')
-    menu.flowers.forEach(flower => point(record(flower, 'mainMenu.flowers[]'), 'mainMenu.flowers[]'))
-    const tracks = record(menu.tracks, 'mainMenu.tracks')
-    for (const key of ['sky', 'anchor', 'profileSign']) text(tracks[key], 'mainMenu.tracks.' + key)
-    texts(tracks.replaced, 'mainMenu.tracks.replaced'); texts(tracks.handRocks, 'mainMenu.tracks.handRocks')
-    const keyShadow = record(menu.keyShadow, 'mainMenu.keyShadow')
-    for (const key of ['track', 'almanac', 'store']) text(keyShadow[key], 'mainMenu.keyShadow.' + key)
-    const trophy = record(menu.trophy, 'mainMenu.trophy')
-    for (const key of ['track', 'image', 'particle']) text(trophy[key], 'mainMenu.trophy.' + key)
-    const start = record(menu.startAdventure, 'mainMenu.startAdventure')
-    for (const key of ['track', 'image', 'highlight', 'shadow', 'adventureShadow']) text(start[key], 'mainMenu.startAdventure.' + key)
-}
-
-function texts(value: unknown, name: string): void {
-    if (!Array.isArray(value)) throw new TypeError(name + ' must be an array')
-    value.forEach(entry => text(entry, name))
-}
-
-function pair(value: unknown, name: string): void {
-    if (!Array.isArray(value) || value.length !== 2) throw new TypeError(name + ' must be a pair')
-    value.forEach(entry => finite(entry, name))
-}
-
-function placement(value: unknown, name: string): void {
-    const source = record(value, name)
-    positiveFinite(source.scale, name + '.scale')
-    finite(source.offsetX, name + '.offsetX')
-    finite(source.offsetY, name + '.offsetY')
-}
-
-function sounds(value: unknown, name: string, required = false): void {
-    if (value === undefined && !required) return
-    if (!Array.isArray(value)) throw new TypeError(name + ' must be an array')
-    for (const entry of value) {
-        const sound = record(entry, name)
-        // A sound names its owner like any other resource: pvz:splat, corn:shoop.
-        if (!isQualifiedId(sound.audio)) throw new TypeError(name + '.audio must be a qualified ID')
-        if (typeof sound.foley !== 'boolean') throw new TypeError(name + '.foley must be boolean')
+/**
+ * A list of sounds, as the presentation writes them; a level rule's view reads its own with it. A sound names its
+ * owner like any other resource: pvz:splat, corn:shoop.
+ */
+export function presentationSounds(value: unknown, name: string): PresentationSound[] {
+    return array(value, name).map((entry, index) => fields<PresentationSound>(entry, `${name}[${index}]`, ['audio', 'foley'], {
+        audio(value, name) {
+            if (!isQualifiedId(value)) throw new TypeError(`${name} must be a qualified ID`)
+            return value
+        },
+        foley: boolean,
         // A negative range lowers the pitch, like FOLEY_NEWSPAPER_RIP's -2 (TodFoley).
-        if (sound.pitchRange !== undefined) finite(sound.pitchRange, name + '.pitchRange')
+        pitchRange: finite,
+    }))
+}
+
+const sounds = presentationSounds
+
+/** A table by ID, each entry read by `parse`. */
+function table<T>(parse: (value: unknown, name: string) => T): (value: unknown, name: string) => Record<string, T> {
+    return (value, name) => named(value, name, parse)
+}
+
+/** An object of exactly these fields, each a non-empty string. */
+function strings<K extends string>(keys: readonly K[]): (value: unknown, name: string) => Record<K, string> {
+    const parsers = Object.fromEntries(keys.map(key => [key, nonEmptyString])) as FieldParsers<Record<K, string>>
+    return (value, name) => allFields(value, name, parsers)
+}
+
+function layer(value: unknown, name: string): RenderLayer {
+    if (!isRenderLayer(value)) throw new TypeError(`${name} is not a render layer`)
+    return value
+}
+
+/** `[r, g, b]`, each 0-255. */
+function color(value: unknown, name: string): [number, number, number] {
+    const channels = array(value, name).map((channel, index) => integerInRange(channel, 0, 255, `${name}[${index}]`))
+    if (channels.length !== 3) throw new TypeError(`${name} must be [r, g, b]`)
+    return channels as [number, number, number]
+}
+
+/** A part's two sprites under two thirds and under a third of its health (a nut's face, a helm's dents). */
+function twoSprites(value: unknown, name: string): [string, string] {
+    const sprites = nonEmptyStrings(value, name)
+    if (sprites.length !== 2) throw new TypeError(`${name} must be two sprites`)
+    return sprites as [string, string]
+}
+
+function placement(value: unknown, name: string): SeedPacketPlacement {
+    return allFields<SeedPacketPlacement>(value, name, { scale: positiveFinite, offsetX: finite, offsetY: finite })
+}
+
+function graveRise(value: unknown, name: string): PresentationDefinitions['graves']['rise'] {
+    return allFields<PresentationDefinitions['graves']['rise']>(value, name, { particle: nonEmptyString, sounds })
+}
+
+function music(value: unknown, name: string): BoardPresentation['music'] {
+    const tune = (value: unknown, name: string) => nonEmptyString(value, name) as MusicTuneId
+    return allFields<BoardPresentation['music']>(value, name, { choosing: tune, gameplay: tune })
+}
+
+/** A clip's picture; ClientAnimationRegistry fills in what it leaves out. */
+function clip(value: unknown, name: string): ClientAnimationClip {
+    return fields<ClientAnimationClip>(value, name, ['reanimId', 'x', 'y'], {
+        reanimId: nonEmptyString, rateScale: positiveFinite, x: finite, y: finite, attachmentTrackId: nonEmptyString, attachmentBase: nonEmptyString,
+        onlyTracks: nonEmptyStrings, blend: nonNegativeFinite, fps: positiveFinite, fullLastFrame: trueFlag,
+    })
+}
+
+const clips = table(clip)
+/** The clips some layers show, `{layer: clip}`. */
+const clipNames = table(nonEmptyString)
+
+function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
+    const menu = allFields<MainMenuDefinition>(value, name, {
+        buttons: (value, name) => array(value, name).map((entry, index) => parseMainMenuButton(entry, `${name}[${index}]`)),
+        images: nonEmptyStrings,
+        clouds: nonEmptyStrings,
+        flowers: (value, name) => array(value, name).map((entry, index) => point(entry, `${name}[${index}]`)),
+        tracks: (value, name) => allFields<MainMenuDefinition['tracks']>(value, name, {
+            sky: nonEmptyString, anchor: nonEmptyString, profileSign: nonEmptyString, replaced: nonEmptyStrings, handRocks: nonEmptyStrings,
+        }),
+        keyShadow: strings(['track', 'almanac', 'store']),
+        trophy: strings(['track', 'image', 'particle']),
+        startAdventure: strings(['track', 'image', 'highlight', 'shadow', 'adventureShadow']),
+    })
+    if (!menu.buttons.length) throw new TypeError(`${name}.buttons must not be empty`)
+    const names = new Set<string>()
+    for (const [index, button] of menu.buttons.entries()) {
+        if (names.has(button.name)) throw new TypeError(`${name}.buttons[${index}].name is duplicated`)
+        names.add(button.name)
+    }
+    return menu
+}
+
+function parseMainMenuButton(value: unknown, name: string): MainMenuButtonDefinition {
+    return fields<MainMenuButtonDefinition>(value, name, ['name', 'track', 'image', 'highlight'], {
+        name: nonEmptyString, target: nonEmptyString, track: nonEmptyString, image: nonEmptyString, highlight: nonEmptyString,
+        replace: boolean, sign: boolean, mode: boolean,
+        x: finite, y: finite, width: positiveFinite, height: positiveFinite, imageX: finite, imageY: finite,
+        polygon(value, name) {
+            const points = array(value, name).map((entry, index) => pair(entry, `${name}[${index}]`))
+            if (points.length < 3) throw new TypeError(`${name} needs three points`)
+            return points
+        },
+    })
+}
+
+function parseTool(value: unknown, name: string): ToolPresentation {
+    return fields<ToolPresentation>(value, name, ['bank', 'sprite', 'tooltipKey', 'x', 'imageOffset', 'cursorOffset', 'arrowOffset'], {
+        bank: nonEmptyString, sprite: nonEmptyString, tooltipKey: nonEmptyString,
+        hotkey(value, name) {
+            if (typeof value !== 'string' || !/^[A-Z]$/.test(value)) throw new TypeError(`${name} must be a letter A-Z`)
+            return value
+        },
+        arrowStep: nonEmptyString, x: finite, imageOffset: pair, cursorOffset: pair, arrowOffset: pair,
+    })
+}
+
+function parseStoreItem(value: unknown, name: string): StoreItemPresentation {
+    type Highlight = NonNullable<StoreItemPresentation['highlight']>
+    return fields<StoreItemPresentation>(value, name, [], {
+        sprite: nonEmptyString, offset: pair, quantity: positiveInteger,
+        highlight(value, name): Highlight {
+            const { type } = record(value, name)
+            if (type !== 'additive') return allFields<Highlight>(value, name, { type: (value, name) => oneOf(value, ['none', 'seedPacket'] as const, name) })
+            return allFields<Highlight>(value, name, { type: (value, name) => oneOf(value, ['additive'] as const, name),
+                opacity: (value, name) => integerInRange(value, 0, 255, name) })
+        },
+    })
+}
+
+function parseStoreDialogue(value: unknown, name: string): StoreDialoguePresentation {
+    type Ambient = StoreDialoguePresentation['ambient']
+    return allFields<StoreDialoguePresentation>(value, name, {
+        readyDelay: positiveFinite, descriptionDuration: positiveFinite,
+        ambient: (value, name) => {
+            const ambient = allFields<Ambient>(value, name, {
+                initialDelay: positiveFinite, duration: positiveFinite,
+                interval(value, name) {
+                    const interval = range(value, name, 0)
+                    if (interval[0] <= 0) throw new TypeError(`${name} must be positive`)
+                    return interval
+                },
+                // The chatter's weights are whole numbers, as PvzpPickFromWeightedArray's are.
+                messages: (value, name) => array(value, name).map((entry, index) => fields<Ambient['messages'][number]>(entry, `${name}[${index}]`,
+                    ['message', 'weight'], { message: nonNegativeInteger, weight: nonNegativeInteger, completed: trueFlag })),
+            })
+            if (!ambient.messages.length) throw new TypeError(`${name}.messages must not be empty`)
+            return ambient
+        },
+    })
+}
+
+function parseDave(value: unknown, name: string): PresentationDefinitions['dave'] {
+    type Dave = PresentationDefinitions['dave']
+    return allFields<Dave>(value, name, {
+        clips: strings(['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink']),
+        sourceFps: positiveFinite, transitionFps: positiveFinite, talkFps: positiveFinite, blinkFps: positiveFinite,
+        idleBlend: positiveFinite, talkBlend: positiveFinite, delay: positiveFinite,
+        blinkSeconds: pair, talkLengths: pair,
+        bubble: (value, name) => allFields<Dave['bubble']>(value, name, {
+            sprite: nonEmptyString, x: finite, y: finite, textX: finite, textY: finite, textWidth: positiveFinite, textHeight: positiveFinite,
+            continueX: finite, continueY: finite, shake: finite,
+        }),
+        hand: (value, name) => allFields<Dave['hand']>(value, name, { reanim: nonEmptyString, x: finite, y: finite, scale: positiveFinite, track: nonEmptyString }),
+        parts: (value, name) => allFields<Dave['parts']>(value, name, { mouth: nonEmptyString, eyes: nonEmptyStrings, head: nonEmptyString }),
+        mouths: table(nonEmptyString),
+    })
+}
+
+function parseBoard(value: unknown, name: string): BoardPresentation {
+    return fields<BoardPresentation>(value, name, ['background', 'backgroundX', 'music', 'gameOver'], {
+        background: nonEmptyString, backgroundX: finite, plantShadow: nonEmptyString, music,
+        gameOver: (value, name) => allFields<BoardPresentation['gameOver']>(value, name, {
+            images(value, name) {
+                const images = nonEmptyStrings(value, name)
+                if (images.length !== 3) throw new TypeError(`${name} must contain three images`)
+                return images as [string, string, string]
+            },
+            interior: point, doorway: point, clipX: finite, winnerY: finite, panX: finite,
+        }),
+    })
+}
+
+/** Its own view reads the rest of a rule's presentation (LevelRulePresentation). */
+function parseRule(value: unknown, name: string): LevelRulePresentation {
+    const { graveRise: rise, itemPadding, ...own } = record(value, name)
+    return {
+        ...own,
+        ...rise === undefined ? {} : { graveRise: graveRise(rise, `${name}.graveRise`) },
+        ...itemPadding === undefined ? {} : { itemPadding: allFields<NonNullable<LevelRulePresentation['itemPadding']>>(itemPadding, `${name}.itemPadding`, { size: finite, height: finite }) },
     }
 }
 
-function range(value: unknown, name: string, fractional = false): void {
-    if (!Array.isArray(value) || value.length !== 2 || value.some(v => !Number.isFinite(v) || v < 0 || (!fractional && !Number.isInteger(v))) || value[0] > value[1]) {
-        throw new TypeError(name + ' must be an ordered range')
-    }
+function parseScreen(value: unknown, name: string): ScreenAnimationDefinition[] {
+    const names = new Set<string>()
+    return array(value, name).map((entry, index) => {
+        const entryName = `${name}[${index}]`
+        const layer = fields<ScreenAnimationDefinition>(entry, entryName, ['name', 'reanimId', 'x', 'y', 'rate', 'playback'], {
+            name: nonEmptyString, reanimId: nonEmptyString, x: finite, y: finite, rate: positiveFinite,
+            playback: (value, name) => oneOf(value, ['loop', 'last'] as const, name), randomPhase: boolean, visibleTracks: nonEmptyStrings,
+        })
+        if (names.has(layer.name)) throw new TypeError(`${name} has duplicate animation names`)
+        names.add(layer.name)
+        if (layer.randomPhase !== undefined && layer.playback !== 'loop') throw new TypeError(`${entryName}.randomPhase requires loop playback`)
+        return layer
+    })
 }
 
-function point(value: unknown, name: string): void {
-    const point = record(value, name)
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new TypeError(name + ' must be a finite point')
+function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
+    type Line = NonNullable<LevelPresentationDefinition['plantingLine']>
+    return fields<LevelPresentationDefinition>(value, name, ['intro', 'advice', 'seedGuideSteps', 'lawnGuideSteps'], {
+        music,
+        intro: parseIntro,
+        // An empty advice shows nothing at its step.
+        advice: table((value, name) => {
+            if (typeof value !== 'string') throw new TypeError(`${name} must be a string`)
+            return value
+        }),
+        adviceDuringIntro: boolean,
+        adviceStyle: (value, name) => oneOf(value, ['hint-stay', 'tutorial-level1-stay'] as const, name),
+        guideSeed: nonEmptyString,
+        seedGuideSteps: nonEmptyStrings,
+        lawnGuideSteps: nonEmptyStrings,
+        seedGuideArrow(value, name) {
+            if (value !== false) throw new TypeError(`${name} can only be false`)
+            return false
+        },
+        plantingLine: (value, name) => allFields<Line>(value, name, {
+            sprite: nonEmptyString, offset: pair, dialogs: (value, name) => array(value, name).map((dialog, index) => integer(dialog, `${name}[${index}]`)),
+        }),
+    })
+}
+
+function parseIntro(value: unknown, name: string): AdventureIntroLayout {
+    type Sod = NonNullable<AdventureIntroLayout['existingSod']>
+    return fields<AdventureIntroLayout>(value, name, ['previewCapacity', 'sod', 'x', 'y', 'width', 'rolls', 'readySetPlant'], {
+        previewCapacity: positiveInteger, stationary: boolean, hiddenSeedBank: boolean,
+        sod: nonEmptyString, x: finite, y: finite, width: positiveFinite, sourceX: finite,
+        existingSod: (value, name) => allFields<Sod>(value, name, { sprite: nonEmptyString, x: finite, y: finite }),
+        rolls: (value, name) => array(value, name).map((roll, index) =>
+            allFields<AdventureIntroLayout['rolls'][number]>(roll, `${name}[${index}]`, { x: finite, y: finite, particleY: finite })),
+        readySetPlant: boolean,
+    })
+}
+
+function parseAward(value: unknown, name: string): AwardPresentationDefinition {
+    type Image = NonNullable<AwardPresentationDefinition['pageImages']>[number]
+    return fields<AwardPresentationDefinition>(value, name, ['sprite', 'scale', 'x', 'y', 'pageY'], {
+        sprite: nonEmptyString, scale: positiveFinite, x: finite, y: finite, pageY: finite,
+        pageImages(value, name) {
+            const images = array(value, name).map((image, index) => fields<Image>(image, `${name}[${index}]`, ['sprite', 'x', 'y'], {
+                sprite: nonEmptyString, x: finite, y: finite, width: positiveFinite, height: positiveFinite,
+            }))
+            if (!images.length) throw new TypeError(`${name} must not be empty`)
+            return images
+        },
+    })
+}
+
+function parseChallengePage(value: unknown, name: string): ChallengePagePresentationDefinition {
+    const page = allFields<ChallengePagePresentationDefinition>(value, name, {
+        x: finite, y: finite, columnSpacing: positiveFinite, rowSpacing: positiveFinite, buttonWidth: positiveFinite, buttonHeight: positiveFinite,
+        thumbnails: (value, name) => allFields<ChallengePagePresentationDefinition['thumbnails']>(value, name, {
+            sprite: nonEmptyString, columns: positiveInteger, rows: positiveInteger,
+        }),
+        icons: table(nonNegativeInteger),
+    })
+    const cels = page.thumbnails.columns * page.thumbnails.rows
+    for (const [key, icon] of Object.entries(page.icons)) if (icon >= cels) throw new TypeError(`${name}.icons.${key} is not a thumbnail cel`)
+    return page
+}
+
+function parseItem(value: unknown, name: string): ItemPresentationDefinition {
+    type Item = ItemPresentationDefinition
+    return fields<Item>(value, name, ['reanim', 'offset', 'rate'], {
+        view: nonEmptyString, reanim: nonEmptyString, offset: pair, rate: (value, name) => range(value, name, 0),
+        flight: (value, name) => allFields<NonNullable<Item['flight']>>(value, name, { sprite: nonEmptyString, offset: pair }),
+        glow: (value, name) => fields<NonNullable<Item['glow']>>(value, name, ['sprite', 'offset'], { sprite: nonEmptyString, offset: pair, inFlight: boolean }),
+        arrow: (value, name) => allFields<NonNullable<Item['arrow']>>(value, name, { particle: nonEmptyString, offset: pair }),
+        spawnSounds: sounds, landSounds: sounds, collectSounds: sounds,
+    })
+}
+
+function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
+    type Plant = PlantPresentationDefinition
+    return fields<Plant>(value, name, ['scale', 'visual'], {
+        fireParticle: (value, name) => allFields<NonNullable<Plant['fireParticle']>>(value, name, {
+            id: nonEmptyString, x: finite, y: finite, delayTicks: nonNegativeInteger,
+        }),
+        layer,
+        shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], { x: finite, y: finite, scale: positiveFinite }),
+        scale: positiveFinite,
+        drawHeightOffset: finite,
+        pointerOffsetY: finite,
+        visual: (value, name) => fields<PlantVisual>(value, name, ['nameKey'], {
+            packetPlant: nonEmptyString, nameKey: nonEmptyString, tooltipKey: nonEmptyString, tint: color,
+        }),
+        parts: (value, name) => fields<PlantParts>(value, name, [], { eyes: nonEmptyStrings, face: nonEmptyString, prey: nonEmptyStrings }),
+        view: nonEmptyString,
+        clips,
+        offBoard: clipNames,
+        packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
+            placement, x: finite, y: finite, scale: positiveFinite, time: finite, clips: clipNames,
+        }),
+        almanacOffset: pair,
+        chewParticle: nonEmptyString,
+        crackedFaces: twoSprites,
+        explosion: (value, name) => allFields<NonNullable<Plant['explosion']>>(value, name, { effect: nonEmptyString, x: finite, layer }),
+        plantedSounds: sounds, explosionSounds: sounds, fireSounds: sounds,
+    })
+}
+
+const ARMOR_FIELDS: FieldParsers<ZombieArmorPresentation> = {
+    track: nonEmptyString, damagedSprites: twoSprites, effect: nonEmptyString, offset: pair, impactSounds: sounds, muffles: trueFlag,
+    bowlingImpactSounds: sounds,
+    dropReanim: (value, name) => allFields<NonNullable<ZombieArmorPresentation['dropReanim']>>(value, name, { reanimId: nonEmptyString, offset: pair }),
+    dropSounds: sounds,
+}
+const ARMOR_REQUIRED = ['track', 'damagedSprites', 'effect', 'offset', 'impactSounds'] as const
+
+function parseZombie(value: unknown, name: string): ZombiePresentationDefinition {
+    type Zombie = ZombiePresentationDefinition
+    const cell = (value: unknown, name: string) => integerInRange(value, 0, 4, name)
+    const drop = (value: unknown, name: string) => fields<ZombieDrop>(value, name, ['track', 'effect', 'offset'], {
+        track: nonEmptyString, effect: nonEmptyString, moweredEffect: nonEmptyString, offset: pair, image: nonEmptyString, sounds,
+    })
+    const zombie = fields<Zombie>(value, name, ['nameKey', 'clips', 'shadow', 'parts', 'damagedArmSprite', 'drops'], {
+        nameKey: nonEmptyString,
+        view: nonEmptyString,
+        clips,
+        shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite }),
+        packet: (value, name) => fields<NonNullable<Zombie['packet']>>(value, name, ['x', 'y', 'scale'], {
+            x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
+        }),
+        portrait: (value, name) => allFields<NonNullable<Zombie['portrait']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
+        parts: parseZombieParts,
+        damagedArmSprite: nonEmptyString,
+        enragedHead: (value, name) => allFields<NonNullable<Zombie['enragedHead']>>(value, name, { track: nonEmptyString, sprite: nonEmptyString }),
+        enrageSounds: sounds,
+        previewBlockedCells: (value, name) => array(value, name).map((entry, index) =>
+            allFields<NonNullable<Zombie['previewBlockedCells']>[number]>(entry, `${name}[${index}]`, { column: cell, row: cell })),
+        drops: (value, name) => fields<Zombie['drops']>(value, name, [], { head: drop, arm: drop, flag: drop }),
+        helm: (value, name) => fields<NonNullable<Zombie['helm']>>(value, name, ARMOR_REQUIRED, { ...ARMOR_FIELDS, showsHair: boolean }),
+        shield: (value, name) => fields<ZombieArmorPresentation>(value, name, ARMOR_REQUIRED, ARMOR_FIELDS),
+    })
+    if (zombie.parts.shieldArms && !zombie.shield) throw new TypeError(`${name}.parts.shieldArms requires a shield`)
+    for (const slot of ['helm', 'shield'] as const) {
+        const armor = zombie[slot]
+        if (armor && !zombie.parts.helms.includes(armor.track)) throw new TypeError(`${name}.${slot}.track is missing from parts.helms`)
+    }
+    if (zombie.helm && zombie.shield && zombie.helm.track === zombie.shield.track) throw new TypeError(`${name} draws its helm and shield on one track`)
+    return zombie
+}
+
+function parseZombieParts(value: unknown, name: string): ZombieParts {
+    return fields<ZombieParts>(value, name, ['head', 'hair', 'tongue', 'arm', 'upperArm', 'helms', 'ground'], {
+        head: nonEmptyStrings, hair: nonEmptyStrings, tongue: nonEmptyStrings, arm: nonEmptyStrings, upperArm: nonEmptyString,
+        helms: nonEmptyStrings, ground: nonEmptyString, held: nonEmptyStrings,
+        flagArm: (value, name) => allFields<NonNullable<ZombieParts['flagArm']>>(value, name, {
+            holding: nonEmptyStrings, free: nonEmptyStrings, front: nonEmptyString,
+        }),
+        shieldArms: (value, name) => allFields<NonNullable<ZombieParts['shieldArms']>>(value, name, { holding: nonEmptyStrings, free: nonEmptyStrings }),
+    })
+}
+
+function parseProjectile(value: unknown, name: string): ProjectilePresentationDefinition {
+    type Projectile = ProjectilePresentationDefinition
+    const projectile = fields<Projectile>(value, name, ['fireSounds', 'impactSounds'], {
+        view: nonEmptyString,
+        sprite: nonEmptyString,
+        reanim: (value, name) => allFields<NonNullable<Projectile['reanim']>>(value, name, {
+            id: nonEmptyString, x: finite, y: finite, scale: positiveFinite, rate: positiveFinite,
+        }),
+        plantShadow: point,
+        layer,
+        shadow(value, name) {
+            const shadow = allFields<NonNullable<Projectile['shadow']>>(value, name, {
+                sprite: nonEmptyString, columns: positiveInteger, cell: nonNegativeInteger, offset: point, scale: positiveFinite,
+            })
+            if (shadow.cell >= shadow.columns) throw new TypeError(`${name}.cell is not one of its columns`)
+            return shadow
+        },
+        trail: (value, name) => allFields<NonNullable<Projectile['trail']>>(value, name, { id: nonEmptyString, x: finite, y: finite }),
+        impact(value, name) {
+            const impact = fields<NonNullable<Projectile['impact']>>(value, name, ['id'], {
+                id: nonEmptyString, shotOffset: pair, lobOffset: pair, yRange: (value, name) => range(value, name, 0), free: trueFlag,
+            })
+            // A free splat stays where it was, with no zombie to stay on.
+            if (!impact.free && !impact.yRange) throw new TypeError(`${name}.yRange is required`)
+            return impact
+        },
+        fireSounds: sounds,
+        impactSounds: sounds,
+        loud: trueFlag,
+    })
+    if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(`${name} needs exactly one of sprite and reanim`)
+    return projectile
 }
 
 export interface BoardPresentation {

@@ -18,14 +18,64 @@ export function exact(value: unknown, required: readonly string[], name: string,
     return source
 }
 
+/** Each field's parser, by name: a field left out of the value has none. */
+export type FieldParsers<T> = { readonly [K in keyof T]-?: (value: unknown, name: string) => T[K] }
+
+/**
+ * An object of `fields` only (exact): the `required` ones and any of the others, each read by its parser. What is
+ * left out stays out of the result.
+ */
+export function fields<T>(value: unknown, name: string, required: readonly (keyof T & string)[], parsers: FieldParsers<T>): T {
+    const source = exact(value, required, name, Object.keys(parsers))
+    const result: Record<string, unknown> = {}
+    for (const [key, parse] of Object.entries(parsers) as [string, (value: unknown, name: string) => unknown][]) {
+        if (source[key] !== undefined || required.includes(key as keyof T & string)) result[key] = parse(source[key], `${name}.${key}`)
+    }
+    return result as T
+}
+
+/** `fields` with none left out. */
+export function allFields<T>(value: unknown, name: string, parsers: FieldParsers<T>): T {
+    return fields(value, name, Object.keys(parsers) as (keyof T & string)[], parsers)
+}
+
 export function array(value: unknown, name: string): unknown[] {
     if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
     return value
 }
 
+/** An object's entries under names of the content's own (a plant's clips and layers), each read by `parse`. */
+export function named<T>(value: unknown, name: string, parse: (entry: unknown, entryName: string, key: string) => T): Record<string, T> {
+    return Object.fromEntries(Object.entries(record(value, name)).map(([key, entry]) => [key, parse(entry, `${name}.${key}`, key)]))
+}
+
 export function nonEmptyString(value: unknown, name: string): string {
     if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${name} must be a non-empty string`)
     return value
+}
+
+export function nonEmptyStrings(value: unknown, name: string): string[] {
+    return array(value, name).map((entry, index) => nonEmptyString(entry, `${name}[${index}]`))
+}
+
+/** `{x, y}`. */
+export function point(value: unknown, name: string): { x: number; y: number } {
+    const source = exact(value, ['x', 'y'], name)
+    return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`) }
+}
+
+/** `[x, y]`. */
+export function pair(value: unknown, name: string): [number, number] {
+    const source = array(value, name)
+    if (source.length !== 2) throw new TypeError(`${name} must be a pair`)
+    return [finite(source[0], `${name}[0]`), finite(source[1], `${name}[1]`)]
+}
+
+/** `[min, max]`: a pair in order, neither below `minimum`. */
+export function range(value: unknown, name: string, minimum = -Infinity): [number, number] {
+    const [min, max] = pair(value, name)
+    if (min < minimum || min > max) throw new TypeError(`${name} must be an ordered range${minimum > -Infinity ? ` from ${minimum}` : ''}`)
+    return [min, max]
 }
 
 export function boolean(value: unknown, name: string): boolean {

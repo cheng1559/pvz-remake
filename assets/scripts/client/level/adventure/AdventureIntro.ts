@@ -14,7 +14,8 @@ import type {
 import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
-import { createOffBoardZombie, type OffBoardZombie } from '@/client/view/offBoard'
+import { createOffBoardZombie } from '@/client/view/offBoard'
+import type { ZombieView } from '@/client/zombies/ZombieView'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
@@ -31,6 +32,7 @@ const PAN_LEFT_START = 450
 const PAN_LEFT_END = 600
 const ROLL_SOD_START = 600
 const ROLL_SOD_END = 800
+/** CutScene's TimeLawnMowerStart for the middle row (each row up starts 5 later) and TimeLawnMowerDuration. */
 const LAWN_MOWER_START = 620
 const LAWN_MOWER_DURATION = 25
 const SEED_BANK_START = 600
@@ -50,18 +52,18 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
 
 /**
  * A street's zombie, drawn by its view as it stands off the board (CutScene::PlaceAZombie makes a zombie of
- * ZOMBIE_WAVE_CUTSCENE): by the node it is in.
+ * ZOMBIE_WAVE_CUTSCENE), with the tongue it was given: by the node it is in.
  */
-const street = new WeakMap<Node, OffBoardZombie>()
+const street = new WeakMap<Node, { view: ZombieView, hasTongue: boolean }>()
 
 /** The zombie in a street node's `Body`, its shadow beside that. */
-async function standInStreet(node: Node, typeId: string, hasTongue: boolean): Promise<OffBoardZombie> {
+async function standInStreet(node: Node, typeId: string, hasTongue: boolean): Promise<ZombieView> {
     street.get(node)?.view.destroy()
     node.getChildByName('Body')?.destroy()
-    const zombie = await createOffBoardZombie(uiNode({ name: 'Body', parent: node }).node, typeId, { hasTongue })
-    if (!zombie) throw new Error(`Street zombie is not drawn off the board: ${typeId}`)
-    street.set(node, zombie)
-    return zombie
+    const view = await createOffBoardZombie(uiNode({ name: 'Body', parent: node }).node, typeId, { hasTongue })
+    if (!view) throw new Error(`Street zombie is not drawn off the board: ${typeId}`)
+    street.set(node, { view, hasTongue })
+    return view
 }
 
 export class AdventureIntro implements LevelIntro {
@@ -72,7 +74,7 @@ export class AdventureIntro implements LevelIntro {
     private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions; almanacZombies: readonly string[] }
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
-        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowers, previewZombies } = context
+        const { content, level, slots, board, entityLayer, bank, houseName, audio, previewZombies } = context
         const [sod] = await Promise.all([modResources.sprite(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
         const sodClip = uiNode({
             node: slots.sodClip, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
@@ -152,7 +154,7 @@ export class AdventureIntro implements LevelIntro {
         // A conveyor level's belt stands in for the bank (Board::UpdateGame draws no bank with one).
         const shown = level.conveyor ? { ...layout, hiddenSeedBank: true } : layout
         const intro = new AdventureIntro(board, sodClip, sodRolls, shown, ready, introZombies, previewTypes, content.presentation, bank, houseName,
-            mowers, audio)
+            audio)
         intro.seedChooser = context.seedChooser === true
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
@@ -204,14 +206,13 @@ export class AdventureIntro implements LevelIntro {
         private readonly board: Node,
         private readonly sodClip: Node,
         private readonly sodRolls: ReanimPlayer[],
-        private readonly layout: AdventureIntroLayout,
+        readonly layout: AdventureIntroLayout,
         private readonly ready: ReanimPlayer | null,
-        private readonly introZombies: Node[],
+        readonly introZombies: Node[],
         private readonly previewTypes: Map<Node, string>,
         private readonly definitions: PresentationDefinitions,
         private readonly bank: Node,
         private readonly houseName: Node,
-        private readonly mowers: () => ReadonlyMap<number, Node>,
         private readonly audio: LevelAudioPresenter,
     ) { if (layout.stationary) this.ticks = SEED_BANK_START }
 
@@ -227,6 +228,16 @@ export class AdventureIntro implements LevelIntro {
     private get endTick(): number { return this.readyStart + (this.layout.readySetPlant ? READY_SET_PLANT_TICKS : 0) }
 
     get elapsedTicks(): number { return this.ticks }
+
+    /**
+     * CutScene::UpdateIntro: each row's mower shows once its TimeLawnMowerStart has passed (the higher rows' later),
+     * after the lawn is rolled and the graves are up, and comes on over TimeLawnMowerDuration.
+     */
+    mowerArrival(row: number): number {
+        if (this.complete) return 1
+        const start = LAWN_MOWER_START + this.sodTicks + this.graveTicks + (2 - row) * 5
+        return Math.max(0, Math.min(1, (this.ticks - start) / LAWN_MOWER_DURATION))
+    }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'intro-preview' }> | null {
         for (let slot = 0; slot < this.introZombies.length; slot++) {
@@ -247,15 +258,15 @@ export class AdventureIntro implements LevelIntro {
             ticks: this.ticks,
             ...(this.hasOpeningDialog ? { hasOpeningDialog: true } : {}),
             previews: this.complete ? [] : this.introZombies.map((node, slot) => {
-                const zombie = street.get(node)!
+                const { view, hasTongue } = street.get(node)!
                 return {
                     slot,
                     typeId: this.previewTypes.get(node)!,
                     x: node.position.x,
                     y: node.position.y,
                     z: node.position.z,
-                    hasTongue: zombie.zombie.hasTongue,
-                    view: zombie.view.snapshot(zombie.zombie.entityId).data,
+                    hasTongue,
+                    view: view.playbackSnapshot(),
                 }
             }),
         }
@@ -279,8 +290,8 @@ export class AdventureIntro implements LevelIntro {
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)
                 // Its view takes back where its body was, on the clip it was on.
-                const zombie = await standInStreet(node, preview.typeId, preview.hasTongue)
-                await zombie.view.restore({ kind: 'zombie', entityId: zombie.zombie.entityId, data: preview.view })
+                const view = await standInStreet(node, preview.typeId, preview.hasTongue)
+                await view.restorePlayback(preview.view, `intro preview ${preview.slot}`)
                 this.syncPreviewTooltip(node)
             }
         }
@@ -344,17 +355,6 @@ export class AdventureIntro implements LevelIntro {
             easeInOut(475, PAN_LEFT_END, tick, 0, 10),
             easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),
         )
-
-        for (const [row, node] of this.mowers()) {
-            const start = LAWN_MOWER_START + this.sodTicks + this.graveTicks + (2 - row) * 5
-            node.active = tick > start || this.complete
-            if (node.active && !this.complete) {
-                node.setPosition(
-                    easeInOut(start, start + LAWN_MOWER_DURATION, tick, -480, -421),
-                    node.position.y,
-                )
-            }
-        }
     }
 
     private startSodRoll(): void {

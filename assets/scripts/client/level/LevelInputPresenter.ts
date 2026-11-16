@@ -215,7 +215,7 @@ export class LevelInputPresenter {
         }
         this.view.setPointer(point)
         const snapshot = this.game.render()
-        if ((snapshot.extensions['pvz:debug'] as { collect?: string } | undefined)?.collect === 'move'
+        if (snapshot.debug?.collect === 'move'
             && snapshot.result === 'playing' && snapshot.cursor.mode === 'none') this.collectAt(point.x, point.y, false)
     }
 

@@ -2,15 +2,17 @@ import { withProjectileMotions } from '../projectileMotions'
 import { readGameplaySource } from '../../tools/mod/content'
 import { withFixedBanks } from '../fixedBankLevels'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { parseGameplayLevels } from '@/shared/content/gameplay'
+import { mowerY, parseGameplayLevels } from '@/shared/content/gameplay'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { Schedule, World } from '@/ecs/index'
+import { CommandBuffer, Schedule, World } from '@/ecs/index'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import {
+    EconomyStateResource,
     LevelStateResource,
     MowedPlantComponent,
+    MowerComponent,
     PlantComponent,
     PositionComponent,
     ProjectileComponent,
@@ -18,7 +20,14 @@ import {
     ZombieComponent,
 } from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
-import { createMowerSystem, startMower } from '@/server/level/mower'
+import { createMower, createMowerSystem, startMower } from '@/server/level/mower'
+import { readyMowers } from '@/server/level/lawn'
+import { updateMowerCoins } from '@/server/level/loot'
+import { ItemComponent } from '@/server/state/levelState'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import type { JsonValue, StartSessionPacket } from '@/shared/protocol/index'
+import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
@@ -29,13 +38,16 @@ const board = definitions.boards['pvz:day']
 function mowerWorld(): World {
     const world = new World()
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board,
-        phase: 'gameplay', result: 'playing', paused: false, mowerRows: [2] })
+        phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(1))
+    createMower(world, 2)
     return world
 }
-/** The running mowers, which are projectiles. */
+/** The running mowers, which run as projectiles. */
 const mowers = (world: World) => [...world.query(PositionComponent, ProjectileComponent)]
+/** The rows whose mower waits. */
+const waiting = (world: World) => [...readyMowers(world).keys()]
 
 test("a row's mower sets off as a mowing projectile when a zombie with its head reaches it, kills overlaps, and is gone off the board", () => {
     const world = mowerWorld()
@@ -45,7 +57,9 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     schedule.add('mower', createMowerSystem(definitions))
 
     schedule.run(world, 1)
-    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
+    const [row] = [...world.query(MowerComponent)]
+    assert.deepEqual(world.get(row, MowerComponent), { state: 'ready' })
+    assert.deepEqual(world.get(row, PositionComponent), { x: -21, y: 303, row: 2 }, 'where it waits, at MOWER_READY_X')
     assert.equal(mowers(world).length, 0)
 
     const zombie = world.createEntity()
@@ -58,12 +72,14 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
     schedule.run(world, 2)
-    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
+    assert.deepEqual(waiting(world), [2])
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'walking')
     world.get(zombie, ZombieComponent)!.hasHead = true
     schedule.run(world, 3)
-    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [])
+    assert.deepEqual(waiting(world), [])
     const [mowerEntity] = mowers(world)
+    assert.equal(mowerEntity, row, 'the mower that waited runs on: one entity throughout (LawnMower::StartMower)')
+    assert.deepEqual(world.get(mowerEntity, MowerComponent), { state: 'triggered' })
     assert.deepEqual(world.get(mowerEntity, ProjectileComponent)!.typeId, 'pvz:lawnmower')
     assert.equal(world.get(mowerEntity, PositionComponent)!.y, 303)
     assert.equal(world.hasEntity(zombie), true)
@@ -111,7 +127,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     world.get(mowerEntity, PositionComponent)!.x = 799
     schedule.run(world, 55)
     assert.equal(world.hasEntity(mowerEntity), false)
-    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [], 'the row has used its mower')
+    assert.deepEqual(waiting(world), [], 'the row has used its mower')
 })
 
 test('Zombie::MowDown drops a worn helm or shield before the mowed animation', () => {
@@ -153,7 +169,7 @@ test('a zombie that cannot be flattened (dying, vaulting, rising) goes in a puff
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
-    startMower(world, definitions, 2)
+    startMower(world, definitions, readyMowers(world).get(2)!)
     const schedule = new Schedule()
     schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
@@ -180,10 +196,10 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
     schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
     schedule.run(world, 1)
-    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
+    assert.deepEqual(waiting(world), [2])
     assert.equal(world.get(enemy, PlantComponent)!.health, 4000)
 
-    startMower(world, definitions, 2)
+    startMower(world, definitions, readyMowers(world).get(2)!)
     const [mower] = mowers(world)
     let tick = 2
     while (!world.get(enemy, MowedPlantComponent)) schedule.run(world, tick++)
@@ -216,7 +232,9 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
         game.update(0)
         return game
     }
-    const running = (game: LocalIntegratedGame) => game.render().projectiles.filter(projectile => projectile.typeId === 'pvz:lawnmower')
+    // What runs as a mower: the shooters' mowing projectiles, and the level's own once set off.
+    const running = (game: LocalIntegratedGame) => [...game.render().projectiles, ...game.render().mowers.filter(mower => mower.state === 'triggered')]
+        .filter(projectile => projectile.typeId === 'pvz:lawnmower')
     const run = (game: LocalIntegratedGame, until: () => boolean) => {
         for (let step = 0; step < 3000 && !until(); step++) game.update(0.01)
         assert.ok(until())
@@ -229,7 +247,7 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     run(ours, () => ours.render().zombies.some(zombie => zombie.state === 'mowered'))
     assert.ok(ours.currentSnapshot!.projectiles[0].y === flat.y && flat.height! > 0, 'fired from a mouth, it flies flat at that height, over its shadow on the ground')
     run(ours, () => running(ours).length === 0)
-    assert.deepEqual(ours.render().mowerRows, [2], "the row's own mower still waits")
+    assert.deepEqual(ours.render().mowers.map(mower => [mower.row, mower.state]), [[2, 'ready']], "the row's own mower still waits")
 
     const theirs = play(['/plant peashooter 3 9 zombies', '/plant wallnut 3 3'])
     run(theirs, () => running(theirs).some(mower => mower.team === 'zombies'))
@@ -254,4 +272,73 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     squashed.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: planted.saveAtBoundary() })
     assert.deepEqual(squashed.render().plants, planted.render().plants, 'a save keeps it mid-squash')
     run(planted, () => !nut())
+})
+
+test("a row's mower is one entity from the level's start to its end, saved and restored as it is, and a save of another shape is refused", () => {
+    const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
+    const start: StartSessionPacket = { protocolVersion: 1, sequence: 1, type: 'startSession', levelId: 'pvz:adventure-1-2', randomSeed: 7,
+        initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-2'), mods: [] }
+    const server = new IntegratedGameServer(definitions, levels)
+    // Board::InitLawnMowers: every row in play has one from the intro on, waiting where the intro rolls it in.
+    const initial = server.start(start)
+    assert.equal(initial.phase, 'intro')
+    assert.deepEqual(initial.mowers.map(mower => [mower.row, mower.x, mower.state]), [[1, -21, 'ready'], [2, -21, 'ready'], [3, -21, 'ready']])
+    runCommand(server, { type: 'completeIntro' })
+    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    const [first, second] = initial.mowers
+    startMower(world, definitions, second.entityId)
+    for (let tick = 0; tick < 30; tick++) server.tick()
+    const running = server.snapshot().mowers
+    assert.deepEqual(running.map(mower => [mower.entityId, mower.state]), [[first.entityId, 'ready'], [second.entityId, 'triggered'], [initial.mowers[2].entityId, 'ready']])
+    assert.ok(running[1].x > -21 + 30 * 3)
+    assert.ok(!server.snapshot().projectiles.length, 'a running mower is listed with the mowers, not the projectiles')
+
+    // Saved through its component: a ready one alone, a running one with the projectile it runs as.
+    const saved = server.save()
+    assert.equal(saved.schemaVersion, 3)
+    assert.deepEqual(Object.keys(saved.level), ['phase', 'result', 'paused'], 'no list of rows: the mowers are entities')
+    const entity = (id: number) => saved.entities.find(entity => entity.entityId === id)!
+    assert.deepEqual(entity(first.entityId), { entityId: first.entityId, position: { x: -21, y: first.y, row: 1 }, mower: { state: 'ready' } })
+    assert.equal(entity(second.entityId).mower!.state, 'triggered')
+    assert.equal(entity(second.entityId).projectile!.typeId, 'pvz:lawnmower')
+    const restored = new IntegratedGameServer(definitions, levels)
+    assert.deepEqual(restored.start({ ...start, save: saved as unknown as JsonValue }).mowers, running)
+    for (let tick = 0; tick < 20; tick++) assert.deepEqual(restored.tick().mowers, server.tick().mowers, 'it runs on as it did')
+
+    const refused = (change: (save: any) => void, message: RegExp, why: string) => {
+        const save = structuredClone(saved) as any
+        change(save)
+        assert.throws(() => new IntegratedGameServer(definitions, levels).start({ ...start, save }), message, why)
+    }
+    const saveOf = (save: any, id: number) => save.entities.find((entity: any) => entity.entityId === id)
+    refused(save => { save.schemaVersion = 2 }, /schemaVersion must be 3/, 'an older save is refused, not read as this one')
+    refused(save => { save.level.mowerRows = [1, 2, 3] }, /server save\.level/, "the old rows' list")
+    refused(save => { saveOf(save, first.entityId).mower.state = 'rolling-in' }, /mower\.state/, 'LawnMowerState: ready or triggered')
+    refused(save => { saveOf(save, first.entityId).position.x = 0 }, /Saved mower .* is invalid/, 'a ready one waits at MOWER_READY_X')
+    refused(save => { saveOf(save, first.entityId).projectile = saveOf(save, second.entityId).projectile }, /Saved mower .* is invalid/, 'a ready one runs as nothing')
+    refused(save => { delete saveOf(save, second.entityId).projectile }, /Saved mower .* is invalid/, 'a triggered one runs as the level\'s mower')
+})
+
+test("at the level's end each ready mower turns into gold where it waits, the lowest first, and is gone", () => {
+    const world = mowerWorld()
+    createMower(world, 0)
+    createMower(world, 4)
+    const running = readyMowers(world).get(0)!
+    startMower(world, definitions, running)
+    world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, mowerCoinTicks: 1 })
+    const commands = new CommandBuffer(world), coins: Array<[number, number]> = []
+    for (let tick = 0; tick < 200; tick++) {
+        updateMowerCoins(world, definitions, commands)
+        commands.flush()
+    }
+    for (const entity of world.query(PositionComponent, ItemComponent)) {
+        const { x, y } = world.get(entity, PositionComponent)!
+        coins.push([x, y])
+    }
+    // Board::UpdateLevelEndSequence: AddCoin(mPosX + 40, mPosY + 40), the coin drawn from its corner 10 left and 8 up.
+    assert.deepEqual(coins, [4, 2].map(row => [-21 + 40 - 10, mowerY(board, row) + 40 - 8]))
+    assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'mowerScored').map(event => event.data),
+        [{ row: 4, remaining: 2 }, { row: 2, remaining: 1 }], 'CountUntriggerLawnMowers counts the one scored')
+    assert.deepEqual([...world.query(MowerComponent)], [running], 'only the running one is left')
+    assert.equal(world.resources.get(EconomyStateResource).mowerCoinTicks, undefined, 'and the scoring is through')
 })

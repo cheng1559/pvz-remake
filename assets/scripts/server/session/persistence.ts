@@ -30,14 +30,14 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     })
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
-        schemaVersion: 2,
+        schemaVersion: 3,
         levelId: level.id,
         mods: mods.map(mod => ({ ...mod })),
         tick,
         gameplayTick,
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
-        level: { phase: level.phase, result: level.result, paused: level.paused, mowerRows: [...level.mowerRows] },
+        level: { phase: level.phase, result: level.result, paused: level.paused },
         economy: asSaved(world.resources.get(EconomyStateResource)),
         ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: asSaved(world.resources.get(PacketUpgradeOfferResource)) } : {}),
         // A repick is not saved (savedSeedBank).

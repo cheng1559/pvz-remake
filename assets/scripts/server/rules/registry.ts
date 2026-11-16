@@ -33,7 +33,7 @@ export interface LevelRuleDefinition extends LevelPlantingRule {
     initialize?(world: World, definitions: GameplayDefinitions): void
     /** Checks a saved `wave.ruleState` and returns it as the rule keeps it; required for a rule that keeps one. */
     parseState?(value: JsonObject): JsonObject
-    /** What the client sees of the rule, under `extensions[kind]`. */
+    /** What the client sees of the rule, under `extensions[kind]`; the rule's client view (LevelRuleView) parses it. */
     snapshot?(world: World): JsonObject | undefined
     /** Challenge::MouseDown: a click on the board that hit nothing else. */
     boardClick?(session: Session, x: number, y: number): CommandRejectionCode | undefined

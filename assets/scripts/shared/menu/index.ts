@@ -22,32 +22,28 @@ export type UserResult = { ok: true, user: UserView | null } | {
 }
 export interface MenuSettings { version: number, musicVolume: number, sfxVolume: number, fullScreen: boolean }
 export const SFX_VOLUME_SCALE = 0.65
-export type StoreItemHighlight = { type: 'none' | 'seedPacket' } | { type: 'additive', opacity: number }
+/**
+ * A store item as the player finds it: its ID (its gameplay and presentation `store` entries'), its place on its page,
+ * the price and Dave's line for the next one bought. Its look is the presentation's.
+ */
 export interface StoreItemView {
-    id: number
+    id: string
+    place: number
     cost: number
     affordable: boolean
     state: 'available' | 'hidden' | 'comingSoon' | 'soldOut'
-    sprite?: string
-    /** The seed the item sells, shown as its packet (an item with no `sprite`). */
+    /** The seed the item sells, shown as its packet unless the item has a sprite of its own. */
     seed?: string
-    offset?: readonly [number, number]
-    highlight: StoreItemHighlight
     message: number
     seedSlots?: number
-    quantity?: number
 }
-export interface StoreSpeech {
-    readyDelay: number
-    descriptionDuration: number
-    ambient: { initialDelay: number, interval: readonly [number, number], duration: number, messages: { message: number, weight: number }[] }
-}
+/** The pages the player can turn to, by page ID; `finishedAdventure` lets Dave chatter his `completed` lines. */
 export interface StoreView {
     userId: number
     playerName: string
     coins: number
-    pages: { id: number, items: StoreItemView[] }[]
-    speech: StoreSpeech
+    finishedAdventure: boolean
+    pages: { id: string, items: StoreItemView[] }[]
 }
 export type PurchaseResult = {
     ok: true, store: StoreView, effect?: 'seedSlots' | 'tree', seedSlots?: number,
@@ -61,29 +57,23 @@ export interface ChallengeView {
     items: { key: string, endless?: boolean, completed: boolean, record: number }[]
 }
 /**
- * `seed`: the seed the player owns the plant by, which is the plant's own ID; `place`: its place on the first page,
- * the seed's `position`; `cost` and `refreshTime`: the seed's own `sunCost` and `cooldownTicks` (AlmanacDialog reads
- * gPlantDefs too). The plant's name is its presentation's `nameKey`.
+ * A seed's card on an almanac page: its place there (its `position` in its group, seedGroupPages), its cost and
+ * recharge as its definition has them (AlmanacDialog reads gPlantDefs too), and whether it is one of the hidden cards,
+ * which have no description. On the first page, the chooser's grid, the seed is the plant's own ID, which names its
+ * presentation (`nameKey`, the almanac's ground).
  */
-export interface AlmanacPlantDefinition {
-    seed: string, place: number, cost: number, refreshTime: number, upgrade?: boolean,
-    ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
-}
-/** `id`: its place on the zombies' page; `zombie`: the zombie it shows, named by its presentation's `nameKey`. */
-export interface AlmanacZombieDefinition { id: number, zombie: string, iceGround?: boolean }
-/** `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player. */
-export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
+export interface AlmanacCard { seed: string, place: number, cost: number, refreshTime: number, hidden?: true }
 /**
- * A seed of a group after the original plants (seedGroupPages) on an almanac page: its place there, its cost and
- * recharge as its definition has them, and whether it is one of the hidden cards, which have no description.
+ * `place`: its window on the zombies' page; `zombie`: the zombie it shows, named by its presentation's `nameKey`.
+ * `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player.
  */
-export interface AlmanacGroupCard { seed: string, place: number, cost: number, refreshTime: number, hidden?: true }
+export interface AlmanacZombieView { place: number, zombie: string, shown: boolean, described: boolean }
 /**
  * The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. With
  * `/cheatseed` every plant and zombie is there and described, and `groupPages` are the plant pages after the first:
  * each Mod's seeds, then the hidden cards.
  */
-export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieView[], groupPages?: AlmanacGroupCard[][] }
+export interface AlmanacView { plants: AlmanacCard[], zombies: AlmanacZombieView[], groupPages?: AlmanacCard[][] }
 export interface AchievementEntry { id: string, titleKey: string, descriptionKey: string, icon: { sprite: string, index: number } }
 export interface AchievementView {
     completed: number
@@ -117,7 +107,7 @@ export interface MenuEndpoints {
     selectUser: { args: { id: number }, result: UserResult }
     deleteUser: { args: { id: number }, result: UserResult }
     getStore: { args: Record<string, never>, result: StoreView }
-    purchase: { args: { userId: number, itemId: number, expectedCost: number }, result: PurchaseResult }
+    purchase: { args: { userId: number, itemId: string, expectedCost: number }, result: PurchaseResult }
     getSettings: { args: Record<string, never>, result: MenuSettings }
     updateSettings: { args: { patch: Partial<Omit<MenuSettings, 'version'>> }, result: MenuSettings }
     getChallenges: { args: { page: ChallengePageId }, result: ChallengeView }

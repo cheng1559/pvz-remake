@@ -4,8 +4,6 @@ import type { HapticStyle } from '@/platform/Haptics'
 import type { Color, Node, SpriteFrame } from 'cc'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { ParticlePlayer, ParticleSpawnArgs } from '@/client/particle/ParticlePlayer'
-import type { PlantView } from '@/client/plants/PlantView'
-import type { ZombieView } from '@/client/zombies/ZombieView'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationSound } from '@/shared/content/presentation'
 import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -30,10 +28,12 @@ export async function plantShadow(content: Content, stage?: LevelStage): Promise
 }
 
 /**
- * What every view of something on the board does (plants, zombies, projectiles, the things of a cell, items). It is made
- * by its registry with its context (`node`, `content`, the entity, and `stage` on the board), readied by `initialize`,
- * and `sync` shows its entity in each of the level's frames, where it places its node itself. A view of what is also
- * drawn off the board has `show` for that. One that keeps something of its own across a save has `snapshot`/`restore`.
+ * What every view of something on the board does (plants, zombies, projectiles and mowers, the things of a cell, items).
+ * It is made by its registry with its context (`node`, `content`, the entity, and `stage` on the board), readied by
+ * `initialize`, and `sync` shows its entity in each of the level's frames, where it places its node itself. One that
+ * keeps something of its own across a save has `snapshot`/`restore`. A plant, a zombie, a thing of a cell and a
+ * projectile are drawn off the board too (offBoard.ts): made the same way with no `stage`, which is what tells a view it
+ * is off the board, drawn as its context has it from `initialize` on, never synced, and gone with `destroy`.
  */
 export interface EntityView<Entity = unknown> {
     initialize(): void | Promise<void>
@@ -50,6 +50,9 @@ export interface EntityView<Entity = unknown> {
     readonly collectProgress?: number
 }
 
+/** A view's class, by which the stage gives the view of that class alone (LevelStage.view). */
+export type ViewType<V> = abstract new (...args: never[]) => V
+
 /**
  * The board as the views of what is on it see it: where they put what they draw outside their own node, and what
  * they ask of the level. LevelEntityRenderer is it.
@@ -62,7 +65,10 @@ export interface LevelStage {
     /** The level being played, and the gameplay tick of the frame being drawn. */
     readonly level: LevelDefinition
     readonly gameplayTick: number
-    /** Plants' and zombies' flashes (Plant::mEatenFlashCountdown, Zombie::mJustGotShotCounter), raised by the server's events. */
+    /**
+     * Plants' and zombies' flashes (Plant::mEatenFlashCountdown, Zombie::mJustGotShotCounter), raised by the server's
+     * events (EntityFlashes' handlers), kept with the board across a save.
+     */
     readonly flashes: EntityFlashes
     /**
      * What the board shows now it shows without what goes with getting there: its first frame, what the level starts or is
@@ -95,10 +101,11 @@ export interface LevelStage {
      * that order, it goes where that entity does.
      */
     addScenery(node: Node, order: number, entityId?: number): void
-    /** An entity's node, and the view of a plant or a zombie. */
+    /** An entity's node. */
     node(entityId: number): Node | undefined
-    plant(entityId: number): PlantView | undefined
-    zombie(entityId: number): ZombieView | undefined
+    /** An entity's view once made: any, or only one of `type` (a plant's PlantView, the award's AwardView). */
+    view(entityId: number): EntityView | undefined
+    view<V extends EntityView>(entityId: number, type: ViewType<V>): V | undefined
     /**
      * Where each kind of entity is drawn among the rest, as the board draws it, for what a view draws with it. A plant's:
      * Plant::CalcRenderOrder.
@@ -106,7 +113,7 @@ export interface LevelStage {
     plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number
     /** A zombie's draw order in a row. */
     zombieOrder(row: number): number
-    /** A projectile's draw order in a row, by its type's layer (a row's waiting mower's too). */
+    /** A projectile's draw order in a row, by its type's layer (a row's mower's too, by the projectile it runs as). */
     projectileOrder(typeId: string, row: number): number
     /** A thing of a cell's draw order in a row, by its type's layer and offset. */
     gridItemOrder(typeId: string, row: number): number

@@ -168,7 +168,6 @@
     "shadow": {"x": 30, "y": -92, "backwardsX": -11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": [], "arm": ["Zombie_polevaulter_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_polevaulter_outerarm_upper", "ground": "_ground", "helms": [], "held": ["Zombie_polevaulter_innerarm_upper", "Zombie_polevaulter_innerarm_lower", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole2", "Zombie_polevaulter_pole"]},
     "damagedArmSprite": "pvz:zombie_polevaulter_outerarm_upper2",
-    "vault": true,
     "clips": {
       "idle": {"reanimId": "pvz:pole_vaulter_idle", "x": 9, "y": 19},
       "walk": {"reanimId": "pvz:pole_vaulter_walk", "x": 9, "y": 19},

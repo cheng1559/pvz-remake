@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { zipSync, type Zippable } from 'fflate'
 import { createHash, randomUUID } from 'node:crypto'
 import { readModContent, type SourceContent } from './content'
+import { writeHostModules } from './hosts'
 import { isModId, type ModManifest } from '../../assets/scripts/shared/mod'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -16,6 +17,7 @@ try {
     if (command === 'init') await init(requireInput(input), option(options, '--out'))
     else if (command === 'test') await test(requireInput(input))
     else if (command === 'pack') await pack(requireInput(input), option(options, '--out'), option(options, '--publish'))
+    else if (command === 'hosts') writeHostModules()
     else usage(command === undefined ? 0 : 1)
 } catch (error) {
     console.error(`[mod] ${error instanceof Error ? error.message : String(error)}`)
@@ -262,6 +264,7 @@ function usage(exitCode: number) {
     console.info(`Usage:
   npm run mod:init -- <name> [--out <directory>]
   npm run mod:test -- <packed-directory>
-  npm run mod:pack -- <name-or-directory> [--out <directory>] [--publish <zip-file>]`)
+  npm run mod:pack -- <name-or-directory> [--out <directory>] [--publish <zip-file>]
+  npm run mod:hosts`)
     process.exitCode = exitCode
 }

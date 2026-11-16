@@ -136,9 +136,7 @@ test('a planted Sunflower survives the complete 1-2 save and restore pipeline', 
     const plant = game.render().plants.find(plant => plant.typeId === 'pvz:sunflower')!
     assert.ok(plant)
     const presentation = levelPresentation(game.render())
-    presentation.entities.push({
-        kind: 'plant', entityId: plant.entityId, data: { flash: { tick: 0, ticks: 25 } },
-    })
+    presentation.flashes.push({ entityId: plant.entityId, tick: 0, ticks: 25 })
     const saved = createGameSave({
         profileId: 1, mode: 'adventure', levelId: options.levelId, createdAt: 100, updatedAt: 200,
         contentSet: { base: { id: 'pvz', version: '2.0.0', contentHash: 'hash' }, mods: [] },
@@ -152,7 +150,7 @@ test('a planted Sunflower survives the complete 1-2 save and restore pipeline', 
 
     const missingPlant = JSON.parse(JSON.stringify(parsed.client))
     missingPlant.transport.current.plants = []
-    assert.throws(() => restored.restorePresentation(missingPlant), /plant .* is not in the current frame/)
+    assert.throws(() => restored.restorePresentation(missingPlant), /flash of .* is not in the current frame/)
 })
 
 test('LocalIntegratedGame returns a server save from the requested boundary', () => {

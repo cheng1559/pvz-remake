@@ -37,7 +37,7 @@ export class PlantingLineView {
     }
 
     sync(snapshot: WorldSnapshot): void {
-        const dialog = snapshot.extensions['pvz:dialog'] as { index: number } | undefined
+        const { dialog } = snapshot
         if (this.stripe.isValid) this.stripe.active = snapshot.phase === 'gameplay' || snapshot.tutorial.step === 'complete' ||
             dialog !== undefined && this.dialogs.includes(dialog.index)
     }

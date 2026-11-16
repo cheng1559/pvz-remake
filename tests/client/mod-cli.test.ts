@@ -24,6 +24,8 @@ function client() {
     }
     const commands = load('platform/debug/DebugCliCommands', modules)
     modules['@/platform/debug/DebugCliCommands'] = commands
+    // The host gives its modules by path (hostModules); these two are the ones the commands need.
+    modules['./hostModules'] = { CLIENT_HOST_MODULES: { 'shared/debug/DebugCli': cli, 'platform/debug/DebugCliCommands': commands } }
     const { createClientModHost } = load('client/content/createModHost', modules)
     return { host: createClientModHost('test:cli', {}, {}, {}, {}) as ModHost,
         execute: commands.executeDebugCliCommand as (input: string, running: boolean,
@@ -127,7 +129,7 @@ test('Mod game commands cross the normal client/server boundary while paused and
     const name = 'test:addsun'
     syntax(host, name)
     syntax(serverHost, name)
-    const { executor } = serverHost.get('server/debug/DebugCommands')
+    const { executor } = serverHost.get('server/debug/debugCommands')
     serverHost.around(executor, 'execute', (next, session, command) => {
         if (command.name !== name) return next(session, command)
         const amount = cli.debugInteger(command.args[0])

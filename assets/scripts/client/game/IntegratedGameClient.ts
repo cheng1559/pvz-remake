@@ -63,7 +63,7 @@ export class IntegratedGameClient {
         const current = frame ?? this.world.current
         if (!current) throw new Error('Cannot snapshot client presentation before the session starts')
         return parseClientPresentationSnapshot({
-            schemaVersion: 2,
+            schemaVersion: 3,
             level,
             transport: {
                 sequence: this.sequence,

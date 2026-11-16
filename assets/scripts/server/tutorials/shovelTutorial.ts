@@ -47,7 +47,7 @@ export const shovelTutorial: TutorialScript = {
         const tutorial = world.resources.get(TutorialResource)
         if (tutorial.step === 'shovel-dig') tutorial.step = 'shovel-pickup'
     },
-    canSelectTool(world, toolId) {
-        return toolId === 'pvz:shovel' && world.resources.get(TutorialResource).step.startsWith('shovel-')
+    canSelectTool(world, tool) {
+        return tool.kind === 'shovel' && world.resources.get(TutorialResource).step.startsWith('shovel-')
     },
 }

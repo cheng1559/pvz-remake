@@ -38,10 +38,10 @@ function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: a
 }
 
 export function register({ host, assets }: GameplayApi): void {
-    const { registry } = host.get('server/GameplayRegistry')
+    const registry = host.get('gameplay/registry')
     const { defineComponent } = host.get('ecs')
     const { PlantComponent: Plant, PositionComponent: Position, LevelStateResource: Level,
-        EconomyStateResource: Economy } = host.get('server/components')
+        EconomyStateResource: Economy } = host.get('server/state/components')
     const settings = assets.json('assets/settings.json')
     for (const key of ['chargeTicks', 'chargeMultiplier', 'particlePeriodTicks']) {
         if (!Number.isSafeInteger(settings[key]) || settings[key] <= 0) throw new Error(`Invalid example setting: ${key}`)
@@ -85,7 +85,7 @@ export function register({ host, assets }: GameplayApi): void {
         const entries = next()
         return entries.some((entry: any) => entry.name === spec.name) ? entries : [...entries, spec]
     })
-    const { executor } = host.get('server/debug/DebugCommands')
+    const { executor } = host.get('server/debug/debugCommands')
     host.around(executor, 'execute', function (next, session, command) {
         if (command.name !== spec.name) return next(session, command)
         const { world } = session

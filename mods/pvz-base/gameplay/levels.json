@@ -37,7 +37,6 @@
       {"id": "pvz:pole_vaulter", "points": 1, "weight": 1, "firstWave": 1}
     ],
     "waves": [{"zombies": [], "points": 160}, {"zombies": [], "points": 1}],
-    "tutorial": "pvz:standard",
     "award": {"kind": "seed", "id": "pvz:repeater"}
   },
   "pvz:seed-chooser-test": {
@@ -53,7 +52,6 @@
       { "zombies": ["pvz:normal", "pvz:conehead"] },
       { "zombies": ["pvz:normal", "pvz:flag", "pvz:normal"], "flagWave": true }
     ],
-    "tutorial": "pvz:standard",
     "award": { "kind": "seed", "id": "pvz:repeater" }
   },
   "pvz:teams-demo": {
@@ -79,7 +77,6 @@
       { "zombies": ["pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"] },
       { "zombies": ["pvz:flag", "pvz:normal", "pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"], "flagWave": true }
     ],
-    "tutorial": "pvz:standard",
     "award": { "kind": "seed", "id": "pvz:repeater" }
   },
   "pvz:adventure-1-2": {
@@ -187,7 +184,6 @@
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:buckethead"],
     "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:buckethead", "waves": [6, 10]}]},
-    "tutorial": "pvz:standard",
     "nextLevel": "pvz:adventure-1-9",
     "award": {
       "kind": "seed",
@@ -204,7 +200,6 @@
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:buckethead"],
     "rules": {"kind": "pvz:adventure", "count": 20},
-    "tutorial": "pvz:standard",
     "nextLevel": "pvz:adventure-1-10",
     "award": {
       "kind": "note",
@@ -224,7 +219,6 @@
     "firstWaveTicks": 100,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:buckethead"],
     "rules": {"kind": "pvz:adventure", "count": 20, "pointsScale": 3},
-    "tutorial": "pvz:standard",
     "conveyor": {
       "capacity": 10,
       "spacing": 50,
@@ -359,8 +353,7 @@
     "tools": [],
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:buckethead"],
     "firstWaveTicks": 200,
-    "rules": {"kind": "pvz:whack-a-zombie", "count": 8, "graves": 9, "refillGraves": 5, "firstGraveColumn": 3, "waveTicks": 2000, "zombies": {"plain": "pvz:normal", "cone": "pvz:conehead", "pail": "pvz:buckethead"},
-      "sun": "pvz:sun"},
+    "rules": {"kind": "pvz:whack-a-zombie", "count": 8, "zombies": {"plain": "pvz:normal", "cone": "pvz:conehead", "pail": "pvz:buckethead"}, "sun": "pvz:sun"},
     "tutorial": "pvz:adventure-2-5",
     "award": {"kind": "seed", "id": "pvz:hypnoshroom"}
   }

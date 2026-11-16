@@ -3,6 +3,7 @@ import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, Node, type Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { StoreView, StoreItemView } from '@/shared/menu'
+import type { StoreDialoguePresentation, StoreItemPresentation } from '@/shared/content/presentation'
 import { FontMetricsUtil } from '@/client/font'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
@@ -57,8 +58,8 @@ export class StoreScreen extends Component {
         this.ui = ui
         this.navigate = navigate
         this.data = await menuApi.getStore()
-        this.ambientTimer = this.data.speech.ambient.initialDelay
-        const itemSprites = this.data.pages.flatMap(page => page.items.flatMap(item => item.sprite ? [item.sprite] : []))
+        this.ambientTimer = this.dialogue.ambient.initialDelay
+        const itemSprites = this.data.pages.flatMap(page => page.items.flatMap(item => this.look(item).sprite ?? []))
         const [frames] = await Promise.all([
             Promise.all([...new Set([...SPRITES, ...itemSprites])].map(async name => {
                 const frame = await modResources.sprite(name)
@@ -120,6 +121,12 @@ export class StoreScreen extends Component {
         this.renderItems()
     }
 
+    /** StoreScreen's timing and Dave's chatter (the presentation's `storeDialogue`). */
+    private get dialogue(): StoreDialoguePresentation { return this.ui.assets.presentation.storeDialogue }
+
+    /** The item's look (the presentation's `store`); an item without one shows its seed's packet, if it sells one. */
+    private look(item: StoreItemView): StoreItemPresentation { return this.ui.assets.presentation.store[item.id] ?? {} }
+
     private renderItems(): void {
         this.page = Math.min(this.page, this.data.pages.length - 1)
         if (this.items) { this.items.active = false; this.items.destroy() }
@@ -127,16 +134,16 @@ export class StoreScreen extends Component {
         this.money.text = formatMoney(this.data.coins)
         this.pageLabel.text = this.ui.text('STORE_PAGE').replace('{PAGE}', String(this.page + 1)).replace('{NUM_PAGES}', String(this.data.pages.length))
         this.pageLabel.node.active = this.data.pages.length > 1 && this.hatchTimer <= 0
-        const drawOrder = [...this.data.pages[this.page].items.entries()]
-            .sort(([a], [b]) => Math.floor(a / 4) - Math.floor(b / 4) || b - a)
-        for (const [index, item] of drawOrder) this.renderItem(item, index)
+        const drawOrder = [...this.data.pages[this.page].items]
+            .sort((a, b) => Math.floor(a.place / 4) - Math.floor(b.place / 4) || b.place - a.place)
+        for (const item of drawOrder) this.renderItem(item)
         this.refreshEnabled()
     }
 
-    private renderItem(item: StoreItemView, index: number): void {
-        const state = item.state
+    private renderItem(item: StoreItemView): void {
+        const state = item.state, { place } = item, look = this.look(item)
         if (state === 'hidden') return
-        const x = (index < 4 ? 422 : 372) + index % 4 * 74, y = index < 4 ? 206 : 310
+        const x = (place < 4 ? 422 : 372) + place % 4 * 74, y = place < 4 ? 206 : 310
         const button = this.ui.button(this.items, {
             images: { normal: this.sprites['pvz:seedpacketflash'] }, x, y, width: 50, height: 87,
             imageBox: { width: 50, height: 70 }, pressOffset: [0, 0], enabled: state === 'available',
@@ -145,25 +152,29 @@ export class StoreScreen extends Component {
         button.node.name = `StoreItemView-${item.id}`
         const visual = button.node.getChildByName('Visual')!
         // The button factory supplies the shared hit/capture behavior; item graphics sit below its highlight.
-        if (item.seed !== undefined) {
-            SeedPacketRenderer.drawSeedPacket({ definitions: this.ui.assets.presentation, parent: button.node, x: 0, y: 0, plant: item.seed, drawCost: false, upgrade: true }).setSiblingIndex(0)
-        } else if (item.sprite) {
-            const icon = this.ui.image(button.node, this.sprites[item.sprite], { x: item.offset?.[0] ?? 0, y: item.offset?.[1] ?? 0 })
+        const packet = look.sprite === undefined ? item.seed : undefined
+        if (packet !== undefined) {
+            SeedPacketRenderer.drawSeedPacket({ definitions: this.ui.assets.presentation, parent: button.node, x: 0, y: 0, plant: packet, drawCost: false, upgrade: true }).setSiblingIndex(0)
+        } else if (look.sprite) {
+            const icon = this.ui.image(button.node, this.sprites[look.sprite], { x: look.offset?.[0] ?? 0, y: look.offset?.[1] ?? 0 })
             icon.node.setSiblingIndex(0)
         }
         if (item.seedSlots !== undefined) this.centerText(button.node, this.ui.text('STORE_UPGRADE_SLOTS').replace('{SLOTS}', String(item.seedSlots)), 'storeItem', 0, 6, 55, 70)
-        if (item.quantity) this.ui.label(button.node, { text: `x${item.quantity}`, font: 'storeItem', x: 56, y: 62, align: 'right', baseline: true })
+        if (look.quantity) this.ui.label(button.node, { text: `x${look.quantity}`, font: 'storeItem', x: 56, y: 62, align: 'right', baseline: true })
         this.ui.image(button.node, this.sprites.store_pricetag, { x: -3, y: 70 })
         this.ui.label(button.node, { text: formatMoney(item.cost), font: 'small', color: Color.BLACK, x: 23, y: 85, baseline: true, align: 'center' })
         if (state === 'comingSoon' || state === 'soldOut') this.centerText(button.node, this.ui.text(state === 'comingSoon' ? 'COMING_SOON' : 'SOLD_OUT'), 'storeItem', 0, 0, 50, 70, new Color(255, 0, 0))
-        const highlight = item.highlight.type === 'additive' && item.sprite
-            ? this.ui.additiveImage(button.node, this.sprites[item.sprite], { x: item.offset?.[0] ?? 0, y: item.offset?.[1] ?? 0 }, item.highlight.opacity).node : null
+        // Without a highlight of its own, a packet flashes and a sprite lights at 96.
+        const lit: NonNullable<StoreItemPresentation['highlight']> = look.highlight
+            ?? (packet !== undefined ? { type: 'seedPacket' } : look.sprite ? { type: 'additive', opacity: 96 } : { type: 'none' })
+        const highlight = lit.type === 'additive' && look.sprite
+            ? this.ui.additiveImage(button.node, this.sprites[look.sprite], { x: look.offset?.[0] ?? 0, y: look.offset?.[1] ?? 0 }, lit.opacity).node : null
         const update = button.onStateChange!
         button.onStateChange = next => {
             update(next)
             uiNode({ node: button.node, opacity: 255 })
             const hovered = next === 'hover' || next === 'pressed'
-            visual.active = hovered && item.highlight.type === 'seedPacket'
+            visual.active = hovered && lit.type === 'seedPacket'
             if (highlight) highlight.active = hovered
             if (hovered && !this.waiting) { this.hoveredItem = item; this.showDescription(item) }
             else if (this.hoveredItem === item) this.hoveredItem = null
@@ -182,7 +193,7 @@ export class StoreScreen extends Component {
         const message = item.message
         this.dave!.say(this.ui.text(`CRAZY_DAVE_${message}`).replace(/\{MONEY\}/g, formatMoney(this.data.coins))
             .replace(/\{UPGRADE_COST\}/g, formatMoney(item.cost)).replace(/\{PLAYER_NAME\}/g, this.data.playerName))
-        this.bubbleTimer = this.data.speech.descriptionDuration
+        this.bubbleTimer = this.dialogue.descriptionDuration
     }
 
     private showSpeech(message: number, duration: number): void {
@@ -192,7 +203,7 @@ export class StoreScreen extends Component {
     }
 
     private async buy(item: StoreItemView): Promise<void> {
-        if (this.waiting || this.hatchTimer > 0 || this.age < this.data.speech.readyDelay) return
+        if (this.waiting || this.hatchTimer > 0 || this.age < this.dialogue.readyDelay) return
         this.waiting = true
         this.hoveredItem = null
         this.dave?.stopTalking()
@@ -253,7 +264,7 @@ export class StoreScreen extends Component {
         const enabled = this.hatchTimer <= 0 && !this.waiting
         for (const arrow of this.arrows) { arrow.enabled = enabled; arrow.interactable = this.data.pages.length > 1 }
         this.back.enabled = enabled
-        for (const button of this.items.getComponentsInChildren(UIButton)) button.enabled = enabled && this.age >= this.data.speech.readyDelay
+        for (const button of this.items.getComponentsInChildren(UIButton)) button.enabled = enabled && this.age >= this.dialogue.readyDelay
         UIHoverManager.refreshHoverStates()
     }
 
@@ -266,7 +277,7 @@ export class StoreScreen extends Component {
 
     private updateSpeech(dt: number): void {
         if (this.waiting || !this.acceptsInput()) return
-        const { speech } = this.data
+        const speech = this.dialogue
         if (this.bubbleTimer > 0) {
             if (!this.hoveredItem) {
                 const remaining = this.bubbleTimer - dt
@@ -278,8 +289,9 @@ export class StoreScreen extends Component {
         if (this.age < speech.readyDelay || !this.dave?.ready) return
         this.ambientTimer -= dt
         if (this.ambientTimer > 0) return
-        // StoreScreen::Update: Dave's chatter by weight, never the line he said last.
-        const choices = speech.ambient.messages.filter(entry => entry.message !== this.previousAmbient && entry.weight > 0)
+        // StoreScreen::Update: Dave's chatter by weight, never the line he said last; the `completed` lines only after the adventure.
+        const choices = speech.ambient.messages.filter(entry => entry.message !== this.previousAmbient && entry.weight > 0 &&
+            (!entry.completed || this.data.finishedAdventure))
         const chosen = choices.length ? pickWeighted(choices, offBoardRandom) : undefined
         if (chosen) {
             this.previousAmbient = chosen.message
@@ -294,11 +306,11 @@ export class StoreScreen extends Component {
         dt = gameClock.delta(dt)
         this.dave?.update(dt)
         if (this.waiting) return
-        const wasReady = this.age >= this.data.speech.readyDelay
+        const wasReady = this.age >= this.dialogue.readyDelay
         this.age += dt
         const t = easeInOutCurve(Math.max(0, Math.min(1, (this.age - 0.5) / 0.6)))
         this.sign.setPosition(285, 150 * (1 - t))
-        if (!wasReady && this.age >= this.data.speech.readyDelay) this.refreshEnabled()
+        if (!wasReady && this.age >= this.dialogue.readyDelay) this.refreshEnabled()
         if (this.hatchTimer <= 0) { this.updateSpeech(dt); return }
         this.hatchTimer -= dt
         const shake = this.hatchTimer > 0.35 ? 1 + Math.floor(Math.random() * 3) : 0

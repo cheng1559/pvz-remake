@@ -37,6 +37,6 @@ test('2-4 follows 2-3 with 20 waves of the allowed zombies over seven graves and
 
 test('Crazy Dave offers the seed slot in the 2-4 intro too', () => {
     const server = start({ initialMoney: 75, packetUpgradeOffer: { cost: 75 } })
-    assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index: 1501 })
+    assert.deepEqual(server.snapshot().dialog, { index: 1501 })
     assert.equal(runCommand(server, { type: 'chooseSeed', seedId: 'pvz:peashooter' }), 'intro-not-complete')
 })

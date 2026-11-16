@@ -35,14 +35,12 @@ function game(content = definitions) {
             lawnMower: 'pvz:lawnmower',
             skySun: 'pvz:sun',
             waves: [{ zombies: ['pvz:normal'] }],
-            tutorial: 'pvz:test',
             award: { kind: 'seed' as const, id: 'pvz:test' },
         },
         board,
         phase: 'gameplay',
         result: 'playing' as const,
         paused: false,
-        mowerRows: [],
     })
     const schedule = new Schedule()
     schedule.add('zombie', createZombieSystem(content))

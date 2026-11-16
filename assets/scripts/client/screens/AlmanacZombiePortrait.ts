@@ -25,10 +25,10 @@ export class AlmanacZombiePortrait extends Component {
         root.setPosition(portrait.x - 2, 2 - portrait.y)
         root.setScale(portrait.scale, portrait.scale, 1)
         // The zombie on the first frame of its idle, from its Reanim's origin.
-        const zombie = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId,
+        const view = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId,
             { pose: 'idle', draw: { position: { x: 0, y: 0 }, shadow: false } })
-        if (!zombie) { if (isValid(root, true)) throw new Error(`Zombie is not drawn off the board: ${typeId}`); return }
+        if (!view) { if (isValid(root, true)) throw new Error(`Zombie is not drawn off the board: ${typeId}`); return }
         // The picture is much smaller than its art.
-        holdStill(zombie.view.players, true)
+        holdStill(view.players, true)
     }
 }

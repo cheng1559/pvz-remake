@@ -19,6 +19,7 @@ import { createItemSystem } from '@/server/level/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
 import { ItemComponent,TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'
+import { TutorialsResource } from '@/server/tutorials'
 import { damageZombie, flattenZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'
@@ -38,7 +39,6 @@ function setup() {
         phase: 'gameplay',
         result: 'playing',
         paused: false,
-        mowerRows: [],
     })
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
@@ -46,6 +46,7 @@ function setup() {
     world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0, cooldownTotal: 0 }] })
     const gameplay = new GameplayRegistry()
     gameplay.freeze(definitions, levels)
+    world.resources.set(TutorialsResource, gameplay.tutorials)
     initializeLevel(world, true, definitions, gameplay.levelRules)
     const schedule = new Schedule()
     schedule.add('tutorial', createLevelProgressSystem(definitions))

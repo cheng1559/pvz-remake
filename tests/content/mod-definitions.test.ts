@@ -186,11 +186,11 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
     const broken = installed('broken', ({ host, assets }: any) => {
         const { specs } = host.get('shared/debug/DebugCli')
         host.around(specs, 'list', (next: any) => [...next(), { name: 'broken:leaked', parameters: [], minimum: 0 }])
-        const { executor } = host.get('server/debug/DebugCommands')
+        const { executor } = host.get('server/debug/debugCommands')
         host.around(executor, 'execute', (next: any, ...args: any[]) =>
             args[3].name === 'broken:leaked' ? { ok: true, message: 'Leaked command' } : next(...args))
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
-        const { registry } = host.get('server/GameplayRegistry')
+        const registry = host.get('gameplay/registry')
         const behavior = { createState: () => ({}), tick() {} }
         registry.plantBehaviors.register(assets.id, 'broken:leaked', behavior)
         registry.zombieBehaviors.register(assets.id, 'broken:leaked', behavior)

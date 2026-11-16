@@ -247,14 +247,6 @@ export class ModResources {
         return this.fileAsset(pack, file, type)
     }
 
-    /** Authoritative configuration bypasses presentation overrides. */
-    async baseJson<T = unknown>(id: string): Promise<T> {
-        await this.ready()
-        const pack = this.find('json', id, undefined, true)
-        if (!pack) throw new Error(`Missing base JSON: ${id}`)
-        return packJson(pack, pack.manifest.json[baseQualified(id)]) as T
-    }
-
     /** The text language: the last running Mod's manifest locale, else the base's. */
     async locale(): Promise<string> {
         await this.ready()

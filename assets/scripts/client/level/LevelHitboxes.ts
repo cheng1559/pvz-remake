@@ -4,7 +4,7 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { WorldSnapshot } from '@/shared/protocol/index'
 
-/** `/hitboxes`: the plants' bodies, the zombies' bodies and bites, and the projectiles' hitboxes, outlined on the lawn. */
+/** `/hitboxes`: the plants' bodies, the zombies' bodies and bites, and the projectiles' and mowers' hitboxes, outlined on the lawn. */
 export class LevelHitboxes {
     private graphics: Graphics | null = null
 
@@ -25,6 +25,7 @@ export class LevelHitboxes {
             draw(zombie, this.definitions.zombies[zombie.typeId].body, Color.RED)
             draw(zombie, this.definitions.zombies[zombie.typeId].attack, Color.YELLOW)
         }
-        for (const projectile of snapshot.projectiles) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
+        // A waiting mower's is where a zombie sets it off (LawnMower::GetLawnMowerAttackRect).
+        for (const projectile of [...snapshot.projectiles, ...snapshot.mowers]) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
     }
 }

@@ -19,7 +19,7 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
     /** What a replay of 1-1 (whose pool has only the plain zombie) drops for `typeId` on a roll of `roll`. */
     const drop = (typeId: string, roll: number) => {
         const world = new World()
-        world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] } as never)
+        world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
         world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
         world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0 })
         world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
@@ -36,7 +36,7 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
 function play21(initialMoney: number, firstAdventure = true) {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start({ levelId: 'pvz:adventure-2-1', randomSeed: 3, initialMoney, firstAdventure, mods: [] })
-    while (game.render().extensions['pvz:dialog']) { game.command({ type: 'advanceDialog' }); game.update(0) }
+    while (game.render().dialog) { game.command({ type: 'advanceDialog' }); game.update(0) }
     for (const seedId of ['puffshroom', 'sunflower', 'peashooter', 'wallnut', 'cherrybomb', 'potatomine']) game.command({ type: 'chooseSeed', seedId: `pvz:${seedId}` })
     game.command({ type: 'confirmSeeds' })
     game.command({ type: 'completeIntro' })
@@ -81,14 +81,14 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
         if (game.drainEvents().some(event => event.type === 'mowerScored')) scored.push(tick)
     }
     assert.deepEqual(scored, [200, 240, 280, 320, 360])
-    assert.equal(game.render().mowerRows.length, 0)
+    assert.equal(game.render().mowers.length, 0, 'each mower is gone for its gold')
     assert.equal(game.render().money, purse + 25)
 })
 
 test('a first adventure drops money from level 11 on, also on levels without a script', () => {
     // Mower gold after the award follows Board::CanDropLoot, so it shows the rule without depending on zombie rolls.
     const mowerGold = (adventureIndex: number) => {
-        const level = { ...levels.levels['pvz:adventure-2-2'], adventureIndex, tutorial: 'test:unscripted' }
+        const { tutorial: _script, ...level } = { ...levels.levels['pvz:adventure-2-2'], adventureIndex }
         const game = new LocalIntegratedGame(definitions, { ...levels, levels: { ...levels.levels, 'test:level': level } }, undefined, true)
         game.start({ levelId: 'test:level', randomSeed: 3, initialMoney: 0, firstAdventure: true, mods: [] })
         for (const seedId of game.render().seedChooser?.availableSeeds.slice(0, game.render().seedChooser!.slots) ?? []) game.command({ type: 'chooseSeed', seedId })

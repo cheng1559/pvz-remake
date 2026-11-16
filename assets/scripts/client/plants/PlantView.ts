@@ -1,7 +1,6 @@
 import { loadReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
 import { Color, type Node, Sprite } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import { type LevelEntitySnapshot, parseSavedFlash, viewSaveData } from '@/client/level/LevelPresentationSnapshot'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
@@ -13,15 +12,18 @@ import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shar
 export type { LayerShown } from '@/client/view/layerPlayback'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { ASSET_FPS } from '@/shared/content/animation'
+import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import { offBoardRandom } from '@/client/view/offBoard'
 import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
- * almanac, a packet's picture) there is nothing else to it.
+ * almanac, a packet's picture) there is nothing else to it but the countdown to its blink, which its view keeps on
+ * with the rest (advance).
  */
-export type ShownPlant = Partial<PlantSnapshot> & Pick<PlantSnapshot, 'typeId'>
+export type ShownPlant = Partial<PlantSnapshot> & Pick<PlantSnapshot, 'typeId'> & Pick<AnimatedPlant, 'blinkTicks'>
 /** How a view draws its plant, where that is not the board's way. */
 export interface PlantDraw {
     /** Where the plant goes in its node, in place of where each of its clips has it. */
@@ -34,8 +36,9 @@ export interface PlantDraw {
 export interface PlantViewContext {
     node: Node
     content: Content
+    /** Off the board, what it shows from the start, which its view keeps animating (advance). */
     plant: ShownPlant
-    /** The board it is on; none off the board. */
+    /** The board it is on; none off the board (offBoard.ts). */
     stage?: LevelStage
     draw?: PlantDraw
 }
@@ -52,8 +55,6 @@ const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
 /** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
 let locator: { track?: ReanimTrack } | undefined
 
-interface FireParticle { id: string; x: number; y: number; delayTicks: number }
-
 /**
  * A plant, drawn by its animation (PlantDefinition.animation): a player for each of its layers, showing the clip the
  * layer is on at its time into it. The pictures are the presentation's clip of the same name, which may be as long as
@@ -61,7 +62,8 @@ interface FireParticle { id: string; x: number; y: number; delayTicks: number }
  * the time it is given.
  *
  * On the board the server keeps the animation and `sync` follows its snapshots, with what else the board does to a
- * plant; off the board whoever shows the plant keeps it (shared/content/plantAnimation) and calls `show`.
+ * plant; off the board the view keeps it itself (`advance`), by the same rules (shared/content/plantAnimation). Either
+ * way `pose` shows it.
  */
 export class PlantView implements EntityView<PlantSnapshot> {
     /** Effects that belong to the plant, such as Mod-added marks. */
@@ -105,7 +107,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
         // Tracks a clip of the plant draws alone (the potato mine's light) are left to it by the others.
         const alone = Object.keys(this.animation.clips).flatMap(name => this.clips[name]?.onlyTracks ?? [])
         this.layers = new LayerPlayers(this.root, [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])], alone)
-        this.show(plant)
+        this.pose(plant)
     }
 
     protected get presentation() { return plantDefinition(this.context.content.presentation, this.context.plant.typeId) }
@@ -159,7 +161,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
      * Each layer on what it shows and at its time; a layer with nothing to show, or hidden, is not drawn. This is all
      * there is to a plant off the board.
      */
-    show(plant: ShownPlant): void {
+    pose(plant: ShownPlant): void {
         const { draw } = this.context
         this.layers.show(name => this.shown(name, plant), {
             blend: (_name, clip, first) => first ? 0 : clip.blend ?? BLEND_SECONDS,
@@ -197,9 +199,20 @@ export class PlantView implements EntityView<PlantSnapshot> {
         return pose
     }
 
+    /**
+     * Off the board: its animation goes on by `ticks` by the rules the server animates a plant by (stepPlantAnimation),
+     * from where Plant::PlantInitialize has one not in play start (offBoard.ts), and is posed.
+     */
+    advance(ticks: number): void {
+        const { stage, plant } = this.context
+        if (stage) throw new Error(`A plant on the board is animated by the server: ${plant.typeId}`)
+        for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(this.animation, plant, offBoardRandom)
+        this.pose(plant)
+    }
+
     /** A particle the presentation has follow a shot (the Fume-shroom's cloud, partway into it). */
     fire(): void {
-        if (this.presentation.viewConfig?.fireParticle) this.shotTick = null
+        if (this.presentation.fireParticle) this.shotTick = null
     }
 
     /**
@@ -290,8 +303,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
      * and its glow (`flash`). A view adds what its plant does here.
      */
     protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
-        this.show(plant)
-        const cue = this.presentation.viewConfig?.fireParticle as unknown as FireParticle | undefined
+        this.pose(plant)
+        const cue = this.presentation.fireParticle
         if (cue && this.shotTick !== undefined) {
             this.shotTick ??= world.gameplayTick
             if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
@@ -320,17 +333,6 @@ export class PlantView implements EntityView<PlantSnapshot> {
             : shade.clone()
     }
 
-    /** Its flash, which goes on across a save; the server's snapshot has the rest of what it shows. */
-    snapshot(entityId: number): LevelEntitySnapshot {
-        const flash = this.context.stage?.flashes.snapshot(entityId)
-        return { kind: 'plant', entityId, data: flash ? { flash: { ...flash } } : {} }
-    }
-
-    restore(snapshot: LevelEntitySnapshot): void | Promise<void> {
-        const data = viewSaveData(snapshot, [], ['flash'])
-        this.context.stage?.flashes.restore(snapshot.entityId, parseSavedFlash(data.flash, 'plant flash'))
-    }
-
     destroy(): void {}
 
     /** A plant put down: what its presentation sounds besides the board's planting (Board::DoPlantingEffects). */
@@ -340,7 +342,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** Plant::Fire: the plant starts what follows its shot. */
     static readonly fired: StageEvent = (stage, event) => {
-        if (typeof event.data.plantId === 'number') stage.plant(event.data.plantId)?.fire()
+        if (typeof event.data.plantId === 'number') stage.view(event.data.plantId, PlantView)?.fire()
     }
 
     /** Plant::Fire for the Fume-shroom plays the fume, and DoRowAreaDamage a splat for the zombies it hits. */

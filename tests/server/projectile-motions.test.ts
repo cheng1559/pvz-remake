@@ -78,7 +78,7 @@ test('a homing projectile turns across the rows to its target and hits only that
     const { definitions } = firing('shooter')
     const world = withProjectileMotions(new World())
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
-        phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+        phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(RandomResource, new DeterministicRng(1))
     const bystander = spawnZombie(world, definitions, 'pvz:normal', 2, 300, 250)
@@ -116,7 +116,7 @@ test('a lobbed projectile comes down past a shield onto the body, where a straig
     const hit = (motion: string) => {
         const world = withProjectileMotions(new World())
         world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
-            phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+            phase: 'gameplay', result: 'playing', paused: false })
         world.resources.set(EventQueueResource, createEventQueue())
         world.resources.set(RandomResource, new DeterministicRng(1))
         const target = spawnZombie(world, definitions, 'pvz:screendoor', 2, 500, 250)
@@ -139,7 +139,7 @@ function flying(pierce: boolean) {
     const definitions = parseGameplayDefinitions(source)
     const world = withProjectileMotions(new World())
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board: definitions.boards['pvz:day'],
-        phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+        phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(RandomResource, new DeterministicRng(1))
     const schedule = new Schedule()
@@ -318,7 +318,7 @@ test('a homing mower keeps homing: it crushes its target, then turns to the next
 test("a plant's own way with its projectile is checked as the projectile's attributes are, and leaves what it is alone", () => {
     for (const [type, overrides, message] of [['shooter', { speed: 0 }, /speed must be positive/], ['lobber', { gravity: 1 }, /gravity is not supported/],
         ['lobber', { flightTicks: 1.5 }, /flightTicks must be/], ['lobber', { landingOffset: 'low' }, /landingOffset must be finite/],
-        ['lobber', { spin: 1 }, /spin must be two ordered/], ['seeker', { homingSpeed: 0 }, /homingSpeed must be positive/],
+        ['lobber', { spin: 1 }, /spin must be an array/], ['lobber', { spin: [2, 1] }, /spin must be an ordered range/], ['seeker', { homingSpeed: 0 }, /homingSpeed must be positive/],
         ['shooter', { hitbox: { x: 0, y: 0, width: 1, height: 1 } }, /hitbox is not supported/], ['shooter', { id: 'pvz:lawnmower', damage: 5 }, /pvz:lawnmower mows/],
         ['seeker', { homingSpeed: 4, turn: 0.01, pierce: true }, undefined]] as const) {
         if (message) assert.throws(() => firing(type, overrides), message)

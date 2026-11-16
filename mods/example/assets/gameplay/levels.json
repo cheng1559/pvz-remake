@@ -21,7 +21,6 @@
         ]
       }
     ],
-    "tutorial": "example:testing",
     "award": {
       "kind": "seed",
       "id": "pvz:sunflower"

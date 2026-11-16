@@ -38,7 +38,6 @@ import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
-import { modResources } from '@/client/content/ModResources'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
 import { provideInstalledMods } from '@/client/content/installedMods'
@@ -80,9 +79,7 @@ export class GameApp extends Component {
         modManager.useProfiles(() => createProfileStore(sys.localStorage).getCurrentProfile()?.id ?? null)
         modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
-            Promise.all([modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog),
-                modResources.baseJson('pvz:gameplay/almanac').then(createAlmanacCatalog),
-                loadGameplayContent().then(content => content.definitions)]))
+            loadGameplayContent().then(({ definitions }) => [createStoreCatalog(definitions), createAlmanacCatalog(definitions), definitions]))
         UIHoverManager.start(this.node)
         // Load the original arrow now rather than on the first mouse move.
         CursorManager.refresh()
@@ -146,7 +143,7 @@ export class GameApp extends Component {
         if (zombieId === undefined) return this.navigate('almanac', undefined, { keepMusic: true })
         const zombie = (await menuApi.getAlmanac()).zombies.find(entry => entry.zombie === zombieId)
         if (!zombie || !this.menu) return
-        this.menu.presetAlmanac({ plant: 0, zombie: zombie.id })
+        this.menu.presetAlmanac({ plant: 0, zombie: zombie.place })
         return this.navigate('zombies', undefined, { keepMusic: true })
     }
 

@@ -4,40 +4,7 @@ import { ModAssets } from '@/shared/mod/ModAssets'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import type { ClientViews } from './ClientViews'
 import { modResources } from './ModResources'
-
-import * as viewport from '@/client/view/ClientViewport'
-import * as menu from '@/client/screens/MainMenuScreen'
-import * as plantView from '@/client/plants/PlantView'
-import * as graveBuster from '@/client/plants/GraveBusterView'
-import * as wallNut from '@/client/plants/WallNutView'
-import * as reanim from '@/client/reanim/ReanimPlayer'
-import * as uiNode from '@/client/view/uiNode'
-import * as zombieView from '@/client/zombies/ZombieView'
-import * as renderer from '@/client/level/LevelEntityRenderer'
-import * as preview from '@/client/hud/PlantPreview'
-import * as packets from '@/client/hud/SeedPacketRenderer'
-import * as content from '@/client/game/loadIntegratedGameContent'
-import * as animations from './ClientAnimationRegistry'
-import * as sounds from '@/client/sound/SoundSystem'
-import * as levelInput from '@/client/level/LevelInputPresenter'
-import * as levelHud from '@/client/level/LevelHudPresenter'
-import * as seedBank from '@/client/level/LevelSeedBank'
-import * as levelView from '@/client/level/LevelView'
-import * as graveView from '@/client/gridItems/GraveView'
-import * as projectileView from '@/client/projectiles/ProjectileView'
-import * as mowerView from '@/client/projectiles/MowerView'
-import * as levelStage from '@/client/level/LevelStage'
-import * as itemView from '@/client/items/ItemView'
-import * as awardView from '@/client/items/AwardView'
-import * as entityFlashes from '@/client/level/EntityFlashes'
-import * as levelRules from '@/client/level/rules'
-import * as debugSettings from '@/platform/debug/GameDebugSettings'
-import * as debugCli from '@/shared/debug/DebugCli'
-import * as protocol from '@/shared/protocol'
-import * as renderOrder from '@/shared/content/renderOrder'
-import * as debugCommands from '@/platform/debug/DebugCliCommands'
-import * as haptics from '@/platform/Haptics'
-import * as clock from '@/core/GameClock'
+import { CLIENT_HOST_MODULES } from './hostModules'
 
 export class ClientModAssets extends ModAssets {
     /** An image file in this Mod's archive, read as is. */
@@ -47,42 +14,11 @@ export class ClientModAssets extends ModAssets {
 }
 
 export function createClientModHost(ownerId: string, definitions: DefinitionSources, views: ClientViews): ModHost {
+    // Every client module by its path (hostModules, generated), the engine, and the host's definitions and views.
     return new ModHost(ownerId, {
+        ...CLIENT_HOST_MODULES,
         'cc': engine,
         'content/definitions': definitions,
         'client/views': views,
-        'client/view/ClientViewport': viewport,
-        'client/screens/MainMenuScreen': menu,
-        'client/plants/PlantView': plantView,
-        'client/plants/GraveBusterView': graveBuster,
-        'client/plants/WallNutView': wallNut,
-        'client/reanim/ReanimPlayer': reanim,
-        'client/view/uiNode': uiNode,
-        'client/zombies/ZombieView': zombieView,
-        'client/level/LevelEntityRenderer': renderer,
-        'client/hud/PlantPreview': preview,
-        'client/hud/SeedPacketRenderer': packets,
-        'client/game/loadIntegratedGameContent': content,
-        'client/content/ClientAnimationRegistry': animations,
-        'client/sound/SoundSystem': sounds,
-        'client/level/LevelInputPresenter': levelInput,
-        'client/level/LevelHudPresenter': levelHud,
-        'client/level/LevelSeedBank': seedBank,
-        'client/level/LevelView': levelView,
-        'client/gridItems/GraveView': graveView,
-        'client/projectiles/ProjectileView': projectileView,
-        'client/projectiles/MowerView': mowerView,
-        'client/items/ItemView': itemView,
-        'client/items/AwardView': awardView,
-        'client/level/LevelStage': levelStage,
-        'client/level/EntityFlashes': entityFlashes,
-        'client/level/rules': levelRules,
-        'platform/debug/GameDebugSettings': debugSettings,
-        'shared/debug/DebugCli': debugCli,
-        'shared/protocol': protocol,
-        'shared/content/renderOrder': renderOrder,
-        'platform/debug/DebugCliCommands': debugCommands,
-        'platform/Haptics': haptics,
-        'core/GameClock': clock,
     })
 }

@@ -52,7 +52,7 @@ test('the bank fills with the available seeds while they fit and opens the choos
     owning.start({ ...options, levelId: 'pvz:adventure-1-1', ownedSeeds: ['pvz:hypnoshroom', 'test:missing', 'pvz:peashooter'] })
     assert.deepEqual(owning.render().seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:hypnoshroom'])
     // CutScene::ShowShovel: the 1-4 award, from 1-5 on a first adventure and on every replay.
-    const owned = (levelId: string, firstAdventure: boolean) => (start(levelId, firstAdventure).extensions['pvz:tools'] as { owned: string[] } | undefined)?.owned
+    const owned = (levelId: string, firstAdventure: boolean) => start(levelId, firstAdventure).tools?.owned
     assert.deepEqual([owned('pvz:adventure-1-4', true), owned('pvz:adventure-1-5', true), owned('pvz:adventure-1-1', false)], [undefined, ['pvz:shovel'], ['pvz:shovel']])
 })
 

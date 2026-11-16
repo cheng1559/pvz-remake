@@ -1,15 +1,15 @@
 import type { Component, World } from '@/ecs/index'
 import type { LayerState } from '@/shared/content/animation'
-import { parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { hasPlantAttack, PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind } from '@/shared/content/plantAbilities'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
 import { checkGraveRanges, GRAVE } from '@/shared/content/graves'
-import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
+import { jsonRoundTrip, MOWER_STATES, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import {
-    GridItemComponent, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent,
-    ZombieComponent, type GridItem, type MowedPlant, type Plant, type PlantAbility, type PlantAttack, type Position, type Projectile, type Zombie,
+    GridItemComponent, LevelStateResource, MowedPlantComponent, MowerComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent,
+    ZombieComponent, type GridItem, type MowedPlant, type Mower, type Plant, type PlantAbility, type PlantAttack, type Position, type Projectile, type Zombie,
 } from '../state/components'
 import { ItemComponent, type Item } from '../state/levelState'
 import type { SavedEntity } from './save'
@@ -211,6 +211,17 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
     }),
     savedComponent({
+        key: 'mower', component: MowerComponent,
+        parse: (value, name): Mower => ({ state: oneOf(exact(value, ['state'], name).state, MOWER_STATES, `${name}.state`) }),
+        // A ready one waits where every row's does; a triggered one runs as the level's mowing projectile.
+        check: (mower, context) => {
+            const { world, entity } = context, level = world.resources.get(LevelStateResource), position = entity.position!
+            const ready = mower.state === 'ready'
+            if (!onBoardRow(context) || (ready ? entity.projectile !== undefined || position.x !== MOWER_READY_X || position.y !== mowerY(level.board, position.row)
+                : entity.projectile?.typeId !== level.definition.lawnMower)) throw new Error(`Saved mower ${entity.entityId} is invalid for the level`)
+        },
+    }),
+    savedComponent({
         key: 'item', component: ItemComponent,
         parse: (value, name): Item => {
             const source = exact(value, [
@@ -249,14 +260,15 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
 
 /**
  * Whether an entity can run as saved: as a cell's (a grid item, nothing else, no position), or with a position and one
- * domain component (or only a Mod's), each of its components checked against the content and the level.
+ * domain component (or only a Mod's), each of its components checked against the content and the level. A mower that
+ * has set off is one, with the projectile it runs as.
  */
 export function checkSavedEntity(content: ServerContent, world: World, entity: SavedEntity): void {
     if (entity.gridItem) {
         if (Object.keys(entity).some(key => key !== 'entityId' && key !== 'gridItem' && key !== 'extensions')) throw new Error(`Saved grid item ${entity.entityId} must have no other component`)
     } else {
         if (!entity.position) throw new Error(`Saved entity ${entity.entityId} has no position`)
-        const kinds = [entity.plant, entity.mowedPlant, entity.zombie, entity.projectile, entity.item].filter(value => value !== undefined).length
+        const kinds = [entity.plant, entity.mowedPlant, entity.zombie, entity.mower ?? entity.projectile, entity.item].filter(value => value !== undefined).length
         if (kinds !== 1 && !(kinds === 0 && entity.extensions && Object.keys(entity.extensions).length)) throw new Error(`Saved entity ${entity.entityId} must have exactly one domain component`)
     }
     const context = { content, world, entity }

@@ -57,9 +57,17 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 }
 ```
 
-定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象。每个种子必须写 `position`，即它在自己所属分组里的格子序号：按 8 列从左到右、从上到下数，从 0 开始，一页 48 格，同一分组里不能重号。分组有三类，依次是原版、各 Mod、隐藏卡：本体的种子属于原版组，就是选卡格子，序号即原版的植物种子编号，只能是 0–47 的植物（平时 5 排 0–39，拥有 40–47 号即原版升级植物中任一张时按原版 `Has7Rows` 改成 6 排，行距 70、首排 y=123；48 号是原版的模仿者）；本体种子写 `"hidden": true` 的属于隐藏卡组（爆炸坚果、两种保龄球坚果、各僵尸卡和墓碑卡）；Mod 的种子一律属于这个 Mod 自己的一组，从 0 自行编号，不会和本体或其他 Mod 冲突，也不能标 `hidden`。Mod 的种子不进选卡格子：开启 `/cheatseed` 时，选卡界面和图鉴在原版页之后按 Mod 的加载顺序给每个 Mod 单独排页，最后是隐藏卡页；平时由 `seedChooser.entries` 提供。没有卡的序号留作空位。和其他定义表一样，Mod 只能登记自己命名空间的种子；要挪动本体或其他 Mod 的卡，用 `overrides.seeds` 整条替换那颗种子的定义。配置按类别分文件，自定义视图参数放在相应植物、子弹定义的 `viewConfig` 中。
+定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象。每个种子必须写 `position`，即它在自己所属分组里的格子序号：按 8 列从左到右、从上到下数，从 0 开始，一页 48 格，同一分组里不能重号。分组有三类，依次是原版、各 Mod、隐藏卡：本体的种子属于原版组，就是选卡格子，序号即原版的植物种子编号，只能是 0–47 的植物（平时 5 排 0–39，拥有 40–47 号即原版升级植物中任一张时按原版 `Has7Rows` 改成 6 排，行距 70、首排 y=123；48 号是原版的模仿者）；本体种子写 `"hidden": true` 的属于隐藏卡组（爆炸坚果、两种保龄球坚果、各僵尸卡和墓碑卡）；Mod 的种子一律属于这个 Mod 自己的一组，从 0 自行编号，不会和本体或其他 Mod 冲突，也不能标 `hidden`。Mod 的种子不进选卡格子：开启 `/cheatseed` 时，选卡界面和图鉴在原版页之后按 Mod 的加载顺序给每个 Mod 单独排页，最后是隐藏卡页；平时由 `seedChooser.entries` 提供。没有卡的序号留作空位。和其他定义表一样，Mod 只能登记自己命名空间的种子；要挪动本体或其他 Mod 的卡，用 `overrides.seeds` 整条替换那颗种子的定义。配置按类别分文件。表现定义和玩法定义一样严格：每个对象只接受它自己的字段，多写、拼错或已经搬走的字段（例如旧的 `viewConfig`、僵尸表现里的 `vault`）都报 `… is not supported`；植物开火后跟着的粒子写在植物表现的 `fireParticle: {id, x, y, delayTicks}`（大喷菇的烟）。关卡规则的表现（`rules`）里除 `graveRise`、`itemPadding` 外的字段归该规则自己的视图读取和校验。
 
 成就写在玩法定义的 `achievements` 表里，ID 到 `{ titleKey, descriptionKey, icon: { sprite, index } }`，图标取 `sprite` 中按 70×70、每行 7 格切出的第 `index` 格。成就页和领奖页按本体在前、各 Mod 依次在后的顺序列出。服务端脚本通过宿主模块 `server/achievements` 的 `grantAchievement(world, id, announce)` 发放：玩家已有的不重复发放；`announce` 为 true 时在关卡里立即提示，否则留到过关后的领奖页列出。档案由客户端转交菜单接口保存。成就怎么获得写在它的 `trigger: { kind, ...设置 }` 里：游戏代码只发服务端事件，成就模块观察每个事件，按 `kind` 对应的触发类型判定。本体的触发类型有 `pvz:blast`（`plants`、`kills`）、`pvz:bowling`（`plants`、`hits`）、`pvz:coin-streak`（`items`、`coins`）、`pvz:sun-held`（`sun`）和 `pvz:win-planting`（`boards`、`skipRules`、`only` / `never`），详见 `docs/ACHIEVEMENTS.zh-CN.md`。Mod 的新成就可以直接用这些类型；需要新的判定方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`server/GameplayRegistry`），`observe` 收到事件、设置和这个成就在关卡里的状态（随存档保存）。要让本体成就认到 Mod 的植物，用 `overrides` 改它的 `trigger`。关卡定义写 `achievements: false` 时，这一关不发放任何成就，适合测试关卡。
+
+商店、图鉴和工具也是玩法定义表，和其他表一样，Mod 用自己的命名空间新增条目、用 `overrides` 改任何人的。`store` 按物品 ID 写商店物品：`{ page, place, cost 或 prices, message 或 messages, purchase, level?, completed?, requires?, seedSlots?, effect?, unlockChallenge? }`。物品 ID 同时是档案里购买计数的键，各 Mod 的物品互不占用。`page` 指向 `storePages` 表里的一页（`{ level? }` 或 `{ completed: true }`，即原版 `StoreScreen::IsPageShown`；页按登记顺序排列，本体四页在前，各 Mod 的依次在后），`place` 是这一页上下两排共 8 格中的第几格（0–7），同页同格只能有一件：Mod 可以放进本体页的空格，也可以登记自己的页。`prices`、`messages`、`seedSlots` 按已买次数取档；`requires` 里的 `anyPurchases`、`allPurchases` 写物品 ID。`purchase.kind` 为 `set`、`count`、`stock`、`timestamp`、`plant`（往禅境花园放一盆 `settings` 里 `zenGarden.template` 的植物）或 `seed`（卖一颗种子，可以是还没安装的升级植物）。全店必须恰好一件 `effect: "seedSlots"`，即戴夫在关卡里推销的卡槽升级。物品的外观写在表现定义的 `store` 表（同一 ID：`sprite`、`offset`、`highlight`、`quantity`；没有 `sprite` 时画所卖种子的卡包），商店界面的时间和戴夫的闲聊写在表现定义的 `storeDialogue`。
+
+图鉴的植物页就是选卡格子（原版 `AlmanacDialog::GetSeedPosition`），不用写条目；`almanac` 表按僵尸 ID 写僵尸页的窗口 `{ place, startingLevel, spawnedOnly?, afterAdventure? }`，`place` 是每行 5 个从 0 数的位置，不能重复，键必须是已有的僵尸。植物或僵尸在图鉴里站的地面写在表现定义的 `almanac` 表，按植物或僵尸 ID：`ground` 为 `day`、`night`、`pool`、`nightpool`、`roof` 或 `ice`，植物可加 `upgrade: true`（升级植物的卡包底色）；没有条目时站在白天的地面上。
+
+工具写在 `tools` 表里，ID 到 `{ kind }`，`kind` 说明它做什么，目前只有 `shovel`（铲起格子里的植物）。关卡的 `tools` 和 `kind: "tool"` 的奖励都必须指向已有的工具，每个工具还要有表现定义 `tools` 里的外观，缺了就是加载失败。
+
+教程脚本和关卡规则一样是服务端登记项：用 `registry.tutorials.register(ownerId, id, script)` 登记（`server/tutorials` 的 `TutorialScript`），关卡写 `tutorial: id` 使用它。加载时检查每关的 `tutorial` 都已登记，写错或没登记的名字让加载失败，不会当作没有教程；没有教程的关卡不写 `tutorial`。脚本自己的步骤（`TutorialResource.step`）用自己的命名空间，如 `example:dig`，随存档保存。
 
 植物的 `visual.nameKey`（必填）、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。种子包默认画植物自己；`visual.packetPlant` 写另一株植物的完整 ID 时画那一株（如保龄球坚果画普通坚果）。卡包里植物图的位置和大小写在植物的 `packet.placement`（`{ scale, offsetX, offsetY }`，原版 `SeedPacket::DrawSeedPacket` 的偏移），不写时用 `seedPackets.defaultPlacement`；`packet` 的其余字段是原版 `Plant::DrawSeedType` 的偏移和姿势。
 
@@ -75,7 +83,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：按 ID 登记的代码行为（`plantBehaviors.register`）不会随定义转移，旧存档中实体状态与新定义不符时按不兼容存档处理。
 
-表现定义里 Mod 可以新增或覆盖的表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`levels`、`rules`、`challenges`，规则和其他定义表相同：新 ID 只能用自己的命名空间，改已有的走 `overrides`。`items` 按掉落物 ID、`awards` 按关卡奖励的 ID、`rules` 按关卡规则的 `kind` 索引。内容组装时检查玩法里的每个植物、僵尸、弹丸和掉落物都有表现且视图已安装，每关的奖励都有图（种子奖励用它的植物表现，`note` 还要有 `pageImages`）；缺了就是这个 Mod 加载失败，而不是等到它出现在关卡里才报错。
+表现定义里 Mod 可以新增或覆盖的表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`levels`、`rules`、`challenges`、`store`、`almanac`，规则和其他定义表相同：新 ID 只能用自己的命名空间，改已有的走 `overrides`。`items` 按掉落物 ID、`awards` 按关卡奖励的 ID、`rules` 按关卡规则的 `kind`、`store` 按商店物品 ID、`almanac` 按图鉴里显示的植物或僵尸 ID 索引。内容组装时检查玩法里的每个植物、僵尸、弹丸和掉落物都有表现且视图已安装，每个工具都有外观，每关的奖励都有图（种子奖励用它的植物表现，`note` 还要有 `pageImages`）；缺了就是这个 Mod 加载失败，而不是等到它出现在关卡里才报错。
 
 图片可通过 `alphaMode: "premultiplied"` 标记预乘透明度的源 PNG，未标记或 `"straight"` 时沿用普通 RGBA。该标记按 PNG 文件生效，共用同一文件的裁片不能声明冲突格式；`assets.sprite(path)` 原始路径也读取这份清单。本体加载器统一解码非交错 RGBA8 PNG 并还原颜色。所有图片（无论哪种 `alphaMode`、来自本体还是 Mod）加载时都会像原版一样“补色”：每个全透明像素取上下两行相邻可见像素的平均色，没有则为黑色，透明度不变，避免线性采样在边缘混入黑边；因此图片里全透明像素自带的 RGB 不会被保留。Web 和 Native 使用同一路径，动画、淡入淡出及普通 Sprite 都保持默认混合，无需 Mod 单独设置混合因子。
 
@@ -95,14 +103,16 @@ npm run mod:test -- dist/mods/example
 
 只有 `mod:pack` 编译。它合并分类定义、收集资源和字体图集、生成内容哈希，输出 `dist/mods/<name>/` 与旁边的 ZIP；源码目录不产生编译文件。ZIP 的 `content.json` 保留资源映射，`gameplay`、`presentation` 则指向生成的合并 JSON。安装器验证清单、模块、文件路径、PNG 尺寸及字体图集。
 
-加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义植物/僵尸行为、视图或包装方法：
+加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义植物/僵尸行为、视图或包装方法。`host.get(id)` 能取到该端的每一个模块，ID 就是模块在 `assets/scripts` 下的路径（不带扩展名，目录的 `index` 用目录名），如 `client/plants/PlantView`、`server/seeds/planting`、`shared/protocol`；客户端另有 `cc`（引擎）、`content/definitions`（定义来源）、`client/views`（视图注册表），服务端另有 `content/definitions` 和 `gameplay/registry`（玩法注册表）。模块挪了位置，ID 也随之改变。模块清单由 `npm run mod:hosts` 生成（`client/content/hostModules.ts`、`server/session/hostModules.ts`），新增、移动或删除模块后需重新生成，测试会检查。
 
 ```ts
 export function register({ host, assets }) {
-    const registry = host.get('server/GameplayRegistry').registry
+    const registry = host.get('gameplay/registry')
     registry.plantBehaviors.register(assets.id, 'example:rapid_pea', behavior)
 }
 ```
+
+行为对象有 `createState`、`tick`，可选 `validateState(state, definition)` 检查种下和读档时的状态，以及 `validateConfig(definition, definitions, name)` 检查定义里的 `behavior` 配置：后者在内容加载时（`GameplayRegistry.validate`）对行为注册的每个类型各运行一次，早于任何实体，配置错误或含未知键就让加载失败。内置的保龄球坚果行为（`kind: "bowling"`）的数值缺省取原版 `Plant::UpdateBowling`，植物只写要改的项。
 
 `ModAssets.json()` 读取归档配置；客户端 `assets.sprite(path)` 按路径直接读取本 Mod 的图片，复用统一资源解码与缓存，其他包无法替换；`assets.spriteResource(id)` 按资源 ID 读取，Mod 在自己的 `content.json` 登记 ID 后，优先级更高的包（如高清包）可用同一 ID 替换。纯资源、数据和脚本 Mod 使用同一个加载入口；注册失败会撤销该 Mod 的注册和方法包装，并跳过依赖它的 Mod。
 
@@ -114,16 +124,16 @@ export function register({ host, assets }) {
 
 | 模块 | 对象与方法 |
 | --- | --- |
-| `server/planting` | `planting.seedAvailability`、`rejectSeed`、`selectSeed`、`selectConveyorPacket`、`placePlant`、`createPlant`、`findPlantAt` |
-| `server/tools` | `tools.available`、`select`、`use` |
-| `server/items` | `items.collect` |
-| `server/commands` | `commands.execute`，处理 Mod 自己的 `mod` 指令 |
+| `server/seeds/planting` | `planting.seedAvailability`、`rejectSeed`、`selectSeed`、`selectConveyorPacket`、`placePlant`、`createPlant`、`findPlantAt` |
+| `server/seeds/tools` | `tools.available`、`select`、`use` |
+| `server/level/items` | `items.collect` |
+| `server/session/commands` | `commands.execute`，处理 Mod 自己的 `mod` 指令 |
 | `shared/protocol` | 两端都能访问；客户端与服务端之间的数据格式及其辅助函数，如 `chooserEntryKey`（选卡卡片的唯一 key，同一种卡的两方算两张） |
-| `server/seedChooser` | `seedChooser.entries(definitions, owned)`，按玩家已拥有的种子，在本体选卡格子之外再提供卡（`{ seedId, team? }`，`team` 可让卡换到另一方）；开启 `/cheatseed` 时排在本体翻页的卡之后，重复的卡只算一次。这些卡和已拥有的种子一样计入卡槽数和是否打开选卡界面（多于卡槽数才打开，否则全部放进卡槽），选卡快照的 `entries` 列出它们，`chooseSeed` 带同样的 `team` 选择；客户端选卡界面用 `showCards` 决定格子里显示哪些卡，卡从卡槽退回而格子里没有它时调用 `onCardHidden`。翻页按钮是选卡界面的 `pageTurners`（`{ button, step }`），Mod 可以改画它们，翻页仍由本体处理 |
-| `server/snapshot` | `snapshot.build`，向 `extensions` 加入 Mod 状态 |
+| `server/seeds/seedChooser` | `seedChooser.entries(definitions, owned)`，按玩家已拥有的种子，在本体选卡格子之外再提供卡（`{ seedId, team? }`，`team` 可让卡换到另一方）；开启 `/cheatseed` 时排在本体翻页的卡之后，重复的卡只算一次。这些卡和已拥有的种子一样计入卡槽数和是否打开选卡界面（多于卡槽数才打开，否则全部放进卡槽），选卡快照的 `entries` 列出它们，`chooseSeed` 带同样的 `team` 选择；客户端选卡界面用 `showCards` 决定格子里显示哪些卡，卡从卡槽退回而格子里没有它时调用 `onCardHidden`。翻页按钮是选卡界面的 `pageTurners`（`{ button, step }`），Mod 可以改画它们，翻页仍由本体处理 |
+| `server/session/snapshot` | `snapshot.build`，向 `extensions` 加入 Mod 状态 |
 
 ```ts
-const { planting } = host.get('server/planting')
+const { planting } = host.get('server/seeds/planting')
 host.around(planting, 'seedAvailability', function (next, session, seedId, ...rest) {
     const availability = next(session, seedId, ...rest)
     return availability.reason || seedId !== 'my-mod:plant' || ready(session.world)
@@ -162,11 +172,11 @@ export function register({ host }) {
 
 修改游戏状态的命令在服务端处理：两端入口执行相同的 `specs.list` 包装（可以抽到 Mod 的共享源码文件），客户端不添加对应的执行包装，正常入口会在有关卡时转发原始命令。集成运行时两端共享语法对象，上面的同名检查可避免补全重复。独立服务端也必须声明语法。
 
-服务端用 `server/debug/DebugCommands` 中的 `executor`，收到的是经过服务端解析校验的命令，并且可以访问当前世界、定义、tick 和种植函数。例如将上面命令改为服务端返回消息时，保留语法包装，将执行包装移到服务端入口：
+服务端用 `server/debug/debugCommands` 中的 `executor`，收到的是经过服务端解析校验的命令，并且可以访问当前世界、定义、tick 和种植函数。例如将上面命令改为服务端返回消息时，保留语法包装，将执行包装移到服务端入口：
 
 ```ts
 const cli = host.get('shared/debug/DebugCli')
-const { executor } = host.get('server/debug/DebugCommands')
+const { executor } = host.get('server/debug/debugCommands')
 host.around(executor, 'execute', function (next, world, definitions, tick, command, createPlant) {
     if (command.name === 'example:hello') {
         return cli.debugSuccess(`Hello ${command.args[0]}, tick: ${tick}`)

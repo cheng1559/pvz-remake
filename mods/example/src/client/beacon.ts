@@ -5,7 +5,7 @@ export function installBeacon({ host, assets }: Context): void {
     const { Color } = host.get('cc')
     const settings = assets.json('assets/settings.json')
     // The beacon is drawn by its animation (its gameplay `animation`), as every plant is: on the board the server
-    // keeps it, and `onBoard` adds what this plant does there. Off the board (a packet's picture) only `show` runs.
+    // keeps it, and `onBoard` adds what this plant does there. Off the board (a packet's picture) only `pose` runs.
     class BeaconView extends PlantView {
         private pulseAtTick = -1
         constructor(context: any) { super(context) }

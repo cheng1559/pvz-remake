@@ -41,6 +41,82 @@ export interface GameplayDefinitions {
      * GetAwardSeedForLevel(1) = 1); the profile records the rest.
      */
     seedBank: { baseSlots: number; maxSlots: number; startingSeeds: string[] }
+    /** The board's tools by ID (the shovel), for the levels that offer or award them. */
+    tools: Record<string, ToolDefinition>
+    /** The store's items by ID, the key of their purchase count in the profile; each stands on a place of a page. */
+    store: Record<string, StoreItemDefinition>
+    /** The store's pages, in their order (base first, then each Mod's): when each opens (StoreScreen::IsPageShown). */
+    storePages: Record<string, StorePageDefinition>
+    /**
+     * The almanac's zombie windows by zombie ID, in their order. Its plant page is the chooser's grid
+     * (AlmanacDialog::GetSeedPosition), so a plant needs no entry.
+     */
+    almanac: Record<string, AlmanacZombieEntry>
+    /** The main Zen Garden: its grid, and the potted plant the store's `plant` purchase puts in its first free spot. */
+    zenGarden: { columns: number; capacity: number; template: ZenGardenPlant }
+}
+
+/** What a tool does where it is used, by its kind (Board::MouseDownWithTool): the shovel digs up a plant. */
+export const TOOL_KINDS = ['shovel'] as const
+export type ToolKind = typeof TOOL_KINDS[number]
+export interface ToolDefinition { kind: ToolKind }
+
+/** The places of a store page (StoreScreen: two rows of four). */
+export const STORE_PAGE_PLACES = 8
+
+/** A page shows from adventure level `level` (1 when left out), or once the adventure is finished; `completed` only then. */
+export interface StorePageDefinition { level?: number; completed?: true }
+
+/**
+ * How a purchase changes the profile: `set` stores `value`; `count` adds `amount`, `limit` at most; `stock` adds `amount`
+ * to at least `minimum`, sold out above `limit`; `timestamp` stores when (Stinky); `plant` pots the Zen Garden's
+ * template plant (once a day, while the garden has room); `seed` gives a seed the player then owns.
+ */
+export type StorePurchase = { kind: 'set'; value: number } | { kind: 'count'; amount: number; limit: number }
+    | { kind: 'stock'; minimum: number; amount: number; limit: number } | { kind: 'timestamp' | 'plant' }
+    | { kind: 'seed'; id: string }
+
+/**
+ * A store item (StoreScreen's StoreItem). `cost` or, by the number bought, `prices`; Dave's line `message` or `messages`
+ * likewise; `level` and `completed` hide it as a page's do; `requires` shows it as coming soon until met.
+ */
+export interface StoreItemDefinition {
+    page: string
+    place: number
+    cost?: number
+    prices?: number[]
+    message?: number
+    messages?: number[]
+    level?: number
+    completed?: true
+    purchase: StorePurchase
+    requires?: { anyPurchases?: string[]; allPurchases?: string[]; minimumStored?: number; finishedAdventure?: true }
+    seedSlots?: number[]
+    effect?: 'seedSlots' | 'tree'
+    unlockChallenge?: { index: number; value: number }
+}
+
+/**
+ * A zombie's almanac window: its `place` on the page and gZombieDefs' mStartingLevel; `spawnedOnly` is
+ * Board::IsZombieTypeSpawnedOnly; `afterAdventure` zombies only come once the adventure is finished (LawnApp::CanSpawnYetis).
+ */
+export interface AlmanacZombieEntry { place: number; startingLevel: number; spawnedOnly?: true; afterAdventure?: true }
+
+/** A potted plant as the Zen Garden keeps it, without its spot (PottedPlant). */
+export interface ZenGardenPlant {
+    /** The potted plant's ID. */
+    plant: string
+    whichZenGarden: string
+    facing: 'left' | 'right'
+    lastWateredTime: number
+    drawVariation: string
+    plantAge: string
+    timesFed: number
+    feedingsPerGrow: number
+    plantNeed: string
+    lastNeedFulfilledTime: number
+    lastFertilizedTime: number
+    lastChocolateTime: number
 }
 
 export interface GameplayLevels {
@@ -50,6 +126,8 @@ export interface GameplayLevels {
 
 /** Where a level's mower waits, its left edge (LawnMower::LawnMowerInitialize). */
 export const MOWER_READY_X = -21
+/** Where the intro brings each row's mower on from, rolling it in to MOWER_READY_X (CutScene::UpdateIntro's CalcPosition). */
+export const MOWER_INTRO_X = -80
 
 export interface BoardDefinition {
     /** Nocturnal plants sleep on boards that are not at night. */
@@ -231,9 +309,10 @@ export interface AnimationClip {
     /** Where parts of the plant are in each of its frames, for what goes with them (PlantDefinition.shooter.anchor). */
     tracks?: Record<string, Point[]>
     /**
-     * In place of `fps`: where the ground is under it in each of its frames (the Reanim's `_ground`). What walks on it
-     * goes as far as its ground does, and it goes at the rate that takes its walker at the walker's speed
-     * (Zombie::UpdateAnimSpeed).
+     * Where the ground is under it in each of its frames (the Reanim's `_ground` x), counted the way its walker faces: a
+     * zombie's Reanim faces left and has it as it is, a plant's faces right and has it negated. What walks on it goes as
+     * far as its ground does (Reanimation::GetTrackVelocity, groundStep). In place of `fps`, it goes at the rate that
+     * takes its walker at the walker's speed (Zombie::UpdateAnimSpeed); with `fps` (a bowled nut's roll), at that.
      */
     ground?: number[]
     /**
@@ -507,7 +586,8 @@ export interface LevelDefinition {
     /** The tools the level offers instead of the ones earlier levels awarded (CutScene::ShowShovel). */
     tools?: string[]
     nextLevel?: string
-    tutorial: string
+    /** Its scripted flow (CutScene, the tutorials): a registered TutorialScript's ID. A level without one has none. */
+    tutorial?: string
     /**
      * `tool` also becomes usable in later levels (the shovel); `unlock` is only collected and shown (the almanac), and
      * its award page button can open the page it unlocks before the next level (AwardScreen::StartButtonPressed).

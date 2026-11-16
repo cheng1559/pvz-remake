@@ -1,10 +1,10 @@
 {
   "pvz:bowling-wallnut": {
     "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
-    "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900, "shieldDamage": 400, "bouncedBreaks": ["door"]},
+    "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}, "bouncedBreaks": ["door"]},
     "animation": {
       "clips": {
-        "body": {"frames": 13, "fps": [12, 18]},
+        "body": {"frames": 13, "fps": [12, 18], "ground": [-44.8, -27.6, -8.9, 11.3, 31.5, 50.2, 67.4, 84.6, 103.4, 123.6, 143.8, 162.5, 179.8]},
         "blinkTwitch": {"frames": 5, "fps": 15, "once": true},
         "blinkTwice": {"frames": 7, "fps": 15, "once": true},
         "blinkThrice": {"frames": 11, "fps": 15, "once": true}
@@ -15,7 +15,7 @@
   },
   "pvz:bowling-explodenut": {
     "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
-    "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900, "shieldDamage": 400, "bouncedBreaks": ["door"]},
+    "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}},
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
     "animation": {"from": "pvz:bowling-wallnut"}
   },

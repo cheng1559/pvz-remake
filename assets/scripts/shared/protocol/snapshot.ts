@@ -81,10 +81,60 @@ export interface WorldSnapshot {
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
     items: ItemSnapshot[]
-    /** The rows whose mower still waits at the house end; one set off is a mowing projectile. */
-    mowerRows: number[]
+    /** The rows' lawn mowers, waiting or set off: not among `projectiles`, even running. */
+    mowers: MowerSnapshot[]
     tutorial: TutorialSnapshot
+    /** The game's cursor tools; absent when it has none. */
+    tools?: ToolsSnapshot
+    /** A conveyor level's belt. */
+    conveyor?: ConveyorSnapshot
+    /** Crazy Dave's current line, while the level's script has one up. */
+    dialog?: DialogSnapshot
+    /** The session's debug rules, once a debug command has set one. */
+    debug?: DebugRules
+    /**
+     * What Mods' registered components show, by component ID, and the level's rule (LevelRuleDefinition.snapshot), by
+     * its kind; a rule's client view checks its own.
+     */
     extensions: Record<string, JsonValue>
+}
+
+export interface ToolsSnapshot {
+    /** The tools this game has, usable now or not (tools.owned): a level does not list them. */
+    owned: string[]
+    /** Those the player can pick up now (tools.available). */
+    available: string[]
+}
+
+export interface ConveyorSnapshot {
+    /** The ticks the belt has moved (the conveyor's `moveTicks`): its picture turns over with them. */
+    ticks: number
+}
+
+export interface DialogSnapshot {
+    /** The line Dave says, `CRAZY_DAVE_<index>` (TutorialResource.dialogIndex). */
+    index: number
+    /** The Yes/No question the line asks (TutorialScript.dialogQuestion). */
+    question?: DialogQuestion
+}
+
+/** A Yes/No question of Dave's: its `kind` says which, the rest is what the client's dialog shows with it. */
+export type DialogQuestion = JsonObject & { kind: string }
+
+export const DEBUG_COLLECT_MODES = ['auto', 'click', 'move'] as const
+
+/** The session's debug switches (server/debug/debugRules.ts), which the debug CLI sets on the server. */
+export interface DebugRules {
+    cooldown: boolean
+    sunCost: boolean
+    plantInvincible: boolean
+    /** How items are picked up: by themselves, by a click, or by the pointer passing over them. */
+    collect: typeof DEBUG_COLLECT_MODES[number]
+    /**
+     * `/cheatseed`: the chooser offers every seed on its pages (chooserPages) and Let's Rock starts with any cards
+     * chosen. It counts towards the chooser's slots and whether it opens, so a chooser takes it up when it opens.
+     */
+    cheatSeeds: boolean
 }
 
 export type CursorSnapshot =
@@ -208,6 +258,24 @@ export interface ProjectileSnapshot {
     facing?: number
 }
 
+/**
+ * LawnMowerState: waiting at the house end of its row (MOWER_READY), or set off along it (MOWER_TRIGGERED). The
+ * original's MOWER_ROLLING_IN is the intro's to show (LevelIntro.mowerArrival); nothing installed squishes a mower
+ * (MOWER_SQUISHED).
+ */
+export type MowerState = 'ready' | 'triggered'
+
+export const MOWER_STATES: readonly MowerState[] = ['ready', 'triggered']
+
+/**
+ * A row's lawn mower (the original's LawnMower), one entity from the level's start to its end. It runs as the level's
+ * mowing projectile (LevelDefinition.lawnMower), whose type is its `typeId` and draws it; set off, it has what a
+ * projectile's snapshot has.
+ */
+export interface MowerSnapshot extends ProjectileSnapshot {
+    state: MowerState
+}
+
 export interface ItemSnapshot {
     entityId: EntityId
     typeId: string
@@ -272,6 +340,25 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     const tutorial = record(snapshot.tutorial, 'snapshot.tutorial')
     nonEmptyString(tutorial.step, 'snapshot.tutorial.step')
     for (const key of ['dave', 'toolsInIntro']) if (tutorial[key] !== undefined && tutorial[key] !== true) throw new TypeError(`snapshot.tutorial.${key} must be true`)
+    if (snapshot.tools !== undefined) {
+        const tools = record(snapshot.tools, 'snapshot.tools')
+        const owned = array(tools.owned, 'snapshot.tools.owned').map((id, index) => nonEmptyString(id, `snapshot.tools.owned[${index}]`))
+        if (!owned.length || new Set(owned).size !== owned.length) throw new TypeError('snapshot.tools.owned must list distinct tools')
+        array(tools.available, 'snapshot.tools.available').forEach((id, index) => {
+            if (!owned.includes(nonEmptyString(id, `snapshot.tools.available[${index}]`))) throw new TypeError(`snapshot.tools.available[${index}] is not owned`)
+        })
+    }
+    if (snapshot.conveyor !== undefined) nonNegativeInteger(record(snapshot.conveyor, 'snapshot.conveyor').ticks, 'snapshot.conveyor.ticks')
+    if (snapshot.dialog !== undefined) {
+        const dialog = record(snapshot.dialog, 'snapshot.dialog')
+        nonNegativeInteger(dialog.index, 'snapshot.dialog.index')
+        if (dialog.question !== undefined) nonEmptyString(record(dialog.question, 'snapshot.dialog.question').kind, 'snapshot.dialog.question.kind')
+    }
+    if (snapshot.debug !== undefined) {
+        const debug = record(snapshot.debug, 'snapshot.debug')
+        for (const key of ['cooldown', 'sunCost', 'plantInvincible', 'cheatSeeds']) boolean(debug[key], `snapshot.debug.${key}`)
+        oneOf(debug.collect, DEBUG_COLLECT_MODES, 'snapshot.debug.collect')
+    }
     record(snapshot.extensions, 'snapshot.extensions')
     const cursor = record(snapshot.cursor, 'snapshot.cursor')
     if (cursor.mode === 'seed') nonEmptyString(cursor.seedId, 'snapshot.cursor.seedId')
@@ -385,17 +472,10 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         if (zombie.riseTicks !== undefined) nonNegativeInteger(zombie.riseTicks, `${name}.riseTicks`)
         if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)
     })
-    array(snapshot.projectiles, 'snapshot.projectiles').forEach((entry, index) => {
-        const name = `snapshot.projectiles[${index}]`
-        const projectile = record(entry, name)
-        nonNegativeInteger(projectile.entityId, `${name}.entityId`)
-        nonEmptyString(projectile.typeId, `${name}.typeId`)
-        finite(projectile.x, `${name}.x`)
-        finite(projectile.y, `${name}.y`)
-        nonNegativeInteger(projectile.row, `${name}.row`)
-        if (projectile.height !== undefined) finite(projectile.height, `${name}.height`)
-        if (projectile.lift !== undefined) finite(projectile.lift, `${name}.lift`)
-        if (projectile.facing !== undefined) finite(projectile.facing, `${name}.facing`)
+    array(snapshot.projectiles, 'snapshot.projectiles').forEach((entry, index) => validateProjectile(entry, `snapshot.projectiles[${index}]`))
+    array(snapshot.mowers, 'snapshot.mowers').forEach((entry, index) => {
+        const name = `snapshot.mowers[${index}]`
+        oneOf(validateProjectile(entry, name).state, MOWER_STATES, `${name}.state`)
     })
     array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').forEach((entry, index) => {
         const name = `snapshot.conveyorPackets[${index}]`, packet = record(entry, name)
@@ -421,8 +501,21 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         nonNegativeInteger(item.alpha, `${name}.alpha`)
         if ((item.alpha as number) > 255) throw new TypeError(`${name}.alpha must not exceed 255`)
     })
-    array(snapshot.mowerRows, 'snapshot.mowerRows').forEach(row => nonNegativeInteger(row, 'snapshot.mowerRows[]'))
     return snapshot as Record<string, JsonValue>
+}
+
+/** A projectile, or a mower, which is drawn as one. */
+const validateProjectile = (value: unknown, name: string): Record<string, JsonValue> => {
+    const projectile = record(value, name)
+    nonNegativeInteger(projectile.entityId, `${name}.entityId`)
+    nonEmptyString(projectile.typeId, `${name}.typeId`)
+    finite(projectile.x, `${name}.x`)
+    finite(projectile.y, `${name}.y`)
+    nonNegativeInteger(projectile.row, `${name}.row`)
+    if (projectile.height !== undefined) finite(projectile.height, `${name}.height`)
+    if (projectile.lift !== undefined) finite(projectile.lift, `${name}.lift`)
+    if (projectile.facing !== undefined) finite(projectile.facing, `${name}.facing`)
+    return projectile as Record<string, JsonValue>
 }
 
 const validateLivingEntity = (value: unknown, name: string): Record<string, JsonValue> => {

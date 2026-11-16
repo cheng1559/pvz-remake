@@ -25,8 +25,8 @@ const IMPACT_PAST = 60
 const ZOMBIE_MIDDLE = 40
 
 /**
- * A projectile as a view shows it: in flight, the server's whole snapshot of it; before it flies (a row's mower, waiting
- * to be set off), its type.
+ * A projectile as a view shows it: on the board the server's whole snapshot of it (a mower's too, MowerSnapshot); off
+ * it its type.
  */
 export type ShownProjectile = Partial<ProjectileSnapshot> & Pick<ProjectileSnapshot, 'typeId'>
 
@@ -34,8 +34,8 @@ export interface ProjectileViewContext {
     node: Node
     content: Content
     projectile: ShownProjectile
-    /** The board: projectiles are on no other. */
-    stage: LevelStage
+    /** The board it is on; none off the board (offBoard.ts), where it is its picture alone. */
+    stage?: LevelStage
 }
 
 /**
@@ -45,6 +45,8 @@ export interface ProjectileViewContext {
 export class ProjectileView implements EntityView<ProjectileSnapshot> {
     /** Its shadow, a node of the board's layer: on the ground under it, drawn with the ground. */
     shadowNode?: Node
+    /** Its animation, for one its presentation animates (a mower's), once loaded. */
+    protected animation?: ReanimPlayer
     private trail?: ParticlePlayer
 
     constructor(protected readonly context: ProjectileViewContext) {}
@@ -53,19 +55,6 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         const { content, projectile: { typeId } } = this.context, presentation = content.presentation.projectiles[typeId]
         if (!presentation) throw new Error(`Projectile presentation is not installed: ${typeId}`)
         return presentation
-    }
-
-    /** Its animation with its corner at `at` from the projectile's, playing in a loop; none if the projectile went meanwhile. */
-    protected async animate(at: { x: number, y: number }): Promise<ReanimPlayer | undefined> {
-        const { node } = this.context, reanim = this.presentation.reanim
-        if (!reanim) throw new Error(`Projectile animation is not installed: ${this.context.projectile.typeId}`)
-        const animation = uiNode({ name: 'ProjectileAnimation', parent: node, position: at, anchor: { x: 0, y: 1 } }).node
-        animation.setScale(reanim.scale, reanim.scale, 1)
-        const player = animation.addComponent(ReanimPlayer)
-        await player.load(reanim.id)
-        if (!node.isValid) return undefined
-        player.play({ loop: true, rate: reanim.rate })
-        return player
     }
 
     /** Each projectile's picture and its own shadow, by type: kept for the session once a level has loaded them. */
@@ -86,9 +75,9 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
     }
 
     async initialize(): Promise<void> {
-        const { stage, projectile, content } = this.context, presentation = this.presentation, { typeId } = projectile
-        if (projectile.entityId === undefined) return this.show()
-        if (!await this.picture()) return
+        const { stage, projectile: { typeId }, content } = this.context, presentation = this.presentation
+        // Off the board it is its picture alone: its shadow lies on the board's ground.
+        if (!await this.picture() || !stage) return
         // Its shadow is apart from it, on the ground: its own picture, or the board's plant shadow about a point.
         const frame = presentation.shadow ? ProjectileView.shadows.get(typeId) : presentation.plantShadow ? await plantShadow(content, stage) : undefined
         if (presentation.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${typeId}`)
@@ -98,17 +87,26 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         }
     }
 
-    /** The projectile as it stands before it flies: its picture where it is. */
-    async show(): Promise<void> {
-        await this.picture()
-    }
-
-    /** Its picture, or its animation playing in a loop; false if the projectile went meanwhile. */
+    /**
+     * Its picture, or its animation playing in a loop with its corner where the presentation has it; false if the
+     * projectile went meanwhile.
+     */
     private async picture(): Promise<boolean> {
-        const { node, projectile: { typeId } } = this.context, { reanim } = this.presentation
-        if (reanim) return !!await this.animate(reanim)
-        const frame = ProjectileView.pictures.get(typeId)
+        const { node, projectile: { typeId } } = this.context, { reanim, sprite } = this.presentation
+        if (reanim) {
+            const animation = uiNode({ name: 'ProjectileAnimation', parent: node, position: reanim, anchor: { x: 0, y: 1 } }).node
+            animation.setScale(reanim.scale, reanim.scale, 1)
+            const player = animation.addComponent(ReanimPlayer)
+            await player.load(reanim.id)
+            if (!node.isValid) return false
+            player.play({ loop: true, rate: reanim.rate })
+            this.animation = player
+            return true
+        }
+        // Off the board no level has loaded it (preload).
+        const frame = ProjectileView.pictures.get(typeId) ?? (sprite ? await modResources.sprite(sprite) : undefined)
         if (!frame) throw new Error(`Projectile sprite is not installed: ${typeId}`)
+        if (!node.isValid) return false
         uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
         return true
     }
@@ -118,7 +116,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
      * it flies (ProjectileSnapshot.facing), turned about its middle.
      */
     sync(projectile: ProjectileSnapshot): void {
-        const { node, stage } = this.context, hitbox = stage.content.definitions.projectiles[projectile.typeId]?.hitbox
+        const { node } = this.context, stage = this.stage, hitbox = stage.content.definitions.projectiles[projectile.typeId]?.hitbox
         const mirror = projectile.team === 'zombies' && hitbox ? 2 * hitbox.x + hitbox.width : 0
         let { x, y } = boardToLayer(projectile.x + mirror, projectile.y), angle = 0
         if (projectile.facing !== undefined && hitbox) {
@@ -157,6 +155,13 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
             this.trail.node.setPosition(left(trail.x), top + trail.y)
             this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
         }
+    }
+
+    /** The board it is on, which syncs it. */
+    protected get stage(): LevelStage {
+        const { stage, projectile } = this.context
+        if (!stage) throw new Error(`Projectile is off the board: ${projectile.typeId}`)
+        return stage
     }
 
     destroy(): void {

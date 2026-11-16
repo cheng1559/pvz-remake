@@ -1,60 +1,13 @@
 import { ModHost } from '@/shared/mod/ModHost'
-import * as ecs from '@/ecs/index'
-import * as server from './IntegratedGameServer'
-import * as session from './session'
-import * as commands from './commands'
-import * as planting from '../seeds/planting'
-import * as tools from '../seeds/tools'
-import * as items from '../level/items'
-import * as snapshot from './snapshot'
-import * as components from '../state/components'
-import * as levelState from '../state/levelState'
-import * as projectiles from '../combat/projectiles'
-import * as zombies from '../zombies/system'
-import * as damage from '../zombies/damage'
-import * as collision from '../combat/collision'
-import * as events from '../state/events'
-import * as achievements from '../achievements/achievements'
-import * as explosions from '../combat/explosions'
-import * as debugRules from '../debug/debugRules'
-import * as debugCli from '@/shared/debug/DebugCli'
-import * as protocol from '@/shared/protocol'
-import * as debugCommands from '../debug/debugCommands'
-import * as gameplay from '../registry/GameplayRegistry'
-import * as seedBank from '../seeds/seedBank'
-import * as seedChooser from '../seeds/seedChooser'
-import * as levelRules from '../rules/registry'
-import * as cursor from '../seeds/cursor'
+import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
+import { SERVER_HOST_MODULES } from './hostModules'
 
-export function createServerModHost(ownerId: string, registry: gameplay.GameplayRegistry, definitions: DefinitionSources): ModHost {
+/** Every server module by its path (hostModules, generated), and the host's definitions and gameplay registry. */
+export function createServerModHost(ownerId: string, registry: GameplayRegistry, definitions: DefinitionSources): ModHost {
     return new ModHost(ownerId, {
-        'ecs': ecs,
+        ...SERVER_HOST_MODULES,
         'content/definitions': definitions,
-        'server/GameplayRegistry': { ...gameplay, registry },
-        'server/IntegratedGameServer': server,
-        'server/session': session,
-        'server/commands': commands,
-        'server/planting': planting,
-        'server/tools': tools,
-        'server/items': items,
-        'server/snapshot': snapshot,
-        'server/components': components,
-        'server/seedBank': seedBank,
-        'server/seedChooser': seedChooser,
-        'server/levelRules': levelRules,
-        'server/cursor': cursor,
-        'server/levelState': levelState,
-        'server/projectiles': projectiles,
-        'server/zombies/system': zombies,
-        'server/zombies/damage': damage,
-        'server/collision': collision,
-        'server/events': events,
-        'server/achievements': achievements,
-        'server/explosions': explosions,
-        'server/debug/DebugRules': debugRules,
-        'shared/debug/DebugCli': debugCli,
-        'shared/protocol': protocol,
-        'server/debug/DebugCommands': debugCommands,
+        'gameplay/registry': registry,
     })
 }

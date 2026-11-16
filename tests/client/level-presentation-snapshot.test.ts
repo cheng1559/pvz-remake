@@ -13,7 +13,7 @@ function reanim(id: string) {
 
 function snapshot(): any {
     return {
-        schemaVersion: 4,
+        schemaVersion: 5,
         flow: { introCompletionSent: true, completionStarted: false },
         intro: {
             ticks: 855,
@@ -32,12 +32,11 @@ function snapshot(): any {
             music: null, ownsMusic: true, gameplayStarted: true,
         },
         entities: [{
-            kind: 'plant', entityId: 1, data: { flash: { tick: 10, ticks: 25 } },
-        }, {
             kind: 'zombie', entityId: 2, data: { body: reanim('pvz:zombie_walk'), mowerDriver: null },
         }, {
             kind: 'item', entityId: 4, data: { animation: null },
         }],
+        flashes: [{ entityId: 1, tick: 10, ticks: 25 }, { entityId: 2, tick: 12, ticks: 25, through: true }],
         particles: [{
             instanceId: 1,
             owner: { kind: 'entity', entityId: 99, slot: 'award-back-effects', x: 0, y: 0, z: 0 },
@@ -84,7 +83,10 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
             slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, view: { body: reanim('pvz:zombie_idle2'), mowerDriver: null },
         }))
     }), /before the intro ends/)
-    assert.throws(invalid(value => { value.entities[1].entityId = 1 }), /entity ID must be unique/)
+    assert.throws(invalid(value => { value.entities[1].entityId = 2 }), /entity ID must be unique/)
+    assert.throws(invalid(value => { value.flashes[1].entityId = 1 }), /flash entity ID must be unique/)
+    assert.throws(invalid(value => { value.flashes[1].through = false }), /flashes\[1\]\.through must be true/)
+    assert.throws(invalid(value => { delete value.flashes }), /flashes is required/, 'the board keeps its flashes, not each view')
     assert.throws(invalid(value => { value.particles[1].instanceId = 1 }), /particle instance ID must be unique/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 151 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)

@@ -7,7 +7,7 @@ import type { TutorialScript } from './index'
 const PITCH = [1501, 1502, 1503], ACCEPTED = [1510, 1511], DECLINED = [1520]
 /** 1503 ({NO_CLICK}) waits for the Yes/No dialog instead of a click. */
 const QUESTION = 1503
-/** The `pvz:dialog` question kind the client answers with DIALOG_PURCHASE_PACKET_SLOT. */
+/** The snapshot's `dialog.question` kind the client answers with DIALOG_PURCHASE_PACKET_SLOT. */
 export const PACKET_UPGRADE_QUESTION = 'pvz:packetUpgrade'
 
 /**

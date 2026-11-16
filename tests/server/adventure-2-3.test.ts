@@ -62,7 +62,7 @@ test('2-3 introduces the screen door in wave 6 and the flag wave only, over 2-2\
 test('a screen door absorbs peas without chill, lets fume through, and falls when its zombie dies holding it', () => {
     const world = new World()
     const definition = levels.levels['pvz:adventure-2-3']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     const events = () => drainServerEvents(world.resources.get(EventQueueResource))
@@ -93,7 +93,7 @@ test('Zombie::TakeDamage: a zombie with a helm and a shield loses the shield, th
     // A Mod zombie: the screen door zombie wearing a cone as well.
     const armored = { ...definitions, zombies: { ...definitions.zombies, 'pvz:screendoor': { ...definitions.zombies['pvz:screendoor'], helm: { type: 'cone', health: 370 } } } }
     const world = new World()
-    world.resources.set(LevelStateResource, { id: options.levelId, definition: levels.levels['pvz:adventure-2-3'], board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition: levels.levels['pvz:adventure-2-3'], board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     const entity = spawnZombie(world, armored, 'pvz:screendoor', 0, 500, 50)
@@ -125,11 +125,11 @@ test('Crazy Dave sells the first seed slot in the 2-3 intro, and the chooser tak
     const server = start({ initialMoney: 75, packetUpgradeOffer: offer })
     assert.equal(runCommand(server, { type: 'chooseSeed', seedId: SEEDS[0] }), 'intro-not-complete')
     for (const index of [1501, 1502]) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         assert.equal(runCommand(server, { type: 'advanceDialog' }), undefined)
     }
     assert.equal(runCommand(server, { type: 'advanceDialog' }), undefined)
-    assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index: 1503, question: { kind: 'pvz:packetUpgrade', cost: 75, slots: 7 } },
+    assert.deepEqual(server.snapshot().dialog, { index: 1503, question: { kind: 'pvz:packetUpgrade', cost: 75, slots: 7 } },
         '{NO_CLICK}: the line asks for the Yes/No dialog, with its price and mPurchases + 7 slots, and only the answer moves on')
     assert.equal(server.snapshot().tutorial.dave, true, 'the offer brings Dave like other scripted dialogue')
     server.drainEvents()
@@ -139,10 +139,10 @@ test('Crazy Dave sells the first seed slot in the 2-3 intro, and the chooser tak
     assert.equal(server.snapshot().money, 0)
     assert.equal(server.snapshot().seedChooser!.slots, 7)
     for (const index of [1510, 1511]) {
-        assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
+        assert.deepEqual(server.snapshot().dialog, { index })
         assert.equal(runCommand(server, { type: 'advanceDialog' }), undefined)
     }
-    assert.equal(server.snapshot().extensions['pvz:dialog'], undefined)
+    assert.equal(server.snapshot().dialog, undefined)
     assert.equal(runCommand(server, { type: 'answerDialog', accept: true }), undefined)
     assert.equal(server.snapshot().money, 0, 'an answer with no question changes nothing')
     play(server, 7)
@@ -168,9 +168,9 @@ test('turning Dave down keeps six slots, and he only offers what the player can 
     declined.drainEvents()
     assert.equal(runCommand(declined, { type: 'answerDialog', accept: false }), undefined)
     assert.ok(declined.drainEvents().some(event => event.type === 'packetUpgradeDeclined'))
-    assert.deepEqual(declined.snapshot().extensions['pvz:dialog'], { index: 1520 })
+    assert.deepEqual(declined.snapshot().dialog, { index: 1520 })
     runCommand(declined, { type: 'advanceDialog' })
-    assert.equal(declined.snapshot().extensions['pvz:dialog'], undefined)
+    assert.equal(declined.snapshot().dialog, undefined)
     assert.equal(declined.snapshot().money, 80)
     assert.equal(declined.snapshot().seedChooser!.slots, 6)
     play(declined, 6)
@@ -182,7 +182,7 @@ test('turning Dave down keeps six slots, and he only offers what the player can 
         { initialMoney: 2000, packetUpgradeOffer: offer, firstAdventure: false },
     ]) {
         const server = start(packet)
-        assert.equal(server.snapshot().extensions['pvz:dialog'], undefined, JSON.stringify(packet))
+        assert.equal(server.snapshot().dialog, undefined, JSON.stringify(packet))
         assert.equal(server.snapshot().tutorial.step, 'complete')
         assert.equal(server.snapshot().seedChooser!.slots, 6 + (packet.packetUpgrades ?? 0))
     }
@@ -193,7 +193,7 @@ test('a game saved during the seed-slot pitch can still sell it after a restore'
     for (let line = 0; line < 2; line++) runCommand(server, { type: 'advanceDialog' })
     const restored = new IntegratedGameServer(definitions, levels)
     restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
-    assert.deepEqual(restored.snapshot().extensions['pvz:dialog'], { index: 1503, question: { kind: 'pvz:packetUpgrade', cost: 75, slots: 7 } })
+    assert.deepEqual(restored.snapshot().dialog, { index: 1503, question: { kind: 'pvz:packetUpgrade', cost: 75, slots: 7 } })
     assert.equal(runCommand(restored, { type: 'answerDialog', accept: true }), undefined)
     assert.equal(restored.snapshot().money, 0)
     assert.equal(restored.snapshot().seedChooser!.slots, 7)

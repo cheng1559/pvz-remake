@@ -1,0 +1,9 @@
+{
+  "pvz:normal": {"place": 0, "startingLevel": 1},
+  "pvz:flag": {"place": 1, "startingLevel": 1},
+  "pvz:conehead": {"place": 2, "startingLevel": 3},
+  "pvz:pole_vaulter": {"place": 3, "startingLevel": 6},
+  "pvz:buckethead": {"place": 4, "startingLevel": 8},
+  "pvz:newspaper": {"place": 5, "startingLevel": 11},
+  "pvz:screendoor": {"place": 6, "startingLevel": 13}
+}

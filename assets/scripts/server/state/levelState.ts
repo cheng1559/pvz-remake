@@ -21,7 +21,10 @@ export interface Item {
     arrow?: true
 }
 
-/** Every step of every tutorial script (Board::mTutorialState), `complete` once a script is done or has none. */
+/**
+ * Every step of every base tutorial script (Board::mTutorialState), `complete` once a script is done or has none. A
+ * Mod's script names its own steps in its namespace (`example:dig`).
+ */
 export const TUTORIAL_STEPS = [
     'pick-first-seed', 'plant-first-seed', 'first-plant-done', 'collect-first-sun', 'collect-more-sun', 'enough-sun',
     'pick-second-seed', 'plant-second-seed', 'complete',
@@ -30,10 +33,12 @@ export const TUTORIAL_STEPS = [
     'whack-before-pick-seed', 'whack-pick-seed', 'whack-done',
 ] as const
 
+export type TutorialStep = typeof TUTORIAL_STEPS[number] | `${string}:${string}`
+
 export interface TutorialState {
     dialogIndex?: number
     firstAdventure: boolean
-    step: typeof TUTORIAL_STEPS[number]
+    step: TutorialStep
     promptAtTick?: number
     /** The advice shown this game, each once (Board::mHelpDisplayed). */
     displayedAdvice: string[]

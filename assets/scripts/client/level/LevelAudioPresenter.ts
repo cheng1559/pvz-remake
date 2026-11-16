@@ -116,10 +116,6 @@ export class LevelAudioPresenter {
             case 'sunFlash': case 'sunDrained': void SoundSystem.play(SoundEffect.Buzzer); break
             // Board::MouseDownWithPlant: FOLEY_DROP for a seed dropped where it cannot be planted.
             case 'seedDropped': void SoundSystem.play(SoundEffect.Drop); break
-            case 'levelAwardCollected':
-                void SoundSystem.play(SoundEffect.SeedLift)
-                void SoundSystem.play(SoundEffect.Drop)
-                break
             case 'levelWon': void SoundSystem.playMusicVolumeSfx(SoundEffect.WinMusic); break
             // Board::NextWaveComing: the awooga before the first wave, else the siren where the server says (a flag wave).
             case 'nextWaveComing':
