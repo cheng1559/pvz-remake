@@ -273,9 +273,10 @@ export class MusicSystem {
         this._fadeOutCounter = duration
     }
 
-    static startBurst() {
-        if (!this._playing || this._paused || !this._currentTune) return
-        if (!this._currentTune.burstScheme) return
+    /** Board::UpdateZombieSpawning: the huge wave countdown bursts a night tune with 700 ticks left and a day one with 400. */
+    static startBurst(countdown: number) {
+        if (!this._playing || this._paused || !this._currentTune?.burstScheme) return
+        if (countdown !== (this._currentTune.burstScheme === 'night' ? 700 : 400)) return
         this._startBurst()
     }
 

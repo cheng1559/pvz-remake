@@ -80,7 +80,7 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => {
         value.intro.ticks = 854
         value.intro.previews = Array.from({ length: 5 }, (_, slot) => ({
-            slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, view: { body: reanim('pvz:zombie_idle2'), mowerDriver: null },
+            slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, hasTongue: slot === 0, view: { body: reanim('pvz:zombie_idle2'), mowerDriver: null },
         }))
     }), /before the intro ends/)
     assert.throws(invalid(value => { value.entities[1].entityId = 2 }), /entity ID must be unique/)

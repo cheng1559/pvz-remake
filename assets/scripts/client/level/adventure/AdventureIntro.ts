@@ -1,6 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
+import { renderOrder } from '@/shared/content/renderOrder'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -117,10 +118,9 @@ export class AdventureIntro implements LevelIntro {
             ready.play({ loop: false, rate: 1, hideOnFinish: false })
             ready.pause()
         }
-        const introZombies: Node[] = []
         const previewTypes = new Map<Node, string>()
         const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.definitions, layout.previewCapacity)
-        const introPositions: Array<{ x: number, y: number, z: number }> = []
+        const introPositions: Array<{ x: number, y: number, order: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
         ).flat().filter(({ gridX, gridY }) => gridX !== 4 || gridY !== 0)
@@ -136,21 +136,25 @@ export class AdventureIntro implements LevelIntro {
             introPositions.push({
                 x: 430 + gridX * 56 + Math.floor(Math.random() * 15),
                 y: 230 - gridY * 90 - (gridX % 2) * 30 - (fixedY ? 0 : Math.floor(Math.random() * 15)),
-                z: 100 + gridY * 4 + (gridX % 2) * 2,
+                // CutScene::PlaceAZombie draws it on the lawn layer by its cell, over what AddZombieInRow gave it: a row
+                // further down, or an odd column (30 lower) of the same row, draws in front.
+                order: renderOrder('lawn', 0, (gridX % 2) * 2 + gridY * 4),
             })
         }
-        await Promise.all(introPositions.map(async (position, index) => {
+        const placed = await Promise.all(introPositions.map(async ({ x, y, order }, index) => {
             const typeId = types[index]
             const node = uiNode({
-                name: `IntroZombie-${index}`, parent: entityLayer, position,
+                name: `IntroZombie-${index}`, parent: entityLayer, position: { x, y },
                 size: { width: 120, height: 120 }, anchor: { x: 0, y: 1 },
             }).node
             await standInStreet(node, typeId, Math.random() < content.definitions.zombies[typeId].tongueChance)
-            introZombies.push(node)
             previewTypes.set(node, typeId)
+            return { node, order }
         }))
-        introZombies.sort((left, right) => left.position.z - right.position.z)
-            .forEach((node, index) => node.setSiblingIndex(index))
+        // Zombies of one order (a row's columns of one parity) draw in the order they were placed. A slot is its zombie's place in drawing, so a restored
+        // intro draws its zombies as they were.
+        const introZombies = placed.sort((left, right) => left.order - right.order).map(({ node }) => node)
+        introZombies.forEach((node, index) => node.setSiblingIndex(index))
         // A conveyor level's belt stands in for the bank (Board::UpdateGame draws no bank with one).
         const shown = level.conveyor ? { ...layout, hiddenSeedBank: true } : layout
         const intro = new AdventureIntro(board, sodClip, sodRolls, shown, ready, introZombies, previewTypes, content.presentation, bank, houseName,
@@ -264,7 +268,6 @@ export class AdventureIntro implements LevelIntro {
                     typeId: this.previewTypes.get(node)!,
                     x: node.position.x,
                     y: node.position.y,
-                    z: node.position.z,
                     hasTongue,
                     view: view.playbackSnapshot(),
                 }
@@ -285,7 +288,7 @@ export class AdventureIntro implements LevelIntro {
             for (const preview of snapshot.previews) {
                 const node = this.introZombies[preview.slot]
                 if (!node?.isValid) throw new Error(`intro preview ${preview.slot} is unavailable`)
-                node.setPosition(preview.x, preview.y, preview.z)
+                node.setPosition(preview.x, preview.y)
                 const definition = this.definitions.zombies[preview.typeId]
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)

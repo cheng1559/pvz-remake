@@ -66,7 +66,10 @@ test('night burst switches on the next order, crossfades the melody, and restore
     const { MusicSystem } = exports
     await MusicSystem.playTune('night_moongrains')
     times.set(1, 9)
-    MusicSystem.startBurst()
+    // The night tune keeps the huge wave's burst at 700, not the day tunes' at 400.
+    MusicSystem.startBurst(400)
+    assert.equal(MusicSystem.capturePlaybackSnapshot().burstState, 'off')
+    MusicSystem.startBurst(700)
     MusicSystem.update(1, { zombiesOnScreen: 10 })
     assert.equal(MusicSystem.capturePlaybackSnapshot().drumsState, 'on-queued')
     assert.equal(volumes.get(2), 0)

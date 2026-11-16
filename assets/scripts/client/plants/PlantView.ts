@@ -306,11 +306,11 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /**
-     * A particle effect of the plant's, over everything on the board (Board::AddPvzpParticle at RENDER_LAYER_TOP), in
-     * board coordinates. `mirrored`: the effect turned round, for a plant facing left.
+     * A particle effect of the plant's in board coordinates, at `order` (`renderOrder`), over everything on the board
+     * (RENDER_LAYER_TOP) without one. `mirrored`: the effect turned round, for a plant facing left.
      */
-    protected particle(effect: string, x: number, y: number, tint?: Color, mirrored?: boolean): void {
-        this.context.stage?.particle(effect, x, y, renderOrder('top'), tint, mirrored)
+    protected particle(effect: string, x: number, y: number, order = renderOrder('top'), tint?: Color, mirrored?: boolean): void {
+        this.context.stage?.particle(effect, x, y, order, tint, mirrored)
     }
 
     /**
@@ -323,9 +323,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
         if (cue && this.shotTick !== undefined) {
             this.shotTick ??= world.gameplayTick
             if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
-                // A plant facing left puffs from its mirrored mouth, the cloud blowing left.
+                // A plant facing left puffs from its mirrored mouth, the cloud blowing left; Plant::UpdateShooting puts the
+                // fume cloud on its row's particle layer.
                 const team = plantTeam(plant)
-                this.particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, undefined, team === 'zombies')
+                this.particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, renderOrder('particle', plant.row), undefined, team === 'zombies')
                 this.shotTick = undefined
             }
         }

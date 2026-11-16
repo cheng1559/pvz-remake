@@ -9,7 +9,7 @@ import type { LevelDefinition } from '@/shared/content/gameplay'
 import { seedTeam } from '@/shared/content/teams'
 import type { WorldSnapshot } from '@/shared/protocol/index'
 import { cellOutOfPlay, type LevelPlantingRule, plantingRefusal, snapshotLawn } from '@/shared/content/planting'
-import { boardCell } from './LevelGeometry'
+import { boardCell, plantingCell } from './LevelGeometry'
 import type { Content } from './LevelStage'
 
 /** The pointer's place in the held preview, which sits this far left of and above it. */
@@ -95,7 +95,10 @@ export class LevelPlantingPreview {
             }
         }
         const presentation = plantId ? plantDefinition(this.content.presentation, plantId) : undefined
-        const { row, column } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
+        // Board::PlantingPixelToGridX and PlantingPixelToGridY, where LevelInputPresenter puts the seed down; a tool's cell is the pointer's.
+        const cell = snapshot.cursor.mode === 'seed'
+            ? plantingCell(board, pointer.x, pointer.y + this.pointerOffsetY(snapshot.cursor.seedId)) : boardCell(board, pointer.x, pointer.y)
+        const { row, column } = cell ?? { row: -1, column: -1 }
         if (plantId) {
             for (const preview of [cursorPlant, gridPlant]) {
                 preview.setPlant(plantId)
@@ -104,9 +107,9 @@ export class LevelPlantingPreview {
         }
         // Board::CanPlantAt, as the server decides it; a mobile tool lights any cell in play.
         const lawn = snapshotLawn(this.content.definitions, this.level, snapshot, this.rule?.())
-        const valid = seedDefinition && snapshot.cursor.mode === 'seed'
+        const valid = cell !== undefined && (seedDefinition && snapshot.cursor.mode === 'seed'
             ? !plantingRefusal(lawn, seedDefinition, snapshot.cursor.team ?? seedTeam(seedDefinition), row, column)
-            : !cellOutOfPlay(lawn, row, column)
+            : !cellOutOfPlay(lawn, row, column))
         if (plantId || zombieId !== undefined || graveSeed) {
             cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             gridPreview.active = valid && !mobile

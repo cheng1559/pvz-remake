@@ -2,7 +2,7 @@ import { TICKS_PER_SECOND, playZombie, zombiePace } from './animation'
 import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
 import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { damageIndex, type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { zombiePartDropped } from './parts'
@@ -94,12 +94,13 @@ export function damageZombie(
         destroyZombie(world, definitions, entity, remover)
         return
     }
-    if (zombie.hasArm && zombie.shieldHealth === 0 &&
-        zombie.health > 0 && zombie.health < zombie.maxHealth * 2 / 3) {
+    // Zombie::UpdateDamageStates: the arm goes below two thirds, the head below a third.
+    const index = damageIndex(zombie.health, zombie.maxHealth)
+    if (zombie.hasArm && zombie.shieldHealth === 0 && zombie.health > 0 && index > 0) {
         zombie.hasArm = false
         zombiePartDropped(world, entity, 'arm')
     }
-    if (zombie.hasHead && zombie.health < zombie.maxHealth / 3) {
+    if (zombie.hasHead && index === 2) {
         dropZombieFlag(world, entity)
         zombie.hasHead = false
         zombiePartDropped(world, entity, 'head')

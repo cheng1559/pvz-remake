@@ -35,7 +35,6 @@ export interface LevelIntroPreviewSnapshot {
     typeId: string
     x: number
     y: number
-    z: number
     hasTongue: boolean
     /** What its view keeps (ZombieView.playbackSnapshot), read back by the view (restorePlayback). */
     view: JsonObject
@@ -176,14 +175,13 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
     const source = exact(value, ['ticks', 'previews'], 'Level intro', ['hasOpeningDialog'])
     const previews = array(source.previews, 'Level intro.previews').map((value, index) => {
         const name = `Level intro.previews[${index}]`
-        const preview = exact(value, ['slot', 'typeId', 'x', 'y', 'z', 'hasTongue', 'view'], name)
+        const preview = exact(value, ['slot', 'typeId', 'x', 'y', 'hasTongue', 'view'], name)
         if (!isQualifiedId(preview.typeId)) throw new TypeError(`${name}.typeId is invalid`)
         return {
             slot: nonNegativeInteger(preview.slot, `${name}.slot`),
             typeId: preview.typeId,
             x: coordinate(preview.x, `${name}.x`),
             y: coordinate(preview.y, `${name}.y`),
-            z: coordinate(preview.z, `${name}.z`),
             hasTongue: boolean(preview.hasTongue, `${name}.hasTongue`),
             view: record(preview.view, `${name}.view`) as JsonObject,
         }

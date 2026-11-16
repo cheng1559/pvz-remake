@@ -106,7 +106,7 @@ export class LevelAudioPresenter {
             case 'toolSelected': void SoundSystem.playFoley(SoundEffect.Shovel); break
             case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); break
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
-            case 'musicBurst': MusicSystem.startBurst(); break
+            case 'musicBurst': MusicSystem.startBurst(Number(event.data.countdown)); break
             case 'hugeWaveSound': void SoundSystem.play(SoundEffect.HugeWave); break
             // ReportAchievement::GiveAchievement plays it with the message, even when the message waits its turn.
             case 'achievementEarned': if (event.data.announce === true) void SoundSystem.play(SoundEffect.Achievement); break

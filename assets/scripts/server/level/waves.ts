@@ -74,7 +74,10 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             }
             if (nextIsFlag && waves.hugeWaveAnnounced) {
                 if (tick === waves.nextWaveAtTick - 726) emitServerEvent(world.resources.get(EventQueueResource), 'hugeWaveSound', {})
-                if (tick === waves.nextWaveAtTick - 401) emitServerEvent(world.resources.get(EventQueueResource), 'musicBurst', {})
+                // Board::UpdateZombieSpawning bursts the music with 700 of the countdown left for the night tune and 400 for the
+                // others; the client keeps the one for its tune.
+                const countdown = waves.nextWaveAtTick - 1 - tick
+                if (countdown === 700 || countdown === 400) emitServerEvent(world.resources.get(EventQueueResource), 'musicBurst', { countdown })
             }
             // Board::UpdateZombieSpawning: 5 ticks before a wave; a flag wave's as its huge wave countdown ends.
             if (tick >= waves.nextWaveAtTick - (nextIsFlag ? 1 : 5)) nextWaveComing(world, nextIsFlag)

@@ -18,6 +18,16 @@ export function boardCell(board: BoardDefinition, x: number, y: number) {
     return { row, column, inBounds: column >= 0 && column < board.columns && row >= 0 && row < board.rows }
 }
 
+/**
+ * Board::PixelToGridX and PixelToGridY, where a seed goes down: no cell left of or above the lawn, the last column or row
+ * past its right or bottom edge.
+ */
+export function plantingCell(board: BoardDefinition, x: number, y: number): { row: number, column: number } | undefined {
+    if (x < board.origin.x || y < board.origin.y) return undefined
+    const { row, column } = boardCell(board, x, y)
+    return { row: Math.min(board.rows - 1, row), column: Math.min(board.columns - 1, column) }
+}
+
 /** LawnApp::GetStageString: the area-level number, shown after [LEVEL]. */
 export function adventureStage(index: number): string {
     return `${Math.floor((index - 1) / 10) + 1}-${(index - 1) % 10 + 1}`

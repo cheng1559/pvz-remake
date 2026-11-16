@@ -5,7 +5,7 @@ import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
-import { boardCell } from './LevelGeometry'
+import { boardCell, plantingCell } from './LevelGeometry'
 import { itemAt } from '@/shared/content/gameplay'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
@@ -273,12 +273,9 @@ export class LevelInputPresenter {
         const cursor = this.game.render().cursor
         // Board::PlantingPixelToGridY picks some seeds' cells from below the pointer.
         const y = pointerY + (cursor.mode === 'seed' ? this.view.pointerOffsetY(cursor.seedId) : 0)
-        const { row, column } = boardCell(board, x, y)
-        if (x < board.origin.x || y < board.origin.y) this.cancelPlanting()
-        else this.game.command({
-            type: 'placePlant', row: Math.max(0, Math.min(board.rows - 1, row)),
-            column: Math.max(0, Math.min(board.columns - 1, column)),
-        })
+        const cell = plantingCell(board, x, y)
+        if (cell) this.game.command({ type: 'placePlant', ...cell })
+        else this.cancelPlanting()
     }
 
     /**

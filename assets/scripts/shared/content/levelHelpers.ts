@@ -36,6 +36,14 @@ export function itemAt<Item extends { typeId: string, state: string, x: number, 
     return undefined
 }
 
+/**
+ * Zombie::GetBodyDamageIndex, GetHelmDamageIndex and GetShieldDamageIndex, Plant::AnimateNuts: 2 below a third of the
+ * maximum, 1 below two thirds, otherwise 0, each third rounded down as the original's integer division does.
+ */
+export function damageIndex(health: number, maxHealth: number): number {
+    return health < Math.trunc(maxHealth / 3) ? 2 : health < Math.trunc(maxHealth * 2 / 3) ? 1 : 0
+}
+
 /** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */
 export function mowerY(board: BoardDefinition, row: number): number {
     return board.origin.y + row * board.cell.height + 23

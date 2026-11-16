@@ -13,7 +13,7 @@ import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot
 import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/LevelPresentationSnapshot'
 import { exact } from '@/shared/validate'
 import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
-import { type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
+import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
 import { ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
@@ -211,11 +211,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /**
-     * A particle effect of the zombie's, over everything on the board (Board::AddPvzpParticle at RENDER_LAYER_TOP), in
-     * board coordinates. `mirrored`: the effect turned round, for a zombie facing right.
+     * A particle effect of the zombie's in board coordinates, at `order` (`renderOrder`), over everything on the board
+     * (RENDER_LAYER_TOP) without one. `mirrored`: the effect turned round, for a zombie facing right.
      */
-    protected particle(effect: string, x: number, y: number, tint?: Color, mirrored?: boolean): void {
-        this.context.stage?.particle(effect, x, y, renderOrder('top'), tint, mirrored)
+    protected particle(effect: string, x: number, y: number, order = renderOrder('top'), tint?: Color, mirrored?: boolean): void {
+        this.context.stage?.particle(effect, x, y, order, tint, mirrored)
     }
 
     /**
@@ -704,10 +704,9 @@ const CHARRED_MIRRORED_SHIFT = 60
 /** What a zombie's body plays. */
 const body = (zombie: ShownZombie) => zombie.animations[ZOMBIE_BODY_LAYER]
 
-/** -1 without the armor or once it is gone, otherwise its damage index (0 whole, 1 below 2/3, 2 below 1/3). */
+/** -1 without the armor or once it is gone, otherwise its damage index. */
 function armorStage(health: number, armor: { readonly health: number } | undefined): number {
-    if (!armor || health <= 0) return -1
-    return health < armor.health / 3 ? 2 : health < armor.health * 2 / 3 ? 1 : 0
+    return !armor || health <= 0 ? -1 : damageIndex(health, armor.health)
 }
 
 /** The sprites a zombie swaps in as it takes damage: its dented helm and shield, its bare arm, its enraged head. */

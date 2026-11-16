@@ -13,6 +13,8 @@ import type { LevelEntityRenderer } from './LevelEntityRenderer'
 const PAN_START = 150
 const PAN_END = 350
 const GRAPHIC_START = 600
+const SHAKE_START = 700
+const SHAKE_END = 800
 const END = 1100
 const TITLE_KEYS = [
     [388.9, 293.4, 0.017], [365.2, 272.1, 0.106], [341.6, 250.8, 0.196],
@@ -28,6 +30,7 @@ export class LevelGameOverPresenter {
     private winnerLayer?: Node
     private title?: Node
     private black?: Graphics
+    private shake = { x: 0, y: 0 }
 
     get active(): boolean { return this.ticks >= 0 }
     get winnerId(): number | undefined { return this.winner?.entityId }
@@ -57,8 +60,9 @@ export class LevelGameOverPresenter {
             return
         }
         this.ticks = 0
+        // Board::ZombiesWon: a loss without a zombie (the debug command's) has nobody walking in.
         const winnerId = events.find(event => event.type === 'levelLost')?.data.zombieId
-        this.winner = snapshot.zombies.find(zombie => winnerId === undefined ? zombie.x <= -100 : zombie.entityId === winnerId)
+        this.winner = winnerId === undefined ? undefined : snapshot.zombies.find(zombie => zombie.entityId === winnerId)
         this.bank.active = false
         this.audio.stop()
         void SoundSystem.play(SoundEffect.LoseMusic)
@@ -87,6 +91,9 @@ export class LevelGameOverPresenter {
         this.ticks = Math.min(END, this.ticks + dt * 100)
         for (const tick of [510, 560]) if (previous < tick && this.ticks >= tick) void SoundSystem.playFoley(SoundEffect.Chomp)
         if (previous < GRAPHIC_START && this.ticks >= GRAPHIC_START) void SoundSystem.playFoley(SoundEffect.Scream)
+        // CutScene::UpdateZombiesWon shakes the title by up to 1 each way (SetShakeOverride), anew every tick.
+        if (Math.floor(previous) !== Math.floor(this.ticks)) this.shake = this.ticks >= SHAKE_START && this.ticks < SHAKE_END
+            ? { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 } : { x: 0, y: 0 }
         this.draw()
         return this.ticks >= END
     }
@@ -115,12 +122,8 @@ export class LevelGameOverPresenter {
             this.black!.fillRect(-width / 2, -height / 2, width, height)
         }
         this.title!.active = this.ticks >= GRAPHIC_START && this.ticks < END
-        let x = lerp(TITLE_KEYS[left][0], TITLE_KEYS[right][0], t)
-        let y = lerp(TITLE_KEYS[left][1], TITLE_KEYS[right][1], t)
-        if (this.ticks >= 700 && this.ticks < 800) {
-            x += Math.sin((this.ticks - 700) * 0.75) * 3
-            y += Math.cos((this.ticks - 700) * 0.92) * 2
-        }
+        const x = lerp(TITLE_KEYS[left][0], TITLE_KEYS[right][0], t) + this.shake.x
+        const y = lerp(TITLE_KEYS[left][1], TITLE_KEYS[right][1], t) + this.shake.y
         const scale = lerp(TITLE_KEYS[left][2], TITLE_KEYS[right][2], t)
         this.title!.setPosition(x - 400, 300 - y)
         this.title!.setScale(scale, scale, 1)

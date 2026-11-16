@@ -80,15 +80,17 @@ test('/nextflag announces the flag wave 750 ticks ahead; repeating it ends the c
     Object.assign(save.wave, { zombieIds: [], accelerateAtTick: save.gameplayTick })
     server.start({ ...start, save: save as unknown as JsonValue })
     server.drainEvents()
-    const timeline = new Map<string, number>(), comings: unknown[] = []
+    const timeline = new Map<string, number>(), comings: unknown[] = [], bursts: unknown[] = []
     for (let tick = 1; !server.snapshot().zombies.length; tick++) {
         server.tick()
         for (const event of server.drainEvents()) {
             if (!timeline.has(event.type)) timeline.set(event.type, tick)
             if (event.type === 'nextWaveComing') comings.push(event.data)
+            if (event.type === 'musicBurst') bursts.push([tick, event.data])
         }
     }
-    assert.deepEqual(['hugeWaveSound', 'musicBurst', 'finalWave', 'nextWaveComing', 'zombieSpawned'].map(type => timeline.get(type)), [25, 350, 750, 750, 751])
+    assert.deepEqual(['hugeWaveSound', 'finalWave', 'nextWaveComing', 'zombieSpawned'].map(type => timeline.get(type)), [25, 750, 750, 751])
+    assert.deepEqual(bursts, [[50, { countdown: 700 }], [350, { countdown: 400 }]], 'the night tune bursts at 700, the others at 400')
     assert.deepEqual(comings, [{ siren: true }], 'Board::NextWaveComing sounds the siren once, as the huge wave countdown ends')
 
     const skipped = game()

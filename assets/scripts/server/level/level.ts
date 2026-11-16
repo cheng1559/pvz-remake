@@ -18,8 +18,8 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
         step: 'complete',
         displayedAdvice: [],
     })
-    // Board::InitLevel: the first sky sun, unless the tutorial holds it back for its first plant.
-    world.resources.set(SkySunResource, { fallen: 0, ...(blocked || !level.skySun ? {} : { atTick: world.resources.get(RandomResource).integer(425, 699) }) })
+    // Board::InitLevel: the first sky sun (RandRangeInt(425, 700), the upper end included), unless the tutorial holds it back for its first plant.
+    world.resources.set(SkySunResource, { fallen: 0, ...(blocked || !level.skySun ? {} : { atTick: world.resources.get(RandomResource).integer(425, 700) }) })
     if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,

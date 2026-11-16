@@ -36,7 +36,11 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     const position = source === undefined ? undefined : world.get(source, PositionComponent)
     const zombie = source === undefined ? undefined : world.get(source, ZombieComponent)
     const body = zombie ? definitions.zombies[zombie.typeId].body : undefined
-    spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : 400, position && body ? position.y + body.y + body.height / 2 : 280)
+    // With no zombie to drop it (the original then drops none), it comes down as Challenge::SpawnLevelAward puts one in
+    // the middle of the lawn: 40 into cell (4, 2), as the slot machine does.
+    const { origin, cell } = level.board
+    spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : origin.x + 4 * cell.width + 40,
+        position && body ? position.y + body.y + body.height / 2 : origin.y + 2 * cell.height + 40)
     // Board::RemoveAllZombies: every zombie that is not dead or dying vanishes, the one that dropped the award included.
     for (const zombieEntity of zombies) {
         if (!isDeadOrDying(world.get(zombieEntity, ZombieComponent)!)) remover.destroyEntity(zombieEntity)
