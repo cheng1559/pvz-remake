@@ -51,7 +51,8 @@
       "blink": {"reanimId": "pvz:snowpea_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
-    "scale": 1
+    "scale": 1,
+    "muzzle": {"effect": "pvz:snowpeapuff", "x": 8, "y": 13}
   },
   "pvz:sunflower": {
     "visual": {"nameKey": "SUNFLOWER"},
@@ -145,7 +146,8 @@
     },
     "shadow": {"x": -3, "y": -47, "scale": 0.5},
     "scale": 1,
-    "drawHeightOffset": 5
+    "drawHeightOffset": 5,
+    "muzzle": {"effect": "pvz:puffshroommuzzle", "x": 18, "y": 13}
   },
   "pvz:sunshroom": {
     "visual": {"nameKey": "SUN_SHROOM"},
@@ -200,5 +202,22 @@
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
+  },
+  "pvz:scaredyshroom": {
+    "visual": {"nameKey": "SCAREDY_SHROOM"},
+    "clips": {
+      "body": {"reanimId": "pvz:scaredyshroom", "x": 0, "y": 14},
+      "shoot": {"reanimId": "pvz:scaredyshroom_shoot", "x": 0, "y": 14},
+      "scared": {"reanimId": "pvz:scaredyshroom_scared", "x": 0, "y": 14},
+      "scaredIdle": {"reanimId": "pvz:scaredyshroom_scaredidle", "x": 0, "y": 14},
+      "grow": {"reanimId": "pvz:scaredyshroom_grow", "x": 0, "y": 14},
+      "sleep": {"reanimId": "pvz:scaredyshroom_sleep", "x": 0, "y": 14},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -20},
+      "blink": {"reanimId": "pvz:scaredyshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+    },
+    "shadow": {"x": -9, "y": -41},
+    "scale": 1,
+    "drawHeightOffset": -14,
+    "muzzle": {"effect": "pvz:puffshroommuzzle", "x": 27, "y": 13}
   }
 }

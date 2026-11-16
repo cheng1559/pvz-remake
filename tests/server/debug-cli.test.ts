@@ -38,8 +38,8 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     }
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
-    assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster', 'hypnoshroom'])
-    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor'])
+    assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster', 'hypnoshroom', 'scaredyshroom'])
+    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor', 'football'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])

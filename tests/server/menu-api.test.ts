@@ -297,7 +297,8 @@ test('winning advances the current profile once and exposes the next installed l
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
     }
     for (const [index, kind, seed, next] of [[1, 'seed', 'pvz:sunshroom', 'pvz:adventure-2-2'], [2, 'seed', 'pvz:fumeshroom', 'pvz:adventure-2-3'],
-        [3, 'seed', 'pvz:gravebuster', 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 'pvz:hypnoshroom', null]] as const) {
+        [3, 'seed', 'pvz:gravebuster', 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 'pvz:hypnoshroom', 'pvz:adventure-2-6'],
+        [6, 'seed', 'pvz:scaredyshroom', null]] as const) {
         level = levels.levels[`pvz:adventure-2-${index}`]
         const award = await api.completeLevel()
         assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])
@@ -307,7 +308,7 @@ test('winning advances the current profile once and exposes the next installed l
     assert.equal((await api.getCurrentUser())!.unlocks.almanac, true)
     // Each won level adds its award seed to the profile once, after the starting peashooter.
     const owned = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea', 'pvz:chomper',
-        'pvz:repeater', 'pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom']
+        'pvz:repeater', 'pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom']
     assert.deepEqual((await api.getPurse()).ownedSeeds, owned)
     await api.completeLevel()
     assert.deepEqual((await api.getPurse()).ownedSeeds, owned, 'winning a level again adds nothing')

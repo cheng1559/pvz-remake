@@ -1,4 +1,4 @@
-import { playZombie, startWalk, stepZombie, walkZombie, zombieBody, zombiePace } from './animation'
+import { playZombie, stepZombie, walkAgain, walkZombie, zombieBody, zombiePace } from './animation'
 import { passedMark } from '@/shared/content/animation'
 import { squashed } from '@/shared/content/zombieAnimation'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -12,6 +12,7 @@ import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../pla
 import { getDebugRules } from '../debug/debugRules'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
+import { mindControl, mindControls } from './mindControl'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /**
@@ -107,9 +108,7 @@ export class ZombieSystem implements GameSystem {
                 stepZombie(zombie, animation, random)
                 zombie.enrageTicks = Math.max(0, zombie.enrageTicks - zombiePace(zombie))
                 if (zombie.enrageTicks === 0) {
-                    const speed = definition.enrage!.speedPerTick
-                    zombie.speedPerTick = speed.min + random.nextFloat() * (speed.max - speed.min)
-                    startWalk(zombie, animation, zombie.walkClip, random)
+                    walkAgain(zombie, definition, random)
                     // Zombie::UpdateZombieNewspaper roars only with its head on and at most 10 zombies on screen.
                     emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', {
                         entityId: entity, typeId: zombie.typeId, roar: zombie.hasHead && countZombiesOnScreen(world) <= 10,
@@ -148,8 +147,9 @@ export class ZombieSystem implements GameSystem {
             const target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack)?.entity : undefined
             if (target === undefined && prey === undefined) {
                 if (zombie.state !== 'walking') {
+                    // Zombie::StopEating: StartWalkAnim picks its speed and walk again, so a mind-controlled one walks at a zombie's own.
                     zombie.state = 'walking'
-                    startWalk(zombie, animation, zombie.hasPole ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
+                    walkAgain(zombie, definition, random)
                 }
                 zombie.biteTicks = 0
                 walkZombie(zombie, position, animation, random, teamDirection(team))
@@ -179,8 +179,13 @@ export class ZombieSystem implements GameSystem {
                             if (victim.health <= 0) emitServerEvent(events, 'zombieAteZombie', { zombieId: entity, targetId: prey })
                         }
                     } else if (target !== undefined) {
-                        if (chewed) emitServerEvent(events, 'zombieChewedPlant', { zombieId: entity, plantId: target })
                         const plant = world.get(target, PlantComponent)!
+                        // Zombie::AnimateChewSound: an awake hypno-shroom turns the zombie as it chews, in place of the chew.
+                        if (chewed && mindControls(world, definitions, plant)) {
+                            mindControl(world, definitions, entity, target, commands)
+                            return
+                        }
+                        if (chewed) emitServerEvent(events, 'zombieChewedPlant', { zombieId: entity, plantId: target })
                         if (bites && !isPlantInedible(plant) && !getDebugRules(world).plantInvincible) {
                             plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
                             plant.health = Math.max(0, plant.health - definition.bite.damage)

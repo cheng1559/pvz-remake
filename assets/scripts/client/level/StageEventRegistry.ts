@@ -26,6 +26,20 @@ const planted: StageEvent = (stage, event, world) => {
 }
 
 /**
+ * Zombie::AnimateChewSound for the hypno-shroom: FOLEY_FLOOP as the plant goes, and StartMindControlled's
+ * SOUND_MINDCONTROLLED with PARTICLE_MIND_CONTROL one above what it turned: at (60, 40) from a zombie, and from a plant
+ * that swallowed it (not in the original) at its middle, (40, 40).
+ */
+const mindControlled: StageEvent = (stage, event, world) => {
+    void SoundSystem.playFoley(SoundEffect.Floop)
+    void SoundSystem.play(SoundEffect.MindControlled)
+    const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
+    const plant = zombie ? undefined : world.plants.find(candidate => candidate.entityId === event.data.entityId)
+    if (zombie) stage.particle('pvz:mindcontrol', zombie.x + 60, zombie.y + 40, stage.zombieOrder(zombie.row) + 1)
+    else if (plant) stage.particle('pvz:mindcontrol', plant.x + 40, plant.y + 40, stage.plantOrder(plant) + 1)
+}
+
+/**
  * Who hears of an event of the server on the board: the views whose entity it is about (their static handlers), and the
  * board's own effects. A flash (EntityFlashes) is heard of `before` the views draw the frame, which shows it; the rest
  * once the frame is drawn, before the entities gone from it go, so what falls off a zombie leaves from where it is now,
@@ -48,6 +62,7 @@ export class StageEventRegistry {
             bowlingImpact: PlantView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
             projectileFired: ProjectileView.fired, projectileImpact: ProjectileView.impact, mowerActivated: MowerView.activated,
             zombieChewedPlant: ZombieView.chewed, zombieChewedZombie: ZombieView.chewed, plantEaten: ZombieView.ate, zombieAteZombie: ZombieView.ate,
+            mindControlled,
             zombieRoseFromGrave: ZombieView.rose, zombieChilled: ZombieView.chilled, zombieVaultSound: ZombieView.vaulted,
             zombieEnraged: ZombieView.enraged, zombieGroaned: ZombieView.groaned, zombieDying: ZombieView.fell,
             zombieMowered: ZombieView.mowered, zombieCharred: ZombieView.charred, zombiePuffed: ZombieView.puffed,
@@ -56,6 +71,7 @@ export class StageEventRegistry {
         for (const [type, handler] of Object.entries(before)) this.register(type, handler, 'before')
         for (const [type, handler] of Object.entries(after)) this.register(type, handler)
         this.register('plantPlaced', PlantView.planted)
+        this.register('projectileFired', PlantView.shot)
     }
 
     register(type: string, handler: StageEvent, time: StageEventTime = 'after'): void {

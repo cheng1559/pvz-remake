@@ -1,7 +1,7 @@
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type Position, RandomResource, type Zombie } from '../state/components'
-import { TICKS_PER_SECOND, playZombie, startWalk, stepZombie, zombieBody } from './animation'
+import { TICKS_PER_SECOND, playZombie, stepZombie, walkAgain, zombieBody } from './animation'
 import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { World } from '@/ecs/index'
 import { PLANT_WIDTH, teamDirection, ZOMBIE_WIDTH, zombieTeam } from '@/shared/content/teams'
@@ -62,6 +62,5 @@ export function startPostVaultWalk(world: World, definitions: GameplayDefinition
     const random = world.resources.get(RandomResource)
     zombie.hasPole = false
     zombie.state = 'walking'
-    zombie.speedPerTick = definition.speedPerTick.min + random.nextFloat() * (definition.speedPerTick.max - definition.speedPerTick.min)
-    startWalk(zombie, definition.animation, zombie.walkClip, random)
+    walkAgain(zombie, definition, random)
 }

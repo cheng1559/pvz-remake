@@ -344,6 +344,7 @@
   },
   "pvz:adventure-2-5": {
     "adventureIndex": 15,
+    "nextLevel": "pvz:adventure-2-6",
     "board": "pvz:night",
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],
@@ -357,5 +358,19 @@
     "rules": {"kind": "pvz:whack-a-zombie", "count": 8, "zombies": {"plain": "pvz:normal", "cone": "pvz:conehead", "pail": "pvz:buckethead"}, "sun": "pvz:sun"},
     "tutorial": "pvz:adventure-2-5",
     "award": {"kind": "seed", "id": "pvz:hypnoshroom"}
+  },
+  "pvz:adventure-2-6": {
+    "adventureIndex": 16,
+    "board": "pvz:night",
+    "lawnMower": "pvz:lawnmower",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 50,
+    "firstWaveTicks": 1800,
+    "graves": [{"column": 5, "count": 1}, {"column": 6, "count": 1}, {"column": 7, "count": 2}, {"column": 8, "count": 3}],
+    "graveZombies": ["pvz:normal", "pvz:conehead"],
+    "tutorial": "pvz:adventure-2-6",
+    "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:football"],
+    "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:football", "waves": [6, 10]}]},
+    "award": {"kind": "seed", "id": "pvz:scaredyshroom"}
   }
 }

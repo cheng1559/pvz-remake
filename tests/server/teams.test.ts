@@ -4,6 +4,7 @@ import test from 'node:test'
 import type { World } from '@/ecs'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { PlantComponent, ZombieComponent } from '@/server/state/components'
+import { WaveResource } from '@/server/state/levelState'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
@@ -476,4 +477,97 @@ test("an enemy sunflower takes 25 sun from the player each time it would make on
     assert.deepEqual(drains(cadenceTicks + 1), [0])
     assert.equal(server.snapshot().sun, 0, 'the bank does not go below 0')
     assert.deepEqual(produced, [], 'it drops no sun (the sky still does)')
+})
+
+/** A night lawn with no waves due yet: 2-6 out of a first adventure, past its intro. */
+function beginAtNight() {
+    const server = new IntegratedGameServer(definitions, levels)
+    const seeds = adventureSeeds(levels, 'pvz:adventure-2-6')
+    server.start({ ...options, levelId: 'pvz:adventure-2-6', ownedSeeds: seeds })
+    for (const seedId of [...new Set(seeds)].slice(0, 6)) assert.equal(runCommand(server, { type: 'chooseSeed', seedId }), undefined)
+    assert.equal(runCommand(server, { type: 'confirmSeeds' }), undefined)
+    assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
+    return server
+}
+
+test('a zombie that chews an awake hypno-shroom comes over to the plants\u2019 side at once, tinted, and the shroom is gone', () => {
+    const server = beginAtNight()
+    debug(server, '/plant hypnoshroom 3 2')
+    debug(server, '/zombie normal 3 3')
+    const events = run(server, 1500)
+    const changed = events.filter(event => event.type === 'mindControlled')
+    assert.equal(changed.length, 1)
+    const [zombie] = zombies(server)
+    assert.deepEqual(changed[0].data, { entityId: zombie.entityId, plantId: changed[0].data.plantId, typeId: 'pvz:normal', team: 'plants' })
+    assert.ok(!events.some(event => event.type === 'zombieChewedPlant' || event.type === 'plantEaten'),
+        'Zombie::AnimateChewSound turns it at its first chew, in place of the chew')
+    assert.ok(!server.snapshot().plants.some(plant => plant.typeId === 'pvz:hypnoshroom'))
+    assert.equal(zombie.team, 'plants')
+    assert.equal(zombie.mindControlled, true)
+    assert.equal(zombie.state, 'walking')
+    // Zombie::StopEating: StartWalkAnim picks its speed again, over StartMindControlled's 0.17.
+    const { min, max } = definitions.zombies['pvz:normal'].speedPerTick, speed = world(server).get(zombie.entityId, ZombieComponent)!.speedPerTick
+    assert.ok(speed >= min && speed <= max, `speed ${speed}`)
+    const x = zombie.x
+    run(server, 100)
+    assert.ok(zombies(server)[0].x > x, 'it walks right')
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
+    assert.equal(restored.snapshot().zombies[0].mindControlled, true, 'a save keeps it mind-controlled')
+    debug(server, '/zombie normal 3 4 plants')
+    assert.equal(zombies(server).find(other => other.entityId !== zombie.entityId)!.mindControlled, undefined,
+        'one put down on the plants\u2019 side is not mind-controlled')
+})
+
+test('a hypno-shroom asleep by day is eaten as any plant', () => {
+    const server = begin()
+    debug(server, '/plant hypnoshroom 3 2')
+    debug(server, '/zombie normal 3 3')
+    const events = run(server, 3000)
+    assert.ok(events.some(event => event.type === 'plantEaten'))
+    assert.ok(!events.some(event => event.type === 'mindControlled'))
+    assert.equal(zombies(server)[0].team, undefined)
+})
+
+test('the last zombie against the player, mind-controlled once the waves are out, drops the level award', () => {
+    const server = beginAtNight()
+    const waves = world(server).resources.get(WaveResource)
+    waves.index = waves.plan.length
+    debug(server, '/plant hypnoshroom 3 2')
+    debug(server, '/zombie normal 3 3')
+    const events = run(server, 1500)
+    const order = events.map(event => event.type).filter(type => type === 'mindControlled' || type === 'levelAwardDropped')
+    assert.deepEqual(order, ['mindControlled', 'levelAwardDropped'], 'Zombie::TrySpawnLevelAward')
+})
+
+test('a chomper that bites an awake hostile hypno-shroom comes over to its side, tinted, without chewing it, and stays there through a save', () => {
+    const server = beginAtNight()
+    debug(server, '/plant chomper 3 2')
+    debug(server, '/plant hypnoshroom 3 3 zombies')
+    const chomper = server.snapshot().plants.find(plant => plant.typeId === 'pvz:chomper')!
+    const events = run(server, 300)
+    assert.deepEqual(events.filter(event => event.type === 'chomperBit').map(event => event.data.ate), [false], 'it does not swallow it')
+    const changed = events.filter(event => event.type === 'mindControlled')
+    assert.deepEqual(changed.map(event => event.data), [{ entityId: chomper.entityId, plantId: changed[0]?.data.plantId, typeId: 'pvz:chomper', team: 'zombies' }])
+    const turned = server.snapshot().plants.find(plant => plant.entityId === chomper.entityId)!
+    assert.deepEqual([turned.team, turned.mindControlled, turned.ability?.state], ['zombies', true, 'ready'], 'its bite went as one that missed, and it is ready again')
+    assert.ok(!server.snapshot().plants.some(plant => plant.typeId === 'pvz:hypnoshroom'))
+    // Now on the zombies' side, a zombie of that side walks past it without a bite.
+    debug(server, '/zombie normal 3 3')
+    const after = run(server, 800)
+    assert.ok(!after.some(event => event.type === 'zombieChewedPlant' && event.data.plantId === chomper.entityId), 'its own side does not eat it')
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.restore(JSON.parse(JSON.stringify(server.save())) as JsonValue)
+    assert.equal(restored.snapshot().plants.find(plant => plant.entityId === chomper.entityId)?.mindControlled, true)
+})
+
+test('a chomper that swallows a hostile hypno-shroom asleep by day only eats it', () => {
+    const server = begin()
+    debug(server, '/plant chomper 3 2')
+    debug(server, '/plant hypnoshroom 3 3 zombies')
+    const events = run(server, 300)
+    assert.deepEqual(events.filter(event => event.type === 'chomperBit').map(event => event.data.ate), [true])
+    assert.ok(!events.some(event => event.type === 'mindControlled'))
+    const chomper = server.snapshot().plants.find(plant => plant.typeId === 'pvz:chomper')!
+    assert.deepEqual([chomper.team, chomper.mindControlled], [undefined, undefined])
 })

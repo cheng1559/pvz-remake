@@ -24,6 +24,8 @@ export interface Plant extends EntityBehaviorState {
     ability?: PlantAbility
     /** Its side when not the plants' (see teams.ts). */
     team?: Team
+    /** Brought over to the other side by swallowing a plant that mind-controls (see zombies/mindControl.ts), which tints it. */
+    mindControlled?: true
     /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); 0 when not chilled. */
     chilledTicks: number
     /** What each layer of its animation plays now (PlantDefinition.animation); see plants/animation.ts. */
@@ -79,6 +81,11 @@ export interface Zombie extends EntityBehaviorState {
     riseTicks: number
     /** Its side when not the zombies': `plants` when mind-controlled or put down on that side (see teams.ts). */
     team?: Team
+    /**
+     * Zombie::mMindControlled: brought over to a plant's side by a plant that mind-controls (the hypno-shroom), which
+     * tints it; one put down on the plants' side is not.
+     */
+    mindControlled?: true
 }
 
 export interface Projectile {

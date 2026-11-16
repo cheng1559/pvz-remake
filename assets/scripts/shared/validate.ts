@@ -71,6 +71,13 @@ export function pair(value: unknown, name: string): [number, number] {
     return [finite(source[0], `${name}[0]`), finite(source[1], `${name}[1]`)]
 }
 
+/** A part of a whole, from 0 to 1. */
+export function fraction(value: unknown, name: string): number {
+    const result = finite(value, name)
+    if (result < 0 || result > 1) throw new Error(`${name} must be between 0 and 1`)
+    return result
+}
+
 /** `[min, max]`: a pair in order, neither below `minimum`. */
 export function range(value: unknown, name: string, minimum = -Infinity): [number, number] {
     const [min, max] = pair(value, name)

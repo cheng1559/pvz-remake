@@ -1,4 +1,5 @@
 import { _decorator, Color, Component, director, Director, gfx, isValid, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
+import type { Tint } from '@/client/view/tints'
 import { loadedReanim, loadReanim } from './ReanimAssets'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
@@ -44,8 +45,6 @@ interface TrackRenderOverride {
 }
 
 const DEG_TO_RAD = Math.PI / 180
-/** Zombie::DrawReanim's chilled color, (75, 75, 255). */
-const CHILL_COLOR = 75
 
 /** A frame's texture with its untrimmed, top-left anchored rectangle and UVs, read once. */
 interface FrameGeometry {
@@ -153,8 +152,8 @@ export class ReanimPlayer extends Component {
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
     private colorOverride = Color.WHITE.clone()
-    /** Chilled: drawn blue over the color override and hit flash (see setChilled). */
-    private chilled = false
+    /** Drawn in this color over the color override and hit flash (see setTint): chilled, or mind-controlled. */
+    private tint: Tint | undefined
     private poseDirty = false
     private batches: KernelBatch[] = []
     private supersampled = false
@@ -444,30 +443,31 @@ export class ReanimPlayer extends Component {
     }
 
     /**
-     * Zombie::DrawReanim's chill, the one way a chilled zombie or plant (one chilled by a hostile snow pea) is drawn:
-     * the color is multiplied by (75, 75, 255) and (75, 75, 255) is added over the hit flash. It stays apart from the
-     * color override and hit flash so that the views keep setting those, and, like them, applies to players attached to
-     * this one's tracks. Its slower animation is the server's, which sends the rate it plays at.
+     * Zombie::DrawReanim's tint, the one way a chilled or mind-controlled zombie or plant (client/view/tints.ts) is
+     * drawn: the color is multiplied by the tint and the tint is added over the hit flash. It stays apart from the color
+     * override and hit flash so that the views keep setting those, and, like them, applies to players attached to this
+     * one's tracks. A chilled one's slower animation is the server's, which sends the rate it plays at.
      */
-    setChilled(chilled: boolean): void {
-        if (this.chilled !== chilled) {
-            this.chilled = chilled
+    setTint(tint?: Tint): void {
+        if (this.tint?.r !== tint?.r || this.tint?.g !== tint?.g || this.tint?.b !== tint?.b) {
+            this.tint = tint && { r: tint.r, g: tint.g, b: tint.b }
             this.applyPose()
         }
-        for (const player of this.attachedPlayers()) player.setChilled(chilled)
+        for (const player of this.attachedPlayers()) player.setTint(tint)
     }
 
     private get drawColor(): Color {
-        const color = this.colorOverride
-        return this.chilled ? new Color(color.r * CHILL_COLOR / 255, color.g * CHILL_COLOR / 255, color.b, color.a) : color
+        const color = this.colorOverride, tint = this.tint
+        return tint ? new Color(color.r * tint.r / 255, color.g * tint.g / 255, color.b * tint.b / 255, color.a) : color
     }
 
-    private get drawExtraAdditive(): boolean { return this.extraAdditive || this.chilled }
+    private get drawExtraAdditive(): boolean { return this.extraAdditive || !!this.tint }
 
     private get drawExtraAdditiveColor(): Color {
-        if (!this.chilled) return this.extraAdditiveColor
+        const tint = this.tint
+        if (!tint) return this.extraAdditiveColor
         const extra = this.extraAdditive ? this.extraAdditiveColor : Color.BLACK
-        return new Color(Math.min(255, extra.r + CHILL_COLOR), Math.min(255, extra.g + CHILL_COLOR), 255, 255)
+        return new Color(Math.min(255, extra.r + tint.r), Math.min(255, extra.g + tint.g), Math.min(255, extra.b + tint.b), 255)
     }
 
     /**

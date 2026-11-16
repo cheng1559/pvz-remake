@@ -18,7 +18,7 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as zombieAnimationModule from '@/shared/content/zombieAnimation'
 import * as teamsModule from '@/shared/content/teams'
-import { readBaseContent } from '../../tools/mod/content'
+import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
 
 // Rendering helpers that need the engine; animation frames pass through unchanged.
 const clientStubs: Record<string, unknown> = {
@@ -898,4 +898,65 @@ test('each flash event is heard once by its flash handler, before the frame is d
         assert.deepEqual([...registry.of(type, 'before')], [EntityFlashes[handler]], type)
         assert.ok(!registry.of(type, 'after').includes(EntityFlashes[handler]), type)
     }
+})
+
+test('a zombie with steps kicks up their effect under its feet as its walk comes to each mark, mirrored walking right', () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { '@/shared/content/teams': teamsModule })
+    const definitions = gameplayModule.parseGameplayDefinitions(readGameplaySource('definitions'))
+    const particles: unknown[][] = []
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        context: { stage: { particle: (...args: unknown[]) => particles.push(args), zombieOrder: (row: number) => 100 + row } },
+        presentation: presentationFixture.zombies['pvz:football'],
+        animation: definitions.zombies['pvz:football'].animation,
+    })
+    const walk = (time: number, zombie: object = {}) =>
+        view.step({ x: 300.7, y: 50.2, row: 2, state: 'walking', animations: { body: { clip: 'walk', time, rate: 20 } }, ...zombie })
+    // Zombie::UpdateZombieWalking: 0.03 and 0.61 of the 30-frame walk, (81, 106) and (87, 110) from (mX, mY), at mRenderOrder - 1.
+    walk(0); walk(1); walk(18); walk(19)
+    walk(31, { team: 'plants' })
+    walk(40, { state: 'eating' })
+    walk(0, { animations: { body: { clip: 'eat', time: 0, rate: 36 } } }); walk(20, { animations: { body: { clip: 'eat', time: 20, rate: 36 } } })
+    assert.deepEqual(particles, [
+        ['pvz:dust_foot', 381, 156, 101, undefined, false],
+        ['pvz:dust_foot', 387, 160, 101, undefined, false],
+        ['pvz:dust_foot', 300 + 120 - 81, 156, 101, undefined, true],
+    ], 'none while it eats, nor on another clip')
+})
+
+test('a mind-controlled zombie is drawn purple over its chill and a burned one black without either', () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', {
+        cc: { Color: { BLACK: 'black', WHITE: 'white' } }, '@/client/view/tints': loadClientModule('view/tints', {}),
+    })
+    const drawn: unknown[][] = []
+    const player = { loadedId: 'test', setColorOverride(color: unknown) { drawn.push(['color', color]) }, setTint(tint: unknown) { drawn.push(['tint', tint]) } }
+    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, color: 'normal' })
+    for (const zombie of [{ chilled: true }, { chilled: true, mindControlled: true }, { mindControlled: true }, { state: 'burned', mindControlled: true }, {}]) {
+        view.applyColor({ state: 'walking', ...zombie })
+    }
+    assert.deepEqual(JSON.parse(JSON.stringify(drawn)), [
+        ['color', 'white'], ['tint', { r: 75, g: 75, b: 255 }],
+        ['color', 'white'], ['tint', { r: 128, g: 64, b: 192 }],
+        ['color', 'black'], ['tint', null],
+        ['color', 'white'], ['tint', null],
+    ], 'ZOMBIE_MINDCONTROLLED_COLOR before the chill, and nothing new while it stays mind-controlled')
+})
+
+test("a shot leaves the muzzle effect of the plant that fired it just over the row's mowers, mirrored across its hitbox for the zombies' side", () => {
+    const { PlantView } = loadClientModule('plants/PlantView', { '@/shared/content/teams': teamsModule })
+    const definitions = gameplayModule.parseGameplayDefinitions(readGameplaySource('definitions'))
+    const particles: unknown[][] = []
+    const stage = { content: { presentation: presentationFixture, definitions }, particle(...args: unknown[]) { particles.push(args) } }
+    const shot = (data: object) => PlantView.shot(stage, { type: 'projectileFired', data: { typeId: 'pvz:spore', x: 100, y: 120, row: 2, ...data } })
+    shot({ plantTypeId: 'pvz:puffshroom' })
+    shot({ plantTypeId: 'pvz:scaredyshroom', team: 'zombies' })
+    shot({ plantTypeId: 'pvz:snowpea', typeId: 'pvz:snow_pea' })
+    shot({ plantTypeId: 'pvz:peashooter', typeId: 'pvz:pea' })
+    // Plant::Fire: aOriginX + 18 (+ 27, + 8), aOriginY + 13, at RENDER_LAYER_LAWN_MOWER and 1 in the row.
+    const order = renderOrderModule.renderOrder('lawnMower', 2, 1)
+    assert.deepEqual(JSON.parse(JSON.stringify(particles)), [
+        ['pvz:puffshroommuzzle', 118, 133, order, null, false],
+        // The spore's hitbox runs from -15 to 40: 27 in from one side is 2 out from the other.
+        ['pvz:puffshroommuzzle', 98, 133, order, null, true],
+        ['pvz:snowpeapuff', 108, 133, order, null, false],
+    ], 'the peashooter has none')
 })

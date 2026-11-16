@@ -211,9 +211,11 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
         height: round(63 - (stem.y - 33)),
     })
     assert.equal(snapshot.projectiles.length, 1)
-    assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
-        'projectileFired', { plantId: 2, projectileId: 4, typeId: 'pvz:pea' },
-    ]])
+    // The event says where it set off, before its first tick: Plant::Fire's origin, for the plant's muzzle effect.
+    const fired = server.drainEvents().map(event => [event.type, { ...event.data, x: round(Number(event.data.x)), y: round(Number(event.data.y)) }])
+    assert.deepEqual(fired, [['projectileFired', {
+        plantId: 2, plantTypeId: 'pvz:peashooter', projectileId: 4, typeId: 'pvz:pea', x: round(40 + stem.x + 24), y: round(280 + stem.y - 33), row: 2,
+    }]])
 
     // Plant::FindTargetAndFire: its head has played the shooting clip since the windup began, at 35 frames a second,
     const windup = definitions.plants['pvz:peashooter'].shooter!.windupTicks

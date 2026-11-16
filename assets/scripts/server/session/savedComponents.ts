@@ -137,7 +137,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
                 'walkClip', 'animations', 'hasHead', 'hasArm',
                 'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
-            ], name, ['behaviorState', 'droppedLoot', 'team'])
+            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled'])
             const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
             const health = nonNegativeInteger(source.health, `${name}.health`)
             if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -163,6 +163,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 riseTicks: nonNegativeInteger(source.riseTicks, `${name}.riseTicks`),
                 ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
                 ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
+                ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
                 ...parseBehaviorState(source, name),
             }
         },
@@ -280,7 +281,7 @@ export function checkSavedEntity(content: ServerContent, world: World, entity: S
 
 function parsePlant(value: unknown, name: string): Plant {
     const source = exact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['ability', 'behaviorState', 'team', 'animations', 'blinkTicks'])
+        ['ability', 'behaviorState', 'team', 'mindControlled', 'animations', 'blinkTicks'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -294,6 +295,7 @@ function parsePlant(value: unknown, name: string): Plant {
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
+        ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
         ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
         ...parseBehaviorState(source, name),

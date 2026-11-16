@@ -4,5 +4,5 @@
   "pvz:lawnmower": {"mow": true, "pierce": true, "hitbox": {"x": 0, "y": 0, "width": 50, "height": 80}},
   "pvz:cabbage": {"damage": 40, "hitbox": {"x": 0, "y": 0, "width": 40, "height": 40}},
   "pvz:melon": {"damage": 80, "splash": true, "hitbox": {"x": 20, "y": 0, "width": 60, "height": 40}, "landingOffset": 39, "rotation": 1.26},
-  "pvz:spore": {"damage": 20, "hitbox": {"x": -15, "y": 0, "width": 55, "height": 40}, "lifetimeTicks": 75}
+  "pvz:spore": {"damage": 20, "hitbox": {"x": -15, "y": 0, "width": 55, "height": 40}}
 }

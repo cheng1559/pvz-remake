@@ -3,6 +3,7 @@ import { Color, type Node, Sprite } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { entityTint } from '@/client/view/tints'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
@@ -14,7 +15,7 @@ import { renderOrder } from '@/shared/content/renderOrder'
 import { ASSET_FPS } from '@/shared/content/animation'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
-import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
+import { mirrorX, PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
@@ -77,7 +78,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
     /** The bite or production glow (Plant::mEatenFlashCountdown) of the frame being drawn. */
     protected flash = 0
     private highlighted = false
-    private chilled = false
+    /** It is drawn tinted (entityTint), so its players are tinted again once it is not. */
+    private hasTint = false
     /** Mowed, it is frozen as it stood for its squashing. */
     private frozen = false
     /** Its shadow's node and the size of the shadow's picture, which `pose` sizes it by (placeShadow). */
@@ -243,11 +245,12 @@ export class PlantView implements EntityView<PlantSnapshot> {
         node.setPosition(at.x, at.y)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         this.onBoard(plant, world)
-        // A plant chilled by a hostile snow pea draws blue (its slower animation is the server's). Its players are
-        // revisited every frame while chilled, since a layer may start a new clip, and once more as it thaws.
-        const chilled = (plant.chilledTicks ?? 0) > 0
-        if (chilled || this.chilled) for (const player of node.getComponentsInChildren(ReanimPlayer)) player.setChilled(chilled)
-        this.chilled = chilled
+        // A plant mind-controlled draws purple, one chilled by a hostile snow pea blue (its slower animation is the
+        // server's). Its players are revisited every frame while tinted, since a layer may start a new clip, and once
+        // more as it thaws.
+        const tint = entityTint(!!plant.mindControlled, (plant.chilledTicks ?? 0) > 0)
+        if (tint || this.hasTint) for (const player of node.getComponentsInChildren(ReanimPlayer)) player.setTint(tint)
+        this.hasTint = !!tint
         if (this.highlighted) this.glow()
     }
 
@@ -355,6 +358,21 @@ export class PlantView implements EntityView<PlantSnapshot> {
     /** Plant::Fire: the plant starts what follows its shot. */
     static readonly fired: StageEvent = (stage, event) => {
         if (typeof event.data.plantId === 'number') stage.view(event.data.plantId, PlantView)?.fire()
+    }
+
+    /**
+     * Plant::Fire: the plant's muzzle effect where its shot sets off (PlantPresentationDefinition.muzzle), at
+     * RENDER_LAYER_LAWN_MOWER and 1 in its row. A shot of the zombies' side flies left, so the effect is mirrored across
+     * the projectile's hitbox, as its splat is.
+     */
+    static readonly shot: StageEvent = (stage, event) => {
+        const { plantTypeId, typeId, x, y, row } = event.data
+        const muzzle = typeof plantTypeId === 'string' ? stage.content.presentation.plants[plantTypeId]?.muzzle : undefined
+        const hitbox = typeof typeId === 'string' ? stage.content.definitions.projectiles[typeId]?.hitbox : undefined
+        if (!muzzle || !hitbox || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
+        const mirrored = event.data.team === 'zombies'
+        stage.particle(muzzle.effect, x + mirrorX(muzzle.x, 2 * hitbox.x + hitbox.width, mirrored), y + muzzle.y,
+            renderOrder('lawnMower', row, 1), undefined, mirrored)
     }
 
     /** Plant::Fire for the Fume-shroom plays the fume, and DoRowAreaDamage a splat for the zombies it hits. */

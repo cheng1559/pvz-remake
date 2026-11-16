@@ -219,3 +219,28 @@ test('a chilled zombie body goes at half its rate and its flag at its own, which
     assert.ok(world.resources.get(EventQueueResource).events.some(event => event.type === 'zombiePartDropped' && event.data.part === 'flag'
         && event.data.typeId === 'pvz:flag'))
 })
+
+test('a zombie that stops eating sets off again as StartWalkAnim does: a new speed and walk; the flag zombie always takes walk2', () => {
+    const eating = game()
+    const plant = eating.world.createEntity()
+    eating.world.add(plant, PositionComponent, { x: 300, y: 280, row: 2 })
+    eating.world.add(plant, PlantComponent, { typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 3, health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0 })
+    const zombies = Array.from({ length: 12 }, () => spawnZombie(eating.world, definitions, 'pvz:normal', 2, 330, 280))
+    const flags = Array.from({ length: 4 }, () => spawnZombie(eating.world, definitions, 'pvz:flag', 2, 330, 280))
+    const before = new Map([...zombies, ...flags].map(entity => [entity, { ...eating.world.get(entity, ZombieComponent)! }]))
+    // A few ticks of chewing, before sixteen of them finish the plant.
+    for (let tick = 0; tick < 3; tick++) eating.run()
+    assert.deepEqual([...zombies, ...flags].map(entity => eating.world.get(entity, ZombieComponent)!.state), Array(16).fill('eating'))
+    eating.world.destroyEntity(plant)
+    eating.run()
+    const after = [...zombies, ...flags].map(entity => eating.world.get(entity, ZombieComponent)!)
+    assert.deepEqual(after.map(zombie => zombie.state), Array(16).fill('walking'))
+    const { min, max } = definitions.zombies['pvz:normal'].speedPerTick
+    assert.ok(zombies.every(entity => { const speed = eating.world.get(entity, ZombieComponent)!.speedPerTick; return speed >= min && speed <= max }))
+    assert.ok(zombies.some(entity => eating.world.get(entity, ZombieComponent)!.speedPerTick !== before.get(entity)!.speedPerTick), 'PickRandomSpeed')
+    const walks = zombies.map(entity => eating.world.get(entity, ZombieComponent)!)
+    assert.ok(walks.some(zombie => zombie.walkClip === 'walk') && walks.some(zombie => zombie.walkClip === 'walk2'), 'Rand(2)')
+    assert.ok(walks.every(zombie => zombie.animations.body.clip === zombie.walkClip))
+    // StartWalkAnim fixes the flag zombie's variant at 0: anim_walk2, from its start too.
+    assert.ok(flags.every(entity => before.get(entity)!.walkClip === 'walk2' && eating.world.get(entity, ZombieComponent)!.walkClip === 'walk2'))
+})

@@ -189,7 +189,7 @@
     "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
-    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 52.5, "y": 60}, "range": 230},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": {"id": "pvz:spore", "lifetimeTicks": 75}, "offset": {"x": 52.5, "y": 60}, "range": 230},
     "nocturnal": true,
     "animation": {
       "clips": {
@@ -260,6 +260,7 @@
   "pvz:hypnoshroom": {
     "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "nocturnal": true,
+    "mindControl": true,
     "animation": {
       "clips": {
         "body": {"frames": 20, "fps": [10, 15]},
@@ -268,6 +269,29 @@
       },
       "layers": {"body": "body", "sleeping": null},
       "asleep": {"body": "sleep", "sleeping": "sleeping"}
+    }
+  },
+  "pvz:scaredyshroom": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 25, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 41.5, "y": 41}},
+    "fright": {"center": {"x": 0, "y": 20}, "radius": 120, "rowRange": 1, "lowerTicks": 130, "raiseTicks": {"min": 84, "max": 143}},
+    "nocturnal": true,
+    "animation": {
+      "clips": {
+        "body": {"frames": 16, "fps": [10, 15]},
+        "shoot": {"frames": 15, "fps": 35, "next": "body"},
+        "scared": {"frames": 13, "fps": 10, "hold": true},
+        "scaredIdle": {"frames": 11, "fps": 10},
+        "grow": {"frames": 10, "fit": true, "fps": [7, 12], "hold": true},
+        "sleep": {"frames": 16, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "fire": {"body": "shoot"},
+      "states": {"calm": {"body": "body"}, "lowering": {"body": "scared"}, "scared": {"body": "scaredIdle"}, "raising": {"body": "grow"}},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
     }
   }
 }

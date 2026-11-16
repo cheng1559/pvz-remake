@@ -6,6 +6,7 @@ import { zombieDefinition } from './definitions'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { entityTint } from '@/client/view/tints'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
@@ -13,7 +14,7 @@ import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/Lev
 import { exact } from '@/shared/validate'
 import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
 import { type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
-import { ASSET_FPS } from '@/shared/content/animation'
+import { ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
@@ -82,6 +83,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     /** Its hit flash (Zombie::mJustGotShotCounter) in the frame being drawn. */
     protected flash = NO_FLASH
     private riseClip?: Node
+    /** Where its body's clip was at the last snapshot, for the marks of its steps it has come to since. */
+    private stepped?: { clip: string, time: number }
 
     private readonly node: Node
     protected readonly presentation: ZombiePresentationDefinition
@@ -179,7 +182,27 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             this.syncMowered(zombie)
             return
         }
+        this.step(zombie)
         this.onBoard(zombie, world)
+    }
+
+    /**
+     * Zombie::UpdateZombieWalking: as its body's walk comes to each of its `steps` marks between two snapshots, the
+     * effect under its feet (ZombiePresentationDefinition.steps), mirrored with a zombie walking right.
+     */
+    private step(zombie: ZombieSnapshot): void {
+        const steps = this.presentation.steps
+        if (!steps) return
+        const body = zombie.animations[ZOMBIE_BODY_LAYER], last = this.stepped
+        this.stepped = body && { clip: body.clip, time: body.time }
+        const clip = body && this.animation.clips[body.clip], stage = this.context.stage
+        if (!stage || !clip?.ground || zombie.state !== 'walking' || last?.clip !== body.clip) return
+        const mirrored = zombie.team === 'plants'
+        for (const mark of steps.marks) {
+            if (!passedMark(clip, last.time, body.time, mark.at)) continue
+            stage.particle(steps.effect, Math.trunc(zombie.x) + mirrorX(mark.x, ZOMBIE_WIDTH, mirrored), Math.trunc(zombie.y) + mark.y,
+                stage.zombieOrder(zombie.row) - 1, undefined, mirrored)
+        }
     }
 
     /** The zombie itself on the board, by the server's snapshot: its layers and what it has on. A view adds what its zombie does here. */
@@ -443,7 +466,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
     }
 
-    private color: 'normal' | 'chilled' | 'burned' = 'normal'
+    private color: 'normal' | 'chilled' | 'mindControlled' | 'burned' = 'normal'
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
 
@@ -469,14 +492,17 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
     }
 
-    /** Zombie::DrawReanim draws a burned zombie black, and a chilled one blue (ReanimPlayer.setChilled) unless burned. */
+    /**
+     * Zombie::DrawReanim draws a burned zombie black; otherwise a mind-controlled one purple, or a chilled one blue
+     * (ReanimPlayer.setTint, entityTint).
+     */
     private applyColor(zombie: ShownZombie, force = false): void {
-        const color = zombie.state === 'burned' ? 'burned' : zombie.chilled ? 'chilled' : 'normal'
+        const color = zombie.state === 'burned' ? 'burned' : zombie.mindControlled ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
         // What it carries is attached to the body's tracks, so it takes the body's colors.
         this.player.setColorOverride(color === 'burned' ? Color.BLACK : Color.WHITE)
-        this.player.setChilled(color === 'chilled')
+        this.player.setTint(color === 'burned' ? undefined : entityTint(!!zombie.mindControlled, !!zombie.chilled))
     }
 
     /** Zombie::DrawReanim's hit highlight (mJustGotShotCounter), over its chill; the shield's own (mShieldJustGotShotCounter). */
@@ -532,14 +558,14 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
 
     /**
      * Zombie::AnimateChewSound and AnimateChewEffect: wall-nuts crumble softly, on the row's projectile layer. A zombie
-     * chewing another (Zombie::EatZombie) chews as on any plant.
+     * chewing another (Zombie::EatZombie) chews as on any plant, softly if it is mind-controlled.
      */
     static readonly chewed: StageEvent = (stage, event, world) => {
         const plant = world.plants.find(candidate => candidate.entityId === event.data.plantId)
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.zombieId)
         const presentation = plant ? stage.content.presentation.plants[plant.typeId] : undefined
         const nut = presentation?.chewParticle !== undefined
-        void SoundSystem.playFoley(nut ? SoundEffect.ChompSoft : SoundEffect.Chomp)
+        void SoundSystem.playFoley(nut || !plant && zombie?.mindControlled ? SoundEffect.ChompSoft : SoundEffect.Chomp)
         if (!nut || !zombie) return
         const tint = presentation!.visual.tint
         // At (37, 40) from the zombie. A zombie facing right mirrors it across its width, and its debris flies the other way.
@@ -618,7 +644,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
         // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
         // part's flight for a mind-controlled zombie.)
-        const mirrored = zombie?.team === 'plants', chilled = zombie?.chilled === true
+        const mirrored = zombie?.team === 'plants', tint = entityTint(!!zombie?.mindControlled, !!zombie?.chilled)
         // One above the zombie.
         stage.spawnParticle(stage.zombieOrder(zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)) + 1, {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
@@ -626,9 +652,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             y: local?.y ?? node.position.y + drop.offset[1],
             // The pole vaulter's own head and a bare hand are swapped in.
             spriteOverride: drop.image,
-            // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
-            tint: chilled ? new Color(75, 75, 255, 255) : undefined,
-            extraAdditive: chilled,
+            // Zombie::OverrideParticleColor keeps a mind-controlled zombie's parts purple, a chilled one's blue.
+            tint: tint && new Color(tint.r, tint.g, tint.b, 255),
+            extraAdditive: !!tint,
             mirrored,
         })
         SoundSystem.playSounds(drop.sounds)

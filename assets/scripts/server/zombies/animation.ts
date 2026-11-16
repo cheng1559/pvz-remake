@@ -1,5 +1,5 @@
 import type { Position, Zombie } from '../state/components'
-import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, CHILLED_ANIMATION_FACTOR, groundStep, type LayerState, startLayer, startLayers, stepLayers, TICKS_PER_SECOND } from '@/shared/content/animation'
 import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'
 
@@ -47,6 +47,33 @@ export function stepZombie(zombie: Zombie, animation: AnimationDefinition, rando
 export function walkRate(speed: number, clip: AnimationClip): number {
     const ground = clip.ground!
     return speed * clip.frames / (ground[ground.length - 1] - ground[0]) * ZOMBIE_WALK_RATE_FACTOR
+}
+
+/**
+ * Zombie::PickRandomSpeed, which StartWalkAnim calls each time a zombie sets off walking (from its start, after eating,
+ * after its vault, out of the newspaper's gasp): the pole vaulter's run while it holds the pole, the newspaper
+ * zombie's enraged walk once its paper is gone, or its own walk.
+ */
+export function pickZombieSpeed(zombie: Pick<Zombie, 'hasPole' | 'shieldHealth'>, definition: ZombieDefinition, random: AnimationRandom): number {
+    const speed = zombie.hasPole && definition.vault ? definition.vault.runSpeedPerTick
+        : definition.enrage && zombie.shieldHealth === 0 ? definition.enrage.speedPerTick : definition.speedPerTick
+    return speed.min + random.nextFloat() * (speed.max - speed.min)
+}
+
+/** Zombie::StartWalkAnim's `Rand(2)`: which of its walks a zombie takes as it sets off (ZombieDefinition.walk2Chance). */
+export function pickWalkClip(definition: ZombieDefinition, random: AnimationRandom): string {
+    return random.nextFloat() < 1 - definition.walk2Chance ? ZOMBIE_CLIPS.walk : ZOMBIE_CLIPS.walk2
+}
+
+/**
+ * Zombie::StartWalkAnim, as a zombie sets off walking again (after eating, after its vault, out of the newspaper's
+ * gasp): its speed picked again, then which of its walks it takes, unless it is the enraged newspaper zombie, whose
+ * walk is its own (PHASE_NEWSPAPER_MAD, without the `Rand(2)`); one still holding its pole runs.
+ */
+export function walkAgain(zombie: Zombie, definition: ZombieDefinition, random: AnimationRandom): void {
+    zombie.speedPerTick = pickZombieSpeed(zombie, definition, random)
+    if (!(definition.enrage && zombie.shieldHealth === 0)) zombie.walkClip = pickWalkClip(definition, random)
+    startWalk(zombie, definition.animation, zombie.hasPole ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
 }
 
 /** Its body starts a walk (its own, or its run), at its speed's rate. */

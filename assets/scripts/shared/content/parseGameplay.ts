@@ -1,4 +1,4 @@
-import { record, array, nonEmptyString, finite, nonNegativeFinite, positiveFinite, integer, nonNegativeInteger, positiveInteger, exact, trueFlag, named, oneOf, pair, point, range } from '@/shared/validate'
+import { record, array, nonEmptyString, finite, fraction, nonNegativeFinite, positiveFinite, integer, nonNegativeInteger, positiveInteger, exact, trueFlag, named, oneOf, pair, point, range } from '@/shared/validate'
 import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
 import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
@@ -164,7 +164,7 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
     const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exact(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation'])
+    const source = exact(value, ['maxHealth', 'body'], name, [...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
@@ -290,6 +290,21 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             throw new Error(`${name}.chomper.biteDelayTicks must not exceed biteTicks`)
         }
     }
+    if (source.fright !== undefined) {
+        // A fright is a shooter's ability, beside its shots; the other abilities are its own.
+        if (result.producer?.growth || result.fuse || result.mine || result.chomper || result.graveBuster) {
+            throw new Error(`${name}.fright does not go with another ability`)
+        }
+        const fright = exact(source.fright, ['center', 'radius', 'rowRange', 'lowerTicks', 'raiseTicks'], `${name}.fright`)
+        result.fright = {
+            center: point(fright.center, `${name}.fright.center`),
+            radius: positiveFinite(fright.radius, `${name}.fright.radius`),
+            rowRange: nonNegativeInteger(fright.rowRange, `${name}.fright.rowRange`),
+            lowerTicks: positiveInteger(fright.lowerTicks, `${name}.fright.lowerTicks`),
+            raiseTicks: tickRange(fright.raiseTicks, `${name}.fright.raiseTicks`, 1),
+        }
+    }
+    if (source.mindControl !== undefined) result.mindControl = trueFlag(source.mindControl, `${name}.mindControl`)
     if (source.deathExplosion) result.deathExplosion = explosion(source.deathExplosion, `${name}.deathExplosion`)
     // Off the board it is in a state of its own ability.
     const offBoardState = result.animation?.offBoard?.state, kind = plantAbilityKind(result)
@@ -532,12 +547,6 @@ function groundTrack(value: unknown, name: string): number[] {
         throw new Error(`${name} must move forward over at least two frames`)
     }
     return ground
-}
-
-function fraction(value: unknown, name: string): number {
-    const result = finite(value, name)
-    if (result < 0 || result > 1) throw new Error(`${name} must be between 0 and 1`)
-    return result
 }
 
 export function parseProjectile(value: unknown, name: string): ProjectileDefinition {

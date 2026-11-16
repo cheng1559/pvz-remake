@@ -185,6 +185,8 @@ export interface PlantSnapshot extends EntityBehaviorState {
     produceTicks?: number
     /** On the zombies' side: the plant faces left. */
     team?: Team
+    /** Brought over by swallowing a plant that mind-controls: drawn tinted, as a mind-controlled zombie is. */
+    mindControlled?: true
     /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
     chilledTicks?: number
     /** What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation). */
@@ -240,6 +242,8 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     riseTicks?: number
     /** Only on the plants' side: it walks right, facing right. */
     team?: 'plants'
+    /** Brought over by a plant that mind-controls (the hypno-shroom): drawn tinted (Zombie::mMindControlled). */
+    mindControlled?: true
 }
 
 export interface ProjectileSnapshot {

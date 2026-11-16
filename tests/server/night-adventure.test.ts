@@ -136,7 +136,11 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
     const world = worldFor(true), schedule = new Schedule()
     schedule.add('projectile', createProjectileSystem(definitions))
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 100, 50)
-    const spore = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 0 }, motion: STRAIGHT })
+    // The puff-shroom's own spores (its shooter's overrides) go only so far; the scaredy-shroom's do not.
+    const spore = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 0 }, motion: STRAIGHT,
+        overrides: definitions.plants['pvz:puffshroom'].shooter!.overrides })
+    const far = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 1 }, motion: STRAIGHT })
+    assert.equal(world.get(far, ProjectileComponent)!.motionState, undefined)
     assert.deepEqual(world.get(spore, ProjectileComponent)!.motionState, { ticksLeft: 75 })
     world.get(spore, ProjectileComponent)!.motionState = { ticksLeft: 1 }
     schedule.run(world, 1)
@@ -204,6 +208,56 @@ function plantAt(world: World, typeId: string, x: number) {
     world.add(entity, PlantAttackComponent, { readyAtTick: 1 })
     return entity
 }
+
+test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, and shoot a whole cadence after they are up', () => {
+    const world = worldFor(true), schedule = new Schedule(), queue = world.resources.get(EventQueueResource)
+    schedule.add('plant', createPlantAttackSystem(definitions))
+    schedule.add('plant', createPlantAbilitySystem(definitions))
+    const { fright, shooter } = definitions.plants['pvz:scaredyshroom']
+    const plant = plantAt(world, 'pvz:scaredyshroom', 40)
+    const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 700, 50)
+    const at = world.get(zombie, PositionComponent)!
+    const state = () => world.get(plant, PlantComponent)!.ability!.state
+    let tick = 0
+    const run = (ticks: number, until?: () => boolean) => {
+        const types: string[] = []
+        for (const end = tick + ticks; tick < end && !until?.();) {
+            schedule.run(world, ++tick)
+            types.push(...drainServerEvents(queue).map(event => event.type))
+        }
+        return types
+    }
+    assert.ok(run(400).includes('projectileFired'), 'far beyond the puff-shroom’s 230 reach')
+    assert.equal(state(), 'calm')
+    // Plant::UpdateScaredyShroom: a zombie's body within 120 of (x, y + 20), here 96 away.
+    at.x = 100
+    const hidden = run(200, () => state() === 'lowering')
+    assert.equal(state(), 'lowering', 'it waits for a shot it has begun')
+    hidden.push(...run(fright!.lowerTicks - 1))
+    assert.equal(state(), 'lowering')
+    hidden.push(...run(1))
+    assert.equal(state(), 'scared', 'down after anim_scared')
+    at.row = 1
+    hidden.push(...run(50))
+    assert.equal(state(), 'scared', 'a zombie on the row beside it scares it too')
+    at.row = 2
+    hidden.push(...run(1))
+    assert.equal(state(), 'raising', 'two rows away it is not near')
+    at.row = 0
+    at.x = 700
+    hidden.push(...run(fright!.raiseTicks.max, () => state() === 'calm'))
+    assert.equal(state(), 'calm')
+    assert.ok(!hidden.includes('plantFiring'), 'it holds its shots until it is up')
+    // Its launch counter was a whole cadence (mLaunchRate, 150) the tick before it was up, and counted down that tick
+    // (UpdateShooter), so it comes to 0 on the 148th tick after.
+    assert.ok(!run(shooter!.cadenceTicks.max - 3).includes('plantFiring'))
+    assert.deepEqual(run(1).filter(type => type === 'plantFiring'), ['plantFiring'])
+    // A zombie on its side does not scare it.
+    world.get(zombie, ZombieComponent)!.team = 'plants'
+    at.x = 100
+    run(300)
+    assert.equal(state(), 'calm')
+})
 
 test('sun-shrooms drop small sun until they grow, produce nothing while growing, and neither grow nor produce asleep', () => {
     const growth = definitions.plants['pvz:sunshroom'].producer!.growth!

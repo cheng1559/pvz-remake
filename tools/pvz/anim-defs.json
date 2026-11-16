@@ -323,12 +323,23 @@
         "anim_scaredidle",
         "anim_scared",
         "anim_shooting"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:scaredyshroom",
+        "anim_sleep": "pvz:scaredyshroom_sleep",
+        "anim_shooting": "pvz:scaredyshroom_shoot",
+        "anim_scared": "pvz:scaredyshroom_scared",
+        "anim_scaredidle": "pvz:scaredyshroom_scaredidle",
+        "anim_grow": "pvz:scaredyshroom_grow"
+      }
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {
+        "anim_blink": "pvz:scaredyshroom_blink"
+      }
     }
   },
   "iceshroom": {
@@ -1219,6 +1230,22 @@
         "anim_walk": "pvz:pole_vaulter_walk",
         "anim_eat": "pvz:pole_vaulter_eat",
         "anim_death": "pvz:pole_vaulter_death"
+      }
+    }
+  },
+  "zombie_football": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_eat",
+        "anim_death"
+      ],
+      "exports": {
+        "anim_idle": "pvz:football_idle",
+        "anim_walk": "pvz:football_walk",
+        "anim_eat": "pvz:football_eat",
+        "anim_death": "pvz:football_death"
       }
     }
   },

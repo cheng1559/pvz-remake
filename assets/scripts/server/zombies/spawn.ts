@@ -3,7 +3,7 @@ import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gam
 import { PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import type { World } from '@/ecs/index'
 import { ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { startWalk, startZombie } from './animation'
+import { pickWalkClip, pickZombieSpeed, startWalk, startZombie } from './animation'
 import { ZombieBehaviorsResource } from './behaviors'
 
 /** Wave spawning and CLI summons share the configured range and flag-wave offset. */
@@ -27,7 +27,6 @@ export function spawnZombie(
     if (definition.behavior !== undefined && behaviorState === undefined) throw new Error(`Zombie behavior is not installed: ${typeId}`)
     const random = world.resources.get(RandomResource)
     const vault = definition.vault
-    const speed = vault?.runSpeedPerTick ?? definition.speedPerTick
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x, y, row })
     world.add(entity, ZombieComponent, {
@@ -37,7 +36,7 @@ export function spawnZombie(
         state: 'walking',
         hasTongue: definition.tongueChance > 0 && random.nextFloat() < definition.tongueChance,
         groanCounter: random.integer(300, 400),
-        speedPerTick: speed.min + random.nextFloat() * (speed.max - speed.min),
+        speedPerTick: pickZombieSpeed({ hasPole: vault !== undefined, shieldHealth: definition.shield?.health ?? 0 }, definition, random),
         biteTicks: 0,
         deathTicksRemaining: 0,
         walkClip: ZOMBIE_CLIPS.walk,
@@ -53,7 +52,7 @@ export function spawnZombie(
         ...(behaviorState === undefined ? {} : { behaviorState }),
     })
     const zombie = world.get(entity, ZombieComponent)!
-    zombie.walkClip = random.nextFloat() < 1 - definition.walk2Chance ? ZOMBIE_CLIPS.walk : ZOMBIE_CLIPS.walk2
+    zombie.walkClip = pickWalkClip(definition, random)
     startZombie(zombie, definition.animation, random)
     startWalk(zombie, definition.animation, vault ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
     return entity

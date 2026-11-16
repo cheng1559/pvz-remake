@@ -55,22 +55,28 @@ export function createPlantAttackSystem(definitions: GameplayDefinitions): GameS
                     const anchor = shooter.anchor ? plantTrackPoint(plant, definition, shooter.anchor.layer, shooter.anchor.track) : { x: 0, y: 0 }
                     // What it aims at, for a motion that takes a target.
                     const target = targets(world, definitions, position, plant).nearest
+                    // Where it sets off: Plant::Fire's aOriginX and aOriginY, the projectile's corner.
+                    const origin = {
+                        x: position.x + plantFacingX(anchor.x + shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
+                        y: position.y + anchor.y + shooter.offset.y - (hitbox.y + hitbox.height / 2),
+                        row: position.row,
+                    }
                     const projectile = launchProjectile(world, definitions, commands, {
                         typeId: shooter.projectile!,
-                        position: {
-                            x: position.x + plantFacingX(anchor.x + shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
-                            y: position.y + anchor.y + shooter.offset.y - (hitbox.y + hitbox.height / 2),
-                            row: position.row,
-                        },
+                        position: { ...origin },
                         motion: PLANT_ATTACKS[shooter.type],
                         ...(shooter.overrides ? { overrides: shooter.overrides } : {}),
                         ...(plant.team ? { team: plant.team } : {}),
                         ...(target === undefined ? {} : { target }),
                     })
+                    // The client puts the plant's muzzle effect where it set off (PlantPresentationDefinition.muzzle).
                     emitServerEvent(world.resources.get(EventQueueResource), 'projectileFired', {
                         plantId: entity,
+                        plantTypeId: plant.typeId,
                         projectileId: projectile,
                         typeId: shooter.projectile!,
+                        ...origin,
+                        ...(team === 'zombies' ? { team } : {}),
                     })
                     if (--attack.burst.shotsRemaining > 0) {
                         attack.burst.fireAtTick = tick + shooter.burstIntervalTicks

@@ -10,7 +10,7 @@
     "bite": {"damage": 4, "cadenceTicks": 4},
     "animation": {"from": "pvz:normal", "clips": {"flag": {"frames": 13, "fps": 15}}, "layers": {"flag": "flag"}},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5
+    "walk2Chance": 1
   },
   "pvz:normal": {
     "wave": {"points": 1, "weight": 4000},
@@ -162,5 +162,32 @@
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
     "walk2Chance": 0.5
+  },
+  "pvz:football": {
+    "facingRightOffsetX": 16.97,
+    "wave": {"points": 7, "weight": 2000, "firstWave": 5},
+    "maxHealth": 270,
+    "boardEdgeX": -175,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.66, "max": 0.68},
+    "body": {"x": 50, "y": 0, "width": 57, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "helm": {"type": "football", "health": 1400},
+    "animation": {
+      "clips": {
+        "idle": {"frames": 21, "fps": [12, 18], "start": [0, 0.99]},
+        "walk": {"frames": 30, "ground": [
+          -59.799999, -57.400002, -55.0, -52.599998, -50.200001, -47.799999, -47.5, -47.299999, -47.0, -46.700001, -46.400002, -46.099998,
+          -45.799999, -44.299999, -42.799999, -41.299999, -39.799999, -38.299999, -36.799999, -35.299999, -33.799999, -33.5, -33.299999, -33.0,
+          -32.700001, -32.400002, -32.099998, -31.799999, -30.799999, -29.799999
+        ]},
+        "eat": {"frames": 36, "fps": 36, "marks": [0.14, 0.68]},
+        "death": {"frames": 18, "fps": 24, "marks": [0.52], "hold": true}
+      },
+      "layers": {"body": "walk"}
+    },
+    "tongueChance": 0,
+    "walk2Chance": 0
   }
 }

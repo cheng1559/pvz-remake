@@ -159,7 +159,7 @@ test('a seed\'s position is its place in its group: the original grid, a Mod\'s 
     const position = (id: string) => definitions.seeds[id].position
     assert.deepEqual(seeds.map(position), seeds.map((_, index) => index), 'the original seed types')
     const hidden = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].hidden)
-    assert.deepEqual(hidden.map(position).sort((left, right) => left - right), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15])
+    assert.deepEqual(hidden.map(position).sort((left, right) => left - right), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15, 16])
     const build = (data: Record<string, unknown>) => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data }]).definitions
     const pea = definitions.seeds['pvz:peashooter'], sunflower = definitions.seeds['pvz:sunflower']
     // Overriding a seed moves it; the chooser follows place order and skips the gap left behind.
@@ -319,14 +319,14 @@ test("/cheatseed's pages: the owned grid, the hidden cards at their places, then
         const available = availableSeeds(definitions, owned)
         const pages = chooserPages(definitions, available)
         const names = pages.map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
-        const zombies = ['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:pole_vaulter', 'pvz:buckethead', 'pvz:newspaper', 'pvz:screendoor']
+        const zombies = ['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:pole_vaulter', 'pvz:buckethead', 'pvz:newspaper', 'pvz:screendoor', 'pvz:football']
         const plants = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut']
         assert.deepEqual(pages.map(page => page.catalog), [true, false, true, false])
         assert.deepEqual(names[0], available)
         assert.deepEqual(pages[0].cards.map(card => card.place), available.map(id => definitions.seeds[id].position), 'at their grid places')
         // The zombie and grave seeds are the zombies' own: page 4 has them as they are, page 2 on the plants' side.
         assert.deepEqual(names[1], [...plants, ...zombies.map(id => `${id}@plants`), 'pvz:grave@plants'])
-        assert.deepEqual(pages[1].cards.map(card => card.place), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15], 'at their positions')
+        assert.deepEqual(pages[1].cards.map(card => card.place), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15, 16], 'at their positions')
         assert.deepEqual(names[2], names[0].map(id => `${id}@zombies`))
         assert.deepEqual(pages[2].cards.map(card => card.place), pages[0].cards.map(card => card.place), "page 3 keeps page 1's places")
         assert.deepEqual(names[3], [...plants.map(id => `${id}@zombies`), ...zombies, 'pvz:grave'])

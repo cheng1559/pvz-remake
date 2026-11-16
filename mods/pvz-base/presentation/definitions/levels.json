@@ -157,5 +157,11 @@
     "seedGuideArrow": false,
     "lawnGuideSteps": [],
     "advice": {}
+  },
+  "pvz:adventure-2-6": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
+    "seedGuideSteps": [],
+    "lawnGuideSteps": [],
+    "advice": {}
   }
 }

@@ -9,7 +9,7 @@ import { sunflowerTutorial } from './sunflowerTutorial'
 import { moreSunTutorial } from './moreSunTutorial'
 import { shovelTutorial } from './shovelTutorial'
 import { introDialog } from './introDialog'
-import { packetUpgradeOffer } from './packetUpgradeOffer'
+import { packetUpgradeOffer, packetUpgradeOffers } from './packetUpgradeOffer'
 import { coinAdvice } from './coinAdvice'
 import { whackTutorial } from './whackTutorial'
 
@@ -105,10 +105,12 @@ export function installBuiltinTutorials(registry: TutorialRegistry): void {
         'pvz:adventure-2-1': { ...introDialog(201, 207), loot: { firstCoinAfterWave: 5, savingsCap: 75 }, moneyCollected: coinAdvice,
             chooserWarnings: { seed: { id: 'pvz:puffshroom', warning: 'SEED_CHOOSER_PUFFSHROOM_WARNING' }, sunWarning: 'SEED_CHOOSER_NIGHT_SUN_WARNING' } },
         'pvz:adventure-2-2': introDialog(1401, 1402),
-        // CutScene::StartLevelIntro offers the first seed-slot upgrade on levels 13-24 except 15, 20 and 21.
+        // CutScene::StartLevelIntro offers the first seed-slot upgrade on levels 13-24 except 15, 20 and 21, and the
+        // second on levels 16-24 except 20 and 21.
         'pvz:adventure-2-3': packetUpgradeOffer,
         'pvz:adventure-2-4': packetUpgradeOffer,
         'pvz:adventure-2-5': whackTutorial,
+        'pvz:adventure-2-6': packetUpgradeOffers(2),
     }
     for (const [id, script] of Object.entries(scripts)) if (!registry.has(id)) registry.register(BASE_MOD_ID, id, script)
 }

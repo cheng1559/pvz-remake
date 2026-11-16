@@ -13,4 +13,10 @@ test('the pole vaulter’s facing-right corrections follow from the original’s
     // Its packet stands 5 left of the plain zombie's at 0.35: its body 14.29 further right in its frame.
     const inFrame = (plain.packet.x - pole.packet.x) / pole.packet.scale
     assert.ok(Math.abs(gameplay['pvz:pole_vaulter'].facingRightOffsetX - (6 + inFrame)) < 0.01, 'put down, its GetDrawPos too')
+    // The football zombie's packet has its own scale: its body and the plain zombie's line up in the packet's middle
+    // (x = 25 of its 50), which for one scale is the pole vaulter's reckoning. Its GetDrawPos moves it only up.
+    const football = presentation['pvz:football'], middle = 25
+    const footballInFrame = (middle - football.packet.x) / football.packet.scale - (middle - plain.packet.x) / plain.packet.scale
+    assert.ok(Math.abs(gameplay['pvz:football'].facingRightOffsetX - footballInFrame) < 0.01, `${footballInFrame}`)
+    assert.deepEqual([football.clips.walk.x, football.clips.walk.y], [plain.clips.walk.x, plain.clips.walk.y + 16])
 })

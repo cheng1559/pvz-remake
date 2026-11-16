@@ -2,8 +2,8 @@ import type { PlantDefinition } from './gameplay'
 
 /**
  * Plant::UpdateAbilities: the states each ability goes through, its first the one a plant starts in. A plant has at
- * most one ability: the fuse (cherry bomb), the mine (potato mine), the chomper, a producer's growth (sun-shroom) or
- * the grave buster's.
+ * most one ability: the fuse (cherry bomb), the mine (potato mine), the chomper, a producer's growth (sun-shroom), the
+ * grave buster's or a shooter's fright (scaredy-shroom).
  */
 export const PLANT_ABILITY_STATES_BY_KIND = {
     fuse: ['fuse'],
@@ -11,6 +11,7 @@ export const PLANT_ABILITY_STATES_BY_KIND = {
     chomper: ['ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing'],
     growth: ['small', 'growing', 'big'],
     graveBuster: ['landing', 'eating'],
+    fright: ['calm', 'lowering', 'scared', 'raising'],
 } as const
 
 export type PlantAbilityKind = keyof typeof PLANT_ABILITY_STATES_BY_KIND
@@ -25,6 +26,7 @@ export function plantAbilityKind(definition: PlantDefinition): PlantAbilityKind 
     if (definition.chomper) return 'chomper'
     if (definition.producer?.growth) return 'growth'
     if (definition.graveBuster) return 'graveBuster'
+    if (definition.fright) return 'fright'
     return undefined
 }
 

@@ -12,11 +12,13 @@
   "pvz:fumeshroom": {"ground": "night"},
   "pvz:gravebuster": {"ground": "night"},
   "pvz:hypnoshroom": {"ground": "night"},
+  "pvz:scaredyshroom": {"ground": "night"},
   "pvz:normal": {"ground": "day"},
   "pvz:flag": {"ground": "day"},
   "pvz:conehead": {"ground": "day"},
   "pvz:pole_vaulter": {"ground": "day"},
   "pvz:buckethead": {"ground": "day"},
   "pvz:newspaper": {"ground": "day"},
-  "pvz:screendoor": {"ground": "day"}
+  "pvz:screendoor": {"ground": "day"},
+  "pvz:football": {"ground": "day"}
 }

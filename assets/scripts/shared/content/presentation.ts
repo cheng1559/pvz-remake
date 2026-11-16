@@ -1,5 +1,5 @@
 import {
-    allFields, array, boolean, fields, type FieldParsers, finite, integer, integerInRange, named, nonEmptyString, nonEmptyStrings, nonNegativeFinite,
+    allFields, array, boolean, fields, type FieldParsers, finite, fraction, integer, integerInRange, named, nonEmptyString, nonEmptyStrings, nonNegativeFinite,
     nonNegativeInteger, oneOf, pair, point, positiveFinite, positiveInteger, range, record, trueFlag,
 } from '@/shared/validate'
 import { withFrom } from './from'
@@ -61,6 +61,12 @@ export interface PlantParts {
 export interface PlantPresentationDefinition {
     /** A particle that follows its shot, `delayTicks` into it, at `x`, `y` from the plant (the Fume-shroom's cloud). */
     readonly fireParticle?: { readonly id: string; readonly x: number; readonly y: number; readonly delayTicks: number }
+    /**
+     * Plant::Fire: a particle at its mouth as each shot leaves (the Puff-shroom's and the Scaredy-shroom's
+     * PARTICLE_PUFFSHROOM_MUZZLE, the Snow Pea's PARTICLE_SNOWPEA_PUFF), at `x`, `y` from where the shot sets off (the
+     * projectile's corner), just over the row's mowers.
+     */
+    readonly muzzle?: { readonly effect: string; readonly x: number; readonly y: number }
     /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
     readonly layer?: RenderLayer
     /**
@@ -244,6 +250,12 @@ export interface ZombiePresentationDefinition {
     /** Unavailable cells in the 5x5 street-preview grid. */
     readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
+    /**
+     * Zombie::UpdateZombieWalking: an effect under its feet each time its walk comes to one of `marks` (`at`, of the
+     * clip's length), at `x`, `y` from its place (mirrored for one walking right), just below it in the draw order:
+     * the football zombie's PARTICLE_DUST_FOOT.
+     */
+    readonly steps?: { readonly effect: string; readonly marks: readonly { readonly at: number; readonly x: number; readonly y: number }[] }
     /** The gameplay `helm`, worn on the head. */
     readonly helm?: ZombieArmorPresentation & {
         /** A helm hides the hair until dropped (Zombie::ZombieInitialize) unless this is set. */
@@ -882,6 +894,7 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         fireParticle: (value, name) => allFields<NonNullable<Plant['fireParticle']>>(value, name, {
             id: nonEmptyString, x: finite, y: finite, delayTicks: nonNegativeInteger,
         }),
+        muzzle: (value, name) => allFields<NonNullable<Plant['muzzle']>>(value, name, { effect: nonEmptyString, x: finite, y: finite }),
         layer,
         shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], {
             x: finite, y: finite, scale: positiveFinite,
@@ -946,6 +959,11 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
         previewBlockedCells: (value, name) => array(value, name).map((entry, index) =>
             allFields<NonNullable<Zombie['previewBlockedCells']>[number]>(entry, `${name}[${index}]`, { column: cell, row: cell })),
         drops: (value, name) => fields<Zombie['drops']>(value, name, [], { head: drop, arm: drop, flag: drop }),
+        steps: (value, name) => allFields<NonNullable<Zombie['steps']>>(value, name, {
+            effect: nonEmptyString,
+            marks: (value, name) => array(value, name).map((entry, index) =>
+                allFields<NonNullable<Zombie['steps']>['marks'][number]>(entry, `${name}[${index}]`, { at: fraction, x: finite, y: finite })),
+        }),
         helm: (value, name) => fields<NonNullable<Zombie['helm']>>(value, name, ARMOR_REQUIRED, { ...ARMOR_FIELDS, showsHair: boolean }),
         shield: (value, name) => fields<ZombieArmorPresentation>(value, name, ARMOR_REQUIRED, ARMOR_FIELDS),
     })

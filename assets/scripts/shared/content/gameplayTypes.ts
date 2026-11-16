@@ -271,6 +271,19 @@ export interface PlantDefinition {
     mine?: { armingTicks: number; riseTicks: number; attack: Rect; targeting: PlantTargeting; explosion: ExplosionDefinition }
     /** Swallows the first zombie in reach, then digests before it can bite again. */
     chomper?: { attack: Rect; targeting: PlantTargeting; biteDelayTicks: number; biteTicks: number; digestTicks: number; swallowTicks: number }
+    /**
+     * Plant::UpdateScaredyShroom: while a hostile zombie is near it hides, and holds its shots (a `shooter` beside it)
+     * until it has come up again. Near is within `radius` of `center` (from the plant's corner, at its own x: the
+     * original's mX), on its row or the `rowRange` rows either side. It goes down for `lowerTicks` (anim_scared),
+     * stays down while one is near, and comes up for `raiseTicks` (anim_grow at its random rate).
+     */
+    fright?: { center: Point; radius: number; rowRange: number; lowerTicks: number; raiseTicks: { min: number; max: number } }
+    /**
+     * Zombie::AnimateChewSound for the hypno-shroom: a hostile zombie that chews it while it is awake turns to its side
+     * (Zombie::StartMindControlled), and the plant is gone. The original's mVelX = 0.17 then does nothing: the zombie
+     * picks its speed again as it stops eating (StopEating, StartWalkAnim, PickRandomSpeed).
+     */
+    mindControl?: true
     /** Explodes when eaten or otherwise destroyed by zombies. */
     deathExplosion?: ExplosionDefinition
     /**
@@ -402,6 +415,10 @@ export interface ZombieDefinition {
      */
     animation: AnimationDefinition
     tongueChance: number
+    /**
+     * Zombie::StartWalkAnim: how often it takes its second walk each time it sets off walking (`Rand(2)`, one in two
+     * for a zombie with anim_walk2; always for the flag zombie, whose variant is fixed at 0).
+     */
     walk2Chance: number
     targetingInsets?: Record<string, number>
     /**

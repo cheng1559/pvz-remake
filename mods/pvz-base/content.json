@@ -50425,7 +50425,18 @@
       "pvz:pole_vaulter_idle": "assets/reanim/pole_vaulter_idle.json",
       "pvz:helm_zombie_idle2": "assets/reanim/helm_zombie_idle2.json",
       "pvz:door_zombie_idle2": "assets/reanim/door_zombie_idle2.json",
-      "pvz:flag_idle2": "assets/reanim/flag_idle2.json"
+      "pvz:flag_idle2": "assets/reanim/flag_idle2.json",
+      "pvz:scaredyshroom": "assets/reanim/scaredyshroom.json",
+      "pvz:scaredyshroom_sleep": "assets/reanim/scaredyshroom_sleep.json",
+      "pvz:scaredyshroom_shoot": "assets/reanim/scaredyshroom_shoot.json",
+      "pvz:scaredyshroom_scared": "assets/reanim/scaredyshroom_scared.json",
+      "pvz:scaredyshroom_scaredidle": "assets/reanim/scaredyshroom_scaredidle.json",
+      "pvz:scaredyshroom_grow": "assets/reanim/scaredyshroom_grow.json",
+      "pvz:scaredyshroom_blink": "assets/reanim/scaredyshroom_blink.json",
+      "pvz:football_idle": "assets/reanim/football_idle.json",
+      "pvz:football_walk": "assets/reanim/football_walk.json",
+      "pvz:football_eat": "assets/reanim/football_eat.json",
+      "pvz:football_death": "assets/reanim/football_death.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",
