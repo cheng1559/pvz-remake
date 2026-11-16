@@ -8,8 +8,7 @@ import { damageZombie, startZombieDeath, updateHeadlessZombie, countZombiesOnScr
 import { zombiePartDropped } from './parts'
 import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
-import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
-import { getDebugRules } from '../debug/debugRules'
+import { damagePlant, isPlantInedible } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl, mindControls } from './mindControl'
@@ -188,14 +187,7 @@ export class ZombieSystem implements GameSystem {
                             return
                         }
                         if (chewed) emitServerEvent(events, 'zombieChewedPlant', { zombieId: entity, plantId: target })
-                        if (bites && !isPlantInedible(plant) && !getDebugRules(world).plantInvincible) {
-                            plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
-                            plant.health = Math.max(0, plant.health - definition.bite.damage)
-                            if (plant.health === 0) {
-                                emitServerEvent(events, 'plantEaten', { zombieId: entity, plantId: target })
-                                destroyEatenPlant(world, definitions, target, commands)
-                            }
-                        }
+                        if (bites && !isPlantInedible(plant)) damagePlant(world, definitions, target, definition.bite.damage, commands, undefined, entity)
                     }
                 }
             }

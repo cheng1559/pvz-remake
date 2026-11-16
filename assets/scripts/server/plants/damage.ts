@@ -15,9 +15,9 @@ export function isPlantInedible(plant: Plant): boolean {
 }
 
 /**
- * A hostile plant's attack on a plant. The original's plants never face each other, so this follows its zombie pea
- * (Projectile::DoImpact): the damage comes off the plant's health with a 25-tick flash whatever the plant is doing, and
- * a plant left with none is destroyed, as if eaten.
+ * Damage to a plant: a hostile plant's attack, which follows the original's zombie pea (Projectile::DoImpact; its plants
+ * never face each other), the damage coming off the plant's health with a 25-tick flash whatever the plant is doing;
+ * or a zombie's bite (Zombie::EatPlant), whose chew flashed it already. A plant left with none is destroyed, as if eaten.
  */
 export function damagePlant(
     world: World,
@@ -27,14 +27,20 @@ export function damagePlant(
     remover: EntityRemover,
     /** A snow pea's chill (see chill.ts). */
     chillTicks?: number,
+    /** The zombie biting it, which has eaten it when it is gone (`plantEaten`). */
+    eater?: number,
 ): void {
     const plant = world.get(entity, PlantComponent)
     if (!plant || plant.health <= 0 || !world.hasEntity(entity)) return
     if (chillTicks !== undefined) chillPlant(world, entity, plant, chillTicks)
     if (getDebugRules(world).plantInvincible) return
+    const events = world.resources.get(EventQueueResource)
+    if (eater !== undefined) plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
     plant.health = Math.max(0, plant.health - damage)
-    emitServerEvent(world.resources.get(EventQueueResource), 'plantHit', { plantId: entity })
-    if (plant.health === 0) destroyEatenPlant(world, definitions, entity, remover)
+    if (eater === undefined) emitServerEvent(events, 'plantHit', { plantId: entity })
+    if (plant.health > 0) return
+    if (eater !== undefined) emitServerEvent(events, 'plantEaten', { zombieId: eater, plantId: entity })
+    destroyEatenPlant(world, definitions, entity, remover)
 }
 
 /** A plant gone by a bite or a blow; one that explodes when destroyed goes off. */
