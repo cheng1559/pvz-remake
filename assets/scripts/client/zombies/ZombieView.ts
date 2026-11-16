@@ -372,6 +372,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             this.pose({ ...zombie, animations: { [ZOMBIE_BODY_LAYER]: { clip: ZOMBIE_CLIPS.walk, time: 0, rate: ASSET_FPS } } })
         }
         this.applyParts(zombie)
+        // What it let go as it was mowed (Zombie::MowDown's DropFlag) is drawn no more; the body is posed no more.
+        for (const layer of Object.keys(this.animation.layers)) if (layer !== ZOMBIE_BODY_LAYER && !zombie.animations[layer]) this.layers.hide(layer)
         this.player?.pause()
         const animation = this.clip(ZOMBIE_CLIPS.mowered)
         if (this.mowerDriver) {
