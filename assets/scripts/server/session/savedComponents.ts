@@ -137,7 +137,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
                 'walkClip', 'animations', 'hasHead', 'hasArm',
                 'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
-            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled'])
+            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled', 'frozenTicks'])
             const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
             const health = nonNegativeInteger(source.health, `${name}.health`)
             if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -158,6 +158,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
                 shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
                 chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
+                ...(source.frozenTicks === undefined ? {} : { frozenTicks: positiveInteger(source.frozenTicks, `${name}.frozenTicks`) }),
                 hasPole: boolean(source.hasPole, `${name}.hasPole`),
                 enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`),
                 riseTicks: nonNegativeInteger(source.riseTicks, `${name}.riseTicks`),
@@ -282,7 +283,7 @@ export function checkSavedEntity(content: ServerContent, world: World, entity: S
 
 function parsePlant(value: unknown, name: string): Plant {
     const source = exact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['ability', 'behaviorState', 'team', 'mindControlled', 'animations', 'blinkTicks'])
+        ['ability', 'behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -294,6 +295,7 @@ function parsePlant(value: unknown, name: string): Plant {
         maxHealth,
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
+        ...(source.frozenTicks === undefined ? {} : { frozenTicks: positiveInteger(source.frozenTicks, `${name}.frozenTicks`) }),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
         ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),

@@ -3,242 +3,250 @@
 import * as m0 from '@/ecs'
 import * as m1 from '@/server/achievements/achievements'
 import * as m2 from '@/server/achievements/triggers'
-import * as m3 from '@/server/combat/collision'
-import * as m4 from '@/server/combat/explosions'
-import * as m5 from '@/server/combat/motions'
-import * as m6 from '@/server/combat/projectiles'
-import * as m7 from '@/server/combat/targets'
-import * as m8 from '@/server/debug/debugCommands'
-import * as m9 from '@/server/debug/debugRules'
-import * as m10 from '@/server/level/conveyor'
-import * as m11 from '@/server/level/graves'
-import * as m12 from '@/server/level/itemSpawn'
-import * as m13 from '@/server/level/items'
-import * as m14 from '@/server/level/lawn'
-import * as m15 from '@/server/level/level'
-import * as m16 from '@/server/level/levelAward'
-import * as m17 from '@/server/level/loot'
-import * as m18 from '@/server/level/mower'
-import * as m19 from '@/server/level/sun'
-import * as m20 from '@/server/level/waves'
-import * as m21 from '@/server/menu/MenuService'
-import * as m22 from '@/server/menu/almanacCatalog'
-import * as m23 from '@/server/menu/challengeCatalog'
-import * as m24 from '@/server/menu/gameSettingsStore'
-import * as m25 from '@/server/menu/profileStore'
-import * as m26 from '@/server/menu/storeCatalog'
-import * as m27 from '@/server/plants/abilities'
-import * as m28 from '@/server/plants/animation'
-import * as m29 from '@/server/plants/behaviors'
-import * as m30 from '@/server/plants/bowling'
-import * as m31 from '@/server/plants/chill'
-import * as m32 from '@/server/plants/damage'
-import * as m33 from '@/server/plants/production'
-import * as m34 from '@/server/plants/shooter'
-import * as m35 from '@/server/registry/EntityBehaviorRegistry'
-import * as m36 from '@/server/registry/GameplayRegistry'
-import * as m37 from '@/server/registry/JsonComponents'
-import * as m38 from '@/server/rules'
-import * as m39 from '@/server/rules/adventure'
-import * as m40 from '@/server/rules/bowling'
-import * as m41 from '@/server/rules/registry'
-import * as m42 from '@/server/rules/whackAZombie'
-import * as m43 from '@/server/seeds/cursor'
-import * as m44 from '@/server/seeds/planting'
-import * as m45 from '@/server/seeds/seedBank'
-import * as m46 from '@/server/seeds/seedChooser'
-import * as m47 from '@/server/seeds/tools'
-import * as m48 from '@/server/session/IntegratedGameHost'
-import * as m49 from '@/server/session/IntegratedGameServer'
-import * as m50 from '@/server/session/commands'
-import * as m51 from '@/server/session/persistence'
-import * as m52 from '@/server/session/save'
-import * as m53 from '@/server/session/savedComponents'
-import * as m54 from '@/server/session/session'
-import * as m55 from '@/server/session/snapshot'
-import * as m56 from '@/server/state/DeterministicRng'
-import * as m57 from '@/server/state/components'
-import * as m58 from '@/server/state/events'
-import * as m59 from '@/server/state/levelState'
-import * as m60 from '@/server/tutorials'
-import * as m61 from '@/server/tutorials/advice'
-import * as m62 from '@/server/tutorials/coinAdvice'
-import * as m63 from '@/server/tutorials/introDialog'
-import * as m64 from '@/server/tutorials/moreSunTutorial'
-import * as m65 from '@/server/tutorials/packetUpgradeOffer'
-import * as m66 from '@/server/tutorials/plantingTutorial'
-import * as m67 from '@/server/tutorials/shovelTutorial'
-import * as m68 from '@/server/tutorials/sunflowerTutorial'
-import * as m69 from '@/server/tutorials/whackTutorial'
-import * as m70 from '@/server/zombies/animation'
-import * as m71 from '@/server/zombies/behaviors'
-import * as m72 from '@/server/zombies/damage'
-import * as m73 from '@/server/zombies/flag'
-import * as m74 from '@/server/zombies/groans'
-import * as m75 from '@/server/zombies/mindControl'
-import * as m76 from '@/server/zombies/parts'
-import * as m77 from '@/server/zombies/poleVault'
-import * as m78 from '@/server/zombies/spawn'
-import * as m79 from '@/server/zombies/system'
-import * as m80 from '@/shared/channel'
-import * as m81 from '@/shared/content/DefinitionRegistry'
-import * as m82 from '@/shared/content/animation'
-import * as m83 from '@/shared/content/chooserPages'
-import * as m84 from '@/shared/content/font'
-import * as m85 from '@/shared/content/from'
-import * as m86 from '@/shared/content/gameplay'
-import * as m87 from '@/shared/content/gameplayTypes'
-import * as m88 from '@/shared/content/graves'
-import * as m89 from '@/shared/content/levelHelpers'
-import * as m90 from '@/shared/content/music'
-import * as m91 from '@/shared/content/parseGameplay'
-import * as m92 from '@/shared/content/particle'
-import * as m93 from '@/shared/content/plantAbilities'
-import * as m94 from '@/shared/content/plantAnimation'
-import * as m95 from '@/shared/content/planting'
-import * as m96 from '@/shared/content/presentation'
-import * as m97 from '@/shared/content/reanim'
-import * as m98 from '@/shared/content/renderOrder'
-import * as m99 from '@/shared/content/seedGroups'
-import * as m100 from '@/shared/content/strings'
-import * as m101 from '@/shared/content/teams'
-import * as m102 from '@/shared/content/zombieAnimation'
-import * as m103 from '@/shared/content/zombieStates'
-import * as m104 from '@/shared/debug/DebugCli'
-import * as m105 from '@/shared/kernel'
-import * as m106 from '@/shared/kernel/binary'
-import * as m107 from '@/shared/kernel/particles'
-import * as m108 from '@/shared/menu'
-import * as m109 from '@/shared/mod'
-import * as m110 from '@/shared/mod/ModAssets'
-import * as m111 from '@/shared/mod/ModHost'
-import * as m112 from '@/shared/mod/content'
-import * as m113 from '@/shared/protocol'
-import * as m114 from '@/shared/protocol/json'
-import * as m115 from '@/shared/protocol/packets'
-import * as m116 from '@/shared/protocol/snapshot'
-import * as m117 from '@/shared/random'
-import * as m118 from '@/shared/validate'
+import * as m3 from '@/server/combat/cold'
+import * as m4 from '@/server/combat/collision'
+import * as m5 from '@/server/combat/explosions'
+import * as m6 from '@/server/combat/freeze'
+import * as m7 from '@/server/combat/ice'
+import * as m8 from '@/server/combat/motions'
+import * as m9 from '@/server/combat/projectiles'
+import * as m10 from '@/server/combat/targets'
+import * as m11 from '@/server/debug/debugCommands'
+import * as m12 from '@/server/debug/debugRules'
+import * as m13 from '@/server/level/conveyor'
+import * as m14 from '@/server/level/graves'
+import * as m15 from '@/server/level/itemSpawn'
+import * as m16 from '@/server/level/items'
+import * as m17 from '@/server/level/lawn'
+import * as m18 from '@/server/level/level'
+import * as m19 from '@/server/level/levelAward'
+import * as m20 from '@/server/level/loot'
+import * as m21 from '@/server/level/mower'
+import * as m22 from '@/server/level/sun'
+import * as m23 from '@/server/level/waves'
+import * as m24 from '@/server/menu/MenuService'
+import * as m25 from '@/server/menu/almanacCatalog'
+import * as m26 from '@/server/menu/challengeCatalog'
+import * as m27 from '@/server/menu/gameSettingsStore'
+import * as m28 from '@/server/menu/profileStore'
+import * as m29 from '@/server/menu/storeCatalog'
+import * as m30 from '@/server/plants/abilities'
+import * as m31 from '@/server/plants/animation'
+import * as m32 from '@/server/plants/behaviors'
+import * as m33 from '@/server/plants/bowling'
+import * as m34 from '@/server/plants/chill'
+import * as m35 from '@/server/plants/damage'
+import * as m36 from '@/server/plants/production'
+import * as m37 from '@/server/plants/shooter'
+import * as m38 from '@/server/plants/sleep'
+import * as m39 from '@/server/registry/EntityBehaviorRegistry'
+import * as m40 from '@/server/registry/GameplayRegistry'
+import * as m41 from '@/server/registry/JsonComponents'
+import * as m42 from '@/server/rules'
+import * as m43 from '@/server/rules/adventure'
+import * as m44 from '@/server/rules/bowling'
+import * as m45 from '@/server/rules/registry'
+import * as m46 from '@/server/rules/whackAZombie'
+import * as m47 from '@/server/seeds/cursor'
+import * as m48 from '@/server/seeds/planting'
+import * as m49 from '@/server/seeds/seedBank'
+import * as m50 from '@/server/seeds/seedChooser'
+import * as m51 from '@/server/seeds/tools'
+import * as m52 from '@/server/session/IntegratedGameHost'
+import * as m53 from '@/server/session/IntegratedGameServer'
+import * as m54 from '@/server/session/commands'
+import * as m55 from '@/server/session/persistence'
+import * as m56 from '@/server/session/save'
+import * as m57 from '@/server/session/savedComponents'
+import * as m58 from '@/server/session/session'
+import * as m59 from '@/server/session/snapshot'
+import * as m60 from '@/server/state/DeterministicRng'
+import * as m61 from '@/server/state/components'
+import * as m62 from '@/server/state/events'
+import * as m63 from '@/server/state/levelState'
+import * as m64 from '@/server/tutorials'
+import * as m65 from '@/server/tutorials/advice'
+import * as m66 from '@/server/tutorials/coinAdvice'
+import * as m67 from '@/server/tutorials/introDialog'
+import * as m68 from '@/server/tutorials/moreSunTutorial'
+import * as m69 from '@/server/tutorials/packetUpgradeOffer'
+import * as m70 from '@/server/tutorials/plantingTutorial'
+import * as m71 from '@/server/tutorials/shovelTutorial'
+import * as m72 from '@/server/tutorials/sunflowerTutorial'
+import * as m73 from '@/server/tutorials/whackTutorial'
+import * as m74 from '@/server/zombies/animation'
+import * as m75 from '@/server/zombies/behaviors'
+import * as m76 from '@/server/zombies/damage'
+import * as m77 from '@/server/zombies/flag'
+import * as m78 from '@/server/zombies/groans'
+import * as m79 from '@/server/zombies/mindControl'
+import * as m80 from '@/server/zombies/parts'
+import * as m81 from '@/server/zombies/poleVault'
+import * as m82 from '@/server/zombies/spawn'
+import * as m83 from '@/server/zombies/system'
+import * as m84 from '@/shared/channel'
+import * as m85 from '@/shared/content/DefinitionRegistry'
+import * as m86 from '@/shared/content/animation'
+import * as m87 from '@/shared/content/chooserPages'
+import * as m88 from '@/shared/content/font'
+import * as m89 from '@/shared/content/from'
+import * as m90 from '@/shared/content/gameplay'
+import * as m91 from '@/shared/content/gameplayTypes'
+import * as m92 from '@/shared/content/graves'
+import * as m93 from '@/shared/content/levelHelpers'
+import * as m94 from '@/shared/content/music'
+import * as m95 from '@/shared/content/parseGameplay'
+import * as m96 from '@/shared/content/particle'
+import * as m97 from '@/shared/content/plantAbilities'
+import * as m98 from '@/shared/content/plantAnimation'
+import * as m99 from '@/shared/content/planting'
+import * as m100 from '@/shared/content/presentation'
+import * as m101 from '@/shared/content/reanim'
+import * as m102 from '@/shared/content/renderOrder'
+import * as m103 from '@/shared/content/seedGroups'
+import * as m104 from '@/shared/content/strings'
+import * as m105 from '@/shared/content/teams'
+import * as m106 from '@/shared/content/zombieAnimation'
+import * as m107 from '@/shared/content/zombieStates'
+import * as m108 from '@/shared/debug/DebugCli'
+import * as m109 from '@/shared/kernel'
+import * as m110 from '@/shared/kernel/binary'
+import * as m111 from '@/shared/kernel/particles'
+import * as m112 from '@/shared/menu'
+import * as m113 from '@/shared/mod'
+import * as m114 from '@/shared/mod/ModAssets'
+import * as m115 from '@/shared/mod/ModHost'
+import * as m116 from '@/shared/mod/content'
+import * as m117 from '@/shared/protocol'
+import * as m118 from '@/shared/protocol/json'
+import * as m119 from '@/shared/protocol/packets'
+import * as m120 from '@/shared/protocol/snapshot'
+import * as m121 from '@/shared/random'
+import * as m122 from '@/shared/validate'
 
 /** Every module a server Mod may get from its host, by its path under assets/scripts. */
 export const SERVER_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'ecs': m0,
     'server/achievements/achievements': m1,
     'server/achievements/triggers': m2,
-    'server/combat/collision': m3,
-    'server/combat/explosions': m4,
-    'server/combat/motions': m5,
-    'server/combat/projectiles': m6,
-    'server/combat/targets': m7,
-    'server/debug/debugCommands': m8,
-    'server/debug/debugRules': m9,
-    'server/level/conveyor': m10,
-    'server/level/graves': m11,
-    'server/level/itemSpawn': m12,
-    'server/level/items': m13,
-    'server/level/lawn': m14,
-    'server/level/level': m15,
-    'server/level/levelAward': m16,
-    'server/level/loot': m17,
-    'server/level/mower': m18,
-    'server/level/sun': m19,
-    'server/level/waves': m20,
-    'server/menu/MenuService': m21,
-    'server/menu/almanacCatalog': m22,
-    'server/menu/challengeCatalog': m23,
-    'server/menu/gameSettingsStore': m24,
-    'server/menu/profileStore': m25,
-    'server/menu/storeCatalog': m26,
-    'server/plants/abilities': m27,
-    'server/plants/animation': m28,
-    'server/plants/behaviors': m29,
-    'server/plants/bowling': m30,
-    'server/plants/chill': m31,
-    'server/plants/damage': m32,
-    'server/plants/production': m33,
-    'server/plants/shooter': m34,
-    'server/registry/EntityBehaviorRegistry': m35,
-    'server/registry/GameplayRegistry': m36,
-    'server/registry/JsonComponents': m37,
-    'server/rules': m38,
-    'server/rules/adventure': m39,
-    'server/rules/bowling': m40,
-    'server/rules/registry': m41,
-    'server/rules/whackAZombie': m42,
-    'server/seeds/cursor': m43,
-    'server/seeds/planting': m44,
-    'server/seeds/seedBank': m45,
-    'server/seeds/seedChooser': m46,
-    'server/seeds/tools': m47,
-    'server/session/IntegratedGameHost': m48,
-    'server/session/IntegratedGameServer': m49,
-    'server/session/commands': m50,
-    'server/session/persistence': m51,
-    'server/session/save': m52,
-    'server/session/savedComponents': m53,
-    'server/session/session': m54,
-    'server/session/snapshot': m55,
-    'server/state/DeterministicRng': m56,
-    'server/state/components': m57,
-    'server/state/events': m58,
-    'server/state/levelState': m59,
-    'server/tutorials': m60,
-    'server/tutorials/advice': m61,
-    'server/tutorials/coinAdvice': m62,
-    'server/tutorials/introDialog': m63,
-    'server/tutorials/moreSunTutorial': m64,
-    'server/tutorials/packetUpgradeOffer': m65,
-    'server/tutorials/plantingTutorial': m66,
-    'server/tutorials/shovelTutorial': m67,
-    'server/tutorials/sunflowerTutorial': m68,
-    'server/tutorials/whackTutorial': m69,
-    'server/zombies/animation': m70,
-    'server/zombies/behaviors': m71,
-    'server/zombies/damage': m72,
-    'server/zombies/flag': m73,
-    'server/zombies/groans': m74,
-    'server/zombies/mindControl': m75,
-    'server/zombies/parts': m76,
-    'server/zombies/poleVault': m77,
-    'server/zombies/spawn': m78,
-    'server/zombies/system': m79,
-    'shared/channel': m80,
-    'shared/content/DefinitionRegistry': m81,
-    'shared/content/animation': m82,
-    'shared/content/chooserPages': m83,
-    'shared/content/font': m84,
-    'shared/content/from': m85,
-    'shared/content/gameplay': m86,
-    'shared/content/gameplayTypes': m87,
-    'shared/content/graves': m88,
-    'shared/content/levelHelpers': m89,
-    'shared/content/music': m90,
-    'shared/content/parseGameplay': m91,
-    'shared/content/particle': m92,
-    'shared/content/plantAbilities': m93,
-    'shared/content/plantAnimation': m94,
-    'shared/content/planting': m95,
-    'shared/content/presentation': m96,
-    'shared/content/reanim': m97,
-    'shared/content/renderOrder': m98,
-    'shared/content/seedGroups': m99,
-    'shared/content/strings': m100,
-    'shared/content/teams': m101,
-    'shared/content/zombieAnimation': m102,
-    'shared/content/zombieStates': m103,
-    'shared/debug/DebugCli': m104,
-    'shared/kernel': m105,
-    'shared/kernel/binary': m106,
-    'shared/kernel/particles': m107,
-    'shared/menu': m108,
-    'shared/mod': m109,
-    'shared/mod/ModAssets': m110,
-    'shared/mod/ModHost': m111,
-    'shared/mod/content': m112,
-    'shared/protocol': m113,
-    'shared/protocol/json': m114,
-    'shared/protocol/packets': m115,
-    'shared/protocol/snapshot': m116,
-    'shared/random': m117,
-    'shared/validate': m118,
+    'server/combat/cold': m3,
+    'server/combat/collision': m4,
+    'server/combat/explosions': m5,
+    'server/combat/freeze': m6,
+    'server/combat/ice': m7,
+    'server/combat/motions': m8,
+    'server/combat/projectiles': m9,
+    'server/combat/targets': m10,
+    'server/debug/debugCommands': m11,
+    'server/debug/debugRules': m12,
+    'server/level/conveyor': m13,
+    'server/level/graves': m14,
+    'server/level/itemSpawn': m15,
+    'server/level/items': m16,
+    'server/level/lawn': m17,
+    'server/level/level': m18,
+    'server/level/levelAward': m19,
+    'server/level/loot': m20,
+    'server/level/mower': m21,
+    'server/level/sun': m22,
+    'server/level/waves': m23,
+    'server/menu/MenuService': m24,
+    'server/menu/almanacCatalog': m25,
+    'server/menu/challengeCatalog': m26,
+    'server/menu/gameSettingsStore': m27,
+    'server/menu/profileStore': m28,
+    'server/menu/storeCatalog': m29,
+    'server/plants/abilities': m30,
+    'server/plants/animation': m31,
+    'server/plants/behaviors': m32,
+    'server/plants/bowling': m33,
+    'server/plants/chill': m34,
+    'server/plants/damage': m35,
+    'server/plants/production': m36,
+    'server/plants/shooter': m37,
+    'server/plants/sleep': m38,
+    'server/registry/EntityBehaviorRegistry': m39,
+    'server/registry/GameplayRegistry': m40,
+    'server/registry/JsonComponents': m41,
+    'server/rules': m42,
+    'server/rules/adventure': m43,
+    'server/rules/bowling': m44,
+    'server/rules/registry': m45,
+    'server/rules/whackAZombie': m46,
+    'server/seeds/cursor': m47,
+    'server/seeds/planting': m48,
+    'server/seeds/seedBank': m49,
+    'server/seeds/seedChooser': m50,
+    'server/seeds/tools': m51,
+    'server/session/IntegratedGameHost': m52,
+    'server/session/IntegratedGameServer': m53,
+    'server/session/commands': m54,
+    'server/session/persistence': m55,
+    'server/session/save': m56,
+    'server/session/savedComponents': m57,
+    'server/session/session': m58,
+    'server/session/snapshot': m59,
+    'server/state/DeterministicRng': m60,
+    'server/state/components': m61,
+    'server/state/events': m62,
+    'server/state/levelState': m63,
+    'server/tutorials': m64,
+    'server/tutorials/advice': m65,
+    'server/tutorials/coinAdvice': m66,
+    'server/tutorials/introDialog': m67,
+    'server/tutorials/moreSunTutorial': m68,
+    'server/tutorials/packetUpgradeOffer': m69,
+    'server/tutorials/plantingTutorial': m70,
+    'server/tutorials/shovelTutorial': m71,
+    'server/tutorials/sunflowerTutorial': m72,
+    'server/tutorials/whackTutorial': m73,
+    'server/zombies/animation': m74,
+    'server/zombies/behaviors': m75,
+    'server/zombies/damage': m76,
+    'server/zombies/flag': m77,
+    'server/zombies/groans': m78,
+    'server/zombies/mindControl': m79,
+    'server/zombies/parts': m80,
+    'server/zombies/poleVault': m81,
+    'server/zombies/spawn': m82,
+    'server/zombies/system': m83,
+    'shared/channel': m84,
+    'shared/content/DefinitionRegistry': m85,
+    'shared/content/animation': m86,
+    'shared/content/chooserPages': m87,
+    'shared/content/font': m88,
+    'shared/content/from': m89,
+    'shared/content/gameplay': m90,
+    'shared/content/gameplayTypes': m91,
+    'shared/content/graves': m92,
+    'shared/content/levelHelpers': m93,
+    'shared/content/music': m94,
+    'shared/content/parseGameplay': m95,
+    'shared/content/particle': m96,
+    'shared/content/plantAbilities': m97,
+    'shared/content/plantAnimation': m98,
+    'shared/content/planting': m99,
+    'shared/content/presentation': m100,
+    'shared/content/reanim': m101,
+    'shared/content/renderOrder': m102,
+    'shared/content/seedGroups': m103,
+    'shared/content/strings': m104,
+    'shared/content/teams': m105,
+    'shared/content/zombieAnimation': m106,
+    'shared/content/zombieStates': m107,
+    'shared/debug/DebugCli': m108,
+    'shared/kernel': m109,
+    'shared/kernel/binary': m110,
+    'shared/kernel/particles': m111,
+    'shared/menu': m112,
+    'shared/mod': m113,
+    'shared/mod/ModAssets': m114,
+    'shared/mod/ModHost': m115,
+    'shared/mod/content': m116,
+    'shared/protocol': m117,
+    'shared/protocol/json': m118,
+    'shared/protocol/packets': m119,
+    'shared/protocol/snapshot': m120,
+    'shared/random': m121,
+    'shared/validate': m122,
 }

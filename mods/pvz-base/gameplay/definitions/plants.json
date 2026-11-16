@@ -1,5 +1,6 @@
 {
   "pvz:bowling-wallnut": {
+    "unfreezable": true,
     "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
     "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}, "bouncedBreaks": ["door"]},
     "animation": {
@@ -14,6 +15,7 @@
     }
   },
   "pvz:bowling-explodenut": {
+    "unfreezable": true,
     "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
     "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}},
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
@@ -83,6 +85,7 @@
     }
   },
   "pvz:cherrybomb": {
+    "unfreezable": true,
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "fuse": {"ticks": 100, "explosion": {"offset": {"x": 40, "y": 40}, "radius": 115, "rowRange": 1, "damage": 1800, "burn": true}},
@@ -106,6 +109,7 @@
     }
   },
   "pvz:potatomine": {
+    "unfreezable": ["rising"],
     "low": true,
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
@@ -245,6 +249,7 @@
     }
   },
   "pvz:gravebuster": {
+    "unfreezable": true,
     "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "graveBuster": {"landTicks": {"min": 47, "max": 70}, "eatTicks": 400},
     "animation": {
@@ -290,6 +295,23 @@
       "layers": {"body": "body", "sleeping": null},
       "fire": {"body": "shoot"},
       "states": {"calm": {"body": "body"}, "lowering": {"body": "scared"}, "scared": {"body": "scaredIdle"}, "raising": {"body": "grow"}},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:iceshroom": {
+    "unfreezable": true,
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "nocturnal": true,
+    "fuse": {"ticks": 100, "freeze": {"ticks": {"min": 400, "max": 600}, "coldTicks": {"min": 300, "max": 400}, "chillTicks": 2000, "damage": 20, "boardTicks": 300}},
+    "animation": {
+      "clips": {
+        "body": {"frames": 17, "fps": [10, 15]},
+        "sleep": {"frames": 17, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
       "asleep": {"body": "sleep", "sleeping": "sleeping"},
       "blink": {"clip": "blink"}
     }

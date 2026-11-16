@@ -75,7 +75,7 @@ test('an explosion counts the zombies it takes out, not a tougher one that survi
     const { world, zombie } = game()
     const tough = zombie('pvz:normal', 2, 360), weak = zombie('pvz:normal', 2, 380)
     world.get(tough, ZombieComponent)!.health = 2000
-    const blast = definitions.plants['pvz:cherrybomb'].fuse!.explosion
+    const blast = definitions.plants['pvz:cherrybomb'].fuse!.explosion!
     assert.equal(explode(world, definitions, { x: board.origin.x + 4 * board.cell.width, y: board.origin.y + 2 * board.cell.height, row: 2 }, blast, world), 1)
     assert.equal(world.get(tough, ZombieComponent)!.health, 200, 'it took the blast and lives')
     assert.equal(world.hasEntity(weak), false)

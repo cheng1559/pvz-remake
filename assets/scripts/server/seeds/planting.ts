@@ -21,6 +21,7 @@ import { placeGrave } from '../level/graves'
 import { graveAt } from '@/shared/content/graves'
 import { cellPlant, type PlantingLawn, type PlantingRefusal, plantingRefusal } from '@/shared/content/planting'
 import { gridItems, lawnPlants } from '../level/lawn'
+import { isPlantAsleep } from '../plants/sleep'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -194,7 +195,7 @@ export const planting = {
             const delay = (definition.shooter ?? definition.producer)!.initialDelayTicks
             world.add(entity, PlantAttackComponent, { readyAtTick: gameplayTick + random.integer(delay.min, delay.max) })
         }
-        startPlantAnimations(world.get(entity, PlantComponent)!, definition, !!definition.nocturnal && !level.board.night, random)
+        startPlantAnimations(world.get(entity, PlantComponent)!, definition, isPlantAsleep(definition, level.board), random)
         return entity
     },
 

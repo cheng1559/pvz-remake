@@ -78,6 +78,8 @@ function burnZombie(world: World, definitions: GameplayDefinitions, entity: numb
         return
     }
     if (!zombie.hasHead) {
+        // Zombie::ApplyBurn's RemoveIceTrap, which breaks nothing off.
+        delete zombie.frozenTicks
         zombie.state = 'burned'
         zombie.deathTicksRemaining = BURNED_TICKS
         zombie.biteTicks = 0

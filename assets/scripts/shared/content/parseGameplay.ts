@@ -4,7 +4,8 @@ import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 import { PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind, type PlantAbilityState } from './plantAbilities'
-import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
+import { ZOMBIE_STATES } from './zombieStates'
+import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
 
@@ -164,7 +165,7 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
     const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exact(value, ['maxHealth', 'body'], name, [...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation'])
+    const source = exact(value, ['maxHealth', 'body'], name, [...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation', 'unchillable', 'unfreezable'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
@@ -259,10 +260,12 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         }
     }
     if (source.fuse) {
-        const fuse = exact(source.fuse, ['ticks', 'explosion'], `${name}.fuse`)
+        const fuse = exact(source.fuse, ['ticks'], `${name}.fuse`, ['explosion', 'freeze'])
+        if ((fuse.explosion === undefined) === (fuse.freeze === undefined)) throw new Error(`${name}.fuse needs exactly one of explosion and freeze`)
         result.fuse = {
             ticks: positiveInteger(fuse.ticks, `${name}.fuse.ticks`),
-            explosion: explosion(fuse.explosion, `${name}.fuse.explosion`),
+            ...(fuse.explosion === undefined ? {} : { explosion: explosion(fuse.explosion, `${name}.fuse.explosion`) }),
+            ...(fuse.freeze === undefined ? {} : { freeze: freeze(fuse.freeze, `${name}.fuse.freeze`) }),
         }
     }
     if (source.mine) {
@@ -306,8 +309,12 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
     }
     if (source.mindControl !== undefined) result.mindControl = trueFlag(source.mindControl, `${name}.mindControl`)
     if (source.deathExplosion) result.deathExplosion = explosion(source.deathExplosion, `${name}.deathExplosion`)
-    // Off the board it is in a state of its own ability.
+    // Off the board it is in a state of its own ability, as the states it is kept from the cold in are.
     const offBoardState = result.animation?.offBoard?.state, kind = plantAbilityKind(result)
+    const states: readonly PlantAbilityState[] = kind ? PLANT_ABILITY_STATES_BY_KIND[kind] : []
+    for (const key of ['unchillable', 'unfreezable'] as const) {
+        if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, states)
+    }
     if (offBoardState !== undefined && !(kind && (PLANT_ABILITY_STATES_BY_KIND[kind] as readonly string[]).includes(offBoardState))) {
         throw new Error(`${name}.animation.offBoard.state must be a state of the plant's ability`)
     }
@@ -326,8 +333,27 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
     }
 }
 
+/** `unchillable` or `unfreezable`: `true`, or the states it holds in, each once, of those it may be in. */
+function coldStates<S extends string>(value: unknown, name: string, states: readonly S[]): true | S[] {
+    if (value === true) return true
+    const listed = array(value, name).map((state, index) => oneOf(state, states, `${name}[${index}]`))
+    if (!listed.length || new Set(listed).size !== listed.length) throw new Error(`${name} must be true or distinct states`)
+    return listed
+}
+
+function freeze(value: unknown, name: string): FreezeDefinition {
+    const source = exact(value, ['ticks', 'coldTicks', 'chillTicks', 'damage', 'boardTicks'], name)
+    return {
+        ticks: tickRange(source.ticks, `${name}.ticks`, 1),
+        coldTicks: tickRange(source.coldTicks, `${name}.coldTicks`, 1),
+        chillTicks: nonNegativeInteger(source.chillTicks, `${name}.chillTicks`),
+        damage: nonNegativeInteger(source.damage, `${name}.damage`),
+        boardTicks: nonNegativeInteger(source.boardTicks, `${name}.boardTicks`),
+    }
+}
+
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX'])
+    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable'])
     const spawn = exact(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -355,6 +381,9 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
             ...(wave.firstWave === undefined ? {} : { firstWave: positiveInteger(wave.firstWave, `${name}.wave.firstWave`) }) },
     }
     if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
+    for (const key of ['unchillable', 'unfreezable'] as const) {
+        if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, ZOMBIE_STATES)
+    }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(record(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.graveRise !== undefined) {
         if (typeof source.graveRise !== 'boolean') throw new Error(`${name}.graveRise must be boolean`)

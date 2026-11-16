@@ -28,6 +28,8 @@ export interface Plant extends EntityBehaviorState {
     mindControlled?: true
     /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); 0 when not chilled. */
     chilledTicks: number
+    /** Ticks left frozen by a hostile ice-shroom, doing nothing (see combat/freeze.ts); absent when not frozen. */
+    frozenTicks?: number
     /** What each layer of its animation plays now (PlantDefinition.animation); see plants/animation.ts. */
     animations?: Record<string, LayerState>
     /** Ticks to its next blink (Plant::mBlinkCountdown). */
@@ -74,6 +76,11 @@ export interface Zombie extends EntityBehaviorState {
     helmHealth: number
     shieldHealth: number
     chilledTicks: number
+    /**
+     * Zombie::mIceTrapCounter: ticks left frozen by a hostile ice-shroom (see combat/freeze.ts), standing still in its
+     * block of ice; absent when not frozen.
+     */
+    frozenTicks?: number
     /** Pole vaulters run with the pole until their single vault. */
     hasPole: boolean
     /** Newspaper gasp and grave emergence progress, persisted with the entity. */
@@ -186,6 +193,11 @@ export interface LevelState {
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
+    /**
+     * Board::mIceTrapCounter: ticks left since an ice-shroom froze a side, by the side frozen (see combat/freeze.ts).
+     * What waits on it (the original's zombies from the pool and the sky, a zombie stepping into the pool) is not yet in.
+     */
+    iceTrap?: Partial<Record<Team, number>>
 }
 
 export const PositionComponent = defineComponent<Position>('pvz:position')

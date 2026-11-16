@@ -61,6 +61,8 @@ export interface WorldSnapshot {
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
+    /** Board::mIceTrapCounter: the ticks left of a side an ice-shroom froze, by side. */
+    iceTrap?: Partial<Record<Team, number>>
     sun: number
     money: number
     wave: WaveSnapshot
@@ -189,6 +191,8 @@ export interface PlantSnapshot extends EntityBehaviorState {
     mindControlled?: true
     /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
     chilledTicks?: number
+    /** Frozen by a hostile ice-shroom: the plant stands still in a block of ice, drawn blue. */
+    frozen?: true
     /** What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation). */
     animations?: Record<string, LayerSnapshot>
     /**
@@ -236,6 +240,8 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     /** Remaining shield health; 0 without one or once it drops. */
     shieldHealth: number
     chilled?: boolean
+    /** Zombie::mIceTrapCounter: frozen by a hostile ice-shroom, it stands still in a block of ice, drawn blue. */
+    frozen?: true
     /** A pole vaulter still carrying the pole. */
     hasPole?: boolean
     enraged?: boolean
@@ -328,6 +334,13 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         throw new TypeError('snapshot.result is unknown')
     }
     boolean(snapshot.paused, 'snapshot.paused')
+    if (snapshot.iceTrap !== undefined) {
+        const iceTrap = record(snapshot.iceTrap, 'snapshot.iceTrap')
+        for (const [side, ticks] of Object.entries(iceTrap)) {
+            oneOf(side, TEAMS, 'snapshot.iceTrap side')
+            nonNegativeInteger(ticks, `snapshot.iceTrap.${side}`)
+        }
+    }
     nonNegativeInteger(snapshot.sun, 'snapshot.sun')
     nonNegativeInteger(snapshot.money, 'snapshot.money')
     const wave = record(snapshot.wave, 'snapshot.wave')
@@ -442,6 +455,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
+        if (plant.frozen !== undefined && plant.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
         if (plant.produceTicks !== undefined) nonNegativeInteger(plant.produceTicks, `${name}.produceTicks`)
         if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
         if (plant.ability !== undefined) {
@@ -474,6 +488,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
             if ((zombie[key] as number) < 0) throw new TypeError(`${name}.${key} must be non-negative`)
         }
         if (zombie.chilled !== undefined) boolean(zombie.chilled, `${name}.chilled`)
+        if (zombie.frozen !== undefined && zombie.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
         if (zombie.enraged !== undefined) boolean(zombie.enraged, `${name}.enraged`)
         if (zombie.riseTicks !== undefined) nonNegativeInteger(zombie.riseTicks, `${name}.riseTicks`)
         if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)

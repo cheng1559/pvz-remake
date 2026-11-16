@@ -18,6 +18,7 @@ import { damagePlant } from './damage'
 import { launchProjectile, ProjectileMotionsResource } from '../combat/motions'
 import { type GameplayDefinitions, PLANT_ATTACKS } from '@/shared/content/gameplay'
 import { firePlantAnimation, plantTrackPoint } from './animation'
+import { isPlantAsleep } from './sleep'
 
 export function createPlantAttackSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -33,7 +34,7 @@ export function createPlantAttackSystem(definitions: GameplayDefinitions): GameS
                 if (!position || !plant || !attack) continue
                 const definition = definitions.plants[plant.typeId], shooter = definition.shooter
                 // Mushrooms sleep on day boards.
-                if (!shooter || definition.nocturnal && !level.board.night) continue
+                if (!shooter || isPlantAsleep(definition, level.board)) continue
 
                 if (attack.burst) {
                     if (tick < attack.burst.fireAtTick) continue

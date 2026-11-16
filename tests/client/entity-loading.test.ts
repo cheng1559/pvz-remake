@@ -956,22 +956,24 @@ test('a zombie with steps kicks up their effect under its feet as its walk comes
     ], 'none while it eats, nor on another clip')
 })
 
-test('a mind-controlled zombie is drawn purple over its chill and a burned one black without either', () => {
+test('a mind-controlled zombie is drawn purple, between purple and blue while cold, and a burned one black without either', () => {
     const { ZombieView } = loadClientModule('zombies/ZombieView', {
         cc: { Color: { BLACK: 'black', WHITE: 'white' } }, '@/client/view/tints': loadClientModule('view/tints', {}),
     })
     const drawn: unknown[][] = []
     const player = { loadedId: 'test', setColorOverride(color: unknown) { drawn.push(['color', color]) }, setTint(tint: unknown) { drawn.push(['tint', tint]) } }
     const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, color: 'normal' })
-    for (const zombie of [{ chilled: true }, { chilled: true, mindControlled: true }, { mindControlled: true }, { state: 'burned', mindControlled: true }, {}]) {
+    for (const zombie of [{ chilled: true }, { chilled: true, mindControlled: true }, { frozen: true, mindControlled: true }, { mindControlled: true },
+        { mindControlled: true }, { state: 'burned', mindControlled: true }, {}]) {
         view.applyColor({ state: 'walking', ...zombie })
     }
     assert.deepEqual(JSON.parse(JSON.stringify(drawn)), [
         ['color', 'white'], ['tint', { r: 75, g: 75, b: 255 }],
+        ['color', 'white'], ['tint', { r: 102, g: 70, b: 224 }],
         ['color', 'white'], ['tint', { r: 128, g: 64, b: 192 }],
         ['color', 'black'], ['tint', null],
         ['color', 'white'], ['tint', null],
-    ], 'ZOMBIE_MINDCONTROLLED_COLOR before the chill, and nothing new while it stays mind-controlled')
+    ], 'both tints halfway while it is mind-controlled and cold (frozen is cold too), and nothing new while it stays so')
 })
 
 test("a shot leaves the muzzle effect of the plant that fired it just over the row's mowers, mirrored across its hitbox for the zombies' side", () => {

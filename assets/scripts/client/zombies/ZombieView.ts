@@ -21,6 +21,7 @@ import { layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } f
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
+import { IceTrapView } from '@/client/view/IceTrapView'
 
 /** Sprites a zombie swaps in as it takes damage, by ID: dented helms and shields, the bare arm, the enraged head. */
 export type ZombieViewSprites = Readonly<Record<string, SpriteFrame>>
@@ -86,6 +87,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private rising = false
     /** Where its body's clip was at the last snapshot, for the marks of its steps it has come to since. */
     private stepped?: { clip: string, time: number }
+    /** The ice it stands in while frozen (Zombie::DrawIceTrap), around its layers; on the board only. */
+    private ice?: IceTrapView
 
     private readonly node: Node
     protected readonly presentation: ZombiePresentationDefinition
@@ -133,6 +136,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const shadow = this.draw.shadow === false ? undefined : await plantShadow(content, stage)
         if (stage) {
             this.sprites = Object.fromEntries(await Promise.all(swapSprites(this.presentation).map(async id => [id, await modResources.sprite(id)] as const)))
+            const look = content.presentation.iceTrap
+            this.ice = await IceTrapView.create(this.root, this.root.children[0], look, this.presentation.iceTrap ?? look.zombie)
         }
         // Off the board its shadow goes beside its node, under what else is there.
         if (shadow) this.shadowNode = uiNode({
@@ -155,6 +160,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.latestZombie = zombie
         this.flash = this.context.stage?.flashes.zombie(zombie.entityId, world.gameplayTick) ?? NO_FLASH
         this.syncFacing(zombie)
+        // Its ice turns with it, across its width as what falls off it does.
+        this.ice?.sync(!!zombie.frozen, this.mirrored ? ZOMBIE_WIDTH : undefined)
         // Zombie::PlayDeathAnim removes the surprise mark (AttachmentReanimTypeDie).
         if (zombie.state === 'dying' || zombie.state === 'mowered') {
             for (const armor of [this.presentation.helm, this.presentation.shield]) {
@@ -486,7 +493,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
     }
 
-    private color: 'normal' | 'chilled' | 'mindControlled' | 'burned' = 'normal'
+    private color: 'normal' | 'chilled' | 'mindControlled' | 'mindControlledChilled' | 'burned' = 'normal'
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
 
@@ -513,16 +520,17 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /**
-     * Zombie::DrawReanim draws a burned zombie black; otherwise a mind-controlled one purple, or a chilled one blue
-     * (ReanimPlayer.setTint, entityTint).
+     * Zombie::DrawReanim draws a burned zombie black; otherwise a mind-controlled one purple, a chilled or frozen one
+     * blue, and one both between the two (ReanimPlayer.setTint, entityTint).
      */
     private applyColor(zombie: ShownZombie, force = false): void {
-        const color = zombie.state === 'burned' ? 'burned' : zombie.mindControlled ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
+        const cold = isCold(zombie)
+        const color = zombie.state === 'burned' ? 'burned' : zombie.mindControlled ? cold ? 'mindControlledChilled' : 'mindControlled' : cold ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
         // What it carries is attached to the body's tracks, so it takes the body's colors.
         this.player.setColorOverride(color === 'burned' ? Color.BLACK : Color.WHITE)
-        this.player.setTint(color === 'burned' ? undefined : entityTint(!!zombie.mindControlled, !!zombie.chilled))
+        this.player.setTint(color === 'burned' ? undefined : entityTint(!!zombie.mindControlled, cold))
     }
 
     /** Zombie::DrawReanim's hit highlight (mJustGotShotCounter), over its chill; the shield's own (mShieldJustGotShotCounter). */
@@ -654,7 +662,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (!view || !zombie || !drop) return
         // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
         // part's flight for a mind-controlled zombie.)
-        const mirrored = zombie.team === 'plants', tint = entityTint(!!zombie.mindControlled, !!zombie.chilled)
+        const mirrored = zombie.team === 'plants', tint = entityTint(!!zombie.mindControlled, isCold(zombie))
         // One above the zombie.
         stage.spawnParticle(stage.zombieOrder(zombie.row) + 1, {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
@@ -706,6 +714,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         })
     }
 }
+
+/** Zombie::DrawReanim and OverrideParticleColor: chilled or frozen (mChilledCounter, mIceTrapCounter), drawn blue. */
+const isCold = (zombie: Pick<ShownZombie, 'chilled' | 'frozen'>): boolean => !!zombie.chilled || !!zombie.frozen
 
 /** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
 const CHARRED_MIRRORED_SHIFT = 60

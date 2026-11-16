@@ -163,8 +163,9 @@ function targetBody(world: World, definitions: GameplayDefinitions, entity: numb
     const zombie = world.get(entity, ZombieComponent), plant = world.get(entity, PlantComponent)
     if (zombie) {
         const team = zombieTeam(zombie), body = zombieFacingRect(definitions.zombies[zombie.typeId].body, team)
-        // Zombie::ZombieTargetLeadX: an eating zombie stands still, a chilled one walks at half speed.
-        const walk = zombie.state === 'eating' ? 0 : teamDirection(team) * zombie.speedPerTick * (zombie.chilledTicks > 0 ? 0.5 : 1)
+        // Zombie::ZombieTargetLeadX: an eating or frozen zombie stands still (ZombieNotWalking), a chilled one walks at half speed.
+        const still = zombie.state === 'eating' || zombie.frozenTicks !== undefined
+        const walk = still ? 0 : teamDirection(team) * zombie.speedPerTick * (zombie.chilledTicks > 0 ? 0.5 : 1)
         const left = Math.trunc(position.x) + body.x
         return { x: left + body.width / 2, left, width: body.width, top: Math.trunc(position.y) + body.y, height: body.height, team, walk }
     }

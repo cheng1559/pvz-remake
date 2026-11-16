@@ -147,6 +147,8 @@ export function mowPlant(world: World, mowerId: number, mower: Projectile, targe
     mower.chompCounter = CHOMP_ACTIVE_TICKS
     world.remove(target.entity, PlantComponent)
     world.remove(target.entity, PlantAttackComponent)
+    // Its ice goes with it, breaking nothing off, as a mowed zombie's (Zombie::MowDown).
+    delete target.plant.frozenTicks
     const squash = startLayer(MOWERED_ANIMATION, {}, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
     world.add(target.entity, MowedPlantComponent, { plant: target.plant, squash, ...(team === 'zombies' ? { left: true as const } : {}) })
     emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId, plantId: target.entity })

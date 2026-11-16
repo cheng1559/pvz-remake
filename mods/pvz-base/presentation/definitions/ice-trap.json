@@ -1,0 +1,7 @@
+{
+  "back": "pvz:icetrap2",
+  "front": "pvz:icetrap",
+  "release": "pvz:icetraprelease",
+  "zombie": {"x": 46, "y": 92, "releaseAt": [75, 106]},
+  "plant": {"x": 13, "y": 51, "releaseAt": [40, 65]}
+}

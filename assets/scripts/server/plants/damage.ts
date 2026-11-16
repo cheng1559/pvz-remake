@@ -1,4 +1,4 @@
-import { type EntityRemover, type Plant, PlantComponent, PositionComponent } from '../state/components'
+import { type EntityRemover, LevelStateResource, type Plant, PlantComponent, PositionComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
@@ -6,12 +6,19 @@ import { explode, explosionCenter } from '../combat/explosions'
 import { plantTeam } from '@/shared/content/teams'
 import { getDebugRules } from '../debug/debugRules'
 import { chillPlant } from './chill'
+import { isPlantAsleep } from './sleep'
+import { breakIce } from '../combat/ice'
 
 export const RECENTLY_EATEN_TICKS = 50
 
-/** Zombies may chew this plant without hurting it, like a lit cherry bomb or a risen potato mine. */
-export function isPlantInedible(plant: Plant): boolean {
-    return plant.ability?.state === 'fuse' || plant.ability?.state === 'rising' || plant.ability?.state === 'armed'
+/**
+ * Zombie::EatPlant: zombies may chew this plant without hurting it, like a lit cherry bomb or a risen potato mine; an
+ * ice-shroom asleep, its fuse not lit, they eat as any plant.
+ */
+export function isPlantInedible(world: World, definitions: GameplayDefinitions, plant: Plant): boolean {
+    const state = plant.ability?.state
+    if (state === 'fuse') return !isPlantAsleep(definitions.plants[plant.typeId], world.resources.get(LevelStateResource).board)
+    return state === 'rising' || state === 'armed'
 }
 
 /**
@@ -32,7 +39,7 @@ export function damagePlant(
 ): void {
     const plant = world.get(entity, PlantComponent)
     if (!plant || plant.health <= 0 || !world.hasEntity(entity)) return
-    if (chillTicks !== undefined) chillPlant(world, entity, plant, chillTicks)
+    if (chillTicks !== undefined) chillPlant(world, definitions, entity, plant, chillTicks)
     if (getDebugRules(world).plantInvincible) return
     const events = world.resources.get(EventQueueResource)
     if (eater !== undefined) plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
@@ -45,7 +52,10 @@ export function damagePlant(
 
 /** A plant gone by a bite or a blow; one that explodes when destroyed goes off. */
 export function destroyEatenPlant(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
-    const explosion = definitions.plants[world.get(entity, PlantComponent)!.typeId].deathExplosion
+    const plant = world.get(entity, PlantComponent)!
+    // The ice it is in breaks off, as off a zombie that dies in it.
+    breakIce(world, entity, plant)
+    const explosion = definitions.plants[plant.typeId].deathExplosion
     if (explosion) detonatePlant(world, definitions, entity, explosion, remover)
     else remover.destroyEntity(entity)
 }

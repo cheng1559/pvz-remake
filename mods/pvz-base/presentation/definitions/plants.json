@@ -219,5 +219,18 @@
     "scale": 1,
     "drawHeightOffset": -14,
     "muzzle": {"effect": "pvz:puffshroommuzzle", "x": 27, "y": 13}
+  },
+  "pvz:iceshroom": {
+    "visual": {"nameKey": "ICE_SHROOM"},
+    "clips": {
+      "body": {"reanimId": "pvz:iceshroom", "x": 0, "y": 0},
+      "sleep": {"reanimId": "pvz:iceshroom_sleep", "x": 0, "y": 0},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -40},
+      "blink": {"reanimId": "pvz:iceshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+    },
+    "shadow": {"x": -3, "y": -51},
+    "scale": 1,
+    "freezeSounds": [{"audio": "pvz:frozen", "foley": true}],
+    "freeze": {"effect": "pvz:icetrap", "layer": "top"}
   }
 }

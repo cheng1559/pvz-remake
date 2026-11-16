@@ -7,6 +7,8 @@ import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { zombiePartDropped } from './parts'
 import { dropZombieLoot } from '../level/loot'
+import { breakIce } from '../combat/ice'
+import { zombieCanBeChilled } from '../combat/cold'
 import { isHostile, type Team, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
 
@@ -56,7 +58,7 @@ export function damageZombie(
     // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
     // mind-controlled zombies only because the original's chills are all the plants'; a chill reaches whatever a
     // hostile attack hits, so an enemy snow pea chills a zombie on the plants' side.
-    if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, entity, zombie, hit.chillTicks)
+    if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, definitions, entity, zombie, hit.chillTicks)
     let remaining = damage
     if (shield) {
         const absorbed = Math.min(zombie.shieldHealth, remaining)
@@ -122,12 +124,19 @@ export function flattenZombie(world: World, definitions: GameplayDefinitions, zo
     if (zombie.state === 'dying' || zombie.state === 'mowered') return
     zombie.health = 0
     zombie.state = 'mowered'
+    // Zombie::MowDown's RemoveIceTrap, which breaks nothing off.
+    delete zombie.frozenTicks
     playZombie(zombie, definitions.zombies[zombie.typeId].animation, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
     zombie.biteTicks = 0
     zombie.deathTicksRemaining = 0
 }
 
-function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number): void {
+/**
+ * Zombie::ApplyChill: chilled for `ticks`, or what it has left if longer, unless it cannot be (zombieCanBeChilled); the
+ * first chill sounds (`zombieChilled`).
+ */
+export function chillZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, ticks: number): void {
+    if (!zombieCanBeChilled(zombie, definitions.zombies[zombie.typeId])) return
     if (zombie.chilledTicks === 0) emitServerEvent(world.resources.get(EventQueueResource), 'zombieChilled', { entityId: entity })
     zombie.chilledTicks = Math.max(zombie.chilledTicks, ticks)
 }
@@ -166,6 +175,8 @@ export function countZombiesOnScreen(world: World, except?: number): number {
 
 export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
+    // Zombie::PlayDeathAnim: the ice it dies in breaks off, and it falls at its pace.
+    breakIce(world, entity, zombie)
     dropZombieFlag(world, entity)
     // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
     dropZombieShield(world, definitions, entity, zombie, true)

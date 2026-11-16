@@ -5,6 +5,7 @@ import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnim
 import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent, RandomResource } from '../state/components'
 import type { PlantAbilityState } from '@/shared/content/plantAbilities'
 import { plantPace, plantSkipsTick } from './chill'
+import { isPlantAsleep } from './sleep'
 
 /**
  * A plant's animation is the server's, as a zombie's is: what each of its layers plays and how far into it
@@ -66,7 +67,7 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
                     chewed: plant.recentlyEatenCounter > 0,
                     // Plant::UpdateBlink: an asleep plant's blink waits. Plant::DoBlink: one about to shoot, or in a state
                     // it does not blink in (a potato mine not armed), misses its blink.
-                    blinkWaits: plantSkipsTick(plant) || !!definition.nocturnal && !level.board.night,
+                    blinkWaits: plantSkipsTick(plant) || isPlantAsleep(definition, level.board),
                     blinkMisses: () => !!world.get(entity, PlantAttackComponent)?.burst
                         || !!animation.blink?.states && !animation.blink.states.includes(plant.ability?.state!),
                 })

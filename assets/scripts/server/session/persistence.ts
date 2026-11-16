@@ -37,7 +37,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         gameplayTick,
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
-        level: { phase: level.phase, result: level.result, paused: level.paused },
+        level: { phase: level.phase, result: level.result, paused: level.paused, ...(level.iceTrap ? { iceTrap: { ...level.iceTrap } } : {}) },
         // The upgrades owned are the profile's, which a restore takes again (EconomyState.ownedUpgrades).
         economy: asSaved({ ...world.resources.get(EconomyStateResource), ownedUpgrades: undefined }),
         ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: asSaved(world.resources.get(PacketUpgradeOfferResource)) } : {}),

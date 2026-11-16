@@ -12,6 +12,7 @@ import { damagePlant, isPlantInedible } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl, mindControls } from './mindControl'
+import { meltIce } from '../combat/ice'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /**
@@ -98,7 +99,16 @@ export class ZombieSystem implements GameSystem {
                 startZombieDeath(world, definitions, entity, zombie)
                 continue
             }
+            // Zombie::UpdatePlaying: the ice counts down first, so a zombie whose ice runs out acts on that tick.
+            meltIce(world, entity, zombie)
             if (zombie.chilledTicks > 0) zombie.chilledTicks--
+            if (zombie.frozenTicks !== undefined) {
+                // Zombie::IsImmobilizied: it neither moves nor eats, its body still (zombiePace); what it carries goes on,
+                // and a headless one goes on dying.
+                stepZombie(zombie, animation, random)
+                if (!zombie.hasHead) updateHeadlessZombie(world, definitions, entity, zombie)
+                continue
+            }
             if (zombie.riseTicks) {
                 // Zombie::Update stops a rising zombie before UpdatePlaying moves it, but UpdateReanim still plays its walk.
                 stepZombie(zombie, animation, random)
@@ -187,7 +197,7 @@ export class ZombieSystem implements GameSystem {
                             return
                         }
                         if (chewed) emitServerEvent(events, 'zombieChewedPlant', { zombieId: entity, plantId: target })
-                        if (bites && !isPlantInedible(plant)) damagePlant(world, definitions, target, definition.bite.damage, commands, undefined, entity)
+                        if (bites && !isPlantInedible(world, definitions, plant)) damagePlant(world, definitions, target, definition.bite.damage, commands, undefined, entity)
                     }
                 }
             }

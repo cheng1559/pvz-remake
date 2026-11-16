@@ -203,6 +203,17 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     assert.deepEqual([trail.node.isValid, trail.unsaved], [true, true])
     trail.update(0.2)
     assert.equal(trail.node.isValid, false)
+
+    // A frozen plant's particle stands still until it thaws, and goes on from where it stood.
+    const chewing = ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0 })
+    chewing.update(0.02)
+    const age = chewing.ageTicks
+    chewing.setPaused(true)
+    chewing.update(0.2)
+    assert.deepEqual([chewing.ageTicks, chewing.node.isValid], [age, true], 'paused, it neither ages nor runs out')
+    chewing.setPaused(false)
+    chewing.update(0.01)
+    assert.equal(chewing.ageTicks, age + 1)
 })
 
 test('particle frames follow AnimationRate and Animated as in TodParticleEmitter', async () => {

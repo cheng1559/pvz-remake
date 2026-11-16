@@ -135,61 +135,62 @@ import * as m131 from '@/client/view/ClientViewport'
 import * as m132 from '@/client/view/EntityAttachments'
 import * as m133 from '@/client/view/FpsDisplay'
 import * as m134 from '@/client/view/GameScreenMath'
-import * as m135 from '@/client/view/OriginalResolution'
-import * as m136 from '@/client/view/bakeSprite'
-import * as m137 from '@/client/view/layerPlayback'
-import * as m138 from '@/client/view/offBoard'
-import * as m139 from '@/client/view/tints'
-import * as m140 from '@/client/view/uiNode'
-import * as m141 from '@/client/zombies/ZombieView'
-import * as m142 from '@/client/zombies/ZombieViewRegistry'
-import * as m143 from '@/client/zombies/definitions'
-import * as m144 from '@/client/zombies/zombieParts'
-import * as m145 from '@/core/GameClock'
-import * as m146 from '@/core/GameTween'
-import * as m147 from '@/platform/Haptics'
-import * as m148 from '@/platform/OptionsSettings'
-import * as m149 from '@/platform/debug/DebugCliCommands'
-import * as m150 from '@/platform/debug/GameDebugSettings'
-import * as m151 from '@/shared/channel'
-import * as m152 from '@/shared/content/DefinitionRegistry'
-import * as m153 from '@/shared/content/animation'
-import * as m154 from '@/shared/content/chooserPages'
-import * as m155 from '@/shared/content/font'
-import * as m156 from '@/shared/content/from'
-import * as m157 from '@/shared/content/gameplay'
-import * as m158 from '@/shared/content/gameplayTypes'
-import * as m159 from '@/shared/content/graves'
-import * as m160 from '@/shared/content/levelHelpers'
-import * as m161 from '@/shared/content/music'
-import * as m162 from '@/shared/content/parseGameplay'
-import * as m163 from '@/shared/content/particle'
-import * as m164 from '@/shared/content/plantAbilities'
-import * as m165 from '@/shared/content/plantAnimation'
-import * as m166 from '@/shared/content/planting'
-import * as m167 from '@/shared/content/presentation'
-import * as m168 from '@/shared/content/reanim'
-import * as m169 from '@/shared/content/renderOrder'
-import * as m170 from '@/shared/content/seedGroups'
-import * as m171 from '@/shared/content/strings'
-import * as m172 from '@/shared/content/teams'
-import * as m173 from '@/shared/content/zombieAnimation'
-import * as m174 from '@/shared/content/zombieStates'
-import * as m175 from '@/shared/debug/DebugCli'
-import * as m176 from '@/shared/kernel'
-import * as m177 from '@/shared/kernel/binary'
-import * as m178 from '@/shared/kernel/particles'
-import * as m179 from '@/shared/menu'
-import * as m180 from '@/shared/mod'
-import * as m181 from '@/shared/mod/ModAssets'
-import * as m182 from '@/shared/mod/ModHost'
-import * as m183 from '@/shared/mod/content'
-import * as m184 from '@/shared/protocol'
-import * as m185 from '@/shared/protocol/json'
-import * as m186 from '@/shared/protocol/packets'
-import * as m187 from '@/shared/protocol/snapshot'
-import * as m188 from '@/shared/random'
-import * as m189 from '@/shared/validate'
+import * as m135 from '@/client/view/IceTrapView'
+import * as m136 from '@/client/view/OriginalResolution'
+import * as m137 from '@/client/view/bakeSprite'
+import * as m138 from '@/client/view/layerPlayback'
+import * as m139 from '@/client/view/offBoard'
+import * as m140 from '@/client/view/tints'
+import * as m141 from '@/client/view/uiNode'
+import * as m142 from '@/client/zombies/ZombieView'
+import * as m143 from '@/client/zombies/ZombieViewRegistry'
+import * as m144 from '@/client/zombies/definitions'
+import * as m145 from '@/client/zombies/zombieParts'
+import * as m146 from '@/core/GameClock'
+import * as m147 from '@/core/GameTween'
+import * as m148 from '@/platform/Haptics'
+import * as m149 from '@/platform/OptionsSettings'
+import * as m150 from '@/platform/debug/DebugCliCommands'
+import * as m151 from '@/platform/debug/GameDebugSettings'
+import * as m152 from '@/shared/channel'
+import * as m153 from '@/shared/content/DefinitionRegistry'
+import * as m154 from '@/shared/content/animation'
+import * as m155 from '@/shared/content/chooserPages'
+import * as m156 from '@/shared/content/font'
+import * as m157 from '@/shared/content/from'
+import * as m158 from '@/shared/content/gameplay'
+import * as m159 from '@/shared/content/gameplayTypes'
+import * as m160 from '@/shared/content/graves'
+import * as m161 from '@/shared/content/levelHelpers'
+import * as m162 from '@/shared/content/music'
+import * as m163 from '@/shared/content/parseGameplay'
+import * as m164 from '@/shared/content/particle'
+import * as m165 from '@/shared/content/plantAbilities'
+import * as m166 from '@/shared/content/plantAnimation'
+import * as m167 from '@/shared/content/planting'
+import * as m168 from '@/shared/content/presentation'
+import * as m169 from '@/shared/content/reanim'
+import * as m170 from '@/shared/content/renderOrder'
+import * as m171 from '@/shared/content/seedGroups'
+import * as m172 from '@/shared/content/strings'
+import * as m173 from '@/shared/content/teams'
+import * as m174 from '@/shared/content/zombieAnimation'
+import * as m175 from '@/shared/content/zombieStates'
+import * as m176 from '@/shared/debug/DebugCli'
+import * as m177 from '@/shared/kernel'
+import * as m178 from '@/shared/kernel/binary'
+import * as m179 from '@/shared/kernel/particles'
+import * as m180 from '@/shared/menu'
+import * as m181 from '@/shared/mod'
+import * as m182 from '@/shared/mod/ModAssets'
+import * as m183 from '@/shared/mod/ModHost'
+import * as m184 from '@/shared/mod/content'
+import * as m185 from '@/shared/protocol'
+import * as m186 from '@/shared/protocol/json'
+import * as m187 from '@/shared/protocol/packets'
+import * as m188 from '@/shared/protocol/snapshot'
+import * as m189 from '@/shared/random'
+import * as m190 from '@/shared/validate'
 
 /** Every module a client Mod may get from its host, by its path under assets/scripts. */
 export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
@@ -328,59 +329,60 @@ export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'client/view/EntityAttachments': m132,
     'client/view/FpsDisplay': m133,
     'client/view/GameScreenMath': m134,
-    'client/view/OriginalResolution': m135,
-    'client/view/bakeSprite': m136,
-    'client/view/layerPlayback': m137,
-    'client/view/offBoard': m138,
-    'client/view/tints': m139,
-    'client/view/uiNode': m140,
-    'client/zombies/ZombieView': m141,
-    'client/zombies/ZombieViewRegistry': m142,
-    'client/zombies/definitions': m143,
-    'client/zombies/zombieParts': m144,
-    'core/GameClock': m145,
-    'core/GameTween': m146,
-    'platform/Haptics': m147,
-    'platform/OptionsSettings': m148,
-    'platform/debug/DebugCliCommands': m149,
-    'platform/debug/GameDebugSettings': m150,
-    'shared/channel': m151,
-    'shared/content/DefinitionRegistry': m152,
-    'shared/content/animation': m153,
-    'shared/content/chooserPages': m154,
-    'shared/content/font': m155,
-    'shared/content/from': m156,
-    'shared/content/gameplay': m157,
-    'shared/content/gameplayTypes': m158,
-    'shared/content/graves': m159,
-    'shared/content/levelHelpers': m160,
-    'shared/content/music': m161,
-    'shared/content/parseGameplay': m162,
-    'shared/content/particle': m163,
-    'shared/content/plantAbilities': m164,
-    'shared/content/plantAnimation': m165,
-    'shared/content/planting': m166,
-    'shared/content/presentation': m167,
-    'shared/content/reanim': m168,
-    'shared/content/renderOrder': m169,
-    'shared/content/seedGroups': m170,
-    'shared/content/strings': m171,
-    'shared/content/teams': m172,
-    'shared/content/zombieAnimation': m173,
-    'shared/content/zombieStates': m174,
-    'shared/debug/DebugCli': m175,
-    'shared/kernel': m176,
-    'shared/kernel/binary': m177,
-    'shared/kernel/particles': m178,
-    'shared/menu': m179,
-    'shared/mod': m180,
-    'shared/mod/ModAssets': m181,
-    'shared/mod/ModHost': m182,
-    'shared/mod/content': m183,
-    'shared/protocol': m184,
-    'shared/protocol/json': m185,
-    'shared/protocol/packets': m186,
-    'shared/protocol/snapshot': m187,
-    'shared/random': m188,
-    'shared/validate': m189,
+    'client/view/IceTrapView': m135,
+    'client/view/OriginalResolution': m136,
+    'client/view/bakeSprite': m137,
+    'client/view/layerPlayback': m138,
+    'client/view/offBoard': m139,
+    'client/view/tints': m140,
+    'client/view/uiNode': m141,
+    'client/zombies/ZombieView': m142,
+    'client/zombies/ZombieViewRegistry': m143,
+    'client/zombies/definitions': m144,
+    'client/zombies/zombieParts': m145,
+    'core/GameClock': m146,
+    'core/GameTween': m147,
+    'platform/Haptics': m148,
+    'platform/OptionsSettings': m149,
+    'platform/debug/DebugCliCommands': m150,
+    'platform/debug/GameDebugSettings': m151,
+    'shared/channel': m152,
+    'shared/content/DefinitionRegistry': m153,
+    'shared/content/animation': m154,
+    'shared/content/chooserPages': m155,
+    'shared/content/font': m156,
+    'shared/content/from': m157,
+    'shared/content/gameplay': m158,
+    'shared/content/gameplayTypes': m159,
+    'shared/content/graves': m160,
+    'shared/content/levelHelpers': m161,
+    'shared/content/music': m162,
+    'shared/content/parseGameplay': m163,
+    'shared/content/particle': m164,
+    'shared/content/plantAbilities': m165,
+    'shared/content/plantAnimation': m166,
+    'shared/content/planting': m167,
+    'shared/content/presentation': m168,
+    'shared/content/reanim': m169,
+    'shared/content/renderOrder': m170,
+    'shared/content/seedGroups': m171,
+    'shared/content/strings': m172,
+    'shared/content/teams': m173,
+    'shared/content/zombieAnimation': m174,
+    'shared/content/zombieStates': m175,
+    'shared/debug/DebugCli': m176,
+    'shared/kernel': m177,
+    'shared/kernel/binary': m178,
+    'shared/kernel/particles': m179,
+    'shared/menu': m180,
+    'shared/mod': m181,
+    'shared/mod/ModAssets': m182,
+    'shared/mod/ModHost': m183,
+    'shared/mod/content': m184,
+    'shared/protocol': m185,
+    'shared/protocol/json': m186,
+    'shared/protocol/packets': m187,
+    'shared/protocol/snapshot': m188,
+    'shared/random': m189,
+    'shared/validate': m190,
 }

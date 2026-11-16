@@ -4,11 +4,12 @@ import { plantTeam } from '@/shared/content/teams'
 import { type EntityRemover, LevelStateResource, type Plant, PlantComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from '../level/levelAward'
+import { isPlantAsleep } from '../plants/sleep'
 
 /** A plant that mind-controls what eats it (PlantDefinition.mindControl, the hypno-shroom), awake: asleep it does not. */
 export function mindControls(world: World, definitions: GameplayDefinitions, plant: Plant): boolean {
     const definition = definitions.plants[plant.typeId]
-    return !!definition.mindControl && !(definition.nocturnal && !world.resources.get(LevelStateResource).board.night)
+    return !!definition.mindControl && !isPlantAsleep(definition, world.resources.get(LevelStateResource).board)
 }
 
 /**

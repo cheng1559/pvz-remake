@@ -150,6 +150,8 @@ export class ParticlePlayer extends Component {
     private scale = 1
     private mirrored = false
     private playing = true
+    /** See setPaused. */
+    private paused = false
     private visible = true
     private perfVisible = true
     private recycle = false
@@ -231,6 +233,7 @@ export class ParticlePlayer extends Component {
         this.mirrored = args.mirrored ?? false
         this.node.setScale(this.mirrored ? -1 : 1, 1, 1)
         this.unsaved = args.unsaved ?? false
+        this.paused = false
     }
 
     /**
@@ -261,6 +264,9 @@ export class ParticlePlayer extends Component {
     }
 
     hide(): void { this.playing = false; this.visible = false; this.render() }
+
+    /** Stands still as it is drawn while what it belongs to does (a frozen plant's), and goes on once that does. */
+    setPaused(paused: boolean): void { this.paused = paused }
 
     fastForward(ticks: number): void {
         if (!Number.isSafeInteger(ticks) || ticks < 0) throw new Error('particle ticks must be a non-negative safe integer')
@@ -295,7 +301,7 @@ export class ParticlePlayer extends Component {
             this.perfVisible = GameDebugSettings.perfParticlesEnabled
             for (const emitter of this.emitters) emitter.setVisible(this.perfVisible && this.visible)
         }
-        if (!this.perfVisible || !this.simulation || !this.playing) return
+        if (!this.perfVisible || !this.simulation || !this.playing || this.paused) return
         this.accumulator += gameClock.delta(dt)
         const ticks = Math.floor(this.accumulator / PARTICLE_STEP_SECONDS)
         if (!ticks) return

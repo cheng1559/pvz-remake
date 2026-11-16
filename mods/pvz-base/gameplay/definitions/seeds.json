@@ -16,6 +16,7 @@
   "pvz:gravebuster": {"kind": "plant", "position": 11, "sunCost": 75, "cooldownTicks": 750, "placement": "grave"},
   "pvz:hypnoshroom": {"kind": "plant", "position": 12, "sunCost": 75, "cooldownTicks": 3000, "initialCooldownTicks": 2000, "placement": "ground"},
   "pvz:scaredyshroom": {"kind": "plant", "position": 13, "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
+  "pvz:iceshroom": {"kind": "plant", "position": 14, "sunCost": 75, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
   "pvz:normal": {"kind": "zombie", "position": 8, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:flag": {"kind": "zombie", "position": 9, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:conehead": {"kind": "zombie", "position": 10, "hidden": true, "sunCost": 75, "cooldownTicks": 0},

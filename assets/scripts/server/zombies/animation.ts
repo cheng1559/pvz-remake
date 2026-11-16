@@ -16,11 +16,13 @@ const ZOMBIE_WALK_RATE_FACTOR = 47
 
 /**
  * The part of its rate a layer of a zombie's animation goes at: Zombie::ApplyAnimRate halves a chilled zombie's body
- * alone (CHILLED_ANIMATION_FACTOR; its walking speed follows its `_ground` track), and what it carries (a flag, a
- * propeller) is a Reanim of its own, at its own rate. The mower's driver is not slowed.
+ * alone (CHILLED_ANIMATION_FACTOR; its walking speed follows its `_ground` track) and stops a frozen one's
+ * (UpdateAnimSpeed), and what it carries (a flag, a propeller) is a Reanim of its own, at its own rate. The mower's
+ * driver is not slowed.
  */
 export function zombiePace(zombie: Zombie, layer = ZOMBIE_BODY_LAYER): number {
-    return layer === ZOMBIE_BODY_LAYER && zombie.chilledTicks > 0 && zombie.state !== 'mowered' ? CHILLED_ANIMATION_FACTOR : 1
+    if (layer !== ZOMBIE_BODY_LAYER || zombie.state === 'mowered') return 1
+    return zombie.frozenTicks !== undefined ? 0 : zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
 }
 
 /** Zombie::ZombieInitialize: every layer starts its clip; the body walks from there (startWalk). */

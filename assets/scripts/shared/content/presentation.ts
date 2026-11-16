@@ -116,8 +116,35 @@ export interface PlantPresentationDefinition {
     readonly explosion?: { readonly effect: string; readonly x: number; readonly layer: RenderLayer }
     readonly plantedSounds?: readonly PresentationSound[]
     readonly explosionSounds?: readonly PresentationSound[]
+    /**
+     * Plant::DoSpecial for a plant that freezes (the ice-shroom): the effect from its middle on `layer` (`top`: over
+     * everything) and its sounds, where it stood.
+     */
+    readonly freeze?: { readonly effect: string; readonly layer: RenderLayer }
+    readonly freezeSounds?: readonly PresentationSound[]
+    /** Its ice when it is frozen, in place of every plant's (IceTrapPresentation.plant). */
+    readonly iceTrap?: IceTrapPlacement
     /** Played when an area shooter, like the Fume-shroom, fires. */
     readonly fireSounds?: readonly PresentationSound[]
+}
+
+/** Where a frozen plant's or zombie's ice is from its corner, in original Y-down pixels, and at what size (1 without). */
+export interface IceTrapPlacement { readonly x: number; readonly y: number; readonly scale?: number }
+
+/**
+ * Zombie::DrawIceTrap: the block of ice a frozen plant or zombie stands in, `back` (IMAGE_ICETRAP2) behind it and
+ * `front` (IMAGE_ICETRAP) over it, at the kind's place unless its type has its own (`iceTrap`); `release`
+ * (PARTICLE_ICE_TRAP_RELEASE) as it breaks off, at the kind's `releaseAt`. A zombie's are DrawIceTrap's (46, 92) and
+ * the (75, 106) HitIceTrap's ice breaks off at, its ice's top on its shadow's (Zombie::DrawShadow's 92); a plant's (not
+ * in the original) sit on its shadow alike (Plant::DrawShadow's 51, a plant standing higher than a zombie of its
+ * row), about the middle of its cell.
+ */
+export interface IceTrapPresentation {
+    readonly back: string
+    readonly front: string
+    readonly release: string
+    readonly zombie: IceTrapPlacement & { readonly releaseAt: readonly [number, number] }
+    readonly plant: IceTrapPlacement & { readonly releaseAt: readonly [number, number] }
 }
 
 /**
@@ -247,6 +274,8 @@ export interface ZombiePresentationDefinition {
     readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
     /** AlmanacDialog::DrawZombies: how far from a zombie's usual place the almanac's card shows it, in original Y-down pixels (the football zombie's 10 left). */
     readonly almanacOffset?: readonly [number, number]
+    /** Zombie::DrawIceTrap: its ice when it is frozen, in place of every zombie's (IceTrapPresentation.zombie). */
+    readonly iceTrap?: IceTrapPlacement
     readonly parts: ZombieParts
     /** Zombie::TakeDamage's bare arm: the upper arm's sprite once the arm has dropped. */
     readonly damagedArmSprite: string
@@ -541,6 +570,7 @@ export interface PresentationDefinitions {
     readonly storeDialogue: StoreDialoguePresentation
     /** By the plant (the seed of a card) or zombie shown. */
     readonly almanac: Readonly<Record<string, AlmanacPresentation>>
+    readonly iceTrap: IceTrapPresentation
     readonly graves: {
         /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
         readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] }
@@ -586,7 +616,7 @@ export interface PresentationDefinitions {
  */
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const definitions = fields<PresentationDefinitions>(value, 'presentation', [
-        'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
+        'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'iceTrap', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
         'gridItems', 'seedPackets',
     ], {
         mainMenu: parseMainMenu,
@@ -602,6 +632,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         almanac: table((value, name) => fields<AlmanacPresentation>(value, name, ['ground'], {
             ground: (value, name) => oneOf(value, ALMANAC_GROUNDS, name), upgrade: trueFlag,
         })),
+        iceTrap: (value, name) => {
+            const kind = (value: unknown, name: string) => ({
+                ...iceTrapPlacement(value, name, ['releaseAt']),
+                releaseAt: pair(record(value, name).releaseAt, `${name}.releaseAt`),
+            })
+            return allFields<IceTrapPresentation>(value, name, { back: nonEmptyString, front: nonEmptyString, release: nonEmptyString, zombie: kind, plant: kind })
+        },
         graves: (value, name) => allFields<PresentationDefinitions['graves']>(value, name, { rise: graveRise, zombie: graveZombie }),
         dave: parseDave,
         boards: table(parseBoard),
@@ -967,8 +1004,17 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         chewParticle: nonEmptyString,
         crackedFaces: twoSprites,
         explosion: (value, name) => allFields<NonNullable<Plant['explosion']>>(value, name, { effect: nonEmptyString, x: finite, layer }),
-        plantedSounds: sounds, explosionSounds: sounds, fireSounds: sounds,
+        freeze: (value, name) => allFields<NonNullable<Plant['freeze']>>(value, name, { effect: nonEmptyString, layer }),
+        iceTrap: (value, name) => iceTrapPlacement(value, name),
+        plantedSounds: sounds, explosionSounds: sounds, freezeSounds: sounds, fireSounds: sounds,
     })
+}
+
+/** An IceTrapPlacement, beside what else `others` lets the object it is written in have. */
+function iceTrapPlacement(value: unknown, name: string, others: readonly string[] = []): IceTrapPlacement {
+    const source = record(value, name)
+    const own = Object.fromEntries(Object.entries(source).filter(([key]) => !others.includes(key)))
+    return fields<IceTrapPlacement>(own, name, ['x', 'y'], { x: finite, y: finite, scale: positiveFinite })
 }
 
 const ARMOR_FIELDS: FieldParsers<ZombieArmorPresentation> = {
@@ -996,6 +1042,7 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
         }),
         portrait: (value, name) => allFields<NonNullable<Zombie['portrait']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
         almanacOffset: pair,
+        iceTrap: (value, name) => iceTrapPlacement(value, name),
         parts: parseZombieParts,
         damagedArmSprite: nonEmptyString,
         enragedHead: (value, name) => allFields<NonNullable<Zombie['enragedHead']>>(value, name, { track: nonEmptyString, sprite: nonEmptyString }),

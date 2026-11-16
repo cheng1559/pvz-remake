@@ -6,8 +6,8 @@ export class CherryBombView extends PlantView {
 
     protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
         super.onBoard(plant, world)
-        if (world.gameplayTick === this.shakenTick) return
-        // Plant::Animate jitters a lit cherry bomb by up to a pixel.
+        // Plant::Animate jitters a lit cherry bomb by up to a pixel, as it updates: not while it is frozen.
+        if (plant.frozen || world.gameplayTick === this.shakenTick) return
         this.root.setPosition(-1 + Math.random() * 2, -1 + Math.random() * 2)
         this.shakenTick = world.gameplayTick
     }

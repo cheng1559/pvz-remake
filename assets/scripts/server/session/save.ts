@@ -1,5 +1,5 @@
 import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
-import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, assertJsonValue } from '@/shared/protocol/index'
+import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
@@ -33,7 +33,8 @@ export interface ServerSaveSnapshot {
     gameplayTick: number
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
-    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean }
+    /** `iceTrap`: LevelState.iceTrap, a side the board keeps frozen. */
+    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, iceTrap?: Partial<Record<Team, number>> }
     economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
@@ -64,11 +65,12 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     } as DeterministicRngState
     DeterministicRng.restore(random)
 
-    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level')
+    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level', ['iceTrap'])
     const level = {
         phase: oneOf(levelSource.phase, ['intro', 'gameplay'] as const, 'server save.level.phase'),
         result: oneOf(levelSource.result, ['playing', 'won', 'lost'] as const, 'server save.level.result'),
         paused: boolean(levelSource.paused, 'server save.level.paused'),
+        ...(levelSource.iceTrap === undefined ? {} : { iceTrap: parseIceTrap(levelSource.iceTrap, 'server save.level.iceTrap') }),
     }
 
     const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks'])
@@ -185,6 +187,12 @@ function parseSeedBank(value: unknown): SeedBankState {
         ...(source.choosing === undefined ? {} : { choosing: boolean(source.choosing, 'server save.seedBank.choosing') }),
         ...(source.owned === undefined ? {} : { owned: array(source.owned, 'server save.seedBank.owned')
             .map((id, index) => nonEmptyString(id, `server save.seedBank.owned[${index}]`)) }) }
+}
+
+/** LevelState.iceTrap: the ticks left of a side frozen, by side. */
+function parseIceTrap(value: unknown, name: string): Partial<Record<Team, number>> {
+    const source = exact(value, [], name, TEAMS)
+    return Object.fromEntries(TEAMS.filter(side => source[side] !== undefined).map(side => [side, positiveInteger(source[side], `${name}.${side}`)]))
 }
 
 function parseTutorial(value: unknown): TutorialState {

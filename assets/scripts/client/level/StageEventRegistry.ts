@@ -8,8 +8,22 @@ import { ItemView } from '@/client/items/ItemView'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { ZombieView } from '@/client/zombies/ZombieView'
 import { renderOrder } from '@/shared/content/renderOrder'
+import { mirrorX, PLANT_WIDTH, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { EntityFlashes } from './EntityFlashes'
 import { boardToLayer, type StageEvent } from './LevelStage'
+
+/**
+ * Zombie::RemoveIceTrap: PARTICLE_ICE_TRAP_RELEASE where the ice of a plant or a zombie breaks off (the presentation's
+ * `iceTrap`), one above it, turned round with one turned round. The event says where it stood, for one gone by now.
+ */
+const iceReleased: StageEvent = (stage, event) => {
+    const { x, y, row, kind, typeId } = event.data
+    if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof typeId !== 'string') return
+    const look = stage.content.presentation.iceTrap, zombie = kind === 'zombie', mirrored = event.data.mirrored === true
+    const [releaseX, releaseY] = (zombie ? look.zombie : look.plant).releaseAt
+    const order = (zombie ? stage.zombieOrder(row) : stage.plantOrder({ typeId, row, x })) + 1
+    stage.particle(look.release, x + mirrorX(releaseX, zombie ? ZOMBIE_WIDTH : PLANT_WIDTH, mirrored), y + releaseY, order, undefined, mirrored)
+}
 
 /** Whether a handler hears of its event before the views draw the frame, or once it is drawn (before the entities gone from it go). */
 export type StageEventTime = 'before' | 'after'
@@ -58,6 +72,7 @@ export class StageEventRegistry {
             zombieHelmDropped: ZombieView.armorDropped, zombieShieldDropped: ZombieView.armorDropped, zombiePartDropped: ZombieView.partDropped,
             plantPlaced: planted, zombiePlaced: planted, gravePlaced: planted,
             plantFiring: PlantView.fired, plantAreaAttack: PlantView.areaAttack, mineRising: PlantView.rose, plantExploded: PlantView.exploded,
+            plantFroze: PlantView.froze, iceReleased,
             plantGrew: PlantView.grew, sunProduced: PlantView.produced, plantChilled: PlantView.chilled, plantMowered: PlantView.mowered,
             bowlingImpact: PlantView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
             projectileFired: ProjectileView.fired, projectileImpact: ProjectileView.impact, mowerActivated: MowerView.activated,

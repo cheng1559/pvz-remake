@@ -13,6 +13,7 @@
   "pvz:gravebuster": {"ground": "night"},
   "pvz:hypnoshroom": {"ground": "night"},
   "pvz:scaredyshroom": {"ground": "night"},
+  "pvz:iceshroom": {"ground": "night"},
   "pvz:normal": {"ground": "day"},
   "pvz:flag": {"ground": "day"},
   "pvz:conehead": {"ground": "day"},

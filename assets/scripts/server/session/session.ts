@@ -16,6 +16,7 @@ import { createMower, createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
 import { createPlantChillSystem } from '../plants/chill'
+import { createBoardIceSystem } from '../combat/freeze'
 import { createPlantAnimationSystem } from '../plants/animation'
 import { createProductionSystem } from '../plants/production'
 import { createPlantAttackSystem } from '../plants/shooter'
@@ -114,6 +115,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'command', system: { id: 'pvz:commands', run: () => processCommandPhase(session) } },
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
         { phase: 'spawn', system: createWaveSystem(definitions) },
+        { phase: 'spawn', system: createBoardIceSystem() },
         ...rule?.systems?.(definitions) ?? [],
         { phase: 'plant', system: createPlantChillSystem() },
         { phase: 'plant', system: createPlantAttackSystem(definitions) },

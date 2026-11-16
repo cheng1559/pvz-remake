@@ -4,6 +4,8 @@ import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegist
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { entityTint } from '@/client/view/tints'
+import { IceTrapView } from '@/client/view/IceTrapView'
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
@@ -52,6 +54,8 @@ const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
+/** Plant::DoSpecial's aPosX and aPosY: the middle of the plant's 80 by 80 (mWidth, mHeight). */
+const PLANT_MIDDLE = { x: 40, y: 40 }
 /** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
 let locator: { track?: ReanimTrack } | undefined
 
@@ -83,6 +87,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
     private frozen = false
     /** Its shadow's node and the size of the shadow's picture, which `pose` sizes it by (placeShadow). */
     private shadow?: { node: Node, width: number, height: number }
+    /** The ice it stands in while a hostile ice-shroom has it frozen, around its layers; on the board only. */
+    private ice?: IceTrapView
+    /** Its own particles stand still while it is frozen (syncFrozen). */
+    private particlesPaused = false
 
     constructor(protected readonly context: PlantViewContext) {
         const animation = context.content.definitions.plants[context.plant.typeId].animation
@@ -107,6 +115,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
         const alone = Object.keys(this.animation.clips).flatMap(name => this.clips[name]?.onlyTracks ?? [])
         this.layers = new LayerPlayers(this.root, [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])], alone)
         this.pose(plant)
+        if (!stage) return
+        const look = content.presentation.iceTrap
+        const ice = await IceTrapView.create(node, this.root, look, this.presentation.iceTrap ?? look.plant)
+        if (node.isValid) this.ice = ice
     }
 
     protected get presentation() { return plantDefinition(this.context.content.presentation, this.context.plant.typeId) }
@@ -237,6 +249,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
     sync(plant: PlantSnapshot, world: WorldSnapshot): void {
         const { node, stage } = this.context
         this.flash = stage?.flashes.plant(plant, world.gameplayTick) ?? 0
+        this.syncFrozen(plant)
         // A mowed plant stays as it stood.
         if (plant.mowered) { this.squash(plant); return }
         // A plant on the zombies' side faces left, mirrored across its width.
@@ -244,13 +257,26 @@ export class PlantView implements EntityView<PlantSnapshot> {
         node.setPosition(at.x, at.y)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         this.onBoard(plant, world)
-        // A plant mind-controlled draws purple, one chilled by a hostile snow pea blue (its slower animation is the
-        // server's). Its players are revisited every frame while tinted, since a layer may start a new clip, and once
-        // more as it thaws.
-        const tint = entityTint(!!plant.mindControlled, (plant.chilledTicks ?? 0) > 0)
+        // A plant mind-controlled draws purple, one chilled by a hostile snow pea or frozen by a hostile ice-shroom blue
+        // (its slower or stopped animation is the server's). Its players are revisited every frame while tinted, since a
+        // layer may start a new clip, and once more as it thaws.
+        const tint = entityTint(!!plant.mindControlled, (plant.chilledTicks ?? 0) > 0 || !!plant.frozen)
         if (tint || this.hasTint) for (const player of node.getComponentsInChildren(ReanimPlayer)) player.setTint(tint)
         this.hasTint = !!tint
         if (this.highlighted) this.glow()
+    }
+
+    /**
+     * A frozen plant in its ice, which is in its node, so it turns with it (a mowed plant has none); what plays on it
+     * stands still with it, as its animation does on the server: the particles that belong to it (a grave buster's
+     * chewing, a Mod's), looked at every frame it is frozen and once more as it thaws.
+     */
+    private syncFrozen(plant: PlantSnapshot): void {
+        const frozen = !!plant.frozen
+        this.ice?.sync(frozen)
+        if (!frozen && !this.particlesPaused) return
+        for (const player of this.context.node.getComponentsInChildren(ParticlePlayer)) player.setPaused(frozen)
+        this.particlesPaused = frozen
     }
 
     /** Plant::mHighlighted: the shovel is over it, so all of it is lit; without it, as much as its flash. */
@@ -407,6 +433,18 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */
     static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
+
+    /**
+     * Plant::DoSpecial for a plant that freezes (the ice-shroom): its presentation's sounds, and its `freeze` effect from
+     * the plant's middle (PARTICLE_ICE_TRAP over everything). The plant is gone by then.
+     */
+    static readonly froze: StageEvent = (stage, event) => {
+        const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
+        SoundSystem.playSounds(presentation?.freezeSounds)
+        const { x, y, row } = event.data, freeze = presentation?.freeze
+        if (!freeze || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
+        stage.particle(freeze.effect, x + PLANT_MIDDLE.x, y + PLANT_MIDDLE.y, renderOrder(freeze.layer, row))
+    }
 
     /** Crushed by a mower, as a zombie is (FOLEY_SPLAT). */
     static readonly mowered: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Splat) }

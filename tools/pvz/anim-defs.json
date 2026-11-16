@@ -350,12 +350,19 @@
       "animations": [
         "anim_idle",
         "anim_sleep"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:iceshroom",
+        "anim_sleep": "pvz:iceshroom_sleep"
+      }
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {
+        "anim_blink": "pvz:iceshroom_blink"
+      }
     }
   },
   "doomshroom": {

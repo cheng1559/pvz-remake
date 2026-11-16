@@ -2,27 +2,34 @@ import type { GameSystem, World } from '@/ecs/index'
 import { CHILLED_ANIMATION_FACTOR } from '@/shared/content/animation'
 import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
+import { meltIce } from '../combat/ice'
+import { plantCanBeChilled } from '../combat/cold'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
 /**
  * A hostile snow pea chills a plant as long as it would a zombie (Zombie::ApplyChill keeps the longer chill). The
  * original's plants are never chilled; here a chilled plant does everything at half speed: its animation goes at half
  * its rate, as a chilled zombie's body does (plantPace), and it sits out every other tick of the rest, its shots,
- * production, ability timers and blinks included.
+ * production, ability timers and blinks included. A hostile ice-shroom freezes it (combat/freeze.ts): it sits out
+ * every tick it is frozen, its animation standing still, as a frozen zombie's body does.
  */
-export function chillPlant(world: World, entity: number, plant: Plant, ticks: number): void {
+export function chillPlant(world: World, definitions: GameplayDefinitions, entity: number, plant: Plant, ticks: number): void {
+    // A torchwood is kept from the cold (plantCanBeChilled).
+    if (!plantCanBeChilled(plant, definitions.plants[plant.typeId])) return
     if (!plant.chilledTicks) emitServerEvent(world.resources.get(EventQueueResource), 'plantChilled', { entityId: entity })
     plant.chilledTicks = Math.max(plant.chilledTicks, ticks)
 }
 
-/** Whether a chilled plant sits out this tick; every plant system reads it after the chill system counted down. */
-export const plantSkipsTick = (plant: Plant): boolean => plant.chilledTicks % 2 === 1
+/** Whether a chilled or frozen plant sits out this tick; every plant system reads it after the chill system counted down. */
+export const plantSkipsTick = (plant: Plant): boolean => plant.frozenTicks !== undefined || plant.chilledTicks % 2 === 1
 
-/** The part of its rate a plant's animation goes at, every layer of it: a chilled one's is slowed (zombiePace's body). */
-export const plantPace = (plant: Plant): number => plant.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
+/** The part of its rate a plant's animation goes at, every layer of it: a chilled one's is slowed (zombiePace's body), a frozen one's stopped. */
+export const plantPace = (plant: Plant): number => plant.frozenTicks !== undefined ? 0 : plant.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
 
 /**
- * Counts chills down before the other plant systems run. On a tick a plant sits out, its shot and production
- * deadlines move one tick later, so the shooter and production systems need no check of their own.
+ * Counts ice and chills down before the other plant systems run; a plant whose ice runs out acts on that tick. On a
+ * tick a plant sits out, its shot and production deadlines move one tick later, so the shooter and production systems
+ * need no check of their own.
  */
 export function createPlantChillSystem(): GameSystem {
     return {
@@ -32,8 +39,10 @@ export function createPlantChillSystem(): GameSystem {
             if (level.result === 'lost' || level.paused) return
             for (const entity of world.query(PlantComponent)) {
                 const plant = world.get(entity, PlantComponent)!
-                if (!plant.chilledTicks) continue
-                if (--plant.chilledTicks === 0 || !plantSkipsTick(plant)) continue
+                if (!plant.chilledTicks && plant.frozenTicks === undefined) continue
+                meltIce(world, entity, plant)
+                if (plant.chilledTicks) plant.chilledTicks--
+                if (!plantSkipsTick(plant)) continue
                 const timer = world.get(entity, PlantAttackComponent)
                 if (!timer) continue
                 timer.readyAtTick++

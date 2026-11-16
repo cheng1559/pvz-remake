@@ -34,7 +34,7 @@ test('every almanac card and window is a plant or a zombie its view can draw off
         }
     }
     assert.deepEqual(chooserSeeds(gameplay).filter(seed => presentationFixture.almanac[seed].ground === 'night'),
-        ['pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom'])
+        ['pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom', 'pvz:iceshroom'])
     for (const zombie of Object.keys(gameplay.almanac)) {
         const presentation = presentationFixture.zombies[zombie]
         assert.ok(presentation && presentationFixture.almanac[zombie], `${zombie} has no zombie to show`)

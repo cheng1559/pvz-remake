@@ -18,6 +18,7 @@ import { levelRule } from '../rules/registry'
 import { zombiePace } from '../zombies/animation'
 import { gridItems as lawnGridItems } from '../level/lawn'
 import { plantPace } from '../plants/chill'
+import { isPlantAsleep } from '../plants/sleep'
 import { pacedLayers } from '@/shared/content/animation'
 
 /** What the client draws each frame. Mods add their state through `host.around(snapshot, 'build', ...)`. */
@@ -50,7 +51,7 @@ export const snapshot = {
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
                 ...plantSnapshot(entity, plant, world.get(entity, PositionComponent)!),
-                ...(definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
+                ...(isPlantAsleep(definitions.plants[plant.typeId], level.board) ? { asleep: true as const } : {}),
                 ...(production ? { produceTicks: Math.max(0, production.readyAtTick - gameplayTick) } : {}),
             }
         })
@@ -67,7 +68,7 @@ export const snapshot = {
                 state: zombie.state,
                 health: zombie.health,
                 maxHealth: zombie.maxHealth,
-                // The rates a view plays them at: a chilled zombie's body's is halved.
+                // The rates a view plays them at: a chilled zombie's body's is halved, a frozen one's stopped.
                 animations: pacedLayers(zombie.animations, layer => zombiePace(zombie, layer)),
                 alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,
@@ -76,6 +77,7 @@ export const snapshot = {
                 helmHealth: zombie.helmHealth,
                 shieldHealth: zombie.shieldHealth,
                 chilled: zombie.chilledTicks > 0,
+                ...(zombie.frozenTicks !== undefined ? { frozen: true as const } : {}),
                 ...(zombie.team === 'plants' ? { team: 'plants' as const } : {}),
                 ...(zombie.mindControlled ? { mindControlled: true as const } : {}),
                 hasPole: zombie.hasPole,
@@ -121,6 +123,7 @@ export const snapshot = {
             phase: level.phase,
             result: level.result,
             paused: level.paused,
+            ...(level.iceTrap ? { iceTrap: { ...level.iceTrap } } : {}),
             sun: economy.sun,
             money: economy.money,
             wave: {
@@ -169,7 +172,8 @@ function projectileSnapshot(world: World, entity: number): ProjectileSnapshot {
 
 /**
  * A plant as a view draws it, standing or mowed, field by field: the server's own counters (its seed, its blink, its
- * last bite) stay on the server, and its layers go at the rates a view plays them at (a chilled plant's are halved).
+ * last bite) stay on the server, and its layers go at the rates a view plays them at (a chilled plant's are halved, a
+ * frozen one's stopped).
  */
 function plantSnapshot(entityId: number, plant: Plant, position: Position): PlantSnapshot {
     return {
@@ -185,6 +189,7 @@ function plantSnapshot(entityId: number, plant: Plant, position: Position): Plan
         ...(plant.team === undefined ? {} : { team: plant.team }),
         ...(plant.mindControlled ? { mindControlled: true as const } : {}),
         ...(plant.chilledTicks ? { chilledTicks: plant.chilledTicks } : {}),
+        ...(plant.frozenTicks !== undefined ? { frozen: true as const } : {}),
         ...(plant.animations ? { animations: pacedLayers(plant.animations, () => plantPace(plant)) } : {}),
         ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
     }

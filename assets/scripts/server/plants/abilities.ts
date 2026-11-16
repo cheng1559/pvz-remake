@@ -21,8 +21,10 @@ import { mindControl, mindControls } from '../zombies/mindControl'
 import { isHostile, zombieFacingRect, plantFacingRect, plantFacingX, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { hostilePlants } from '../combat/targets'
+import { freezeFromPlant } from '../combat/freeze'
 import { destroyEatenPlant, detonatePlant, isPlantInedible } from './damage'
 import { plantSkipsTick } from './chill'
+import { isPlantAsleep } from './sleep'
 import { plantAbilityAnimation } from './animation'
 import { animateCurve } from '@/shared/content/animation'
 import { graveAt } from '@/shared/content/graves'
@@ -66,7 +68,7 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                 const position = world.get(entity, PositionComponent)!
                 const definition = definitions.plants[plant.typeId]
                 // Plant::Update returns early while asleep, so a sleeping sun-shroom does not grow.
-                if (definition.nocturnal && !level.board.night) continue
+                if (isPlantAsleep(definition, level.board)) continue
                 const detonate = (explosion: ExplosionDefinition) => detonatePlant(world, definitions, entity, explosion, commands)
                 const next = (state: PlantAbilityState, ticks: number) => {
                     ability.state = state
@@ -80,9 +82,13 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     continue
                 }
                 switch (ability.state) {
-                    case 'fuse':
-                        if (ability.ticks === 0) detonate(definition.fuse!.explosion)
+                    case 'fuse': {
+                        if (ability.ticks > 0) break
+                        const { explosion, freeze } = definition.fuse!
+                        if (explosion) detonate(explosion)
+                        else freezeFromPlant(world, definitions, entity, freeze!, commands)
                         break
+                    }
                     case 'arming':
                         if (ability.ticks > 0) break
                         next('rising', definition.mine!.riseTicks)
@@ -104,12 +110,13 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         if (ability.ticks > 0) break
                         const chomper = definition.chomper!
                         const target = findAbilityTarget(world, definitions, position, plant, chomper)
-                        // A pole vaulter still holding the pole slips away, as in Plant::UpdateChomper. A hostile plant
-                        // is swallowed whole, unless zombies could not hurt it either (a lit cherry bomb, a rising or
-                        // armed potato mine): it slips away.
+                        // A pole vaulter still holding the pole slips away, as in Plant::UpdateChomper, unless it is frozen
+                        // (IsImmobilizied). A hostile plant is swallowed whole, unless zombies could not hurt it either (a
+                        // lit cherry bomb, a rising or armed potato mine): it slips away.
                         const zombie = target === undefined ? undefined : world.get(target, ZombieComponent)
                         const prey = target === undefined || zombie ? undefined : world.get(target, PlantComponent)!
-                        const bit = target !== undefined && (zombie ? !zombie.hasPole : !isPlantInedible(prey!))
+                        const bit = target !== undefined && (zombie ? !zombie.hasPole || zombie.frozenTicks !== undefined
+                            : !isPlantInedible(world, definitions, prey!))
                         // An awake hypno-shroom bitten turns the plant to its side, as a zombie that chews one, and is
                         // gone; it is not swallowed, so the bite goes on as one that missed, with nothing to chew.
                         const turned = bit && !zombie && mindControls(world, definitions, prey!), ate = bit && !turned

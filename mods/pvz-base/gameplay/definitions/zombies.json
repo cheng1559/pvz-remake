@@ -79,6 +79,7 @@
     "graveRise": true
   },
   "pvz:pole_vaulter": {
+    "unfreezable": ["vaulting"],
     "facingRightOffsetX": 20.29,
     "wave": {"points": 2, "weight": 2000, "firstWave": 5},
     "maxHealth": 500,

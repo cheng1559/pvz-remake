@@ -12,6 +12,7 @@ import {
 import { spawnItem } from '../level/itemSpawn'
 import { plantTeam } from '@/shared/content/teams'
 import { levelAwardDropped } from '../level/levelAward'
+import { isPlantAsleep } from './sleep'
 
 export function createProductionSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -25,7 +26,7 @@ export function createProductionSystem(definitions: GameplayDefinitions): GameSy
                 if (!producer) continue
                 const timer = world.get(entity, PlantAttackComponent)!
                 // A sleeping mushroom and a growing sun-shroom skip UpdateProductionPlant, holding the launch counter.
-                const idle = definition.nocturnal && !level.board.night || plant.ability?.state === 'growing'
+                const idle = isPlantAsleep(definition, level.board) || plant.ability?.state === 'growing'
                 if (stopped || idle) { timer.readyAtTick++; continue }
                 // The client draws the glow over the last 100 ticks from the snapshot's produceTicks.
                 if (timer.readyAtTick - tick > 0) continue

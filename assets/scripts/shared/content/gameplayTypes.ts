@@ -1,5 +1,6 @@
 import type { JsonObject, Team } from '@/shared/protocol'
 import type { PlantAbilityState } from './plantAbilities'
+import type { ZombieState } from './zombieStates'
 
 /** The gameplay definitions' types (GameplayDefinitions, GameplayLevels), and the fixed names and places they share. */
 
@@ -195,6 +196,20 @@ export interface ExplosionDefinition {
     burn: boolean
 }
 
+/**
+ * Plant::IceZombies and Zombie::HitIceTrap: every plant and zombie hostile to the plant is frozen where it is, for
+ * `ticks`, or `coldTicks` if it was chilled or frozen already, chilled for `chillTicks` (or what it had left, if longer)
+ * and takes `damage` (through a zombie's shield); the board keeps the side frozen for `boardTicks`
+ * (Board::mIceTrapCounter).
+ */
+export interface FreezeDefinition {
+    ticks: { min: number; max: number }
+    coldTicks: { min: number; max: number }
+    chillTicks: number
+    damage: number
+    boardTicks: number
+}
+
 export interface PlantTargeting {
     eatingExtraRange: number
     excludeHeldPole: boolean
@@ -212,6 +227,16 @@ export interface PlantDefinition {
     plantingOffset?: { min: Point; max: Point }
     /** Mushrooms: asleep, doing nothing, on a board that is not at night. */
     nocturnal?: boolean
+    /**
+     * Kept from the cold, always (`true`) or in these states of its ability: no snow pea or ice-shroom chills it, so
+     * none freezes it either (the torchwood). See server/combat/cold.ts.
+     */
+    unchillable?: true | PlantAbilityState[]
+    /**
+     * Kept from an ice-shroom's ice, always (`true`) or in these states of its ability: it is only chilled, not frozen
+     * nor hurt (the cherry bomb and the ice-shroom, the bowled nuts, the grave buster, a potato mine `rising`).
+     */
+    unfreezable?: true | PlantAbilityState[]
     /** Projectile::FindCollisionTargetPlant: so low that projectiles fly over it (the puff-shroom, the potato mine). */
     low?: boolean
     maxHealth: number
@@ -265,8 +290,11 @@ export interface PlantDefinition {
     }
     /** Lands, eats the grave in its cell, then disappears; shovels cannot dig it. */
     graveBuster?: { landTicks: { min: number; max: number }; eatTicks: number }
-    /** Explodes after the fuse; zombies cannot damage it meanwhile. */
-    fuse?: { ticks: number; explosion: ExplosionDefinition }
+    /**
+     * After the fuse it goes off and is gone: with `explosion` it explodes (the cherry bomb), with `freeze` it freezes
+     * (the ice-shroom); exactly one. Zombies cannot damage it meanwhile, unless it is asleep.
+     */
+    fuse?: { ticks: number; explosion?: ExplosionDefinition; freeze?: FreezeDefinition }
     /** Arms underground, rises, then explodes when a zombie enters the attack rect. */
     mine?: { armingTicks: number; riseTicks: number; attack: Rect; targeting: PlantTargeting; explosion: ExplosionDefinition }
     /** Swallows the first zombie in reach, then digests before it can bite again. */
@@ -386,6 +414,16 @@ export interface ZombieDefinition {
      * 6 + 14.29. Zombies that face right in the original (mind-controlled, a digger walking back) keep its place.
      */
     facingRightOffsetX?: number
+    /**
+     * Zombie::CanBeChilled by its type: kept from the cold, always (`true`) or in these states, so never frozen either
+     * (the original's Zamboni, a bobsled team with its sled). See server/combat/cold.ts.
+     */
+    unchillable?: true | ZombieState[]
+    /**
+     * Zombie::CanBeFrozen by its type: kept from an ice-shroom's ice, always or in these states, it is only chilled,
+     * not frozen nor hurt (a pole vaulter `vaulting`).
+     */
+    unfreezable?: true | ZombieState[]
     maxHealth: number
     /** JSON configuration consumed by a registered entity behavior. */
     behavior?: JsonObject
