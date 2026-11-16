@@ -289,6 +289,17 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         return Math.round(depth * Math.min(1, riseTicks / ticks))
     }
 
+    /**
+     * Where something falls off from on the board's layer: its track's place as the body is drawn, or `offset` from
+     * the zombie's top left (turned round with one facing right) when the body draws no such track.
+     */
+    private dropPosition(layer: Node, trackId: string, offset: readonly [number, number]): { x: number, y: number } {
+        const track = this.getTrackWorldPosition(trackId)
+        if (track) return uiNode({ node: layer }).transform.convertToNodeSpaceAR(track)
+        const at = layer.inverseTransformPoint(new Vec3(), this.node.worldPosition)
+        return { x: at.x + mirrorX(offset[0], ZOMBIE_WIDTH, this.mirrored), y: at.y + offset[1] }
+    }
+
     /** Zombie::DropHelm or DropShield: plays the armor's `dropReanim` on the zombie. */
     armorDropped(slot: 'helm' | 'shield'): void {
         const drop = this.presentation[slot]?.dropReanim
@@ -621,44 +632,33 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (typeof entityId !== 'number' || event.data.silent === true) return
         // Zombie::DropHelm takes the track where it is this tick, as the parts do: heard once the frame is drawn, the
         // view has the zombie there (one rising from a grave is higher now), or as it last was if it is gone.
-        const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
-        const node = stage.node(entityId), view = stage.view(entityId, ZombieView)
-        const typeId = zombie?.typeId ?? view?.typeId
-        const armor = typeId ? stage.content.presentation.zombies[typeId]?.[slot] : undefined
-        if (!node || !armor) return
+        const view = stage.view(entityId, ZombieView), zombie = view?.latestZombie
+        const armor = view && zombie && stage.content.presentation.zombies[view.typeId]?.[slot]
+        if (!armor) return
         if (event.data.bypassed !== true) {
-            view?.armorDropped(slot)
+            view.armorDropped(slot)
             SoundSystem.playSounds(armor.dropSounds)
         }
-        const track = view?.getTrackWorldPosition(armor.track)
-        const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
-        // A zombie facing right sheds its armor the way it faces.
-        const mirrored = zombie?.team === 'plants'
-        // One above the zombie.
-        stage.spawnParticle(stage.zombieOrder(zombie?.row ?? 0) + 1, {
-            id: armor.effect, mirrored,
-            x: local?.x ?? node.position.x + mirrorX(armor.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + armor.offset[1],
-        })
+        const at = view.dropPosition(stage.layer, armor.track, armor.offset)
+        // One above the zombie; one facing right sheds its armor the way it faces.
+        stage.spawnParticle(stage.zombieOrder(zombie.row) + 1, { id: armor.effect, mirrored: zombie.team === 'plants', ...at })
     }
 
     /** Zombie::DropHead, DropArm and DropFlag: the part flies off from where it is on the body, with its sounds. */
     static readonly partDropped: StageEvent = (stage, event, world) => {
         const { entityId, typeId, part } = event.data
         if (typeof entityId !== 'number' || typeof typeId !== 'string' || (part !== 'head' && part !== 'arm' && part !== 'flag')) return
-        const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
-        const node = stage.node(entityId), view = stage.view(entityId, ZombieView)
-        const drop = node && stage.content.presentation.zombies[typeId]?.drops[part]
-        if (!node || !drop) return
-        const track = view?.getTrackWorldPosition(drop.track)
-        const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
+        // As the helm: by the view, which has the zombie as it last was once it is gone (a mowed one).
+        const view = stage.view(entityId, ZombieView), zombie = view?.latestZombie
+        const drop = zombie && stage.content.presentation.zombies[typeId]?.drops[part]
+        if (!view || !zombie || !drop) return
         // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
         // part's flight for a mind-controlled zombie.)
-        const mirrored = zombie?.team === 'plants', tint = entityTint(!!zombie?.mindControlled, !!zombie?.chilled)
+        const mirrored = zombie.team === 'plants', tint = entityTint(!!zombie.mindControlled, !!zombie.chilled)
         // One above the zombie.
-        stage.spawnParticle(stage.zombieOrder(zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)) + 1, {
+        stage.spawnParticle(stage.zombieOrder(zombie.row) + 1, {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
-            x: local?.x ?? node.position.x + mirrorX(drop.offset[0], ZOMBIE_WIDTH, mirrored),
-            y: local?.y ?? node.position.y + drop.offset[1],
+            ...view.dropPosition(stage.layer, drop.track, drop.offset),
             // The pole vaulter's own head and a bare hand are swapped in.
             spriteOverride: drop.image,
             // Zombie::OverrideParticleColor keeps a mind-controlled zombie's parts purple, a chilled one's blue.

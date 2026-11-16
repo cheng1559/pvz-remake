@@ -119,8 +119,8 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.deepEqual(
         world.resources.get(EventQueueResource).events
             .filter(event => event.type === 'zombiePartDropped' && event.data.entityId === zombie)
-            .map(event => [event.data.part, event.data.mowered, event.data.row]),
-        [['head', true, 2], ['arm', true, 2]],
+            .map(event => [event.data.part, event.data.mowered]),
+        [['head', true], ['arm', true]],
     )
 
     world.resources.get(LevelStateResource).result = 'won'

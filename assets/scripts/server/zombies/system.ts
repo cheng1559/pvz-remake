@@ -68,11 +68,11 @@ export class ZombieSystem implements GameSystem {
                 if (squashed(zombieBody(zombie))) {
                     if (zombie.hasHead) {
                         zombie.hasHead = false
-                        zombiePartDropped(world, entity, 'head', { mowered: true, row: position.row })
+                        zombiePartDropped(world, entity, 'head', { mowered: true })
                     }
                     if (zombie.hasArm) {
                         zombie.hasArm = false
-                        zombiePartDropped(world, entity, 'arm', { mowered: true, row: position.row })
+                        zombiePartDropped(world, entity, 'arm', { mowered: true })
                     }
                     commands.destroyEntity(entity)
                 }

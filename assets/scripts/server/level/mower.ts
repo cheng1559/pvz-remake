@@ -124,7 +124,7 @@ export function mowZombie(world: World, definitions: GameplayDefinitions, mowerI
             const has = part === 'head' ? 'hasHead' : 'hasArm'
             if (!zombie[has]) continue
             zombie[has] = false
-            zombiePartDropped(world, entity, part, { row: position.row })
+            zombiePartDropped(world, entity, part)
         }
         dropZombieHelm(world, definitions, entity, zombie)
         dropZombieShield(world, definitions, entity, zombie)
