@@ -322,10 +322,13 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
         const double g = rounded(options[PVZ_PARTICLE_GREEN] * green * e.tracks[Green].at(p.lastTime, p.interpolation[1]) * light) / 255;
         const double b = rounded(options[PVZ_PARTICLE_BLUE] * blue * e.tracks[Blue].at(p.lastTime, p.interpolation[2]) * light) / 255;
         const double a = rounded(options[PVZ_PARTICLE_ALPHA] * alpha * e.tracks[Alpha].at(p.lastTime, p.interpolation[3]) * light) * opacity;
+        // TodScaleRotateTransformMatrix (m00 cos, m10 -sin, m01 sin, m11 cos) turns the particle by its spin on the
+        // original's Y-down screen; with Y up both sines change sign. (A Reanim's skew is negated before its matrix,
+        // so its quads keep these signs the other way round.)
         // A negative alpha marks additive images for the shared material; the extra image follows its particle.
-        pvz_write_quad(image, p.x, -p.y, c * scale, -sn * scale, sn * scale * stretch, c * scale * stretch, r, g, b,
+        pvz_write_quad(image, p.x, -p.y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
                        additive ? -a : a, positions, vertices, quad++, stride);
-        if (extra) pvz_write_quad(image, p.x, -p.y, c * scale, -sn * scale, sn * scale * stretch, c * scale * stretch, r, g, b,
+        if (extra) pvz_write_quad(image, p.x, -p.y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
                                   -a, positions, vertices, quad++, stride);
     }
     pvz_clear_quads(positions, vertices, quad, capacity, stride);

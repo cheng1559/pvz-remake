@@ -103,3 +103,31 @@ test('an emitter draws its newest particles first and applies the tint alpha, as
         faded.forEach((alpha, index) => assert.ok(Math.abs(alpha - alphas[index] * 128 / 255) <= 1))
     } finally { particles.dispose() }
 })
+
+test('a particle turns by its spin as PvzpScaleRotateTransformMatrix turns it on the Y-down screen: aligned ones point out of their circle', () => {
+    // PARTICLE_MIND_CONTROL: spaced evenly round a circle, each turned the way it flies and half round more, so its
+    // image lies along the ray it flies out on (TodParticle's AlignLaunchSpin). Turned the other way, the ones between
+    // the axes lie across their rays and the ring looks square.
+    const definition = parseParticle({ schemaVersion: 3, id: 'test:ring', emitters: [{
+        sprite: 'pvz:star', emitterType: 'circleevenspacing', emitterRadius: track(30), launchSpeed: track(100),
+        spawnMinActive: track(8), particleDuration: track(40), alignLaunchSpin: true, particleSpinAngle: track(180),
+    }] })
+    const particles = new KernelParticles(packParticleEmitters(definition.emitters), 1, 1)
+    try {
+        particles.step(1)
+        const STRIDE = 9, count = particles.counts[0]
+        assert.equal(count, 8)
+        const positions = new Float32Array(count * 4 * STRIDE), vertices = new Float32Array(count * 4 * STRIDE)
+        const geometry = new Float64Array(Array.from({ length: 64 }, () => [0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1]).flat())
+        particles.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, count]), positions, vertices)
+        for (let quad = 0; quad < count; quad++) {
+            // The first corner is where the particle is (its image's bottom left); the third is a step up its image.
+            const corner = quad * 4 * STRIDE, x = positions[corner], y = positions[corner + 1]
+            const up = [positions[corner + 2 * STRIDE] - x, positions[corner + 2 * STRIDE + 1] - y]
+            const cross = x * up[1] - y * up[0], length = Math.hypot(x, y) * Math.hypot(up[0], up[1])
+            assert.ok(Math.abs(cross) < length * 1e-3, `particle ${quad} at (${x.toFixed(1)}, ${y.toFixed(1)}) lies along (${up.map(v => v.toFixed(2))})`)
+            // Its launch angle and 180 more: the image's bottom (m01, m11 on the Y-down screen) points in, its top out.
+            assert.ok(x * up[0] + y * up[1] > 0, `particle ${quad}: the top of its image points out`)
+        }
+    } finally { particles.dispose() }
+})
