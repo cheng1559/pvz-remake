@@ -204,6 +204,7 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     assert.deepEqual({ ...pea, x: round(pea.x), y: round(pea.y), height: round(pea.height!) }, {
         entityId: 4,
         typeId: 'pvz:pea',
+        age: 1,
         x: round(40 + stem.x + 24 + 3.33),
         y: round(280 + stem.y - 33),
         row: 2,

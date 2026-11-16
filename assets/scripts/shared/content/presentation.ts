@@ -172,6 +172,11 @@ export interface ProjectilePresentationDefinition {
         readonly offset: { readonly x: number; readonly y: number }; readonly scale: number
     }
     readonly trail?: { readonly id: string; readonly x: number; readonly y: number }
+    /**
+     * Projectile::Draw for a puff: its picture grows from `from` of its size to whole over its first `ticks` of age,
+     * about its middle; what goes with it (its trail) does not.
+     */
+    readonly grow?: { readonly ticks: number; readonly from: number }
     readonly impact?: {
         readonly id: string
         /**
@@ -1044,6 +1049,7 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
             return shadow
         },
         trail: (value, name) => allFields<NonNullable<Projectile['trail']>>(value, name, { id: nonEmptyString, x: finite, y: finite }),
+        grow: (value, name) => allFields<NonNullable<Projectile['grow']>>(value, name, { ticks: positiveInteger, from: fraction }),
         impact(value, name) {
             const impact = fields<NonNullable<Projectile['impact']>>(value, name, ['id'], {
                 id: nonEmptyString, shotOffset: pair, lobOffset: pair, yRange: (value, name) => range(value, name, 0), free: trueFlag,

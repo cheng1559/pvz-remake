@@ -146,6 +146,7 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
     schedule.run(world, 1)
     assert.equal(world.hasEntity(spore), false)
     assert.equal(world.get(zombie, ZombieComponent)!.health, 270)
+    assert.equal(world.get(far, ProjectileComponent)!.age, 1, 'Projectile::Update counts its age first')
 })
 
 test('a newspaper blocks chill until damage reaches the body, while cones and buckets do not', () => {

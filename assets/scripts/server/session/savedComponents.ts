@@ -188,9 +188,10 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
     savedComponent({
         key: 'projectile', component: ProjectileComponent,
         parse: (value, name): Projectile => {
-            const source = exact(value, ['typeId', 'definition', 'motion'], name, ['team', 'chompCounter', 'motionState', 'hits'])
+            const source = exact(value, ['typeId', 'age', 'definition', 'motion'], name, ['team', 'chompCounter', 'motionState', 'hits'])
             return {
                 typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+                age: nonNegativeInteger(source.age, `${name}.age`),
                 definition: parseProjectileDefinition(source.definition, `${name}.definition`),
                 motion: nonEmptyString(source.motion, `${name}.motion`),
                 ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),

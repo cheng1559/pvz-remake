@@ -163,6 +163,8 @@ export class ProjectileSystem implements GameSystem {
 
         const position = world.get(entity, PositionComponent)!
         const projectile = world.get(entity, ProjectileComponent)!
+        // Projectile::Update counts its age first.
+        projectile.age++
         const definition = projectile.definition
         const team = projectileTeam(projectile)
         const effect = definition.mow ? mowing : damaging

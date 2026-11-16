@@ -254,6 +254,8 @@ export interface ProjectileSnapshot {
     row: number
     /** Fired by a plant on the zombies' side: it flies left. */
     team?: 'zombies'
+    /** The ticks it has flown (Projectile::mProjectileAge), which its picture may grow by; a waiting mower has none. */
+    age?: number
     /** How far above the ground it flies, when it does: what it draws on the ground lies as far under it. */
     height?: number
     /** How far up it has been thrown from where it set off, when it is above there: its shadow shrinks the higher. */
@@ -516,6 +518,7 @@ const validateProjectile = (value: unknown, name: string): Record<string, JsonVa
     finite(projectile.x, `${name}.x`)
     finite(projectile.y, `${name}.y`)
     nonNegativeInteger(projectile.row, `${name}.row`)
+    if (projectile.age !== undefined) nonNegativeInteger(projectile.age, `${name}.age`)
     if (projectile.height !== undefined) finite(projectile.height, `${name}.height`)
     if (projectile.lift !== undefined) finite(projectile.lift, `${name}.lift`)
     if (projectile.facing !== undefined) finite(projectile.facing, `${name}.facing`)

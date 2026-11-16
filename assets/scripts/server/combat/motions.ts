@@ -140,6 +140,7 @@ export function setOffProjectile(world: World, definitions: GameplayDefinitions,
     creator.add(entity, PositionComponent, position)
     creator.add(entity, ProjectileComponent, {
         typeId: launch.typeId,
+        age: 0,
         definition,
         motion: launch.motion,
         ...(launch.team ? { team: launch.team } : {}),

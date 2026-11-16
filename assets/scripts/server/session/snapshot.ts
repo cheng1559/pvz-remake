@@ -163,7 +163,7 @@ function projectileSnapshot(world: World, entity: number): ProjectileSnapshot {
     const motion = world.resources.get(ProjectileMotionsResource).of(projectile)
     const height = motion.height?.(projectile.motionState) ?? heightOverRow(world, projectile.definition, position), facing = motion.facing?.(projectile.motionState)
     const lift = motion.lift?.(projectile.motionState) ?? 0
-    return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}),
+    return { entityId: entity, typeId: projectile.typeId, ...position, age: projectile.age, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}),
         ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }) }
 }
 

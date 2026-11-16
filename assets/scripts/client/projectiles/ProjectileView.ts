@@ -113,26 +113,28 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
 
     /**
      * The projectile where it flies. One of the zombies' side flies left, mirrored across its hitbox. It points the way
-     * it flies (ProjectileSnapshot.facing), turned about its middle.
+     * it flies (ProjectileSnapshot.facing) and grows as it sets off (ProjectilePresentationDefinition.grow), both about
+     * its middle.
      */
     sync(projectile: ProjectileSnapshot): void {
         const { node } = this.context, stage = this.stage, hitbox = stage.content.definitions.projectiles[projectile.typeId]?.hitbox
         const mirror = projectile.team === 'zombies' && hitbox ? 2 * hitbox.x + hitbox.width : 0
+        const scale = ProjectileView.grown(this.presentation, projectile.age)
         let { x, y } = boardToLayer(projectile.x + mirror, projectile.y), angle = 0
-        if (projectile.facing !== undefined && hitbox) {
+        if ((projectile.facing !== undefined || scale !== 1) && hitbox) {
             // Mirrored, it already points left. The angle is counter-clockwise here, and the middle is from the node's
             // corner, y up.
-            angle = (mirror ? Math.PI : 0) - projectile.facing
+            angle = projectile.facing === undefined ? 0 : (mirror ? Math.PI : 0) - projectile.facing
             const middle = ProjectileView.middle(stage, projectile.typeId)!
             const middleX = (mirror ? -1 : 1) * middle.x, middleY = -middle.y
             const cos = Math.cos(angle), sin = Math.sin(angle)
-            x += middleX - (cos * middleX - sin * middleY)
-            y += middleY - (sin * middleX + cos * middleY)
+            x += middleX - scale * (cos * middleX - sin * middleY)
+            y += middleY - scale * (sin * middleX + cos * middleY)
         }
         if (node.isValid) {
             node.setPosition(x, y)
             node.angle = angle * 180 / Math.PI
-            node.setScale(mirror ? -1 : 1, 1, 1)
+            node.setScale((mirror ? -1 : 1) * scale, scale, 1)
         }
         if (!hitbox) return
         // Each of the rest at its offset from the projectile, mirrored across the hitbox of one flying left.
@@ -168,6 +170,15 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         if (this.shadowNode?.isValid) this.shadowNode.destroy()
         // Projectile::Die: its trail stays where it ended, launching no more, until its last particle is gone.
         if (this.trail?.isValid) this.trail.stop()
+    }
+
+    /**
+     * Projectile::Draw's PvzpAnimateCurveFloat(0, ticks, mProjectileAge, from, 1, CURVE_LINEAR): the size of a projectile
+     * that grows as it sets off, by its age; whole without one (a waiting mower).
+     */
+    static grown(presentation: Pick<ProjectilePresentationDefinition, 'grow'>, age: number | undefined): number {
+        const grow = presentation.grow
+        return grow && age !== undefined ? grow.from + (1 - grow.from) * Math.min(1, age / grow.ticks) : 1
     }
 
     /** The middle of a projectile from its corner: of its picture, or of its hitbox for an animated one. It turns about it. */

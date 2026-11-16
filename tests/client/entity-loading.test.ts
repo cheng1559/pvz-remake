@@ -960,3 +960,15 @@ test("a shot leaves the muzzle effect of the plant that fired it just over the r
         ['pvz:snowpeapuff', 108, 133, order, null, false],
     ], 'the peashooter has none')
 })
+
+test('a spore grows from 0.3 of its size to whole over its first 30 ticks, as Projectile::Draw draws a puff', () => {
+    const { ProjectileView } = loadClientModule('projectiles/ProjectileView', {
+        cc: { Sprite: { SizeMode: { RAW: 0 } } }, '@/client/level/LevelStage': loadClientModule('level/LevelStage', {}),
+        '@/shared/content/teams': teamsModule,
+    })
+    const spore = presentationFixture.projectiles['pvz:spore']
+    assert.deepEqual(spore.grow, { ticks: 30, from: 0.3 })
+    assert.deepEqual([0, 1, 15, 30, 75].map(age => Math.round(ProjectileView.grown(spore, age) * 1000) / 1000), [0.3, 0.323, 0.65, 1, 1])
+    assert.equal(ProjectileView.grown(spore, undefined), 1, 'without an age (a waiting mower) it is whole')
+    assert.equal(ProjectileView.grown(presentationFixture.projectiles['pvz:pea'], 1), 1, 'a pea does not grow')
+})

@@ -90,6 +90,8 @@ export interface Zombie extends EntityBehaviorState {
 
 export interface Projectile {
     typeId: string
+    /** Projectile::mProjectileAge: the ticks it has flown, counted as each of its updates starts. */
+    age: number
     /** What it is as it was set off: its type's definition, with what its launcher has its own way (shooter.overrides). */
     definition: ProjectileDefinition
     /** The side that fired it, when not the plants'. */
