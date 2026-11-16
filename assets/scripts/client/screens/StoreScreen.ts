@@ -160,7 +160,7 @@ export class StoreScreen extends Component {
             icon.node.setSiblingIndex(0)
         }
         if (item.seedSlots !== undefined) this.centerText(button.node, this.ui.text('STORE_UPGRADE_SLOTS').replace('{SLOTS}', String(item.seedSlots)), 'storeItem', 0, 6, 55, 70)
-        if (look.quantity) this.ui.label(button.node, { text: `x${look.quantity}`, font: 'storeItem', x: 56, y: 62, align: 'right', baseline: true })
+        if (item.quantity) this.ui.label(button.node, { text: `x${item.quantity}`, font: 'storeItem', x: 56, y: 62, align: 'right', baseline: true })
         this.ui.image(button.node, this.sprites.store_pricetag, { x: -3, y: 70 })
         this.ui.label(button.node, { text: formatMoney(item.cost), font: 'small', color: Color.BLACK, x: 23, y: 85, baseline: true, align: 'center' })
         if (state === 'comingSoon' || state === 'soldOut') this.centerText(button.node, this.ui.text(state === 'comingSoon' ? 'COMING_SOON' : 'SOLD_OUT'), 'storeItem', 0, 0, 50, 70, new Color(255, 0, 0))

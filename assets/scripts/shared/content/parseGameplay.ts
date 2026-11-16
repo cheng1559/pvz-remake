@@ -606,7 +606,7 @@ function parseStorePage(value: unknown, name: string): StorePageDefinition {
 
 function parseStoreItem(value: unknown, name: string): StoreItemDefinition {
     const source = exact(value, ['page', 'place', 'purchase'], name,
-        ['cost', 'prices', 'message', 'messages', 'level', 'completed', 'requires', 'seedSlots', 'effect', 'unlockChallenge'])
+        ['cost', 'prices', 'message', 'messages', 'level', 'completed', 'requires', 'effect', 'unlockChallenge'])
     // A price and Dave's line each come once, or by the number bought (StoreScreen::GetItemCost, the upgrade's lines).
     for (const [one, tiers] of [['cost', 'prices'], ['message', 'messages']]) {
         if ((source[one] === undefined) === (source[tiers] === undefined)) throw new Error(`${name} needs exactly one of ${one} and ${tiers}`)
@@ -625,11 +625,9 @@ function parseStoreItem(value: unknown, name: string): StoreItemDefinition {
         ...(source.messages === undefined ? {} : { messages: tiers('messages', nonNegativeInteger) }),
         ...storeVisibility(source, name),
         purchase: parseStorePurchase(source.purchase, `${name}.purchase`),
-        ...(source.seedSlots === undefined ? {} : { seedSlots: tiers('seedSlots', positiveInteger) }),
         ...(source.effect === undefined ? {} : { effect: oneOf(source.effect, ['seedSlots', 'tree'] as const, `${name}.effect`) }),
     }
     if (item.place >= STORE_PAGE_PLACES) throw new Error(`${name}.place must be below ${STORE_PAGE_PLACES}, on its page`)
-    if (item.effect === 'seedSlots' && !item.seedSlots) throw new Error(`${name}.effect seedSlots needs seedSlots`)
     if (source.requires !== undefined) {
         const requires = exact(source.requires, [], `${name}.requires`, ['anyPurchases', 'allPurchases', 'minimumStored', 'finishedAdventure'])
         item.requires = {

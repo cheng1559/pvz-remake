@@ -43,7 +43,10 @@ export interface StoreItemView {
     /** The seed the item sells, shown as its packet unless the item has a sprite of its own. */
     seed?: string
     message: number
+    /** The seed-slot upgrade's slots once bought. */
     seedSlots?: number
+    /** How many it sells at a time, written over it (`x5`). */
+    quantity?: number
 }
 /** The pages the player can turn to, by page ID; `finishedAdventure` lets Dave chatter his `completed` lines. */
 export interface StoreView {

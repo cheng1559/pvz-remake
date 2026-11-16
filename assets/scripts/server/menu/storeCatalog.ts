@@ -13,7 +13,7 @@ const currentDay = (now: number) => Math.floor((now - Date.UTC(2000, 0, 1)) / 86
  * The store from the gameplay definitions' `store` and `storePages` (checked as they were read): the rules determine
  * purchases; no behavior depends on a specific item ID.
  */
-export function createStoreCatalog(definitions: Pick<GameplayDefinitions, 'store' | 'storePages' | 'zenGarden'>) {
+export function createStoreCatalog(definitions: Pick<GameplayDefinitions, 'store' | 'storePages' | 'zenGarden' | 'seedBank'>) {
     const items = Object.entries(definitions.store).map(([id, item]): StoreItem => ({ id, ...item }))
     const pages = Object.entries(definitions.storePages).map(([id, page]): StorePage => ({
         id, ...page, items: items.filter(item => item.page === id).sort((a, b) => a.place - b.place),
@@ -21,6 +21,8 @@ export function createStoreCatalog(definitions: Pick<GameplayDefinitions, 'store
     const garden = definitions.zenGarden
     const tier = (item: StoreItem, profile: PlayerProfile) => profile.purchases[item.id] ?? 0
     const atTier = (values: readonly number[], index: number) => values[Math.max(0, Math.min(values.length - 1, index))]
+    /** The bank's slots with this many seed-slot upgrades (Board::GetNumSeedsInBank): one more each, up to its most. */
+    const slotsWith = (upgrades: number) => Math.min(definitions.seedBank.baseSlots + upgrades, definitions.seedBank.maxSlots)
 
     function item(id: string): StoreItem | undefined {
         return items.find(item => item.id === id)
@@ -76,17 +78,22 @@ export function createStoreCatalog(definitions: Pick<GameplayDefinitions, 'store
         return true
     }
 
+    /**
+     * StoreScreen::DrawItem: Dave's line for the next one bought; the seed-slot upgrade says the slots it makes, and an
+     * item sold several at a time how many (`x5`).
+     */
     function itemDetails(item: StoreItem, profile: PlayerProfile) {
-        const count = tier(item, profile)
+        const count = tier(item, profile), rule = item.purchase
         return {
             message: item.messages ? atTier(item.messages, count) : item.message!,
-            ...(item.seedSlots && { seedSlots: atTier(item.seedSlots, count) }),
+            ...(item.effect === 'seedSlots' && { seedSlots: slotsWith(count + 1) }),
+            ...(rule.kind === 'stock' && rule.amount > 1 && { quantity: rule.amount }),
         }
     }
 
     function purchaseEffect(item: StoreItem, profile: PlayerProfile) {
         return item.effect ? { effect: item.effect,
-            ...(item.seedSlots && { seedSlots: atTier(item.seedSlots, tier(item, profile) - 1) }),
+            ...(item.effect === 'seedSlots' && { seedSlots: slotsWith(tier(item, profile)) }),
         } : {}
     }
 

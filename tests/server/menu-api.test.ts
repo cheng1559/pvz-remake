@@ -32,7 +32,7 @@ test('shop rules, tiers and purchase effects follow the store table, for a Mod\'
     const upgrade = readGameplaySource('definitions').store['pvz:packet-upgrade']
     // A Mod sells its own seed-slot upgrade in the base's place, and moves the base's off the store.
     const { definitions } = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
-        store: { 'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001], seedSlots: [8, 9] } },
+        store: { 'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001] } },
         overrides: { store: { 'pvz:packet-upgrade': { page: 'test:page', place: 0, cost: 1, message: 1, purchase: { kind: 'set', value: 1 } } } },
         storePages: { 'test:page': { completed: true } },
     } }])
@@ -47,12 +47,12 @@ test('shop rules, tiers and purchase effects follow the store table, for a Mod\'
     assert.equal(item.place, 0)
     assert.equal(item.cost, 123)
     assert.equal(item.message, 9000)
-    assert.equal(item.seedSlots, 8)
+    assert.equal(item.seedSlots, 7, 'the bank\'s 6 slots and one more')
     const result = await api.purchase(profile.id, 'test:upgrade', 123)
     assert.equal(result.ok, true)
     if (!result.ok) return
     assert.equal(result.effect, 'seedSlots')
-    assert.equal(result.seedSlots, 8)
+    assert.equal(result.seedSlots, 7)
     assert.deepEqual(profiles.getCurrentProfile()!.purchases, { 'test:upgrade': 1 }, 'the profile counts purchases by item ID')
     assert.equal(result.store.coins, 9877)
     assert.equal(result.store.pages[0].items.find(item => item.id === 'test:upgrade')!.message, 9001)

@@ -495,8 +495,6 @@ export interface StoreItemPresentation {
      * Without, a seed's packet flashes and a sprite lights at 96.
      */
     readonly highlight?: { readonly type: 'none' | 'seedPacket' } | { readonly type: 'additive'; readonly opacity: number }
-    /** The count written over it, as `x5` (fertilizer, bug spray). */
-    readonly quantity?: number
 }
 
 /**
@@ -769,7 +767,7 @@ function parseTool(value: unknown, name: string): ToolPresentation {
 function parseStoreItem(value: unknown, name: string): StoreItemPresentation {
     type Highlight = NonNullable<StoreItemPresentation['highlight']>
     return fields<StoreItemPresentation>(value, name, [], {
-        sprite: nonEmptyString, offset: pair, quantity: positiveInteger,
+        sprite: nonEmptyString, offset: pair,
         highlight(value, name): Highlight {
             const { type } = record(value, name)
             if (type !== 'additive') return allFields<Highlight>(value, name, { type: (value, name) => oneOf(value, ['none', 'seedPacket'] as const, name) })

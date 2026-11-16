@@ -55,7 +55,7 @@ test('the store, the almanac, the tools and the Zen Garden take only what they s
         [(value: any) => { value.store['pvz:rake'].level = 2; value.store['pvz:rake'].completed = true }, /at most one of level and completed/],
         [(value: any) => { value.store['pvz:rake'].purchase = { kind: 'gift' } }, /purchase\.kind must be set, count, stock, timestamp, plant or seed/],
         [(value: any) => { value.store['pvz:wheelbarrow'].requires.anyPurchases = ['pvz:moon-garden'] }, /requires\.anyPurchases\[0\] references unknown ID/],
-        [(value: any) => { value.store['pvz:rake'].effect = 'seedSlots'; value.store['pvz:rake'].seedSlots = [7] }, /exactly one item with the seedSlots effect/],
+        [(value: any) => { value.store['pvz:rake'].effect = 'seedSlots' }, /exactly one item with the seedSlots effect/],
         [(value: any) => { value.storePages['pvz:plant-upgrades'].level = 0 }, /storePages\.pvz:plant-upgrades\.level must be positive/],
         [(value: any) => { value.almanac['pvz:flag'].place = 0 }, /almanac\.pvz:normal and almanac\.pvz:flag share place 0/],
         [(value: any) => { value.almanac['pvz:yeti'] = { place: 30, startingLevel: 1 } }, /almanac key references unknown ID pvz:yeti/],

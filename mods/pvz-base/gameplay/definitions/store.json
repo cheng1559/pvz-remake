@@ -1,5 +1,5 @@
 {
-  "pvz:packet-upgrade": {"page": "pvz:slot-upgrades", "place": 0, "prices": [75, 500, 2000, 8000], "messages": [2011, 2012, 2013, 2014], "purchase": {"kind": "count", "amount": 1, "limit": 4}, "seedSlots": [7, 8, 9, 10], "effect": "seedSlots"},
+  "pvz:packet-upgrade": {"page": "pvz:slot-upgrades", "place": 0, "prices": [75, 500, 2000, 8000], "messages": [2011, 2012, 2013, 2014], "purchase": {"kind": "count", "amount": 1, "limit": 4}, "effect": "seedSlots"},
   "pvz:pool-cleaner": {"page": "pvz:slot-upgrades", "place": 1, "cost": 100, "message": 2026, "purchase": {"kind": "set", "value": 1}},
   "pvz:rake": {"page": "pvz:slot-upgrades", "place": 2, "cost": 20, "message": 2028, "purchase": {"kind": "set", "value": 3}},
   "pvz:roof-cleaner": {"page": "pvz:slot-upgrades", "place": 3, "cost": 300, "message": 2027, "level": 42, "purchase": {"kind": "set", "value": 1}},

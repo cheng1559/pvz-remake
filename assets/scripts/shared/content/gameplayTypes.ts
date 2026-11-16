@@ -91,7 +91,7 @@ export interface StoreItemDefinition {
     completed?: true
     purchase: StorePurchase
     requires?: { anyPurchases?: string[]; allPurchases?: string[]; minimumStored?: number; finishedAdventure?: true }
-    seedSlots?: number[]
+    /** `seedSlots`: it is the seed-slot upgrade, each one bought a slot more (seedBank); `tree`: the Tree of Wisdom. */
     effect?: 'seedSlots' | 'tree'
     unlockChallenge?: { index: number; value: number }
 }
