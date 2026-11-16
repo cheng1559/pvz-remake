@@ -5,7 +5,7 @@ import { ZombiePreview } from '@/client/hud/ZombiePreview'
 import { plantDefinition } from '@/client/plants/definitions'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import type { LevelDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type LevelDefinition } from '@/shared/content/gameplay'
 import { seedTeam } from '@/shared/content/teams'
 import type { WorldSnapshot } from '@/shared/protocol/index'
 import { cellOutOfPlay, type LevelPlantingRule, plantingRefusal, snapshotLawn } from '@/shared/content/planting'
@@ -113,8 +113,8 @@ export class LevelPlantingPreview {
         if (plantId || zombieId !== undefined || graveSeed) {
             cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             gridPreview.active = valid && !mobile
-            if (valid && !mobile) gridPreview.setPosition(board.origin.x + column * board.cell.width,
-                -(board.origin.y + row * board.cell.height + (presentation?.drawHeightOffset ?? 0)))
+            const cell = cellPosition(board, row, column)
+            if (valid && !mobile) gridPreview.setPosition(cell.x, -(cell.y + (presentation?.drawHeightOffset ?? 0)))
         } else gridPreview.active = false
         if (valid && mobile) {
             mobileGridGuide.active = true
@@ -124,8 +124,9 @@ export class LevelPlantingPreview {
                 const graphics = mobileGridGuide.getComponent(Graphics)!
                 graphics.clear()
                 graphics.fillColor = new Color(255, 255, 255, 72)
-                graphics.fillRect(board.origin.x, -(board.origin.y + (row + 1) * board.cell.height), board.columns * board.cell.width, board.cell.height)
-                graphics.fillRect(board.origin.x + column * board.cell.width, -(board.origin.y + board.rows * board.cell.height), board.cell.width, board.rows * board.cell.height)
+                const at = cellPosition(board, row, column), bottom = cellPosition(board, board.rows, 0).y
+                graphics.fillRect(board.origin.x, -(at.y + board.cell.height), board.columns * board.cell.width, board.cell.height)
+                graphics.fillRect(at.x, -bottom, board.cell.width, board.rows * board.cell.height)
             }
         }
     }

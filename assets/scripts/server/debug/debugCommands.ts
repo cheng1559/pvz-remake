@@ -17,7 +17,7 @@ import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
 import { levelAwardDropped, spawnLevelAward } from '../level/levelAward'
-import { LEVEL_AWARD } from '@/shared/content/gameplay'
+import { cellPosition, LEVEL_AWARD, zombieRowY } from '@/shared/content/gameplay'
 
 export const executor = { execute: executeCommand }
 
@@ -158,7 +158,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const team = args[3]?.toLowerCase() === 'plants' ? 'plants' : 'zombies'
             const entityId = grid.column !== undefined ? planting.placeZombie(session, typeId, grid.row, grid.column, team)
                 : spawnZombie(world, definitions, typeId, grid.row, pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource)),
-                    level.board.origin.y + grid.row * level.board.cell.height - 30)
+                    zombieRowY(level.board, grid.row))
             if (team === 'plants') world.get(entityId, ZombieComponent)!.team = 'plants'
             emitServerEvent(events, 'zombieSpawned', { entityId, typeId, row: grid.row })
             return debugSuccess(`Summoned ${args[0]}`)
@@ -242,8 +242,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             if (award && levelAwardDropped(world)) return debugCondition('DEBUG_AWARD_EXISTS')
             const grid = args.length === 3 ? position(args[1], args[2]) : undefined
             if (grid === null) return invalidPosition()
-            const x = grid ? level.board.origin.x + grid.column! * level.board.cell.width : 400
-            const y = grid ? level.board.origin.y + grid.row * level.board.cell.height : 280
+            const { x, y } = grid ? cellPosition(level.board, grid.row, grid.column!) : { x: 400, y: 280 }
             if (!award) {
                 // Board::AddCoin with COIN_MOTION_COIN, like a zombie's loot.
                 spawnLoot(world, definitions, world, typeId, x, y)

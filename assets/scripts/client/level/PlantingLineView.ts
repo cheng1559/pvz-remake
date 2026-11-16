@@ -1,7 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import type { Node } from 'cc'
 import type { UI } from '@/client/ui/UI'
-import type { LevelDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentationDefinition } from '@/shared/content/presentation'
 import type { WorldSnapshot } from '@/shared/protocol'
 import type { LoadedContent } from './LevelView'
@@ -26,10 +26,8 @@ export class PlantingLineView {
         if (!level.plantingLine || !look) return undefined
         const board = content.definitions.boards[level.board]
         const sprite = await modResources.sprite(look.sprite)
-        const [x, y] = look.offset
-        const stripe = ui.image(ground.parent!, sprite, {
-            x: board.origin.x + (level.plantingLine.column + 1) * board.cell.width + x - 400, y: board.origin.y + y - 300,
-        }).node
+        const [x, y] = look.offset, edge = cellPosition(board, 0, level.plantingLine.column + 1)
+        const stripe = ui.image(ground.parent!, sprite, { x: edge.x + x - 400, y: edge.y + y - 300 }).node
         stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         const view = new PlantingLineView(stripe, look.dialogs)
         view.sync(initial)

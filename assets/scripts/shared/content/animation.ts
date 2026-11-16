@@ -2,6 +2,30 @@ import { TICK_SECONDS } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
 import type { AnimationClip, AnimationDefinition } from './gameplay'
 
+/** PvzpCurves: how a value animated from one end to the other goes (PvzpCurveEvaluate). */
+export type AnimateCurve = 'linear' | 'ease-in' | 'ease-in-out' | 'bounce'
+const curveS = (t: number) => 3 * t * t - 2 * t * t * t
+const CURVES: Record<AnimateCurve, (t: number) => number> = {
+    linear: t => t, 'ease-in': t => t * t, 'ease-in-out': t => curveS(curveS(t)), bounce: t => 1 - Math.abs(1 - 2 * t),
+}
+
+/**
+ * PvzpAnimateCurveFloat: the value `from` at `start` going to `to` at `end`, as `age` goes between them by `curve`;
+ * before the start it is `from`, after the end `to`, and a bounce is back at `from` (PvzpCurveEvaluateClamped).
+ */
+export function animateCurveFloat(start: number, end: number, age: number, from: number, to: number, curve: AnimateCurve = 'linear'): number {
+    const t = (age - start) / (end - start)
+    if (t <= 0) return from
+    if (t >= 1) return curve === 'bounce' ? from : to
+    return from + (to - from) * CURVES[curve](t)
+}
+
+/** PvzpAnimateCurve: animateCurveFloat in whole units, rounded half away from zero (FloatRoundToInt). */
+export function animateCurve(start: number, end: number, age: number, from: number, to: number, curve: AnimateCurve = 'linear'): number {
+    const value = animateCurveFloat(start, end, age, from, to, curve)
+    return value > 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5)
+}
+
 /**
  * An animation (a plant's or a zombie's `animation`) as it goes: what each of its layers plays and how far into it.
  * The server keeps it for what is on the board, so what follows from it (where a pea shooter's mouth is as it sways,

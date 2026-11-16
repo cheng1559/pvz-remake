@@ -24,6 +24,7 @@ import { hostilePlants } from '../combat/targets'
 import { destroyEatenPlant, detonatePlant, isPlantInedible } from './damage'
 import { plantSkipsTick } from './chill'
 import { plantAbilityAnimation } from './animation'
+import { animateCurve } from '@/shared/content/animation'
 import { graveAt } from '@/shared/content/graves'
 import { gridItems } from '../level/lawn'
 
@@ -241,7 +242,7 @@ function flashMineLight(world: World, definitions: GameplayDefinitions, position
         distance = Math.min(distance, Math.max(0, -rectOverlap({ x: position.x + reach.x, width: reach.width }, { x: at.x + rect.x, width: rect.width })))
     }
     const frames = definition.animation!.clips[light.clip].frames, { near, far, fast } = MINE_LIGHT
-    const round = Math.round(Math.max(fast, Math.min(frames, frames + (distance - far) * (fast - frames) / (near - far))))
+    const round = animateCurve(far, near, distance, frames, fast)
     // The round is that many frames in place of the clip's, so the clip goes round that much faster.
     light.rate = (body.rate - MINE_LIGHT.slower) * frames / round
     if (light.time % frames / frames * (round - 1) < 1) delete light.hidden

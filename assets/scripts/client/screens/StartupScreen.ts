@@ -13,6 +13,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { animateCurve } from '@/shared/content/animation'
 
 const { ccclass } = _decorator
 const BAR_WIDTH = 314
@@ -235,11 +236,11 @@ export class StartupScreen extends Component {
             return
         }
         if (this.phase !== 'loading') return
-        const logoY = this.titleCounter > 60 ? curve(100, 60, this.titleCounter, -150, 10)
-            : curve(60, 50, this.titleCounter, 10, 15, true)
+        const logoY = this.titleCounter > 60 ? animateCurve(100, 60, this.titleCounter, -150, 10, 'ease-in')
+            : animateCurve(60, 50, this.titleCounter, 10, 15, 'bounce')
         this.pvzLogo.setPosition(this.pvzLogo.position.x, -logoY)
-        const buttonY = this.titleCounter > 10 ? curve(60, 10, this.titleCounter, 650, 534)
-            : curve(10, 0, this.titleCounter, 534, 529, true)
+        const buttonY = this.titleCounter > 10 ? animateCurve(60, 10, this.titleCounter, 650, 534, 'ease-in')
+            : animateCurve(10, 0, this.titleCounter, 534, 529, 'bounce')
         this.bar.setPosition(this.grassX, -(buttonY + 1))
         this.startButton.node.setPosition(this.grassX, -buttonY)
         this.grass.setContentSize(this.width, this.grass.height)
@@ -284,10 +285,4 @@ export class StartupScreen extends Component {
         if (playSound) void SoundSystem.play(SoundEffect.ButtonClick)
         this.onStart()
     }
-}
-
-function curve(begin: number, end: number, counter: number, from: number, to: number, bounce = false): number {
-    const t = Math.max(0, Math.min(1, (begin - counter) / (begin - end)))
-    const value = from + (to - from) * (bounce ? 1 - Math.abs(2 * t - 1) : t * t)
-    return Math.trunc(value + (value > 0 ? 0.5 : -0.5))
 }

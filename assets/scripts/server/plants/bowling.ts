@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
 import type { PlantBehavior } from './behaviors'
 import {
     type EntityRemover, LevelStateResource, type Plant, PlantComponent, type Position, PositionComponent, RandomResource, ZombieComponent,
@@ -87,7 +87,7 @@ export const bowlingBehavior: PlantBehavior<State> = {
             return
         }
         position.y += state.direction * rules.bounceSpeed
-        if (Math.abs(board.origin.y + position.row * board.cell.height - position.y) > rules.bounceSpeed) return
+        if (Math.abs(cellPosition(board, position.row, 0).y - position.y) > rules.bounceSpeed) return
         let direction = state.direction
         if (direction < 0 && position.row === 0) direction = 1
         else if (direction > 0 && position.row === board.rows - 1) direction = -1

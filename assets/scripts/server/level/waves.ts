@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { WaveResource, type WaveState } from '../state/levelState'
@@ -94,7 +94,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
                     typeId,
                     row,
                     pickZombieSpawnX(definitions.zombies[typeId], random, wave.flagWave),
-                    level.board.origin.y + row * level.board.cell.height - 30,
+                    zombieRowY(level.board, row),
                 )
                 emitServerEvent(world.resources.get(EventQueueResource), 'zombieSpawned', {
                     entityId,

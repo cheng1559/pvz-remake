@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import { type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
 import { type EntityRemover, LevelStateResource, PositionComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { ItemComponent, WaveResource } from '../state/levelState'
@@ -15,7 +15,7 @@ export function levelAwardDropped(world: World): boolean {
 /** Board::AddCoin of the level's award at (x, y), dropped like a coin (COIN_MOTION_COIN). */
 export function spawnLevelAward(world: World, x: number, y: number): number {
     const award = world.resources.get(LevelStateResource).definition.award
-    const entity = spawnItem(world, world, { typeId: LEVEL_AWARD, value: 1, width: levelAwardSize(award).width, levelAward: true }, x, y, 'coin')
+    const entity = spawnItem(world, world, { typeId: LEVEL_AWARD, value: 1, width: levelAwardSize(award).width }, x, y, 'coin')
     emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, awardId: award.id })
     return entity
 }
@@ -38,9 +38,9 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     const body = zombie ? definitions.zombies[zombie.typeId].body : undefined
     // With no zombie to drop it (the original then drops none), it comes down as Challenge::SpawnLevelAward puts one in
     // the middle of the lawn: 40 into cell (4, 2), as the slot machine does.
-    const { origin, cell } = level.board
-    spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : origin.x + 4 * cell.width + 40,
-        position && body ? position.y + body.y + body.height / 2 : origin.y + 2 * cell.height + 40)
+    const middle = cellPosition(level.board, 2, 4)
+    spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : middle.x + 40,
+        position && body ? position.y + body.y + body.height / 2 : middle.y + 40)
     // Board::RemoveAllZombies: every zombie that is not dead or dying vanishes, the one that dropped the award included.
     for (const zombieEntity of zombies) {
         if (!isDeadOrDying(world.get(zombieEntity, ZombieComponent)!)) remover.destroyEntity(zombieEntity)

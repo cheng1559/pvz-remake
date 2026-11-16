@@ -14,7 +14,7 @@ import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/Lev
 import { exact } from '@/shared/validate'
 import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
 import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
-import { ASSET_FPS, passedMark } from '@/shared/content/animation'
+import { animateCurve, ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
@@ -283,10 +283,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
 
     private get graveRise() { return this.context.content.presentation.graves.zombie }
 
-    /** How far below the body still is: the original's altitude, PvzpAnimateCurve's whole pixels down to none. */
+    /** How far below the body still is: Zombie::UpdateZombieRiseFromGrave's altitude, from -depth up to none. */
     private sunk(riseTicks: number): number {
         const { depth, riseTicks: ticks } = this.graveRise
-        return Math.round(depth * Math.min(1, riseTicks / ticks))
+        return -animateCurve(ticks, 0, riseTicks, -depth, 0)
     }
 
     /**

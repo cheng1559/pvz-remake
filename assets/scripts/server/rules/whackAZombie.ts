@@ -5,6 +5,7 @@ import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComp
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { startWalk } from '../zombies/animation'
+import { animateCurve } from '@/shared/content/animation'
 import { damageZombie, destroyZombie } from '../zombies/damage'
 import { damagePlant } from '../plants/damage'
 import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
@@ -116,14 +117,6 @@ function awardDropped(world: World): boolean {
 /** The mallet is the player's, on the plants' side: it only meets what is hostile to that. */
 const HAMMER_TEAM: Team = 'plants'
 
-/** PvzpAnimateCurve on ints: the clamped linear or quadratic ease-in curve, rounded half away from zero. */
-function animateCurve(start: number, end: number, age: number, from: number, to: number, easeIn = false): number {
-    let time = Math.min(1, Math.max(0, (age - start) / (end - start)))
-    if (easeIn) time *= time
-    const value = from + (to - from) * time
-    return value > 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5)
-}
-
 /**
  * Challenge::WhackAZombiePlaceGraves: graves on random free cells from the level's first grave column, strongly
  * preferring empty ones, each put down as any grave is (placeGrave): the plant holding the cell dies and a rolling nut
@@ -200,7 +193,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
     const plants = [...world.query(PositionComponent, PlantComponent)]
     const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
         && world.get(entity, PlantComponent)!.column === grave.column && definitions.plants[world.get(entity, PlantComponent)!.typeId].graveBuster))
-    let maxSpeed = animateCurve(1, 12, wave, 1, 3, true)
+    let maxSpeed = animateCurve(1, 12, wave, 1, 3, 'ease-in')
     count = Math.min(count, graves.length)
     for (let index = 0; index < count; index++) {
         const [grave] = graves.splice(random.integer(0, graves.length - 1), 1)

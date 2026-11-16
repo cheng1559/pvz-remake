@@ -1,5 +1,5 @@
 import type { EntityId, World } from '@/ecs'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
 import { holdsCell } from '@/shared/content/planting'
 import { pickWeighted } from '@/shared/random'
@@ -67,8 +67,7 @@ export function raiseZombieFromGrave(world: World, definitions: GameplayDefiniti
     typeId: string, riseTicks: number): EntityId {
     const { board } = world.resources.get(LevelStateResource)
     const entityId = spawnZombie(world, definitions, typeId, grave.row,
-        board.origin.x + grave.column * board.cell.width - 25,
-        board.origin.y + grave.row * board.cell.height - 30)
+        cellPosition(board, grave.row, grave.column).x - 25, zombieRowY(board, grave.row))
     const zombie = world.get(entityId, ZombieComponent)!
     zombie.riseTicks = riseTicks
     if (grave.team) zombie.team = grave.team

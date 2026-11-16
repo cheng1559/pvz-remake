@@ -2,18 +2,16 @@ import { modResources } from '@/client/content/ModResources'
 import { Mask, type Node, Sprite, type UITransform } from 'cc'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { easeInOut } from '@/client/view/GameScreenMath'
+import { animateCurve } from '@/shared/content/animation'
 import { uiNode } from '@/client/view/uiNode'
 import type { GraveSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { graveRiseCounter } from '@/shared/content/graves'
+import { cellPosition } from '@/shared/content/gameplay'
 import type { GridItemView, GridItemViewContext } from './GridItemView'
 
 /** The atlases' looks a row. */
 const COLUMNS = 5
 const ROWS = 4
-
-/** FloatRoundToInt: halves round away from zero. */
-const roundToInt = (value: number) => value > 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5)
 
 /**
  * A grave (GridItem::DrawGraveStone): its stone and its mound of dirt, each shown from the original atlases as far as
@@ -68,9 +66,8 @@ export class GraveView implements GridItemView {
         const board = content.definitions.boards[content.levels.levels[world.levelId].board]
         // Its corner is 4 left of and 9 above its cell, by the cell's own offset; one of the plants' side is turned
         // round within its own width, as that side's plants and zombies are.
-        const mirrored = grave.team === 'plants'
-        node.setPosition(board.origin.x + grave.column * board.cell.width + grave.offsetX - 4 - 400 + (mirrored ? this.width : 0),
-            300 - board.origin.y - grave.row * board.cell.height - grave.offsetY + 9)
+        const mirrored = grave.team === 'plants', cell = cellPosition(board, grave.row, grave.column)
+        node.setPosition(cell.x + grave.offsetX - 4 - 400 + (mirrored ? this.width : 0), 300 - cell.y - grave.offsetY + 9)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         // The level's own graves rise from the intro's grave tick; a level in play has them risen.
         const ticks = world.phase === 'gameplay' || stage.intro.complete ? Infinity : stage.intro.elapsedTicks - (stage.intro.graveStartTick ?? 0)
@@ -96,20 +93,19 @@ export class GraveView implements GridItemView {
     /** GridItem::AddGraveStoneParticles. */
     private riseEffects(grave: GraveSnapshot, world: WorldSnapshot): void {
         const { stage, content } = this.context
-        const board = content.definitions.boards[content.levels.levels[world.levelId].board]
-        stage!.particle('pvz:gravestonerise', board.origin.x + grave.column * board.cell.width + 14 + grave.offsetX,
-            board.origin.y + grave.row * board.cell.height + 78 + grave.offsetY, stage!.gridItemOrder(grave.typeId, grave.row) + 1)
+        const cell = cellPosition(content.definitions.boards[content.levels.levels[world.levelId].board], grave.row, grave.column)
+        stage!.particle('pvz:gravestonerise', cell.x + 14 + grave.offsetX, cell.y + 78 + grave.offsetY, stage!.gridItemOrder(grave.typeId, grave.row) + 1)
         void SoundSystem.playFoley(SoundEffect.DirtRise)
     }
 
     /** `counter`: how far it has risen (mGridItemCounter); `eaten`: pixels a grave buster has eaten off the stone's top. */
     private layout(counter: number, eaten: number): void {
         if (!this.stone?.isValid) return
-        // PvzpAnimateCurve rounds each step to whole units (FloatRoundToInt).
-        const position = roundToInt(easeInOut(0, 100, counter, 1000, 0))
-        const stoneHeight = roundToInt(easeInOut(0, 1000, position, this.height, 0))
-        const bottomClip = roundToInt(easeInOut(0, 50, position, 0, 14))
-        const dirtHeight = roundToInt(easeInOut(500, 1000, position, this.height, 0))
+        // PvzpAnimateCurve rounds each step to whole units.
+        const position = animateCurve(0, 100, counter, 1000, 0, 'ease-in-out')
+        const stoneHeight = animateCurve(0, 1000, position, this.height, 0, 'ease-in-out')
+        const bottomClip = animateCurve(0, 50, position, 0, 14, 'ease-in-out')
+        const dirtHeight = animateCurve(500, 1000, position, this.height, 0, 'ease-in-out')
         // Its node is at the top left of the whole stone; what has risen stands on the stone's bottom.
         this.stone.setPosition(0, stoneHeight - eaten - this.height)
         this.stoneSize.setContentSize(this.stoneSize.width, Math.max(0, stoneHeight - bottomClip - eaten))

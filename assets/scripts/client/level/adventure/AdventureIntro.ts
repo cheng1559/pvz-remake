@@ -15,6 +15,7 @@ import type {
 import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
+import { SEED_CHOOSER_SLIDE } from '../LevelSeedChooser'
 import { createOffBoardZombie } from '@/client/view/offBoard'
 import type { ZombieView } from '@/client/zombies/ZombieView'
 import { UIButton } from '@/client/ui/UIButton'
@@ -31,6 +32,8 @@ const PAN_RIGHT_START = 150
 const PAN_RIGHT_END = 350
 const PAN_LEFT_START = 450
 const PAN_LEFT_END = 600
+/** CutScene's TimeSeedBankRightStart: the bank slides from its choosing place back right as the camera pans left. */
+const SEED_BANK_RIGHT_START = 475
 const ROLL_SOD_START = 600
 const ROLL_SOD_END = 800
 /** CutScene's TimeLawnMowerStart for the middle row (each row up starts 5 later) and TimeLawnMowerDuration. */
@@ -38,8 +41,6 @@ const LAWN_MOWER_START = 620
 const LAWN_MOWER_DURATION = 25
 const SEED_BANK_START = 600
 const SEED_BANK_DURATION = 25
-/** SeedChooserScreen: the bank drops with the chooser. */
-const CHOOSER_BANK_START = 400
 const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
@@ -178,7 +179,7 @@ export class AdventureIntro implements LevelIntro {
             button.changeCursor = false
             button.hapticsEnabled = false
             button.rightClickTriggers = false
-            button.canInteract = () => surface.activeInHierarchy && this.ticks === 425
+            button.canInteract = () => surface.activeInHierarchy && this.ticks === SEED_CHOOSER_SLIDE.onEnd
             button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
             // The arrow stays (SeedChooserScreen::UpdateCursor); a click opens the almanac on this zombie.
             button.pressSound = null
@@ -319,7 +320,7 @@ export class AdventureIntro implements LevelIntro {
     sync(): void {
         const tick = this.ticks
         for (const { hit, tooltip } of this.previewTooltips.values()) if (hit.isValid) {
-            hit.active = tick === 425
+            hit.active = tick === SEED_CHOOSER_SLIDE.onEnd
             if (!hit.active) tooltip.hide()
         }
         const boardX = this.layout.stationary ? 0 : tick <= PAN_RIGHT_START
@@ -352,10 +353,11 @@ export class AdventureIntro implements LevelIntro {
 
         // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop.
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
-        const bankStart = this.seedChooser ? CHOOSER_BANK_START : SEED_BANK_START + this.sodTicks
+        // The bank drops with the chooser (CutScene's TimeSeedBankOnStart).
+        const bankStart = this.seedChooser ? SEED_CHOOSER_SLIDE.onStart : SEED_BANK_START + this.sodTicks
         this.bank.active = !this.layout.hiddenSeedBank && tick > bankStart
         this.bank.setPosition(
-            easeInOut(475, PAN_LEFT_END, tick, 0, 10),
+            easeInOut(SEED_BANK_RIGHT_START, PAN_LEFT_END, tick, 0, 10),
             easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),
         )
     }

@@ -44,9 +44,19 @@ export function damageIndex(health: number, maxHealth: number): number {
     return health < Math.trunc(maxHealth / 3) ? 2 : health < Math.trunc(maxHealth * 2 / 3) ? 1 : 0
 }
 
+/** Board::GridToPixelX and GridToPixelY: the top left of a cell on the board. */
+export function cellPosition(board: BoardDefinition, row: number, column: number): { x: number, y: number } {
+    return { x: board.origin.x + column * board.cell.width, y: board.origin.y + row * board.cell.height }
+}
+
+/** Zombie::GetPosYBasedOnRow: where a zombie in a row stands, 30 above its cells. */
+export function zombieRowY(board: BoardDefinition, row: number): number {
+    return cellPosition(board, row, 0).y - 30
+}
+
 /** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */
 export function mowerY(board: BoardDefinition, row: number): number {
-    return board.origin.y + row * board.cell.height + 23
+    return cellPosition(board, row, 0).y + 23
 }
 
 /** The ground of a row, where a mower's wheels stand (mowerY and its height): what is thrown comes down there. */

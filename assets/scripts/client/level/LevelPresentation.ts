@@ -20,7 +20,7 @@ export interface LevelIntroContext {
     openAlmanacZombie?: (zombieId: string) => void
     /** LawnApp::CanShowAlmanac || CanShowStore: the chooser shows its Almanac or Store button. */
     chooserPages?: boolean
-    /** The level opens with the seed chooser: the bank comes in with its drop, from tick 400 to 425. */
+    /** The level opens with the seed chooser: the bank comes in with its drop (SEED_CHOOSER_SLIDE). */
     seedChooser?: boolean
     content: LoadedContent
     level: LevelDefinition

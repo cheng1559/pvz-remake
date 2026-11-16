@@ -1,6 +1,6 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
 import { seedTeam, type Team } from '@/shared/content/teams'
-import type { SeedDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type SeedDefinition, zombieRowY } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
 import {
     EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
@@ -157,8 +157,7 @@ export const planting = {
         const { world, definitions } = session
         const board = world.resources.get(LevelStateResource).board
         const offsetX = team === 'plants' ? definitions.zombies[typeId].facingRightOffsetX ?? 0 : 0
-        const entity = spawnZombie(world, definitions, typeId, row, board.origin.x + column * board.cell.width - 30 + offsetX,
-            board.origin.y + row * board.cell.height - 30)
+        const entity = spawnZombie(world, definitions, typeId, row, cellPosition(board, row, column).x - 30 + offsetX, zombieRowY(board, row))
         if (team === 'plants') world.get(entity, ZombieComponent)!.team = 'plants'
         return entity
     },
@@ -172,10 +171,10 @@ export const planting = {
         const definition = definitions.plants[plantedSeed.id]
         const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.id, definition)
         const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
-        const entity = world.createEntity()
+        const entity = world.createEntity(), cell = cellPosition(level.board, row, column)
         world.add(entity, PositionComponent, {
-            x: level.board.origin.x + column * level.board.cell.width + (offset ? random.integer(offset.min.x, offset.max.x) : 0),
-            y: level.board.origin.y + row * level.board.cell.height + (offset ? random.integer(offset.min.y, offset.max.y) : 0),
+            x: cell.x + (offset ? random.integer(offset.min.x, offset.max.x) : 0),
+            y: cell.y + (offset ? random.integer(offset.min.y, offset.max.y) : 0),
             row,
         })
         world.add(entity, PlantComponent, {

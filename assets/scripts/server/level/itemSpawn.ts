@@ -2,6 +2,7 @@ import type { CommandBuffer, World } from '@/ecs/index'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { PositionComponent, RandomResource } from '../state/components'
 import { type Item, ItemComponent } from '../state/levelState'
+import { LEVEL_AWARD } from '@/shared/content/gameplay'
 
 /**
  * Coin::CoinInitialize's motions: falling from the sky (COIN_MOTION_FROM_SKY), thrown up by a plant
@@ -33,8 +34,6 @@ export interface ItemSpawn {
     readonly width: number
     readonly scale?: number
     readonly arrow?: boolean
-    /** The level's award, which lands 30 higher than a coin would. */
-    readonly levelAward?: boolean
 }
 
 /**
@@ -48,7 +47,8 @@ export function spawnItem(world: World, commands: Pick<CommandBuffer, 'createEnt
     commands.add(entity, PositionComponent, { x, y, row: -1 })
     commands.add(entity, ItemComponent, {
         typeId: spawn.typeId, value: spawn.value, state: motion === 'mower-coin' ? 'collecting' : 'available',
-        ...moving, groundY: spawn.levelAward ? moving.groundY - 30 : moving.groundY,
+        // The level's award lands 30 higher than a coin would (Coin::CoinInitialize, IsLevelAward).
+        ...moving, groundY: spawn.typeId === LEVEL_AWARD ? moving.groundY - 30 : moving.groundY,
         width: spawn.width, disappearTicks: 0, fadeTicks: 0, scale: spawn.scale ?? 1, alpha: 255,
         ...(spawn.arrow ? { arrow: true as const } : {}),
     })

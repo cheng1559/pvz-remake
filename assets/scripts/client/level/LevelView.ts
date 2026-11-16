@@ -34,7 +34,7 @@ import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { LevelSeedChooser, REPICK_END_TICK } from './LevelSeedChooser'
+import { LevelSeedChooser, SEED_CHOOSER_SLIDE } from './LevelSeedChooser'
 import { LevelBoardHud } from './LevelBoardHud'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { PlantingLineView } from './PlantingLineView'
@@ -103,9 +103,9 @@ export class LevelView {
     get introComplete(): boolean {
         return this.intro.complete
     }
-    get canOpenMenu(): boolean { return this.introComplete || !!this.seedChooser?.active && this.seedChooser.choosing && this.intro.elapsedTicks >= 425 }
+    get canOpenMenu(): boolean { return this.introComplete || !!this.seedChooser?.active && this.seedChooser.choosing && this.intro.elapsedTicks >= SEED_CHOOSER_SLIDE.onEnd }
     /** The chooser's menu button stays drawn, though disabled, from its arrival until the board's menu takes over. */
-    get menuVisible(): boolean { return this.introComplete || !!this.seedChooser && this.intro.elapsedTicks >= 425 }
+    get menuVisible(): boolean { return this.introComplete || !!this.seedChooser && this.intro.elapsedTicks >= SEED_CHOOSER_SLIDE.onEnd }
 
     private constructor(
         private readonly root: Node,
@@ -372,13 +372,13 @@ export class LevelView {
                 // A bank a rule still keeps above the screen (Whack-a-Zombie's, until there is sun) comes down as the chooser
                 // drops, as the intro's does, for the cards to be chosen into it, and goes back up as the chooser lifts: the
                 // level stood still meanwhile, so it is no nearer its time.
-                if (repick <= 425) hiddenBankY ??= bank.position.y
-                bank.setPosition(repick <= 425 ? easeInOut(400, 425, repick, 10, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, 10),
+                if (repick <= SEED_CHOOSER_SLIDE.onEnd) hiddenBankY ??= bank.position.y
+                bank.setPosition(repick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, 10, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, 10),
                     hiddenBankY === undefined ? bank.position.y
-                        : repick <= 425 ? easeInOut(400, 425, repick, hiddenBankY, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, hiddenBankY))
-                if (repick >= REPICK_END_TICK) hiddenBankY = undefined
+                        : repick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, hiddenBankY, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, hiddenBankY))
+                if (repick >= SEED_CHOOSER_SLIDE.offEnd) hiddenBankY = undefined
                 chooser.setBankShift(bank.position.x, bank.position.y)
-                raiseBankToChooser(repick < REPICK_END_TICK)
+                raiseBankToChooser(repick < SEED_CHOOSER_SLIDE.offEnd)
                 return
             }
             chooser.syncIntro(tick)
@@ -427,7 +427,7 @@ export class LevelView {
             this.boardHud.update(dt, this.intro.elapsedTicks)
             if (this.boardHud.blocksIntro) return false
         }
-        const complete = this.intro.update(dt, this.seedChooser?.choosing ? 425 : undefined)
+        const complete = this.intro.update(dt, this.seedChooser?.choosing ? SEED_CHOOSER_SLIDE.onEnd : undefined)
         this.seedChooser?.update(dt)
         this.syncSeedChooserIntro()
         return complete

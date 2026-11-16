@@ -39,8 +39,11 @@ interface Choice extends ChooserEntry {
     grayed?: boolean
 }
 
-/** A repick's last tick: the chooser is out and the bank back from its choosing place, as quickly as they came in. */
-export const REPICK_END_TICK = 475
+/**
+ * CutScene's TimeSeedChoserSlideOnStart, SlideOnEnd, SlideOffStart and SlideOffEnd, in ticks of the intro: the seed
+ * chooser drops in over 400-425, is there to choose from 425, and lifts out over 450-475; a repick goes by them too.
+ */
+export const SEED_CHOOSER_SLIDE = { onStart: 400, onEnd: 425, offStart: 450, offEnd: 475 } as const
 
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
@@ -71,8 +74,8 @@ export class LevelSeedChooser {
     private age = 0
     private introTick = 0
     /**
-     * A repick in play (`/repick`): the chooser's own ticks on the intro's timeline, dropping in over 400–425 and lifting
-     * out over 450–475 (REPICK_END_TICK) while the camera stays where it is, the bank sliding with it;
+     * A repick in play (`/repick`): the chooser's own ticks on the intro's timeline, dropping in and lifting
+     * out (SEED_CHOOSER_SLIDE) while the camera stays where it is, the bank sliding with it;
      * undefined until the first repick.
      */
     repickTick?: number
@@ -165,7 +168,7 @@ export class LevelSeedChooser {
             const button = view.node.addComponent(UIButton)
             button.hapticsEnabled = false
             button.clickOnPress = true
-            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen
+            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
             const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1, notRecommended: warning !== undefined }
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
@@ -181,7 +184,7 @@ export class LevelSeedChooser {
             if (!shown) continue
             const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
             this.pageButtons.push(button)
-            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen && !this.inFlight
+            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen && !this.inFlight
         }
         // SeedChooserScreen's (Debug Play): no image (IMAGE_BLANK), FONT_BRIANNETOD12 in (255, 240, 0), lit (200, 200, 255),
         // its label moving 1px down-right while pressed; at the DLC's arrows 107 and 108, Resize(20, 545, 77, 46) and
@@ -195,7 +198,7 @@ export class LevelSeedChooser {
             this.pageTurners.push({ button, step })
         }
         const pointerDown = (event: EventMouse | EventTouch) => {
-            if (!this.panel.active || !this.choosing || this.introTick < 425 || this.snapshot?.paused || UIHoverManager.isModalBlocked) return
+            if (!this.panel.active || !this.choosing || this.introTick < SEED_CHOOSER_SLIDE.onEnd || this.snapshot?.paused || UIHoverManager.isModalBlocked) return
             if (event instanceof EventMouse && (GameDebugSettings.isMobileMode() || ![0, 2].includes(event.getButton()))) return
             if (!(event instanceof EventMouse) && !GameDebugSettings.isMobileMode()) return
             // Original MouseDown lands every flight before hit testing, including clicks on another card.
@@ -249,7 +252,7 @@ export class LevelSeedChooser {
 
     /** SeedChooserScreen::ButtonDepress takes the chooser's buttons only while choosing, with no warning open or seed flying. */
     get canTurnPage(): boolean {
-        return this.pages.length > 1 && !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425
+        return this.pages.length > 1 && !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd
             && !this.warningOpen && !this.inFlight
     }
 
@@ -367,10 +370,10 @@ export class LevelSeedChooser {
         if (offer) this.layOut(offer.cheatSeeds === true, offer.availableSeeds, offer.entries ?? [])
         // A repick drops the chooser in from the top again, its cards straight in their places.
         const repick = snapshot.seedChooser?.repick === true
-        if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= 450)) {
-            this.repickTick = 400
+        if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= SEED_CHOOSER_SLIDE.offStart)) {
+            this.repickTick = SEED_CHOOSER_SLIDE.onStart
             this.repickFinished = false
-            this.syncIntro(400)
+            this.syncIntro(SEED_CHOOSER_SLIDE.onStart)
         }
         for (const button of this.pageButtons) button.node.active = !repick
         // The bank may hold a card nothing offers: one /seed put in, or a saved one whose Mod is gone. It shows in its slot
@@ -397,7 +400,7 @@ export class LevelSeedChooser {
                 }
                 const destination = slot < 0 ? choice.home : this.slotPosition(slot)
                 if (!destination) { this.land(choice); choice.view.node.active = false; continue }
-                if (before && this.introTick >= 425 && snapshot.seedChooser?.choosing) {
+                if (before && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && snapshot.seedChooser?.choosing) {
                     this.move(choice, destination, slot >= 0 && oldSlot >= 0 ? 15 : 25)
                 } else choice.view.node.setPosition(destination.x, -destination.y)
             }
@@ -414,11 +417,11 @@ export class LevelSeedChooser {
         this.age += dt * 100
         // A repick holds the chooser down while choosing and lifts it out after Let's Rock; once the bank is back in its
         // place the level goes on.
-        if (this.repickTick !== undefined && this.repickTick < REPICK_END_TICK) {
-            this.repickTick = this.snapshot?.seedChooser?.repick && this.choosing ? Math.min(425, this.repickTick + dt * 100)
-                : Math.min(REPICK_END_TICK, Math.max(450, this.repickTick) + dt * 100)
+        if (this.repickTick !== undefined && this.repickTick < SEED_CHOOSER_SLIDE.offEnd) {
+            this.repickTick = this.snapshot?.seedChooser?.repick && this.choosing ? Math.min(SEED_CHOOSER_SLIDE.onEnd, this.repickTick + dt * 100)
+                : Math.min(SEED_CHOOSER_SLIDE.offEnd, Math.max(SEED_CHOOSER_SLIDE.offStart, this.repickTick) + dt * 100)
         }
-        if (this.repickTick === REPICK_END_TICK && this.snapshot?.seedChooser?.repick && !this.choosing && !this.repickFinished) {
+        if (this.repickTick === SEED_CHOOSER_SLIDE.offEnd && this.snapshot?.seedChooser?.repick && !this.choosing && !this.repickFinished) {
             this.repickFinished = true
             this.send({ type: 'finishRepick' })
         }
@@ -436,15 +439,15 @@ export class LevelSeedChooser {
 
     syncIntro(tick: number): void {
         // A pointer already resting on Let's Rock lights it once the chooser has arrived.
-        if (this.introTick < 425 && tick >= 425) UIHoverManager.refreshHoverStates()
+        if (this.introTick < SEED_CHOOSER_SLIDE.onEnd && tick >= SEED_CHOOSER_SLIDE.onEnd) UIHoverManager.refreshHoverStates()
         this.introTick = tick
         // The intro's preview zombies are not there for a repick.
-        this.previewTooltipSurface.active = tick === 425 && this.choosing && !this.snapshot?.paused && !this.snapshot?.seedChooser?.repick
-        this.panel.active = tick >= 400 && tick < 475
+        this.previewTooltipSurface.active = tick === SEED_CHOOSER_SLIDE.onEnd && this.choosing && !this.snapshot?.paused && !this.snapshot?.seedChooser?.repick
+        this.panel.active = tick >= SEED_CHOOSER_SLIDE.onStart && tick < SEED_CHOOSER_SLIDE.offEnd
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active
         this.buttons.active = this.panel.active
-        const y = tick <= 425 ? easeInOut(400, 425, tick, -516, 0) : easeInOut(450, 475, tick, 0, -516)
+        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516)
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
         for (const choice of this.choices) {
@@ -504,7 +507,7 @@ export class LevelSeedChooser {
 
     /** Let's Rock answers once the intro has shown the chooser, while choosing, unpaused and with no warning open. */
     private get canStart(): boolean {
-        return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen
+        return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
     }
 
     private confirm(): void {
