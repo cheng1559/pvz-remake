@@ -7,6 +7,7 @@ import type { MusicTuneId } from './music'
 import { isQualifiedId } from '@/shared/mod'
 import { isRenderLayer, type RenderLayer } from './renderOrder'
 import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
+import { type JsonObject, jsonRoundTrip } from '@/shared/protocol'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
@@ -80,6 +81,8 @@ export interface PlantPresentationDefinition {
     readonly parts?: PlantParts
     /** The view that draws it (PlantViewRegistry), where it has one of its own: every plant is drawn by its animation. */
     readonly view?: string
+    /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
+    readonly viewConfig?: Readonly<JsonObject>
     /**
      * The pictures of its clips, by the names of its gameplay animation's: the Reanim each is drawn with, where, and the
      * part it goes on. With `from`, another plant's, adding what it writes of its own (the explode-o-nut's are the wall-nut's).
@@ -134,6 +137,8 @@ export interface FoleyDefinition {
 export interface GridItemPresentationDefinition {
     /** Its view (GridItemViewRegistry). */
     readonly view: string
+    /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
+    readonly viewConfig?: Readonly<JsonObject>
     /** Its render layer and its offset on it: a grave's `graveStone` and 3 (Board::AddAGraveStone). */
     readonly layer: RenderLayer
     readonly offset?: number
@@ -143,6 +148,8 @@ export interface GridItemPresentationDefinition {
 export interface ProjectilePresentationDefinition {
     /** Its view (ProjectileViewRegistry): `projectile` when omitted, a mower's `mower`. */
     readonly view?: string
+    /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
+    readonly viewConfig?: Readonly<JsonObject>
     readonly sprite?: string
     /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
     readonly reanim?: { readonly id: string; readonly x: number; readonly y: number; readonly scale: number; readonly rate: number }
@@ -209,6 +216,8 @@ export interface ZombiePresentationDefinition {
     readonly nameKey: string
     /** The view that draws it (ZombieViewRegistry), where it has one of its own. */
     readonly view?: string
+    /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
+    readonly viewConfig?: Readonly<JsonObject>
     /** The pictures of its clips, as a plant's: with `from`, another zombie's, adding what it writes of its own (a Mod zombie on the plain body). */
     readonly clips: AnimationDefinition
     /**
@@ -337,6 +346,8 @@ export interface LevelRulePresentation {
 export interface ItemPresentationDefinition {
     /** Its view (ItemViewRegistry): `item` when omitted. */
     readonly view?: string
+    /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
+    readonly viewConfig?: Readonly<JsonObject>
     /** Looping animation; `rate` is a random speed range relative to the clip's fps. */
     readonly reanim: string
     readonly offset: readonly [number, number]
@@ -566,7 +577,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         plants: (value, name) => named(withFrom(record(value, name), 'clips', 'plants'), name, parsePlant),
         zombies: (value, name) => named(withFrom(record(value, name), 'clips', 'zombies'), name, parseZombie),
         projectiles: table(parseProjectile),
-        gridItems: table((value, name) => fields<GridItemPresentationDefinition>(value, name, ['view', 'layer'], { view: nonEmptyString, layer, offset: finite })),
+        gridItems: table((value, name) => fields<GridItemPresentationDefinition>(value, name, ['view', 'layer'], { view: nonEmptyString, viewConfig, layer, offset: finite })),
         seedPackets: (value, name) => allFields<PresentationDefinitions['seedPackets']>(value, name, {
             flash: (value, name) => allFields<PresentationDefinitions['seedPackets']['flash']>(value, name, { id: nonEmptyString }),
             selection: (value, name) => allFields<PresentationDefinitions['seedPackets']['selection']>(value, name, { color }),
@@ -650,6 +661,11 @@ function clip(value: unknown, name: string): ClientAnimationClip {
 }
 
 const clips = table(clip)
+
+/** A view's own settings (`viewConfig`): any JSON object, copied as it is, for the view to read and check. */
+function viewConfig(value: unknown, name: string): Readonly<JsonObject> {
+    return jsonRoundTrip(record(value, name)) as JsonObject
+}
 
 function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
     const menu = allFields<MainMenuDefinition>(value, name, {
@@ -855,7 +871,7 @@ function parseChallengePage(value: unknown, name: string): ChallengePagePresenta
 function parseItem(value: unknown, name: string): ItemPresentationDefinition {
     type Item = ItemPresentationDefinition
     return fields<Item>(value, name, ['reanim', 'offset', 'rate'], {
-        view: nonEmptyString, reanim: nonEmptyString, offset: pair, rate: (value, name) => range(value, name, 0),
+        view: nonEmptyString, viewConfig, reanim: nonEmptyString, offset: pair, rate: (value, name) => range(value, name, 0),
         flight: (value, name) => allFields<NonNullable<Item['flight']>>(value, name, { sprite: nonEmptyString, offset: pair }),
         glow: (value, name) => fields<NonNullable<Item['glow']>>(value, name, ['sprite', 'offset'], { sprite: nonEmptyString, offset: pair, inFlight: boolean }),
         arrow: (value, name) => allFields<NonNullable<Item['arrow']>>(value, name, { particle: nonEmptyString, offset: pair }),
@@ -888,6 +904,7 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         }),
         parts: (value, name) => fields<PlantParts>(value, name, [], { eyes: nonEmptyStrings, face: nonEmptyString, prey: nonEmptyStrings }),
         view: nonEmptyString,
+        viewConfig,
         clips,
         packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
             placement, x: finite, y: finite, scale: positiveFinite, time: finite,
@@ -918,6 +935,7 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
     const zombie = fields<Zombie>(value, name, ['nameKey', 'clips', 'shadow', 'parts', 'damagedArmSprite', 'drops'], {
         nameKey: nonEmptyString,
         view: nonEmptyString,
+        viewConfig,
         clips,
         shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite }),
         packet: (value, name) => fields<NonNullable<Zombie['packet']>>(value, name, ['x', 'y', 'scale'], {
@@ -958,6 +976,7 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
     type Projectile = ProjectilePresentationDefinition
     const projectile = fields<Projectile>(value, name, ['fireSounds', 'impactSounds'], {
         view: nonEmptyString,
+        viewConfig,
         sprite: nonEmptyString,
         reanim: (value, name) => allFields<NonNullable<Projectile['reanim']>>(value, name, {
             id: nonEmptyString, x: finite, y: finite, scale: positiveFinite, rate: positiveFinite,

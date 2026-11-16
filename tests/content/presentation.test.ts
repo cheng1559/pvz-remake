@@ -8,7 +8,8 @@ import { fields, finite, pair, point, range } from '@/shared/validate'
 test('presentation definitions take only their own fields, at every depth, as gameplay definitions do', () => {
     for (const [change, message] of [
         [(data: any) => { data.extra = {} }, /^TypeError: presentation\.extra is not supported$/],
-        [(data: any) => { data.plants['pvz:fumeshroom'].viewConfig = {} }, /plants\.pvz:fumeshroom\.viewConfig is not supported/],
+        [(data: any) => { data.plants['pvz:fumeshroom'].cloud = {} }, /plants\.pvz:fumeshroom\.cloud is not supported/],
+        [(data: any) => { data.projectiles['pvz:pea'].viewConfig = [] }, /pvz:pea\.viewConfig must be an object/],
         [(data: any) => { data.zombies['pvz:pole_vaulter'].vault = true }, /zombies\.pvz:pole_vaulter\.vault is not supported/],
         [(data: any) => { data.zombies['pvz:normal'].packet.facingRightOffsetX = 1 }, /pvz:normal\.packet\.facingRightOffsetX is not supported/],
         [(data: any) => { data.zombies['pvz:newspaper'].shield.showsHair = true }, /pvz:newspaper\.shield\.showsHair is not supported/],
@@ -49,6 +50,12 @@ test('the presentation read is what was read, and reads back the same', () => {
     assert.throws(() => parsePresentationDefinitions(data), /fireParticle\.delayTicks must be a non-negative safe integer/)
     // A rule's own fields are its view's to read: they stay as written, beside what the level view reads.
     assert.deepEqual(parsed.rules!['pvz:whack-a-zombie'], source.rules['pvz:whack-a-zombie'])
+    // So does a view's own `viewConfig`, on every kind a Mod may draw with a view of its own.
+    const kinds = ['plants', 'zombies', 'projectiles', 'items', 'gridItems'] as const, config = { size: 2, parts: ['a'], on: null }
+    const configured = structuredClone(source)
+    for (const kind of kinds) configured[kind][Object.keys(configured[kind])[0]].viewConfig = config
+    const read = parsePresentationDefinitions(configured)
+    for (const kind of kinds) assert.deepEqual(Object.values(read[kind])[0].viewConfig, config, kind)
 })
 
 test('points, pairs, ranges and objects of fields are read by one shared copy', () => {
