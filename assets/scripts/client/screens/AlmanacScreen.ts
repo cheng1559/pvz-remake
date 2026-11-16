@@ -67,8 +67,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             return details = uiNode({ name: `${name}Details`, parent: detailsLayer, anchor: { x: 0, y: 1 } }).node
         }
         const plantPosition = (id: number) => ({ x: id % 8 * 52 + 26, y: Math.floor(id / 8) * 78 + 92 })
-        const describe = (node: Node, headerKey: string | undefined, bodyKey: string) => {
-            const header = headerKey === undefined ? 0 : drawAlmanacText(node, ui, ui.text(headerKey), { x: 485, y: 309, width: 258 })
+        const describe = (node: Node, headerKey: string, bodyKey: string) => {
+            const header = drawAlmanacText(node, ui, ui.text(headerKey), { x: 485, y: 309, width: 258 })
             drawAlmanacText(node, ui, ui.text(bodyKey), {
                 x: 485, y: 309 + header, width: 258, height: Math.max(20, 210 - header), scrollColors: PLANT_SCROLLBAR_COLORS,
             })
@@ -95,10 +95,10 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 else SeedPacketRenderer.drawGrave(node, undefined, x - 4, y - 9, 1)
                 ui.image(node, sprites.almanac_plantcard, { x: 459, y: 86 })
                 ui.label(node, { text: ui.text(subject.nameKey), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
-                // The hidden cards share a placeholder, with no header; a Mod's plant has its description when its
-                // text table does.
+                // The hidden cards share a placeholder, in the middle of the description's box as the zombies' page
+                // has [NOT_ENCOUNTERED_YET]; a Mod's plant has its description when its text table does.
                 const header = `${subject.nameKey}_DESCRIPTION_HEADER`, body = `${subject.nameKey}_DESCRIPTION`
-                if (card.hidden) describe(node, undefined, 'ALMANAC_HIDDEN_DESCRIPTION')
+                if (card.hidden) drawMiddleAlmanacText(node, ui, ui.text('ALMANAC_HIDDEN_DESCRIPTION'), { x: 485, y: 309, width: 258, height: 210 })
                 else if (ui.hasText(header) && ui.hasText(body)) describe(node, header, body)
             }
             drawAlmanacText(node, ui, `{KEYWORD}${ui.text('COST')}:{STAT} ${card.cost}`, { x: 485, y: 520, width: 134 })
