@@ -75,49 +75,50 @@ import * as m71 from '@/server/zombies/behaviors'
 import * as m72 from '@/server/zombies/damage'
 import * as m73 from '@/server/zombies/flag'
 import * as m74 from '@/server/zombies/groans'
-import * as m75 from '@/server/zombies/poleVault'
-import * as m76 from '@/server/zombies/spawn'
-import * as m77 from '@/server/zombies/system'
-import * as m78 from '@/shared/channel'
-import * as m79 from '@/shared/content'
-import * as m80 from '@/shared/content/DefinitionRegistry'
-import * as m81 from '@/shared/content/animation'
-import * as m82 from '@/shared/content/chooserPages'
-import * as m83 from '@/shared/content/font'
-import * as m84 from '@/shared/content/from'
-import * as m85 from '@/shared/content/gameplay'
-import * as m86 from '@/shared/content/gameplayTypes'
-import * as m87 from '@/shared/content/graves'
-import * as m88 from '@/shared/content/levelHelpers'
-import * as m89 from '@/shared/content/music'
-import * as m90 from '@/shared/content/parseGameplay'
-import * as m91 from '@/shared/content/particle'
-import * as m92 from '@/shared/content/plantAbilities'
-import * as m93 from '@/shared/content/plantAnimation'
-import * as m94 from '@/shared/content/planting'
-import * as m95 from '@/shared/content/presentation'
-import * as m96 from '@/shared/content/reanim'
-import * as m97 from '@/shared/content/renderOrder'
-import * as m98 from '@/shared/content/seedGroups'
-import * as m99 from '@/shared/content/strings'
-import * as m100 from '@/shared/content/teams'
-import * as m101 from '@/shared/content/zombieAnimation'
-import * as m102 from '@/shared/content/zombieStates'
-import * as m103 from '@/shared/debug/DebugCli'
-import * as m104 from '@/shared/kernel'
-import * as m105 from '@/shared/kernel/binary'
-import * as m106 from '@/shared/kernel/particles'
-import * as m107 from '@/shared/menu'
-import * as m108 from '@/shared/mod'
-import * as m109 from '@/shared/mod/ModAssets'
-import * as m110 from '@/shared/mod/ModHost'
-import * as m111 from '@/shared/mod/content'
-import * as m112 from '@/shared/protocol'
-import * as m113 from '@/shared/protocol/json'
-import * as m114 from '@/shared/protocol/packets'
-import * as m115 from '@/shared/protocol/snapshot'
-import * as m116 from '@/shared/random'
-import * as m117 from '@/shared/validate'
+import * as m75 from '@/server/zombies/parts'
+import * as m76 from '@/server/zombies/poleVault'
+import * as m77 from '@/server/zombies/spawn'
+import * as m78 from '@/server/zombies/system'
+import * as m79 from '@/shared/channel'
+import * as m80 from '@/shared/content'
+import * as m81 from '@/shared/content/DefinitionRegistry'
+import * as m82 from '@/shared/content/animation'
+import * as m83 from '@/shared/content/chooserPages'
+import * as m84 from '@/shared/content/font'
+import * as m85 from '@/shared/content/from'
+import * as m86 from '@/shared/content/gameplay'
+import * as m87 from '@/shared/content/gameplayTypes'
+import * as m88 from '@/shared/content/graves'
+import * as m89 from '@/shared/content/levelHelpers'
+import * as m90 from '@/shared/content/music'
+import * as m91 from '@/shared/content/parseGameplay'
+import * as m92 from '@/shared/content/particle'
+import * as m93 from '@/shared/content/plantAbilities'
+import * as m94 from '@/shared/content/plantAnimation'
+import * as m95 from '@/shared/content/planting'
+import * as m96 from '@/shared/content/presentation'
+import * as m97 from '@/shared/content/reanim'
+import * as m98 from '@/shared/content/renderOrder'
+import * as m99 from '@/shared/content/seedGroups'
+import * as m100 from '@/shared/content/strings'
+import * as m101 from '@/shared/content/teams'
+import * as m102 from '@/shared/content/zombieAnimation'
+import * as m103 from '@/shared/content/zombieStates'
+import * as m104 from '@/shared/debug/DebugCli'
+import * as m105 from '@/shared/kernel'
+import * as m106 from '@/shared/kernel/binary'
+import * as m107 from '@/shared/kernel/particles'
+import * as m108 from '@/shared/menu'
+import * as m109 from '@/shared/mod'
+import * as m110 from '@/shared/mod/ModAssets'
+import * as m111 from '@/shared/mod/ModHost'
+import * as m112 from '@/shared/mod/content'
+import * as m113 from '@/shared/protocol'
+import * as m114 from '@/shared/protocol/json'
+import * as m115 from '@/shared/protocol/packets'
+import * as m116 from '@/shared/protocol/snapshot'
+import * as m117 from '@/shared/random'
+import * as m118 from '@/shared/validate'
 
 /** Every module a server Mod may get from its host, by its path under assets/scripts. */
 export const SERVER_HOST_MODULES: Readonly<Record<string, unknown>> = {
@@ -196,47 +197,48 @@ export const SERVER_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'server/zombies/damage': m72,
     'server/zombies/flag': m73,
     'server/zombies/groans': m74,
-    'server/zombies/poleVault': m75,
-    'server/zombies/spawn': m76,
-    'server/zombies/system': m77,
-    'shared/channel': m78,
-    'shared/content': m79,
-    'shared/content/DefinitionRegistry': m80,
-    'shared/content/animation': m81,
-    'shared/content/chooserPages': m82,
-    'shared/content/font': m83,
-    'shared/content/from': m84,
-    'shared/content/gameplay': m85,
-    'shared/content/gameplayTypes': m86,
-    'shared/content/graves': m87,
-    'shared/content/levelHelpers': m88,
-    'shared/content/music': m89,
-    'shared/content/parseGameplay': m90,
-    'shared/content/particle': m91,
-    'shared/content/plantAbilities': m92,
-    'shared/content/plantAnimation': m93,
-    'shared/content/planting': m94,
-    'shared/content/presentation': m95,
-    'shared/content/reanim': m96,
-    'shared/content/renderOrder': m97,
-    'shared/content/seedGroups': m98,
-    'shared/content/strings': m99,
-    'shared/content/teams': m100,
-    'shared/content/zombieAnimation': m101,
-    'shared/content/zombieStates': m102,
-    'shared/debug/DebugCli': m103,
-    'shared/kernel': m104,
-    'shared/kernel/binary': m105,
-    'shared/kernel/particles': m106,
-    'shared/menu': m107,
-    'shared/mod': m108,
-    'shared/mod/ModAssets': m109,
-    'shared/mod/ModHost': m110,
-    'shared/mod/content': m111,
-    'shared/protocol': m112,
-    'shared/protocol/json': m113,
-    'shared/protocol/packets': m114,
-    'shared/protocol/snapshot': m115,
-    'shared/random': m116,
-    'shared/validate': m117,
+    'server/zombies/parts': m75,
+    'server/zombies/poleVault': m76,
+    'server/zombies/spawn': m77,
+    'server/zombies/system': m78,
+    'shared/channel': m79,
+    'shared/content': m80,
+    'shared/content/DefinitionRegistry': m81,
+    'shared/content/animation': m82,
+    'shared/content/chooserPages': m83,
+    'shared/content/font': m84,
+    'shared/content/from': m85,
+    'shared/content/gameplay': m86,
+    'shared/content/gameplayTypes': m87,
+    'shared/content/graves': m88,
+    'shared/content/levelHelpers': m89,
+    'shared/content/music': m90,
+    'shared/content/parseGameplay': m91,
+    'shared/content/particle': m92,
+    'shared/content/plantAbilities': m93,
+    'shared/content/plantAnimation': m94,
+    'shared/content/planting': m95,
+    'shared/content/presentation': m96,
+    'shared/content/reanim': m97,
+    'shared/content/renderOrder': m98,
+    'shared/content/seedGroups': m99,
+    'shared/content/strings': m100,
+    'shared/content/teams': m101,
+    'shared/content/zombieAnimation': m102,
+    'shared/content/zombieStates': m103,
+    'shared/debug/DebugCli': m104,
+    'shared/kernel': m105,
+    'shared/kernel/binary': m106,
+    'shared/kernel/particles': m107,
+    'shared/menu': m108,
+    'shared/mod': m109,
+    'shared/mod/ModAssets': m110,
+    'shared/mod/ModHost': m111,
+    'shared/mod/content': m112,
+    'shared/protocol': m113,
+    'shared/protocol/json': m114,
+    'shared/protocol/packets': m115,
+    'shared/protocol/snapshot': m116,
+    'shared/random': m117,
+    'shared/validate': m118,
 }

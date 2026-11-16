@@ -164,7 +164,6 @@ export class LevelEntityRenderer implements LevelStage {
         this.lastSnapshot = snapshot
         const handlers = this.content.views.events
         for (const event of events) for (const handler of handlers.of(event.type, 'before')) handler(this, event, snapshot)
-        for (const id of changes.removed) this.remove(id)
         const added = new Set(changes.added)
         if (added.size) for (const kind of KINDS) for (const entity of LISTS[kind](snapshot)) {
             const id = entity.entityId
@@ -184,6 +183,9 @@ export class LevelEntityRenderer implements LevelStage {
             }
         }
         for (const event of events) for (const handler of handlers.of(event.type, 'after')) handler(this, event, snapshot)
+        // What the frame no longer has goes once its events are heard: what fell off a zombie gone with it (a puff) flies
+        // from where it last was.
+        for (const id of changes.removed) this.remove(id)
         this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
         this.firstFrame = false

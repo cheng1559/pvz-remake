@@ -584,10 +584,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     static readonly armorDropped: StageEvent = (stage, event, world) => {
         const entityId = event.data.entityId, slot = event.type === 'zombieHelmDropped' ? 'helm' : 'shield'
         if (typeof entityId !== 'number' || event.data.silent === true) return
+        // Zombie::DropHelm takes the track where it is this tick, as the parts do: heard once the frame is drawn, the
+        // view has the zombie there (one rising from a grave is higher now), or as it last was if it is gone.
         const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
         const node = stage.node(entityId), view = stage.view(entityId, ZombieView)
-        // Zombie::DropHelm takes the track where it is this tick, as the parts do: one rising from a grave is higher now.
-        if (zombie) view?.sync(zombie, world)
         const typeId = zombie?.typeId ?? view?.typeId
         const armor = typeId ? stage.content.presentation.zombies[typeId]?.[slot] : undefined
         if (!node || !armor) return
@@ -608,12 +608,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
 
     /** Zombie::DropHead, DropArm and DropFlag: the part flies off from where it is on the body, with its sounds. */
     static readonly partDropped: StageEvent = (stage, event, world) => {
-        const { entityId, part } = event.data
-        if (typeof entityId !== 'number' || (part !== 'head' && part !== 'arm' && part !== 'flag')) return
+        const { entityId, typeId, part } = event.data
+        if (typeof entityId !== 'number' || typeof typeId !== 'string' || (part !== 'head' && part !== 'arm' && part !== 'flag')) return
         const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
         const node = stage.node(entityId), view = stage.view(entityId, ZombieView)
-        if (zombie) view?.sync(zombie, world)
-        const drop = node && stage.content.presentation.zombies[view?.typeId ?? 'pvz:normal']?.drops[part]
+        const drop = node && stage.content.presentation.zombies[typeId]?.drops[part]
         if (!node || !drop) return
         const track = view?.getTrackWorldPosition(drop.track)
         const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null

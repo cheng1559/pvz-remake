@@ -5,6 +5,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
+import { zombiePartDropped } from './parts'
 import { dropZombieLoot } from '../level/loot'
 import { isHostile, type Team, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
@@ -96,12 +97,12 @@ export function damageZombie(
     if (zombie.hasArm && zombie.shieldHealth === 0 &&
         zombie.health > 0 && zombie.health < zombie.maxHealth * 2 / 3) {
         zombie.hasArm = false
-        emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
+        zombiePartDropped(world, entity, 'arm')
     }
     if (zombie.hasHead && zombie.health < zombie.maxHealth / 3) {
         dropZombieFlag(world, entity)
         zombie.hasHead = false
-        emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head' })
+        zombiePartDropped(world, entity, 'head')
         // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
         dropZombieLoot(world, definitions, entity, remover)
     }

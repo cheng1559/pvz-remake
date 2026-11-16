@@ -5,6 +5,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { damageZombie, startZombieDeath, updateHeadlessZombie, countZombiesOnScreen } from './damage'
+import { zombiePartDropped } from './parts'
 import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
@@ -64,14 +65,13 @@ export class ZombieSystem implements GameSystem {
             if (zombie.state === 'mowered') {
                 stepZombie(zombie, animation, random)
                 if (squashed(zombieBody(zombie))) {
-                    const events = world.resources.get(EventQueueResource)
                     if (zombie.hasHead) {
                         zombie.hasHead = false
-                        emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head', mowered: true, row: position.row })
+                        zombiePartDropped(world, entity, 'head', { mowered: true, row: position.row })
                     }
                     if (zombie.hasArm) {
                         zombie.hasArm = false
-                        emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm', mowered: true, row: position.row })
+                        zombiePartDropped(world, entity, 'arm', { mowered: true, row: position.row })
                     }
                     commands.destroyEntity(entity)
                 }

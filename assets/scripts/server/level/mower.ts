@@ -10,6 +10,7 @@ import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, flattenZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
+import { zombiePartDropped } from '../zombies/parts'
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { isHostile, type Team, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
@@ -123,7 +124,7 @@ export function mowZombie(world: World, definitions: GameplayDefinitions, mowerI
             const has = part === 'head' ? 'hasHead' : 'hasArm'
             if (!zombie[has]) continue
             zombie[has] = false
-            emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part, row: position.row })
+            zombiePartDropped(world, entity, part, { row: position.row })
         }
         dropZombieHelm(world, definitions, entity, zombie)
         dropZombieShield(world, definitions, entity, zombie)

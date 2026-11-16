@@ -215,5 +215,7 @@ test('a chilled zombie body goes at half its rate and its flag at its own, which
     assert.ok(Math.abs(zombie.animations.flag.time - before.flag - 15 / 100) < 1e-9)
     damageZombie(world, definitions, entity, 200)
     assert.equal(zombie.animations.flag, undefined, 'Zombie::DropFlag')
-    assert.ok(world.resources.get(EventQueueResource).events.some(event => event.type === 'zombiePartDropped' && event.data.part === 'flag'))
+    // The client draws what falls by the zombie's type, which the event says.
+    assert.ok(world.resources.get(EventQueueResource).events.some(event => event.type === 'zombiePartDropped' && event.data.part === 'flag'
+        && event.data.typeId === 'pvz:flag'))
 })
