@@ -1,4 +1,4 @@
-import type { MenuStorage } from '@/shared/menu'
+import { GAME_SAVE_KEY, type MenuStorage, PLAYER_MODS_PREFIX } from '@/shared/menu'
 import type { ZenGardenPlant } from '@/shared/content/gameplay'
 import { isQualifiedId } from '@/shared/mod'
 
@@ -80,8 +80,8 @@ export interface ProfileRegistry {
 export function createProfileStore(storage: MenuStorage) {
     const getStorage = () => storage
     const deleteProfileSaves = (profileId: number) => {
-        // The client's per-player Mod list (ModManager's PLAYER_MODS_PREFIX) goes too; unused archives are removed at startup.
-        const prefixes = [`pvz-remake:game-save-v2:${profileId}:`, `pvz-remake:player-mods:${profileId}:`]
+        // The client's per-player Mod list goes too; unused archives are removed at startup.
+        const prefixes = [`${GAME_SAVE_KEY}:${profileId}:`, `${PLAYER_MODS_PREFIX}${profileId}:`]
         for (let i = storage.length - 1; i >= 0; i--) {
             const key = storage.key(i)
             if (key && prefixes.some(prefix => key.startsWith(prefix))) storage.removeItem(key)

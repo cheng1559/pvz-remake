@@ -4,7 +4,7 @@ import { setImmediate } from 'node:timers/promises'
 import { loadScript } from '../loadScript'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
-import { GAME_SAVE_KEY } from '@/app/GameSaveStore'
+import { GAME_SAVE_KEY } from '@/shared/menu'
 
 function load(path: string, modules: Record<string, unknown>, globals: Record<string, unknown> = {}) {
     return loadScript(`assets/scripts/${path}.ts`, (id: string) => modules[id] ?? {}, { console, ...globals })

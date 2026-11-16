@@ -1,3 +1,4 @@
+import { GAME_SAVE_KEY } from '@/shared/menu'
 import { parseGameSave, type GameSave } from './SaveCoordinator'
 
 export interface StorageLike {
@@ -5,9 +6,6 @@ export interface StorageLike {
     setItem(key: string, value: string): void
     removeItem(key: string): void
 }
-
-// Keep the persisted key stable; code names do not depend on the save format version.
-export const GAME_SAVE_KEY = 'pvz-remake:game-save-v2'
 
 export class GameSaveStore {
     private readonly tempKey: string

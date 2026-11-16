@@ -150,6 +150,7 @@ function setup() {
     const archive = load('assets/scripts/client/content/InstalledArchives.ts')
     modules['./InstalledArchives'] = modules['@/client/content/InstalledArchives'] = archive
     modules['@/shared/mod'] = modules['@/shared/mod/index'] = load('assets/scripts/shared/mod/index.ts')
+    modules['@/shared/menu'] = load('assets/scripts/shared/menu/index.ts')
     modules['@/shared/mod/content'] = load('assets/scripts/shared/mod/content.ts')
     const { ModManager: StartupModManager } = load('assets/scripts/client/content/ModManager.ts')
     // Each manager stands for a startup; unless a test says otherwise, the one before it reached the main menu.

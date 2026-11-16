@@ -1,6 +1,7 @@
 import { Game, game, sys } from 'cc'
 import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
+import { PLAYER_MODS_PREFIX } from '@/shared/menu'
 import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod extends ContentArchive {
@@ -38,8 +39,6 @@ interface ModSelection {
     order: string[]
 }
 
-/** The profile store removes this prefix with the rest of a deleted player's data. */
-export const PLAYER_MODS_PREFIX = 'pvz-remake:player-mods:'
 const selectionKey = (profile: number | null) => `${PLAYER_MODS_PREFIX}${profile ?? 'none'}:state`
 const pendingStorageKey = 'pvz-remake:pending-mod-changes'
 /** Set while a startup loads Mods and cleared at the main menu; still set means that startup ended (e.g. crashed) on the way. */

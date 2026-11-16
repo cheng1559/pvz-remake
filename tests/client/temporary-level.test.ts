@@ -35,7 +35,7 @@ test('temporary levels preserve the adventure save when entered, restarted and e
         './LocalIntegratedGame': { LocalIntegratedGame: Game },
         './ModLoader': { loadInstalledMods: async () => ({ gameplay: [] }) },
         './CocosGameSaveStore': { createLocalGameSaveStore: () => store },
-        './GameSaveStore': { GAME_SAVE_KEY: 'save' },
+        '@/shared/menu': { GAME_SAVE_KEY: 'save' },
         './SaveCoordinator': { createGameSave: (value: any) => value },
         '@/client/game/loadIntegratedGameContent': { LEVEL_PREFAB_ID: 'prefab', async loadIntegratedGameContent() {
             return { levels: { levels }, definitions: {}, enabledMods: [],

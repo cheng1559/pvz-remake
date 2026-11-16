@@ -6,6 +6,14 @@ export interface MenuStorage {
     readonly length: number
 }
 
+/**
+ * A player's game saves (GameSaveStore), under `${GAME_SAVE_KEY}:${id}:...`, which deleting its profile removes. The
+ * persisted key stays as it is: code names do not depend on the save format version.
+ */
+export const GAME_SAVE_KEY = 'pvz-remake:game-save-v2'
+/** A player's Mod list (ModManager), under `${PLAYER_MODS_PREFIX}${id}:...`, which deleting its profile removes too. */
+export const PLAYER_MODS_PREFIX = 'pvz-remake:player-mods:'
+
 export interface UserSummary { id: number, name: string }
 /** GameSelector: the locked mode buttons and the menu items the player has reached. */
 export interface MainMenuUnlocks { minigames: boolean, puzzle: boolean, survival: boolean, almanac: boolean, store: boolean, garden: boolean }
