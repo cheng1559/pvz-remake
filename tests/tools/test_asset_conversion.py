@@ -123,6 +123,16 @@ SetDefaultPointSize 2;
                 {'time': 1, 'low': 0, 'high': 0},
             ])
 
+    def test_full_screen_flash_keeps_its_white_pixel(self):
+        # IceTrap's IceFlash: a FullScreen emitter on IMAGE_WHITEPIXEL fills the screen in its color.
+        particle_xml = '\n<Emitter><Name>IceFlash</Name><SpawnMinActive>1</SpawnMinActive><SpawnMaxLaunched>1</SpawnMaxLaunched>\n<ParticleDuration>30</ParticleDuration><ParticleScale>1600</ParticleScale><ParticleAlpha>.5 0</ParticleAlpha>\n<Image>IMAGE_WHITEPIXEL</Image><ParticleRed>.5</ParticleRed><FullScreen>1</FullScreen></Emitter>\n'
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'icetrap.xml'
+            source.write_text(particle_xml)
+            emitter = write_particle(source, Path(directory) / 'particle.json', 'pvz:icetrap', image_grids={})['emitters'][0]
+            self.assertEqual((emitter['name'], emitter['sprite'], emitter['fullScreen']), ('IceFlash', 'pvz:whitepixel', True))
+            self.assertEqual(emitter['particleRed']['nodes'], [{'time': 0, 'low': .5, 'high': .5}])
+
 
 if __name__ == '__main__':
     unittest.main()

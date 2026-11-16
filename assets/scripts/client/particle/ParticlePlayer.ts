@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, Node, Sprite, SpriteFrame } from 'cc'
+import { _decorator, Canvas, Color, Component, Mat4, Node, Sprite, SpriteFrame, UITransform, Vec3 } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { KernelBatch, type KernelQuadSource } from '@/client/render/KernelBatch'
 import { gameClock } from '@/core/GameClock'
@@ -17,6 +17,7 @@ class ParticleEmitterView implements KernelQuadSource {
     private readonly geometry: Float64Array
     private readonly frame: SpriteFrame
     private readonly additive: boolean
+    private readonly fullScreen: boolean
     private readonly batch: KernelBatch
     private readonly options = kernel().f64(ParticleOption.SIZE)
     private system: KernelParticles | null = null
@@ -28,6 +29,7 @@ class ParticleEmitterView implements KernelQuadSource {
         this.frame = assets.frame
         this.geometry = assets.geometry
         this.additive = assets.definition.additive
+        this.fullScreen = assets.definition.fullScreen
         this.options[ParticleOption.CEL_WIDTH] = assets.cel.width
         this.options[ParticleOption.CEL_HEIGHT] = assets.cel.height
     }
@@ -49,7 +51,9 @@ class ParticleEmitterView implements KernelQuadSource {
         this.options[ParticleOption.OPACITY] = opacity
         this.options[ParticleOption.STRIDE] = stride
         this.options[ParticleOption.CAPACITY] = capacity
-        return this.system.write(this.index, this.geometry, this.options, positions, vertices)
+        const written = this.system.write(this.index, this.geometry, this.options, positions, vertices)
+        if (this.fullScreen && written > 0) fillScreen(this.batch.node, positions, stride, written)
+        return written
     }
 
     setVisible(visible: boolean): void { this.batch.enabled = visible }
@@ -63,6 +67,36 @@ class ParticleEmitterView implements KernelQuadSource {
     release(): void {
         this.system = null
         kernel().release(this.options)
+    }
+}
+
+/**
+ * PvzpParticleEmitter::DrawParticle for a FullScreen emitter: its particles fill the screen (FillRect over the board),
+ * in the color and alpha the kernel gives them. Each corner of a quad goes to the screen's corner on its side, in the
+ * batch's own space. The screen is the Canvas the batch is drawn in, which covers what is visible.
+ */
+function fillScreen(node: Node, positions: Float32Array, stride: number, quads: number): void {
+    let canvas: Node | null = node
+    while (canvas && !canvas.getComponent(Canvas)) canvas = canvas.parent
+    const screen = canvas?.getComponent(UITransform)?.getBoundingBoxToWorld()
+    if (!screen) return
+    const world = node.worldMatrix, inverse = Mat4.invert(new Mat4(), world), corner = new Vec3()
+    for (let quad = 0; quad < quads; quad++) {
+        const first = quad * 4 * stride
+        // The quad's middle on the screen, from its corners.
+        let middleX = 0, middleY = 0
+        for (let vertex = 0; vertex < 4; vertex++) {
+            Vec3.transformMat4(corner, corner.set(positions[first + vertex * stride], positions[first + vertex * stride + 1], 0), world)
+            middleX += corner.x / 4; middleY += corner.y / 4
+        }
+        for (let vertex = 0; vertex < 4; vertex++) {
+            const at = first + vertex * stride
+            Vec3.transformMat4(corner, corner.set(positions[at], positions[at + 1], 0), world)
+            corner.set(corner.x < middleX ? screen.xMin : screen.xMax, corner.y < middleY ? screen.yMin : screen.yMax, 0)
+            Vec3.transformMat4(corner, corner, inverse)
+            positions[at] = corner.x
+            positions[at + 1] = corner.y
+        }
     }
 }
 

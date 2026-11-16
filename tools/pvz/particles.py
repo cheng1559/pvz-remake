@@ -56,6 +56,8 @@ FLAG_FIELDS = {
     "ParticlesDontFollow": "particlesDontFollow",
     "Additive": "additive",
     "Animated": "animated",
+    # A flash over the whole screen in the particle's color (IceTrap's IceFlash, Doom's DoomFlash).
+    "FullScreen": "fullScreen",
 }
 
 FIELD_TYPES = {
@@ -186,7 +188,7 @@ def build_particle(source: Path, content_id: str, namespace: str = "pvz",
     emitters = []
     for node in root.findall("Emitter"):
         image = strip_image_prefix((node.findtext("Image") or "").strip())
-        if not image or image.lower() == "whitepixel":
+        if not image:
             continue
         grid = grids.get(image.upper(), grids.get("IMAGE_" + image.upper(), {}))
         frames = int(node.findtext("ImageFrames") or 1)

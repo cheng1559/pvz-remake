@@ -54,6 +54,11 @@ export interface ParticleEmitter {
     particlesDontFollow: boolean
     /** TodEmitterDefinition::mAnimated: the frames play once over each particle's life. */
     animated: boolean
+    /**
+     * PARTICLE_FULLSCREEN: each particle fills the screen in its color, wherever it is and whatever its size (the
+     * original's FillRect over the board; the ice-shroom's and the doom-shroom's flash, on IMAGE_WHITEPIXEL).
+     */
+    fullScreen: boolean
     systemDuration?: ParticleTrack
     /** Frames per 100 ticks of a looping frame animation (TodParticle mAnimationTimeValue); overrides `animated`. */
     animationRate?: ParticleTrack
@@ -121,6 +126,7 @@ const DEFAULT_EMITTER: Omit<ParticleEmitter, 'sprite'> = {
     randomStartTime: false,
     particlesDontFollow: false,
     animated: false,
+    fullScreen: false,
     spawnRate: constant(0),
     spawnMinActive: constant(-1),
     spawnMaxActive: constant(-1),
