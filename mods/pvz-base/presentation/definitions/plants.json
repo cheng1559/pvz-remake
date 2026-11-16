@@ -70,7 +70,6 @@
       "idle": {"reanimId": "pvz:cherrybomb_idle", "fps": 30, "x": 0, "y": 0},
       "explode": {"reanimId": "pvz:cherrybomb_explode", "fps": 30, "x": 0, "y": 0}
     },
-    "offBoard": {"body": "idle"},
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
     "plantedSounds": [{"audio": "pvz:reverse_explosion", "foley": true}],
@@ -102,8 +101,7 @@
       "blink": {"reanimId": "pvz:potatomine_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
       "glow": {"reanimId": "pvz:potatomine_glow", "x": 0, "y": 0, "attachmentTrackId": "anim_light", "onlyTracks": ["anim_glow"]}
     },
-    "offBoard": {"body": "armed"},
-    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}, "x": 12, "y": 12, "scale": 0.85, "clips": {"light": "glow"}},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}, "x": 12, "y": 12, "scale": 0.85, "state": "armed"},
     "shadow": {"x": -3, "y": -51},
     "scale": 0.8,
     "explosionSounds": [{"audio": "pvz:potato_mine", "foley": false}],
@@ -159,9 +157,8 @@
       "grow": {"reanimId": "pvz:sunshroom_grow", "x": 0, "y": 0, "blend": 0.1},
       "blink": {"reanimId": "pvz:sunshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
     },
-    "offBoard": {"body": "body"},
-    "packet": {"clips": {"body": "small"}},
-    "shadow": {"x": -3, "y": -42, "scale": 0.5},
+    "packet": {"state": "small"},
+    "shadow": {"x": -3, "y": -42, "scale": 1, "states": {"small": 0.5, "growing": [0.5, 1]}},
     "scale": 1
   },
   "pvz:fumeshroom": {
@@ -189,7 +186,6 @@
       "body": {"reanimId": "pvz:gravebuster", "x": 0, "y": 40, "blend": 0.1},
       "land": {"reanimId": "pvz:gravebuster_land", "x": 0, "y": 40}
     },
-    "offBoard": {"body": "body"},
     "scale": 1,
     "drawHeightOffset": -40,
     "pointerOffsetY": 15

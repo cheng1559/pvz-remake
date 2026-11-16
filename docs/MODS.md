@@ -69,7 +69,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 教程脚本和关卡规则一样是服务端登记项：用 `registry.tutorials.register(ownerId, id, script)` 登记（`server/tutorials` 的 `TutorialScript`），关卡写 `tutorial: id` 使用它。加载时检查每关的 `tutorial` 都已登记，写错或没登记的名字让加载失败，不会当作没有教程；没有教程的关卡不写 `tutorial`。脚本自己的步骤（`TutorialResource.step`）用自己的命名空间，如 `example:dig`，随存档保存。
 
-植物的 `visual.nameKey`（必填）、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。种子包默认画植物自己；`visual.packetPlant` 写另一株植物的完整 ID 时画那一株（如保龄球坚果画普通坚果）。卡包里植物图的位置和大小写在植物的 `packet.placement`（`{ scale, offsetX, offsetY }`，原版 `SeedPacket::DrawSeedPacket` 的偏移），不写时用 `seedPackets.defaultPlacement`；`packet` 的其余字段是原版 `Plant::DrawSeedType` 的偏移和姿势。
+植物的 `visual.nameKey`（必填）、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。种子包默认画植物自己；`visual.packetPlant` 写另一株植物的完整 ID 时画那一株（如保龄球坚果画普通坚果）。卡包里植物图的位置和大小写在植物的 `packet.placement`（`{ scale, offsetX, offsetY }`，原版 `SeedPacket::DrawSeedPacket` 的偏移），不写时用 `seedPackets.defaultPlacement`；`packet` 的其余字段是原版 `Plant::DrawSeedType` 的偏移和姿势，`packet.state` 指定图里植物所处的技能状态（小阳光菇、亮灯的土豆雷），不写时与场外相同（玩法动画的 `offBoard`）。
 
 每个僵尸定义都必须写 `wave: { points, weight, firstWave? }`，即原版 `ZombieDefinition` 的分值 `mZombieValue`、出怪权重 `mPickWeight` 和最早出现的波次 `mFirstAllowedWave`。分值既是出怪时花的点数，也决定它死亡时掉钱的概率（`Zombie::DropLoot`），所以只在列出的波次、墓碑或调试命令里出现的僵尸也要写；不想被出怪池随机选中就把 `weight` 写成 0。关卡 `zombiePool` 的条目可以覆盖这些值。缺少 `wave` 的僵尸在加载时报错。
 

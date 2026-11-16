@@ -21,7 +21,7 @@ import { plantDefinition } from './definitions'
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
  * almanac, a packet's picture) there is nothing else to it but the countdown to its blink, which its view keeps on
- * with the rest (advance).
+ * with the rest (advance), and the state of its ability it is in there (PlantAnimationDefinition.offBoard).
  */
 export type ShownPlant = Partial<PlantSnapshot> & Pick<PlantSnapshot, 'typeId'> & Pick<AnimatedPlant, 'blinkTicks'>
 /** How a view draws its plant, where that is not the board's way. */
@@ -80,6 +80,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
     private chilled = false
     /** Mowed, it is frozen as it stood for its squashing. */
     private frozen = false
+    /** Its shadow's node and the size of the shadow's picture, which `pose` sizes it by (placeShadow). */
+    private shadow?: { node: Node, width: number, height: number }
 
     constructor(protected readonly context: PlantViewContext) {
         const animation = context.content.definitions.plants[context.plant.typeId].animation
@@ -90,15 +92,11 @@ export class PlantView implements EntityView<PlantSnapshot> {
     async initialize(): Promise<void> {
         const { node, content, plant, draw, stage } = this.context
         // Plant::DrawShadow skips a few plants, such as the grave buster: those have no shadow in their presentation.
-        const shadow = draw?.shadow === false ? undefined : this.presentation.shadow
-        const frame = shadow && await plantShadow(content, stage)
-        if (shadow && frame && node.isValid) {
-            const scale = shadow.scale ?? 1, size = frame.originalSize
-            uiNode({
-                name: 'PlantShadow', parent: node, anchor: { x: 0, y: 1 },
-                position: { x: shadow.x + size.width * (1 - scale) / 2, y: shadow.y - size.height * (1 - scale) / 2, z: -1 },
-                sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false },
-            }).node.setScale(scale, scale, 1)
+        const frame = draw?.shadow !== false && this.presentation.shadow && await plantShadow(content, stage)
+        if (frame && node.isValid) {
+            const shadow = uiNode({ name: 'PlantShadow', parent: node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
+            this.shadow = { node: shadow, width: frame.originalSize.width, height: frame.originalSize.height }
+            this.placeShadow(plant)
         }
         // Every clip is in memory from here on, so a layer changes to one at once.
         await prepareReanims(this.playable())
@@ -135,9 +133,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
      * their place off the board, and a Mod that shows others adds those.
      */
     protected playable(): string[] {
-        const { offBoard, packet } = this.presentation
-        return [...new Set([...Object.keys(this.animation.clips), ...Object.values(offBoard ?? {}), ...Object.values(packet?.clips ?? {})])]
-            .map(name => this.clip(name).reanimId)
+        return Object.keys(this.animation.clips).map(name => this.clip(name).reanimId)
     }
 
     /** How long one of its Reanim is, in the frames of its own pace (12 a second): what a Mod times a clip of its own by. */
@@ -153,7 +149,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
      */
     protected shown(layer: string, plant: ShownPlant): LayerShown | undefined {
         const state = plant.animations?.[layer]
-        // A clip the presentation has in place of the animation's off the board is a loop of its own length.
+        // A Mod's clip that is not the animation's is a loop of its own length.
         return state && shownLayer(state, plant.animations, this.layerClips)
     }
 
@@ -181,6 +177,25 @@ export class PlantView implements EntityView<PlantSnapshot> {
         }
         // On the board and off it (the almanac): the layers over the first are on its parts, so its colors reach them all.
         if (this.body.loadedId) this.body.setColorOverride(this.tinted())
+        this.placeShadow(plant)
+    }
+
+    /**
+     * Plant::DrawShadow: the board's plant shadow at the presentation's place, about its middle at its `scale`, or at
+     * what its `states` has for the state the plant's ability is in; `[from, to]` goes from one to the other as the
+     * first layer's clip plays (a sun-shroom growing: 0.5 + 0.5 * its body's anim_grow time).
+     */
+    private placeShadow(plant: ShownPlant): void {
+        const shadow = this.shadow, place = this.presentation.shadow
+        if (!shadow?.node.isValid || !place) return
+        const sized = plant.ability && place.states?.[plant.ability.state]
+        let scale = typeof sized === 'number' ? sized : place.scale ?? 1
+        if (Array.isArray(sized)) {
+            const layer = plant.animations?.[Object.keys(this.animation.layers)[0]], frames = layer && this.animation.clips[layer.clip]?.frames
+            scale = sized[0] + (sized[1] - sized[0]) * (layer && frames ? Math.min(1, layer.time / frames) : 0)
+        }
+        shadow.node.setPosition(place.x + shadow.width * (1 - scale) / 2, place.y - shadow.height * (1 - scale) / 2, -1)
+        shadow.node.setScale(scale, scale, 1)
     }
 
     /** The plant's clips, for what a layer shows (shownLayer). */
@@ -262,8 +277,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
         if (!this.frozen) {
             this.frozen = true
             for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
-            const shadow = node.getChildByName('PlantShadow')
-            if (shadow) shadow.active = false
+            if (this.shadow?.node.isValid) this.shadow.node.active = false
         }
         if (!locator) {
             const loaded: { track?: ReanimTrack } = locator = {}

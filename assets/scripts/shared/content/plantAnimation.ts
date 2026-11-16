@@ -1,5 +1,6 @@
 import { type Animated, type AnimationRandom, drawn, pace, startLayer, startLayers, stepLayers } from './animation'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from './gameplay'
+import type { PlantAbilityState } from './plantAbilities'
 
 /** What only a plant's animation does (PlantDefinition.animation), on the rules of every animation (./animation). */
 
@@ -21,20 +22,33 @@ export function startPlantLayers(animation: PlantAnimationDefinition, plant: Ani
     if (animation.blink) plant.blinkTicks = random.integer(animation.blink.ticks.min, animation.blink.ticks.max)
 }
 
+/** A plant off the board, as far as its animation goes, and the state its ability is in there, if it has one. */
+export interface OffBoardPlant extends AnimatedPlant {
+    state?: PlantAbilityState
+}
+
 /**
- * Plant::PlantInitialize for a plant that is not in play: its layers start as on the board, which gives each its pace,
- * and then show the clips in `shown` in place of their own (an armed potato mine goes at the 12 it is buried at). A
- * layer that only has a clip off the board starts that. `at`: how far each starts towards its clip's last frame, as a part.
+ * Plant::PlantInitialize for a plant that is not in play (PlantAnimationDefinition.offBoard): its layers start as on
+ * the board, which gives each its pace, and then show the clips of the state its ability is in there (`states`) and the
+ * clips `offBoard.layers` has, in place of their own (an armed potato mine goes at the 12 it is buried at). A layer that
+ * only has a clip there starts that; one with none there is not there. A picture of the plant (a packet's) may have it
+ * in a `state` of its own, in place of all of `offBoard`; `at`: how far each layer starts towards its clip's last
+ * frame, as a part.
  */
-export function startOffBoardPlant(animation: PlantAnimationDefinition, shown: Readonly<Record<string, string>> | undefined,
-    random: AnimationRandom, at = 0): AnimatedPlant {
-    const plant: AnimatedPlant = {}
-    startPlantLayers(animation, plant, Object.fromEntries(Object.entries(animation.layers).map(([layer, clip]) => [layer, clip ?? shown?.[layer] ?? null])), random)
-    for (const [layer, state] of Object.entries(plant.animations!)) {
-        state.clip = shown?.[layer] ?? state.clip
-        state.time += Math.max(0, (animation.clips[state.clip]?.frames ?? 1) - 1) * at
-        delete state.hidden
+export function startOffBoardPlant(animation: PlantAnimationDefinition, random: AnimationRandom,
+    picture: { state?: PlantAbilityState, at?: number } = {}): OffBoardPlant {
+    const offBoard = picture.state === undefined ? animation.offBoard : { state: picture.state }, state = offBoard?.state
+    const shown: Record<string, string | null> = { ...(state === undefined ? {} : animation.states?.[state]), ...offBoard?.layers }
+    const plant: OffBoardPlant = {}
+    startPlantLayers(animation, plant, Object.fromEntries(Object.entries(animation.layers).map(([layer, clip]) => [layer, clip ?? shown[layer] ?? null])), random)
+    for (const [layer, layerState] of Object.entries(plant.animations!)) {
+        const clip = Object.hasOwn(shown, layer) ? shown[layer] : layerState.clip
+        if (clip === null) { delete plant.animations![layer]; continue }
+        layerState.clip = clip
+        layerState.time += Math.max(0, (animation.clips[clip]?.frames ?? 1) - 1) * (picture.at ?? 0)
+        delete layerState.hidden
     }
+    if (state !== undefined) plant.state = state
     return plant
 }
 

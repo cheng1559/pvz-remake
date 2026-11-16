@@ -6,6 +6,7 @@ import { withFrom } from './from'
 import type { MusicTuneId } from './music'
 import { isQualifiedId } from '@/shared/mod'
 import { isRenderLayer, type RenderLayer } from './renderOrder'
+import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
@@ -61,8 +62,15 @@ export interface PlantPresentationDefinition {
     readonly fireParticle?: { readonly id: string; readonly x: number; readonly y: number; readonly delayTicks: number }
     /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
     readonly layer?: RenderLayer
-    /** Plant::DrawShadow: where its shadow lies; a plant without one (the grave buster) has none. */
-    readonly shadow?: { readonly x: number; readonly y: number; readonly scale?: number }
+    /**
+     * Plant::DrawShadow: where its shadow lies, about its middle at `scale`; a plant without one (the grave buster) has
+     * none. `states`: its scale while its ability is in one of them, `[from, to]` going from one to the other as its
+     * first layer's clip plays (the sun-shroom's, small, then growing with its anim_grow).
+     */
+    readonly shadow?: {
+        readonly x: number; readonly y: number; readonly scale?: number
+        readonly states?: Readonly<Partial<Record<PlantAbilityState, number | readonly [number, number]>>>
+    }
     readonly scale: number
     /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
     readonly drawHeightOffset?: number
@@ -78,21 +86,17 @@ export interface PlantPresentationDefinition {
      */
     readonly clips?: AnimationDefinition
     /**
-     * Plant::PlantInitialize off the board (the almanac, a packet's picture): the clips its layers show there in place
-     * of the ones they start with on it, `{layer: clip}`, going at those's pace (an armed potato mine, a grown sun-shroom).
-     */
-    readonly offBoard?: Readonly<Record<string, string>>
-    /**
-     * A packet's picture of the plant. `placement`: SeedPacket::DrawSeedPacket's place and size of the picture in the
-     * packet (seedPackets.defaultPlacement without). The rest is Plant::DrawSeedType: where the plant goes from that
-     * place and at what size (the potato mine's), how far towards its clips' last frame it is posed (`time`, the
-     * sunflower's), and the clips its layers show on top of `offBoard` (`clips`: the potato mine's light lit, the
+     * A packet's picture of the plant, as it is off the board (PlantAnimationDefinition.offBoard). `placement`:
+     * SeedPacket::DrawSeedPacket's place and size of the picture in the packet (seedPackets.defaultPlacement without).
+     * The rest is Plant::DrawSeedType: where the plant goes from that place and at what size (the potato mine's), how
+     * far towards its clips' last frame it is posed (`time`, the sunflower's), and the state of its ability it is
+     * pictured in, in place of all it is off the board (`state`: the potato mine armed with its light lit, the
      * sun-shroom small).
      */
     readonly packet?: {
         readonly placement?: SeedPacketPlacement
         readonly x?: number; readonly y?: number; readonly scale?: number; readonly time?: number
-        readonly clips?: Readonly<Record<string, string>>
+        readonly state?: PlantAbilityState
     }
     /** AlmanacDialog: how far from a plant's usual place the almanac shows it, in original Y-down pixels (the grave buster's 55 down). */
     readonly almanacOffset?: readonly [number, number]
@@ -646,8 +650,6 @@ function clip(value: unknown, name: string): ClientAnimationClip {
 }
 
 const clips = table(clip)
-/** The clips some layers show, `{layer: clip}`. */
-const clipNames = table(nonEmptyString)
 
 function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
     const menu = allFields<MainMenuDefinition>(value, name, {
@@ -868,7 +870,16 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
             id: nonEmptyString, x: finite, y: finite, delayTicks: nonNegativeInteger,
         }),
         layer,
-        shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], { x: finite, y: finite, scale: positiveFinite }),
+        shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], {
+            x: finite, y: finite, scale: positiveFinite,
+            states: (value, name) => {
+                const states = table((value, name) => Array.isArray(value)
+                    ? pair(value, name).map((scale, index) => positiveFinite(scale, `${name}[${index}]`)) as [number, number]
+                    : positiveFinite(value, name))(value, name)
+                for (const state of Object.keys(states)) oneOf(state, PLANT_ABILITY_STATES, `${name}.${state}`)
+                return states
+            },
+        }),
         scale: positiveFinite,
         drawHeightOffset: finite,
         pointerOffsetY: finite,
@@ -878,9 +889,9 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         parts: (value, name) => fields<PlantParts>(value, name, [], { eyes: nonEmptyStrings, face: nonEmptyString, prey: nonEmptyStrings }),
         view: nonEmptyString,
         clips,
-        offBoard: clipNames,
         packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
-            placement, x: finite, y: finite, scale: positiveFinite, time: finite, clips: clipNames,
+            placement, x: finite, y: finite, scale: positiveFinite, time: finite,
+            state: (value, name) => oneOf(value, PLANT_ABILITY_STATES, name),
         }),
         almanacOffset: pair,
         chewParticle: nonEmptyString,

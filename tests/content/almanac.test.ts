@@ -16,9 +16,8 @@ const random = (...values: number[]): AnimationRandom => {
     return { nextFloat: next, integer: (min, max) => min + Math.floor(next() * (max - min + 1)) }
 }
 const shown = (id: string, picture: 'offBoard' | 'packet' = 'offBoard') => {
-    const presentation = presentationFixture.plants[id]
-    return startOffBoardPlant(gameplay.plants[id].animation!, { ...presentation.offBoard, ...(picture === 'packet' ? presentation.packet?.clips : {}) },
-        random(0), picture === 'packet' ? presentation.packet?.time : 0)
+    const packet = picture === 'packet' ? presentationFixture.plants[id].packet : undefined
+    return startOffBoardPlant(gameplay.plants[id].animation!, random(0), { state: packet?.state, at: packet?.time })
 }
 
 test('every almanac card and window is a plant or a zombie its view can draw off the board, on its ground', () => {
@@ -45,30 +44,46 @@ test('every almanac card and window is a plant or a zombie its view can draw off
     }
 })
 
-test('a plant off the board starts as on it and shows the clips it has there', () => {
+test('a plant off the board starts as on it, in the state and with the clips it has there', () => {
     // Plant::PlantInitialize: the head sways with the body; the blink is counted down to as on the board.
     const pea = shown('pvz:peashooter')
     assert.deepEqual(pea.animations, { body: { clip: 'body', time: 0, rate: 15 }, head: { clip: 'idleHead', time: 0, rate: 15 } })
     assert.equal(pea.blinkTicks, 400)
-    // An armed mine at the 12 it is buried at, its light lit only in a packet's picture; a cherry bomb that is not
-    // going off; a grown sun-shroom at the small one's pace, small in its packet.
-    assert.deepEqual(shown('pvz:potatomine').animations, { body: { clip: 'armed', time: 0, rate: 12 } })
-    assert.deepEqual(shown('pvz:potatomine', 'packet').animations, { body: { clip: 'armed', time: 0, rate: 12 }, light: { clip: 'glow', time: 0, rate: 12 } })
+    assert.equal(pea.state, undefined, 'a plant without an ability is in no state')
+    // An armed mine at the 12 it is buried at, its light lit only in a packet's picture (its armed state's clips there);
+    // a cherry bomb that is not going off; a grown sun-shroom at the small one's pace, small in its packet.
+    const mine = shown('pvz:potatomine'), minePacket = shown('pvz:potatomine', 'packet')
+    assert.deepEqual([mine.state, mine.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 } }])
+    assert.deepEqual([minePacket.state, minePacket.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 }, light: { clip: 'glow', time: 0, rate: 12 } }])
     assert.deepEqual(shown('pvz:cherrybomb').animations, { body: { clip: 'idle', time: 0, rate: 10 } })
-    assert.deepEqual(shown('pvz:sunshroom').animations, { body: { clip: 'body', time: 0, rate: 10 } })
-    assert.deepEqual(shown('pvz:sunshroom', 'packet').animations, { body: { clip: 'small', time: 0, rate: 10 } })
+    const shroom = shown('pvz:sunshroom'), shroomPacket = shown('pvz:sunshroom', 'packet')
+    assert.deepEqual([shroom.state, shroom.animations], ['big', { body: { clip: 'body', time: 0, rate: 10 } }])
+    assert.deepEqual([shroomPacket.state, shroomPacket.animations], ['small', { body: { clip: 'small', time: 0, rate: 10 } }])
     // The grave buster stands at the 10 to 15 its landing goes at on the board, where that fits the ticks it lands in.
-    const buster = gameplay.plants['pvz:gravebuster'].animation!, standing = presentationFixture.plants['pvz:gravebuster'].offBoard
-    assert.deepEqual(startOffBoardPlant(buster, standing, random(1)).animations, { body: { clip: 'body', time: 0, rate: 15 } })
+    const buster = gameplay.plants['pvz:gravebuster'].animation!
+    assert.deepEqual(startOffBoardPlant(buster, random(1)).animations, { body: { clip: 'body', time: 0, rate: 15 } })
     assert.deepEqual(shown('pvz:gravebuster').animations, { body: { clip: 'body', time: 0, rate: 10 } })
     // DrawSeedType poses the sunflower 0.15 of the way to its last frame.
     assert.deepEqual(shown('pvz:sunflower', 'packet').animations, { body: { clip: 'body', time: 24 * 0.15, rate: 10 } })
 })
 
-test('a plant off the board goes on by the rules of the board: a clip of the presentation loops, and a nut blinks one of its three ways', () => {
+test("a plant off the board is in a state of its own ability, on its animation's layers and clips", () => {
+    const broken = (change: (plants: any) => void) => () => {
+        const source = structuredClone(readGameplaySource('definitions')) as any
+        change(source.plants)
+        parseGameplayDefinitions(source)
+    }
+    assert.throws(broken(plants => { plants['pvz:sunshroom'].animation.offBoard = { state: 'armed' } }), /offBoard\.state must be a state of the plant's ability/)
+    assert.throws(broken(plants => { plants['pvz:peashooter'].animation.offBoard = { state: 'big' } }), /offBoard\.state must be a state of the plant's ability/)
+    assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { head: 'idle' } } }), /must be one of the animation's layers/)
+    assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { body: 'missing' } } }), /must be one of the animation's clips/)
+    assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = {} }), /must have a state or layers/)
+})
+
+test('a plant off the board goes on by the rules of the board: its clip there loops, and a nut blinks one of its three ways', () => {
     const cherry = shown('pvz:cherrybomb'), animation = gameplay.plants['pvz:cherrybomb'].animation!
     for (let tick = 0; tick < 1000; tick++) stepPlantAnimation(animation, cherry, random(0))
-    assert.deepEqual([cherry.animations!.body.clip, Math.round(cherry.animations!.body.time)], ['idle', 100], 'its idle is not a clip of the animation, and goes round')
+    assert.deepEqual([cherry.animations!.body.clip, Math.round(cherry.animations!.body.time)], ['idle', 100], 'its idle goes round')
     const nut = shown('pvz:wallnut'), nutAnimation = gameplay.plants['pvz:wallnut'].animation!
     assert.equal(nut.blinkTicks, 1000)
     // The blink comes round, its ticks are drawn again (0), then the way it blinks: the last of 10 is the third.

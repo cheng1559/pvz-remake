@@ -87,8 +87,9 @@
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "fuse": {"ticks": 100, "explosion": {"offset": {"x": 40, "y": 40}, "radius": 115, "rowRange": 1, "damage": 1800, "burn": true}},
     "animation": {
-      "clips": {"explode": {"frames": 14, "fps": [10, 15], "hold": true}},
-      "layers": {"body": "explode"}
+      "clips": {"explode": {"frames": 14, "fps": [10, 15], "hold": true}, "idle": {"frames": 13, "fps": [10, 15]}},
+      "layers": {"body": "explode"},
+      "offBoard": {"layers": {"body": "idle"}}
     }
   },
   "pvz:wallnut": {
@@ -125,6 +126,7 @@
       },
       "layers": {"body": "buried", "light": null},
       "states": {"rising": {"body": "rise"}, "armed": {"body": "armed", "light": "glow"}},
+      "offBoard": {"state": "armed", "layers": {"light": null}},
       "blink": {"clip": "blink", "states": ["armed"], "first": {"min": 400, "max": 4399}}
     }
   },
@@ -220,6 +222,7 @@
       "layers": {"body": "small", "sleeping": null},
       "states": {"growing": {"body": "grow"}, "big": {"body": "body"}},
       "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "offBoard": {"state": "big"},
       "blink": {"clip": "blink"}
     }
   },
@@ -250,7 +253,8 @@
         "body": {"frames": 28, "fps": 12}
       },
       "layers": {"body": "land"},
-      "states": {"eating": {"body": "body"}}
+      "states": {"eating": {"body": "body"}},
+      "offBoard": {"layers": {"body": "body"}}
     }
   },
   "pvz:hypnoshroom": {

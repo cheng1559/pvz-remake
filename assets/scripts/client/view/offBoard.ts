@@ -45,9 +45,10 @@ export async function createOffBoardPlant(node: Node, typeId: string, options: {
     const game = await loadIntegratedGameContent()
     const animation = game.definitions.plants[typeId]?.animation
     if (!animation || !node.isValid) return null
-    const presentation = plantDefinition(game.presentation, typeId), packet = options.packet ? presentation.packet : undefined
-    const { animations, blinkTicks } = startOffBoardPlant(animation, { ...presentation.offBoard, ...packet?.clips }, random, packet?.time)
-    const plant: ShownPlant = { typeId, animations, ...(blinkTicks === undefined ? {} : { blinkTicks }) }
+    const packet = options.packet ? plantDefinition(game.presentation, typeId).packet : undefined
+    const { animations, blinkTicks, state } = startOffBoardPlant(animation, random, { state: packet?.state, at: packet?.time })
+    // In the state of its ability it is in there (a grown sun-shroom), with nothing to count down.
+    const plant: ShownPlant = { typeId, animations, ...(blinkTicks === undefined ? {} : { blinkTicks }), ...(state === undefined ? {} : { ability: { state, ticks: 0 } }) }
     return game.views.plants.create({ node, content: game, plant, draw: options.draw })
 }
 
@@ -65,7 +66,7 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     const animations = startOffBoardZombie(definition.animation, clip => clips[clip] !== undefined, random, options.pose)
     // Whole and at rest, with its own helm and shield worn: little else of a snapshot is read off the board.
     const zombie: ShownZombie = {
-        typeId, x: 0, y: 0, row: 0, state: 'walking', ...(options.mirrored ? { team: 'plants' as const } : {}),
+        typeId, x: 0, y: 0, row: 0, state: 'standing', ...(options.mirrored ? { team: 'plants' as const } : {}),
         health: definition.maxHealth, maxHealth: definition.maxHealth, alpha: 255,
         hasHead: true, hasArm: true, hasTongue: options.hasTongue === true,
         helmHealth: definition.helm?.health ?? 0, shieldHealth: definition.shield?.health ?? 0, animations,

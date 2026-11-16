@@ -3,7 +3,7 @@ import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
 import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
-import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
+import { PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind, type PlantAbilityState } from './plantAbilities'
 import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
@@ -291,6 +291,11 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         }
     }
     if (source.deathExplosion) result.deathExplosion = explosion(source.deathExplosion, `${name}.deathExplosion`)
+    // Off the board it is in a state of its own ability.
+    const offBoardState = result.animation?.offBoard?.state, kind = plantAbilityKind(result)
+    if (offBoardState !== undefined && !(kind && (PLANT_ABILITY_STATES_BY_KIND[kind] as readonly string[]).includes(offBoardState))) {
+        throw new Error(`${name}.animation.offBoard.state must be a state of the plant's ability`)
+    }
     return result
 }
 
@@ -445,7 +450,7 @@ function parseAnimation(source: Record<string, unknown>, name: string): Animatio
 }
 
 function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefinition {
-    const source = exact(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep'])
+    const source = exact(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep', 'offBoard'])
     const result: PlantAnimationDefinition = parseAnimation(source, name), { clips, layers } = result
     const clipOf = (entry: unknown, entryName: string): string => {
         if (typeof entry !== 'string' || !clips[entry]) throw new Error(`${entryName} must be one of the animation's clips`)
@@ -466,6 +471,17 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
     if (source.states !== undefined) {
         result.states = named(source.states, `${name}.states`, playing)
         for (const state of Object.keys(result.states)) abilityState(state, `${name}.states.${state}`)
+    }
+    if (source.offBoard !== undefined) {
+        const offBoard = exact(source.offBoard, [], `${name}.offBoard`, ['state', 'layers'])
+        if (offBoard.state === undefined && offBoard.layers === undefined) throw new Error(`${name}.offBoard must have a state or layers`)
+        const shown = offBoard.layers === undefined ? undefined
+            : named(offBoard.layers, `${name}.offBoard.layers`, (entry, entryName) => entry === null ? null : clipOf(entry, entryName))
+        for (const layer of Object.keys(shown ?? {})) if (!Object.hasOwn(layers, layer)) throw new Error(`${name}.offBoard.layers.${layer} must be one of the animation's layers`)
+        result.offBoard = {
+            ...(offBoard.state === undefined ? {} : { state: abilityState(offBoard.state, `${name}.offBoard.state`) }),
+            ...(shown ? { layers: shown } : {}),
+        }
     }
     if (source.blink !== undefined) {
         const blink = exact(source.blink, ['clip'], `${name}.blink`, ['ticks', 'states', 'first'])

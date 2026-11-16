@@ -21,10 +21,11 @@ class Node {
     siblingIndex?: number
     active = true
     position = { x: 0, y: 0 }
+    scale = 1
     readonly children: Node[] = []
     constructor(parent?: Node) { if (parent) { this.parent = parent; parent.children.push(this) } }
     setPosition(x: number, y: number) { this.position = { x, y } }
-    setScale() {}
+    setScale(x: number) { this.scale = x }
     setSiblingIndex(index: number) { this.siblingIndex = index }
     getChildByName(name: string) { return this.children.find(child => child.name === name) ?? null }
     destroy() { this.isValid = false }
@@ -95,20 +96,42 @@ test('a zombie off the board is its view, of no entity: whole as it is given, wi
 test("a plant off the board keeps its animation on by the server's rules, from where it is given", async () => {
     const random = { nextFloat: () => 0.5, integer: (min: number) => min }
     const { PlantView } = load('plants/PlantView', {
-        './definitions': { plantDefinition: () => ({ ...presentationFixture.plants['pvz:peashooter'], offBoard: undefined, packet: undefined }) },
+        './definitions': { plantDefinition: () => ({ ...presentationFixture.plants['pvz:peashooter'], packet: undefined }) },
         '@/client/view/offBoard': { offBoardRandom: random },
     })
-    const plant = { typeId: 'pvz:peashooter', ...plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:peashooter'].animation!, undefined, random) }
+    const plant = { typeId: 'pvz:peashooter', ...plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:peashooter'].animation!, random) }
     const view = new PlantView({ node: new Node(), content, plant, draw: { shadow: false } })
     LayerPlayers.shown = []
     await view.initialize()
     const before = plant.animations!.body.time
     view.advance(10)
     assert.ok(plant.animations!.body.time > before, 'its layers went on')
-    const stepped = plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:peashooter'].animation!, undefined, random)
+    const stepped = plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:peashooter'].animation!, random)
     for (let tick = 0; tick < 10; tick++) plantAnimationModule.stepPlantAnimation(definitions.plants['pvz:peashooter'].animation!, stepped, random)
     assert.deepEqual([plant.animations, plant.blinkTicks], [stepped.animations, stepped.blinkTicks], 'as stepPlantAnimation steps one')
     assert.equal(LayerPlayers.shown.length, 2, 'posed as it starts, then as it went on')
     const board = new PlantView({ node: new Node(), content, plant: { typeId: 'pvz:peashooter' }, stage: {} })
     assert.throws(() => board.advance(1), /animated by the server/)
+})
+
+test("a sun-shroom's shadow is the size of the state it is in: small, growing with its grow clip, grown, and grown off the board", async () => {
+    const random = { nextFloat: () => 0, integer: (min: number) => min }
+    const { PlantView } = load('plants/PlantView', {
+        './definitions': { plantDefinition: () => presentationFixture.plants['pvz:sunshroom'] },
+        '@/client/view/offBoard': { offBoardRandom: random },
+    })
+    // Plant::DrawShadow: 0.5 small, 0.5 + 0.5 * its anim_grow's time growing, 1 grown; about its 80 by 30 middle.
+    const shadow = async (plant: object) => {
+        const node = new Node(), view = new PlantView({ node, content, plant: { typeId: 'pvz:sunshroom', ...plant } })
+        await view.initialize()
+        const { scale, position } = node.getChildByName('PlantShadow')!
+        return [scale, position.x, position.y]
+    }
+    const at = (state: string, clip: string, time: number) => ({ ability: { state, ticks: 0 }, animations: { body: { clip, time, rate: 12 } } })
+    assert.deepEqual(await shadow(at('small', 'small', 3)), [0.5, -3 + 20, -42 - 7.5])
+    assert.deepEqual(await shadow(at('growing', 'grow', 6)), [0.75, -3 + 10, -42 - 3.75])
+    assert.deepEqual(await shadow(at('big', 'body', 3)), [1, -3, -42])
+    // The almanac's is grown (its animation's offBoard), and so is its shadow.
+    const almanac = plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:sunshroom'].animation!, random)
+    assert.deepEqual(await shadow({ animations: almanac.animations, ability: { state: almanac.state, ticks: 0 } }), [1, -3, -42])
 })

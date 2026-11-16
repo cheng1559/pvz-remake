@@ -337,6 +337,13 @@ export interface PlantAnimationDefinition extends AnimationDefinition {
     states?: Partial<Record<PlantAbilityState, Record<string, string>>>
     /** Plant::SetSleeping: the clips its layers play in place of their own while it is asleep (a mushroom by day). */
     asleep?: Record<string, string>
+    /**
+     * Plant::PlantInitialize for a plant that is not in play (the almanac, a packet's picture): the state its ability
+     * is in there, whose clips (`states`) its layers show (the grown sun-shroom, the armed potato mine), and then
+     * `layers`, `{layer: clip}`, what some layers show in place of those, `null` for none (the cherry bomb not going
+     * off, the armed potato mine without the light it lights in play). Without it, a plant there is as it starts on the board.
+     */
+    offBoard?: { state?: PlantAbilityState; layers?: Record<string, string | null> }
     /** Plant::FindTargetAndFire: the clip a layer plays from its start as the plant starts a shot. */
     fire?: Record<string, string>
     /**
