@@ -107,7 +107,6 @@ async function executeCommand(
                 particles: GameDebugSettings.perfParticlesEnabled, sfx: GameDebugSettings.perfSfxEnabled, logic: GameDebugSettings.perfLogicEnabled }[toggle]
             return debugSwitched(`perf ${toggle}`, GameDebugSettings.setPerfToggle(toggle, !current))
         }
-        case 'background': return debugCondition('DEBUG_BACKGROUND_UNAVAILABLE')
         case 'money': {
             if (running) return runGameCommand(command)
             // Outside a level the purse is the profile's (PlayerInfo::mCoins).

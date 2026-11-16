@@ -42,7 +42,6 @@
   "DEBUG_LEVEL_NOT_INSTALLED": "Level is not installed: %s",
   "DEBUG_WINDOWED_UNAVAILABLE": "Windowed mode is unavailable on mobile",
   "DEBUG_FULLSCREEN_UNAVAILABLE": "Full screen is unavailable",
-  "DEBUG_BACKGROUND_UNAVAILABLE": "Widescreen backgrounds are not implemented in this version",
   "DEBUG_REQUIRES_LEVEL": "/%s requires an active level",
   "DEBUG_REQUIRES_PLAYER": "/%s requires a player",
   "DEBUG_PLANT_NOT_INSTALLED": "Plant is not installed: %s",
