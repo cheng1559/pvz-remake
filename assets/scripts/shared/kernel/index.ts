@@ -36,7 +36,8 @@ export interface Kernel {
 /** Layouts shared with native/engine/common/kernel/pvz_kernel.h. */
 export const KEY = 10, TRACK = 4, IMAGE = 12, BLEND = 8
 export const ParticleOption = {
-    RED: 0, GREEN: 1, BLUE: 2, ALPHA: 3, SCALE: 4, ADDITIVE: 5, EXTRA: 6, OPACITY: 7, STRIDE: 8, CAPACITY: 9, SIZE: 10,
+    RED: 0, GREEN: 1, BLUE: 2, ALPHA: 3, SCALE: 4, ADDITIVE: 5, EXTRA: 6, OPACITY: 7, STRIDE: 8, CAPACITY: 9,
+    CEL_WIDTH: 10, CEL_HEIGHT: 11, SIZE: 12,
 } as const
 export const PngResult = { OK: 0, UNSUPPORTED: -1, SCANLINES: -2, FILTER: -3 } as const
 /** Bytes of an image the WebAssembly kernel sands at a time. */

@@ -41,6 +41,10 @@ TRACK_FIELDS = {
     "CollisionReflect": "collisionReflect",
     "CollisionSpin": "collisionSpin",
     "AnimationRate": "animationRate",
+    "ClipTop": "clipTop",
+    "ClipBottom": "clipBottom",
+    "ClipLeft": "clipLeft",
+    "ClipRight": "clipRight",
 }
 
 FLAG_FIELDS = {

@@ -10,7 +10,7 @@ export const PARTICLE_TRACKS = [
     'systemRed', 'systemGreen', 'systemBlue', 'systemAlpha', 'systemBrightness',
     'particleRed', 'particleGreen', 'particleBlue', 'particleAlpha', 'particleBrightness',
     'particleSpinAngle', 'particleSpinSpeed', 'particleScale', 'particleStretch', 'collisionReflect', 'collisionSpin',
-    'animationRate',
+    'animationRate', 'clipTop', 'clipBottom', 'clipLeft', 'clipRight',
 ] as const
 const FLAGS = ['randomLaunchSpin', 'alignLaunchSpin', 'particleLoops', 'systemLoops', 'randomStartTime', 'particlesDontFollow', 'animated'] as const
 const TYPES = ['circle', 'circlepath', 'circleevenspacing', 'box', 'boxpath']

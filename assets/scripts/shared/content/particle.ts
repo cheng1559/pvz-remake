@@ -88,6 +88,11 @@ export interface ParticleEmitter {
     particleStretch: ParticleTrack
     collisionReflect: ParticleTrack
     collisionSpin: ParticleTrack
+    /** TodParticle's ClipTop, ClipBottom, ClipLeft and ClipRight: how much of its cel each side cuts off, 0 to 1. */
+    clipTop: ParticleTrack
+    clipBottom: ParticleTrack
+    clipLeft: ParticleTrack
+    clipRight: ParticleTrack
     fields: ParticleField[]
     systemFields: ParticleField[]
 }
@@ -147,6 +152,10 @@ const DEFAULT_EMITTER: Omit<ParticleEmitter, 'sprite'> = {
     particleStretch: constant(1),
     collisionReflect: constant(0),
     collisionSpin: constant(0),
+    clipTop: constant(0),
+    clipBottom: constant(0),
+    clipLeft: constant(0),
+    clipRight: constant(0),
     fields: [],
     systemFields: [],
 }
@@ -191,7 +200,12 @@ function parseEmitter(value: unknown, index: number): ParticleEmitter {
             ;(emitter as any)[key] = source[key]
         } else if (fallback && typeof fallback === 'object' && 'nodes' in fallback && source[key] !== undefined) {
             const limit = key.startsWith('spawn') && key !== 'spawnRate' ? 4096 : 1_000_000
-            ;(emitter as any)[key] = parseTrack(source[key], `${name}.${key}`, limit)
+            const track = parseTrack(source[key], `${name}.${key}`, limit)
+            // RenderParticle asserts a clip within its cel.
+            if (key.startsWith('clip') && track.nodes.some(node => Math.min(node.low, node.high) < 0 || Math.max(node.low, node.high) > 1)) {
+                throw new Error(`${name}.${key} must be from 0 to 1`)
+            }
+            ;(emitter as any)[key] = track
         }
     }
     emitter.systemDuration = source.systemDuration === undefined ? emitter.particleDuration : parseTrack(source.systemDuration, `${name}.systemDuration`)

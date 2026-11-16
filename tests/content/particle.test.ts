@@ -119,7 +119,7 @@ test('a particle turns by its spin as PvzpScaleRotateTransformMatrix turns it on
         assert.equal(count, 8)
         const positions = new Float32Array(count * 4 * STRIDE), vertices = new Float32Array(count * 4 * STRIDE)
         const geometry = new Float64Array(Array.from({ length: 64 }, () => [0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1]).flat())
-        particles.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, count]), positions, vertices)
+        particles.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, count, 0, 0]), positions, vertices)
         for (let quad = 0; quad < count; quad++) {
             // The first corner is where the particle is (its image's bottom left); the third is a step up its image.
             const corner = quad * 4 * STRIDE, x = positions[corner], y = positions[corner + 1]
@@ -130,4 +130,23 @@ test('a particle turns by its spin as PvzpScaleRotateTransformMatrix turns it on
             assert.ok(x * up[0] + y * up[1] > 0, `particle ${quad}: the top of its image points out`)
         }
     } finally { particles.dispose() }
+})
+
+test('a clip cuts its share of the cel off the particle and draws the rest centered where the particle moved, as RenderParticle does', () => {
+    // ZombieRise's arm: ClipTop hides its top. Half cut off a 10 by 20 cel, the rest is 10 high, centered 10 lower (the
+    // unrounded clip, not half of it), its top edge showing the cel's middle.
+    const definition = parseParticle({ schemaVersion: 3, id: 'test:clip', emitters: [{
+        sprite: 'pvz:star', spawnMinActive: track(1), particleDuration: track(10), clipTop: track(0.5),
+    }] })
+    const particles = new KernelParticles(packParticleEmitters(definition.emitters), 1, 1)
+    try {
+        particles.step(1)
+        const STRIDE = 9, positions = new Float32Array(4 * STRIDE), vertices = new Float32Array(4 * STRIDE)
+        // Corners bottom left, bottom right, top left, top right; the image's top is the texture's v = 0.
+        const geometry = new Float64Array([-5, 5, -10, 10, 0, 1, 1, 1, 0, 0, 1, 0])
+        assert.equal(particles.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, 1, 10, 20]), positions, vertices), 1)
+        const corners = [0, 1, 2, 3].map(corner => [positions[corner * STRIDE], positions[corner * STRIDE + 1], vertices[corner * STRIDE + 3], vertices[corner * STRIDE + 4]])
+        assert.deepEqual(corners, [[-5, -15, 0, 1], [5, -15, 1, 1], [-5, -5, 0, 0.5], [5, -5, 1, 0.5]])
+    } finally { particles.dispose() }
+    assert.throws(() => parseParticle({ schemaVersion: 3, id: 'test:clip', emitters: [{ sprite: 'pvz:star', clipTop: track(1.5) }] }), /clipTop must be from 0 to 1/)
 })

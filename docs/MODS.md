@@ -196,7 +196,7 @@ host.around(executor, 'execute', function (next, world, definitions, tick, comma
 
 粒子统一登记在 `resources.particles`，JSON 使用 `schemaVersion: 3`、完整限定的 `id` 和 `emitters`。每个发射器的 `sprite` 也是限定 ID；图集使用 `columns`、`rows`、`firstFrame`、`frameCount`。可选属性覆盖原版的循环、生成额度、色调、旋转、碰撞和场，缺省值由公共解析器统一补全。
 
-轨道使用 `{ "nodes": [{ "time": 0, "low": 1, "high": 1 }] }`；`time` 是寿命比例，`systemDuration` / `particleDuration` 的值以 0.01 秒的 tick 计。XML 转换统一通过 `tools/pvz/particles.py`，基础包从 PAK 临时解包，直接转换到 `mods/pvz-base/assets/particles/` 并登记资源清单，再由通用 Mod 打包器打包。原版曲线及随机分布在转换时保留，由公共粒子内核运算。
+轨道使用 `{ "nodes": [{ "time": 0, "low": 1, "high": 1 }] }`；`time` 是寿命比例，`systemDuration` / `particleDuration` 的值以 0.01 秒的 tick 计。`clipTop`、`clipBottom`、`clipLeft`、`clipRight`（0–1）照原版 `RenderParticle` 从精灵格子各边裁掉相应比例，剩下的部分以粒子位置加上未取整的上、左裁切量为中心绘制（如出土粒子里伸出地面的手）。XML 转换统一通过 `tools/pvz/particles.py`，基础包从 PAK 临时解包，直接转换到 `mods/pvz-base/assets/particles/` 并登记资源清单，再由通用 Mod 打包器打包。原版曲线及随机分布在转换时保留，由公共粒子内核运算。
 
 脚本通过 `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })` 播放，所有平台使用同一 C++ 核心。`whenReady()` 等待加载；`snapshot()` 与 `ParticlePlayer.restore()` 使用同一种存档结构。旧粒子格式和旧粒子存档不再接受，已有 Mod 的粒子资源需要重新转换和打包。
 

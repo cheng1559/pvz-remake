@@ -19,7 +19,8 @@ size_t liveParticles = 0;
 enum TrackId {
     Duration, Rate, MinActive, MaxActive, MaxLaunched, OffsetX, OffsetY, Radius, BoxX, BoxY, SkewX, SkewY, Path,
     Life, Speed, Angle, SysRed, SysGreen, SysBlue, SysAlpha, SysBrightness,
-    Red, Green, Blue, Alpha, Brightness, SpinAngle, SpinSpeed, Scale, Stretch, Reflect, CollisionSpin, AnimationRate, TrackCount
+    Red, Green, Blue, Alpha, Brightness, SpinAngle, SpinSpeed, Scale, Stretch, Reflect, CollisionSpin, AnimationRate,
+    ClipTop, ClipBottom, ClipLeft, ClipRight, TrackCount
 };
 double warp(double value, int curve) {
     if (curve == 1) return value * value;
@@ -57,12 +58,13 @@ struct Particle {
     // TodParticle::mAnimationTimeValue and its track interpolation (drawn only when the emitter has a rate).
     double animation = 0, animationRandom = 0;
     std::array<double, 11> interpolation{}; // red through collisionSpin
+    std::array<double, 4> clip{}; // top, bottom, left, right, drawn only by an emitter that clips
     std::array<std::array<double, 2>, MAX_FIELDS> fieldRandom{}, fieldLast{};
 };
 struct Emitter {
     int type = 0, flags = 0, frames = 1, columns = 1, rows = 1, col = 0, row = 0, age = -1, spawned = 0;
     double duration = 1, time = 0, accumulator = 0, centerX = 0, centerY = 0, launchLimit = -1;
-    bool dead = false, stopped = false;
+    bool dead = false, stopped = false, clips = false;
     std::array<Track, TrackCount> tracks;
     std::array<double, 9> interpolation{}; // alpha, red, green, blue, brightness, rate, min, max, launched
     std::vector<Field> fields, systemFields;
@@ -123,7 +125,8 @@ struct System {
         const Track &limit = e.tracks[MaxLaunched];
         if (!(e.flags & SystemLoop) && !limit.nodes.empty() && limit.nodes[0].low >= 0 && limit.constant(limit.nodes[0].low))
             e.launchLimit = std::floor(limit.nodes[0].low);
-
+        e.clips = !(e.tracks[ClipTop].constant(0) && e.tracks[ClipBottom].constant(0) &&
+                    e.tracks[ClipLeft].constant(0) && e.tracks[ClipRight].constant(0));
     }
     bool update(Emitter &e, Particle &p) {
         if (p.age >= p.duration) {
@@ -174,6 +177,8 @@ struct System {
         for (double &v : p.interpolation) v = random();
         for (size_t i = 0; i < e.fields.size(); ++i) p.fieldRandom[i] = {random(), random()};
         if (!e.tracks[AnimationRate].nodes.empty()) p.animationRandom = random();
+        // Drawn after the rest, so effects that do not clip keep their random numbers.
+        if (e.clips) for (double &v : p.clip) v = random();
         double x, y;
         if (e.type == 3 || e.type == 4) { x = sample(e, BoxX, time); y = sample(e, BoxY, time); }
         else { const double radius = sample(e, Radius, time); x = std::sin(angle) * radius; y = std::cos(angle) * radius; }
@@ -239,6 +244,28 @@ std::unordered_map<int32_t, std::unique_ptr<System>> systems;
 int32_t nextHandle = 1;
 System *get(int32_t handle) { const auto it = systems.find(handle); return it == systems.end() ? nullptr : it->second.get(); }
 double rounded(double value) { return std::floor(value + .5); }
+// RenderParticle: a clip cuts whole pixels off each side of the cel (of width by height), and what is left is drawn
+// centered on the particle, which the unrounded top and left clips move. Writes the cut image into `out`, in the
+// whole cel's centered, Y-up coordinates, its corner UVs where its edges now fall; false when nothing is left.
+bool clipImage(const double *image, double width, double height, double top, double bottom, double left, double right, double *out) {
+    const double cl = rounded(left * width), cr = rounded(width * (left + right)) - cl;
+    const double ct = rounded(top * height), cb = rounded(height * (top + bottom)) - ct;
+    const double l = std::max(image[0], cl - width / 2), r = std::min(image[1], width / 2 - cr);
+    const double b = std::max(image[2], cb - height / 2), t = std::min(image[3], height / 2 - ct);
+    if (l >= r || b >= t) return false;
+    // Centering the rest moves it by half of what one side cuts more than the other.
+    const double dx = (cr - cl) / 2, dy = (ct - cb) / 2, w = image[1] - image[0], h = image[3] - image[2];
+    out[0] = l + dx; out[1] = r + dx; out[2] = b + dy; out[3] = t + dy;
+    for (int corner = 0; corner < 4; ++corner) {
+        const double fx = (((corner & 1) ? r : l) - image[0]) / w, fy = (((corner & 2) ? t : b) - image[2]) / h;
+        for (int axis = 0; axis < 2; ++axis) {
+            const double lower = image[4 + axis] + (image[6 + axis] - image[4 + axis]) * fx;
+            const double upper = image[8 + axis] + (image[10 + axis] - image[8 + axis]) * fx;
+            out[4 + corner * 2 + axis] = lower + (upper - lower) * fy;
+        }
+    }
+    return true;
+}
 }
 
 extern "C" {
@@ -314,6 +341,13 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
         const int frame = frameOf(e, p);
         if (frame < 0 || static_cast<int64_t>(frame + 1) * PVZ_IMAGE > geometryLength) return -1;
         const double *image = geometry + frame * PVZ_IMAGE;
+        double x = p.x, y = -p.y, cut[PVZ_IMAGE];
+        if (e.clips) {
+            const auto clip = [&](TrackId id, int index) { return std::clamp(e.tracks[id].at(p.lastTime, p.clip[index]), 0.0, 1.0); };
+            const double top = clip(ClipTop, 0), left = clip(ClipLeft, 2), width = options[PVZ_PARTICLE_CEL_WIDTH], height = options[PVZ_PARTICLE_CEL_HEIGHT];
+            if (!clipImage(image, width, height, top, clip(ClipBottom, 1), left, clip(ClipRight, 3), cut)) continue;
+            image = cut; x += left * width; y -= top * height;
+        }
         const double scale = e.tracks[Scale].at(p.lastTime, p.interpolation[7]) * options[PVZ_PARTICLE_SCALE];
         const double stretch = e.tracks[Stretch].at(p.lastTime, p.interpolation[8]);
         const double c = std::cos(p.spin), sn = std::sin(p.spin);
@@ -326,9 +360,9 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
         // original's Y-down screen; with Y up both sines change sign. (A Reanim's skew is negated before its matrix,
         // so its quads keep these signs the other way round.)
         // A negative alpha marks additive images for the shared material; the extra image follows its particle.
-        pvz_write_quad(image, p.x, -p.y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
+        pvz_write_quad(image, x, y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
                        additive ? -a : a, positions, vertices, quad++, stride);
-        if (extra) pvz_write_quad(image, p.x, -p.y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
+        if (extra) pvz_write_quad(image, x, y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
                                   -a, positions, vertices, quad++, stride);
     }
     pvz_clear_quads(positions, vertices, quad, capacity, stride);

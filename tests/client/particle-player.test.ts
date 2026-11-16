@@ -153,7 +153,7 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     const definition = parseDefinition({ emitters: [{ sprite: 'pvz:test', systemDuration: constant(50),
         particleDuration: constant(5), spawnMinActive: constant(1), spawnMaxLaunched: constant(1) }] })!
     const assets = { definition, packed: particles.packParticleEmitters(definition.emitters),
-        emitters: [{ definition: definition.emitters[0], frame: {}, geometry: kernelModule.kernel().f64(kernelModule.IMAGE) }] }
+        emitters: [{ definition: definition.emitters[0], frame: {}, geometry: kernelModule.kernel().f64(kernelModule.IMAGE), cel: { width: 1, height: 1 } }] }
     type FakeNode = { name: string, parent: FakeNode | null, children: FakeNode[], isValid: boolean, [key: string]: any }
     const makeNode = (name: string, parent: FakeNode | null): FakeNode => {
         const node: FakeNode = { name, parent, children: [], isValid: true, worldPosition: { x: 0, y: 0 }, scaleX: 1,
@@ -213,7 +213,7 @@ test('particle frames follow AnimationRate and Animated as in TodParticleEmitter
     const geometry = new Float64Array(Array.from({ length: 4 }, (_, cell) => [cell, cell + 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1]).flat())
     const frame = (system: InstanceType<typeof KernelParticles>) => {
         const positions = new Float32Array(4 * STRIDE), vertices = new Float32Array(4 * STRIDE)
-        assert.equal(system.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, 1]), positions, vertices), 1)
+        assert.equal(system.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, 1, 0, 0]), positions, vertices), 1)
         return positions[0]
     }
     const emitter = { sprite: 'pvz:test', columns: 4, frameCount: 4, systemDuration: constant(50),

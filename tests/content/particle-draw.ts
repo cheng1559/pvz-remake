@@ -11,7 +11,7 @@ const geometry = new Float64Array(Array.from({ length: 64 }, () => [0, 1, 0, 1, 
 export function drawParticles(system: KernelParticles, tint: readonly [number, number, number, number] = [255, 255, 255, 255], scale = 1): DrawnParticle[] {
     const count = Math.max(0, system.counts[0])
     const positions = new Float32Array(count * 4 * STRIDE), vertices = new Float32Array(count * 4 * STRIDE)
-    const written = system.write(0, geometry, new Float64Array([...tint, scale, 0, 0, 1 / 255, STRIDE, count]), positions, vertices)
+    const written = system.write(0, geometry, new Float64Array([...tint, scale, 0, 0, 1 / 255, STRIDE, count, 0, 0]), positions, vertices)
     if (written !== count) throw new Error(`particle kernel wrote ${written} of ${count} quads`)
     return Array.from({ length: count }, (_, quad) => {
         const corner = quad * 4 * STRIDE

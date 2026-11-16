@@ -11,6 +11,8 @@ export interface ParticleEmitterAssets {
     frame: SpriteFrame
     /** One kernel image slot per sprite cell. */
     geometry: Float64Array
+    /** One cell's size, which a particle's clip cuts. */
+    cel: { width: number, height: number }
 }
 export interface LoadedParticle {
     definition: Particle
@@ -80,15 +82,15 @@ export class ParticleAssets {
         let grids = cells.get(frame)
         if (!grids) cells.set(frame, grids = new Map())
         let geometry = grids.get(key)
+        const width = frame.originalSize.width / columns, height = frame.originalSize.height / rows
         if (!geometry) {
             geometry = kernel().f64(columns * rows * IMAGE)
-            const width = frame.originalSize.width / columns, height = frame.originalSize.height / rows
             for (let index = 0; index < columns * rows; index++) {
                 const cell = columns === 1 && rows === 1 ? frame : getAtlasFrame(frame, index, width, height, columns)
                 centeredGeometry(cell, geometry, index * IMAGE)
             }
             grids.set(key, geometry)
         }
-        return { definition, frame, geometry }
+        return { definition, frame, geometry, cel: { width, height } }
     }
 }

@@ -10,7 +10,9 @@ int32_t pvz_particles_step(int32_t handle, int32_t ticks, const double *motion, 
 int32_t pvz_particles_info(int32_t handle, double *output, int32_t length);
 enum PvzParticleOption {
     PVZ_PARTICLE_RED, PVZ_PARTICLE_GREEN, PVZ_PARTICLE_BLUE, PVZ_PARTICLE_ALPHA, PVZ_PARTICLE_SCALE, PVZ_PARTICLE_ADDITIVE, PVZ_PARTICLE_EXTRA,
-    PVZ_PARTICLE_OPACITY, PVZ_PARTICLE_STRIDE, PVZ_PARTICLE_CAPACITY, PVZ_PARTICLE_OPTIONS
+    PVZ_PARTICLE_OPACITY, PVZ_PARTICLE_STRIDE, PVZ_PARTICLE_CAPACITY,
+    // The size of one sprite cell, which a particle's clip cuts.
+    PVZ_PARTICLE_CEL_WIDTH, PVZ_PARTICLE_CEL_HEIGHT, PVZ_PARTICLE_OPTIONS
 };
 // Writes one emitter's particles as quads, each followed by its extra additive copy when enabled, and clears the rest
 // of the capacity. Geometry is one PVZ_IMAGE per sprite cell. Returns the quads written, or -1 for invalid input.

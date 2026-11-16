@@ -28,6 +28,8 @@ class ParticleEmitterView implements KernelQuadSource {
         this.frame = assets.frame
         this.geometry = assets.geometry
         this.additive = assets.definition.additive
+        this.options[ParticleOption.CEL_WIDTH] = assets.cel.width
+        this.options[ParticleOption.CEL_HEIGHT] = assets.cel.height
     }
 
     render(system: KernelParticles, tint: Color | null, scale: number, extraAdditive: boolean): void {
