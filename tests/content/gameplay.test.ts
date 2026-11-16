@@ -87,7 +87,7 @@ test('Gameplay levels validate all 1-1 references, active rows, and waves', () =
     assert.throws(invalid(level => { delete level.rules; level.waves = [] }), /must not be empty/)
     assert.throws(invalid(level => { level.rules.count = 0 }), /count/)
     assert.throws(invalid(level => { level.waves = [{ zombies: ['pvz:normal'] }] }), /either waves or rules/)
-    assert.throws(invalid(level => { level.waves = level.rules; delete level.rules }), /write a level rule as rules/, 'the old rule form points to rules')
+    assert.throws(invalid(level => { level.waves = level.rules; delete level.rules }), /waves must be an array/, 'a level rule is no list of waves')
     assert.throws(invalid(level => { level.zombiePool = [] }), /one-point zombie/)
     assert.throws(invalid(level => { level.graveZombies = [{ id: 'pvz:no_such', weight: 100 }] }), /unknown ID/, 'a weighted grave zombie is still looked up')
     assert.doesNotThrow(invalid(level => { level.award.id = 'pvz:not-defined-yet' }))

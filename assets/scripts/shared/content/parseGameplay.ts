@@ -816,8 +816,6 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
     if (seedPackets && conveyor) throw new Error(`${name} cannot combine a conveyor and fixed seed packets`)
     if ((source.waves === undefined) === (source.rules === undefined)) throw new Error(`${name} needs either waves or rules`)
-    // The rule form moved from `waves: {kind, ...}` to `rules`; say so rather than asking for an array.
-    if (source.waves !== undefined && !Array.isArray(source.waves)) throw new Error(`${name}.waves lists the waves; write a level rule as rules: {kind, count, ...}`)
     const waves = source.waves === undefined ? undefined : parseLevelWaves(array(source.waves, `${name}.waves`), name, definitions)
     const rules = source.rules === undefined ? undefined : parseLevelRule(source.rules, `${name}.rules`)
     const zombiePool = source.zombiePool === undefined ? undefined : parseZombiePool(source.zombiePool, name, definitions)

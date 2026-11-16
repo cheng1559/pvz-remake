@@ -205,30 +205,8 @@ export async function readInstalledManifest(kind: ArchiveKind, id: string): Prom
 const installedRoots = new WeakMap<ArchiveFiles, string>()
 
 /**
- * Native installation already extracted these files; each one is read from disk when used. Installed files change
- * only while pending changes are applied at startup, before any Mod is read, so a running game sees one version.
- */
-export function readInstalledFiles(kind: ArchiveKind, id: string, archive: ArchiveData): ArchiveFiles | undefined {
-    if (!sys.isNative || !(archive instanceof Uint8Array)) return undefined
-    const root = `${installedArchiveRoot(kind, id)}/`
-    const paths = new Set<string>()
-    // Read the ZIP directory without inflating entries, including hidden files.
-    fflate.unzipSync(archive, { filter: entry => { if (!entry.name.endsWith('/')) paths.add(entry.name); return false } })
-    const files: ArchiveFiles = Object.create(null)
-    for (const [, name] of archivePaths([...paths], 'manifest.json')) {
-        Object.defineProperty(files, name, { enumerable: true, configurable: true, get() {
-            const data = native.fileUtils.getDataFromFile(`${root}${name}`)
-            if (!data) throw new Error(`Failed to read installed archive file: ${name}`)
-            return new Uint8Array(data)
-        } })
-    }
-    installedRoots.set(files, root)
-    return files
-}
-
-/**
  * Native: the extracted files of an installed archive, listed from disk, so a startup never reads the whole ZIP into
- * memory (HD packs run to hundreds of MB). Undefined when the archive was not extracted (older installs).
+ * memory (HD packs run to hundreds of MB). Undefined when it has no extracted files.
  */
 export function readExtractedFiles(kind: ArchiveKind, id: string): ArchiveFiles | undefined {
     if (!sys.isNative) return undefined

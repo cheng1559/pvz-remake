@@ -2,7 +2,7 @@ import { Game, game, sys } from 'cc'
 import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
 import { PLAYER_MODS_PREFIX } from '@/shared/menu'
-import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
+import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod extends ContentArchive {
     files: ArchiveFiles
@@ -456,8 +456,8 @@ export class ModManager {
             if (allowMissing) return undefined
             throw new Error(`Mod is not installed: ${id}. Open /mod to install it`)
         }
-        // The web reads the stored Blob's index and text files; media stay in storage until used.
-        const mod = parseInstalled(readInstalledFiles('mods', key, archive) ?? await openArchive(archive))
+        // Otherwise the stored archive opens: the web reads its Blob's index and text files, and media stay in storage until used.
+        const mod = parseInstalled(await openArchive(archive))
         if (mod.manifest.id !== id) throw new Error(`Installed Mod ID does not match: ${id}`)
         this.loaded.set(key, mod)
         return mod
@@ -469,8 +469,8 @@ export class ModManager {
         const value = JSON.parse(raw), ids = (list: unknown) => Array.isArray(list) && list.every(id => isModId(id)) && new Set(list).size === list.length
         if (!value || typeof value !== 'object' || !ids(value.enabled) || !ids(value.order) || !value.installed || typeof value.installed !== 'object'
             || Object.entries(value.installed).some(([id, key]) => !isModId(id) || typeof key !== 'string')) {
-            // Dev saves follow the current format only (e.g. Mod IDs before they became bare names): start without Mods.
-            console.warn(`[Mods] Ignoring saved Mods in an old format for player ${profile ?? 'none'}`)
+            // Saved data follows the current format only; a selection that does not parse starts without Mods.
+            console.warn(`[Mods] Ignoring an invalid Mod selection for player ${profile ?? 'none'}`)
             return { installed: {}, enabled: [], order: [] }
         }
         return { installed: { ...value.installed }, enabled: [...value.enabled], order: [...value.order] }

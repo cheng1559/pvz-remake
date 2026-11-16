@@ -7,9 +7,8 @@ const POINTS_SCALE = 4
 
 /** `rules: {kind: "pvz:bowling", count, fixedZombies?}`: the adventure's waves at four times the points. */
 function waves(rule: LevelRule): LevelRule {
-    const { pointsScale, lineColumn, ...settings } = rule.settings
+    const { pointsScale, ...settings } = rule.settings
     if (pointsScale !== undefined) throw new Error('pointsScale is fixed on Wall-nut Bowling')
-    if (lineColumn !== undefined) throw new Error('lineColumn is now the level\'s plantingLine: {column}')
     return { ...rule, settings: { ...settings, pointsScale: POINTS_SCALE } }
 }
 
