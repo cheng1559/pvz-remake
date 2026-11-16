@@ -523,7 +523,7 @@ test('presentation track lists name exact tracks that exist in their clips; losi
         assert.ok(selector.has(track), `the main menu lists ${track}`)
     }
     const hand = new Set(trackIds('pvz:selector_zombie_hand'))
-    for (const track of menuTracks.handRocks) assert.ok(hand.has(track), `the zombie hand lists ${track}`)
+    for (const track of menu.hand.rocks) assert.ok(hand.has(track), `the zombie hand lists ${track}`)
     const screens = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/screens.json', 'utf8'))
     const layers = (value: unknown): any[] => Array.isArray(value) ? value.flatMap(layers)
         : value && typeof value === 'object' ? 'visibleTracks' in value ? [value] : Object.values(value).flatMap(layers) : []

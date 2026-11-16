@@ -352,6 +352,17 @@ export interface LevelRulePresentation {
     readonly graveRise?: { readonly particle: string; readonly sounds: readonly PresentationSound[] }
     readonly [key: string]: unknown
 }
+/**
+ * Zombie::UpdateZombieRiseFromGrave: a rising zombie's body comes up from `depth` below over the last `riseTicks` of
+ * its rise. Zombie::GetDrawPos and DrawReanim draw it inside a clip `x` across from the zombie and `width` wide, from
+ * `y` from the top of its body (which comes up with it) down to `bottom` under the zombie less the ticks it has still
+ * to rise, at most `settleTicks`, so the clip's bottom comes down over its last ticks. Down is positive.
+ */
+export interface GraveZombiePresentation {
+    readonly depth: number
+    readonly riseTicks: number
+    readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number; readonly settleTicks: number }
+}
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
     /** Its view (ItemViewRegistry): `item` when omitted. */
@@ -432,8 +443,16 @@ export interface MainMenuDefinition {
         readonly profileSign: string
         /** Drawn by the game's own leaf and flower animations instead. */
         readonly replaced: readonly string[]
-        /** The rocks the rising zombie hand pushes aside, drawn outside the hand's clip. */
-        readonly handRocks: readonly string[]
+    }
+    /**
+     * GameSelector's zombie hand rising out of the ground: placed at (`x`, `y`) on the screen and drawn inside `clip`
+     * (GameSelector::Draw's SetClipRect), all but its `rocks`, the tracks it pushes aside, which ignore the clip
+     * (mIgnoreClipRect).
+     */
+    readonly hand: {
+        readonly x: number; readonly y: number
+        readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+        readonly rocks: readonly string[]
     }
     /** Drawn under the almanac and the store key; with only one of them, that one's own shadow, and none without either. */
     readonly keyShadow: { readonly track: string; readonly almanac: string; readonly store: string }
@@ -517,8 +536,12 @@ export interface PresentationDefinitions {
     readonly storeDialogue: StoreDialoguePresentation
     /** By the plant (the seed of a card) or zombie shown. */
     readonly almanac: Readonly<Record<string, AlmanacPresentation>>
-    /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
-    readonly graves: { readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] } }
+    readonly graves: {
+        /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
+        readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] }
+        /** How a zombie coming up out of a grave is drawn. */
+        readonly zombie: GraveZombiePresentation
+    }
     readonly dave: {
         readonly clips: Readonly<Record<string, string>>
         readonly sourceFps: number; readonly transitionFps: number; readonly talkFps: number; readonly blinkFps: number
@@ -574,7 +597,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         almanac: table((value, name) => fields<AlmanacPresentation>(value, name, ['ground'], {
             ground: (value, name) => oneOf(value, ALMANAC_GROUNDS, name), upgrade: trueFlag,
         })),
-        graves: (value, name) => allFields<PresentationDefinitions['graves']>(value, name, { rise: graveRise }),
+        graves: (value, name) => allFields<PresentationDefinitions['graves']>(value, name, { rise: graveRise, zombie: graveZombie }),
         dave: parseDave,
         boards: table(parseBoard),
         rules: table(parseRule),
@@ -657,6 +680,15 @@ function graveRise(value: unknown, name: string): PresentationDefinitions['grave
     return allFields<PresentationDefinitions['graves']['rise']>(value, name, { particle: nonEmptyString, sounds })
 }
 
+function graveZombie(value: unknown, name: string): GraveZombiePresentation {
+    return allFields<GraveZombiePresentation>(value, name, {
+        depth: nonNegativeFinite, riseTicks: positiveInteger,
+        clip: (value, name) => allFields<GraveZombiePresentation['clip']>(value, name, {
+            x: finite, y: finite, width: positiveFinite, bottom: finite, settleTicks: nonNegativeInteger,
+        }),
+    })
+}
+
 function music(value: unknown, name: string): BoardPresentation['music'] {
     const tune = (value: unknown, name: string) => nonEmptyString(value, name) as MusicTuneId
     return allFields<BoardPresentation['music']>(value, name, { choosing: tune, gameplay: tune })
@@ -684,7 +716,13 @@ function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
         clouds: nonEmptyStrings,
         flowers: (value, name) => array(value, name).map((entry, index) => point(entry, `${name}[${index}]`)),
         tracks: (value, name) => allFields<MainMenuDefinition['tracks']>(value, name, {
-            sky: nonEmptyString, anchor: nonEmptyString, profileSign: nonEmptyString, replaced: nonEmptyStrings, handRocks: nonEmptyStrings,
+            sky: nonEmptyString, anchor: nonEmptyString, profileSign: nonEmptyString, replaced: nonEmptyStrings,
+        }),
+        hand: (value, name) => allFields<MainMenuDefinition['hand']>(value, name, {
+            x: finite, y: finite, rocks: nonEmptyStrings,
+            clip: (value, name) => allFields<MainMenuDefinition['hand']['clip']>(value, name, {
+                x: finite, y: finite, width: positiveFinite, height: positiveFinite,
+            }),
         }),
         keyShadow: strings(['track', 'almanac', 'store']),
         trophy: strings(['track', 'image', 'particle']),

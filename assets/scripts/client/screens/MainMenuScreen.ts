@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, SpriteFrame } from 'cc'
+import { _decorator, Color, Component, director, Director, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { MainMenuUnlocks, UserView } from '@/shared/menu'
 import { preloadTasks } from '@/client/content/preloadTasks'
@@ -45,7 +45,7 @@ export class MainMenuScreen extends Component {
     private grass!: ReanimPlayer
     private flowers: ReanimPlayer[] = []
     private clouds: { player: ReanimPlayer, delay: number }[] = []
-    private hand: ReanimPlayer[] = []
+    private hand: ReanimPlayer | null = null
     private buttonsRoot!: Node
     private numbersRoot!: Node
     private trophyRoot!: Node
@@ -101,8 +101,7 @@ export class MainMenuScreen extends Component {
         this.sign = player('sign')
         this.grass = player('grass')
         this.flowers = menu.flowers.map((_, index) => player(`flower${index + 1}`))
-        const clip = uiNode({ name: 'HandClip', parent: content, anchor: { x: 0, y: 1 }, size: { width: 800, height: 560 }, mask: Mask.Type.GRAPHICS_RECT }).node
-        this.hand = [player('zombie_hand', clip), player('zombie_hand')]
+        const hand = this.hand = player('zombie_hand')
         await preloadTasks(pending)
         if (!this.node.isValid) return
         this.current = this.open
@@ -113,13 +112,11 @@ export class MainMenuScreen extends Component {
             animation.setTracksVisible(menu.buttons.filter(button => button.replace).map(button => button.track), false)
             animation.setTracksVisible([menu.startAdventure.track], false)
         }
-        this.hand.forEach((animation, index) => {
-            animation.node.setPosition(-70, -10)
-            // The clipped hand draws everything but the rocks; the second player draws only the rocks.
-            const rocks = menu.tracks.handRocks
-            animation.setTracksVisible(index === 1 ? animation.trackIds.filter(id => !rocks.includes(id)) : rocks, false)
-            animation.hide()
-        })
+        // The screen's clip, in the hand's own coordinates; the rocks it pushes aside are drawn outside it.
+        const { x, y, clip, rocks } = menu.hand
+        hand.node.setPosition(x, -y)
+        hand.setClip({ x: clip.x - x, y: clip.y - y, width: clip.width, height: clip.height, ignore: rocks })
+        hand.hide()
         this.signsRoot = uiNode({ name: 'Signs', parent: content, anchor: { x: 0, y: 1 }, active: false }).node
         const signTrack = this.sign.getTrackNode(menu.tracks.profileSign)!
         signTrack.parent = this.signsRoot
@@ -144,7 +141,7 @@ export class MainMenuScreen extends Component {
         // Match the original draw order; flower clips 1/2/3 contain tracks 3/2/1.
         const layers = [
             ...this.clouds.map(cloud => cloud.player.node), this.open.node, this.sign.node,
-            this.buttonsRoot, clip, this.hand[1].node, this.numbersRoot, this.trophyRoot, this.grass.node,
+            this.buttonsRoot, hand.node, this.numbersRoot, this.trophyRoot, this.grass.node,
             ...[...this.flowers].reverse().map(flower => flower.node), this.signsRoot,
         ]
         layers.forEach((layer, index) => layer.setSiblingIndex(index + 1))
@@ -158,7 +155,7 @@ export class MainMenuScreen extends Component {
     show(): void {
         if (!this.ready) return
         this.startingSeconds = null
-        for (const hand of this.hand) hand.hide()
+        this.hand?.hide()
         void MusicSystem.playTune('title_theme')
         if (this.opened) {
             this.setButtonsEnabled(true)
@@ -380,7 +377,7 @@ export class MainMenuScreen extends Component {
             MusicSystem.stop()
             void SoundSystem.play(SoundEffect.LoseMusic)
             void SoundSystem.playFoley(SoundEffect.DirtRise)
-            for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
+            this.hand?.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
         } else if (config.target && isMenuDialog(config.target)) void this.onOpenDialog(config.target)
         else if (config.target) void this.onNavigate(config.target as MenuAction)
         else this.ui.dialog(this.node, { title: this.ui.text('ZOMBATAR_UNAVAILABLE_HEADER'), message: this.ui.text('ZOMBATAR_UNAVAILABLE_BODY') })

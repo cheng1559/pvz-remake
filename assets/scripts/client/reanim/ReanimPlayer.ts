@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, director, Director, gfx, isValid, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
+import { _decorator, Color, Component, director, Director, gfx, isValid, Mask, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
 import type { Tint } from '@/client/view/tints'
 import { loadedReanim, loadReanim } from './ReanimAssets'
 import { uiNode } from '@/client/view/uiNode'
@@ -90,7 +90,19 @@ function packClip(data: Reanim): PackedClip {
 }
 
 /** Consecutive tracks drawn by one batch, or a track drawn by its own node. */
-type Segment = { first: number, end: number, frame: FrameGeometry, source: KernelQuadSource } | { trackId: string, view: TrackView }
+type Segment = ({ first: number, end: number, frame: FrameGeometry, source: KernelQuadSource } | { trackId: string, view: TrackView }) & { clipped: boolean }
+
+/**
+ * Graphics::SetClipRect around Reanimation::Draw: a rectangle in the player's own coordinates, from its origin with
+ * down positive, and the tracks drawn outside it (ReanimatorTrackInstance::mIgnoreClipRect).
+ */
+export interface ReanimClip {
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly height: number
+    readonly ignore?: readonly string[]
+}
 
 let additiveSpriteMaterial: Material | null = null
 interface TrackAttachment {
@@ -159,6 +171,9 @@ export class ReanimPlayer extends Component {
     private supersampled = false
     /** Child nodes drawn right after a track; see drawAfterTrack. */
     private readonly followers = new Map<string, Node[]>()
+    /** See setClip; one mask for each run of clipped tracks, in drawing order. */
+    private clipRect: ReanimClip | null = null
+    private clipMasks: Node[] = []
     /** Kernel arrays are released when the node is destroyed, even if it was never activated. */
     private releasesOnDestroy = false
     /** Kernel input; rebuilt when tracks, images, track colors or blend sources change. */
@@ -211,6 +226,20 @@ export class ReanimPlayer extends Component {
         node.setParent(this.node)
         this.getTrackNode(trackId)
         this.writePose()
+    }
+
+    /**
+     * Draws the tracks inside `clip` but those it names to `ignore`; null draws them whole. A change of the rectangle
+     * alone only moves the masks the clipped runs are drawn under.
+     */
+    setClip(clip: ReanimClip | null): void {
+        const before = this.clipRect, ignore = clip?.ignore ?? []
+        this.clipRect = clip && { x: clip.x, y: clip.y, width: clip.width, height: clip.height, ignore: [...ignore] }
+        if ((before === null) !== (clip === null) || before && (before.ignore!.length !== ignore.length || before.ignore!.some((id, index) => id !== ignore[index]))) {
+            this.drawingStale = true
+            this.applyPose()
+        }
+        for (const mask of this.clipMasks) this.placeClipMask(mask)
     }
 
     getAnimation(): Reanim {
@@ -641,6 +670,24 @@ export class ReanimPlayer extends Component {
         Object.assign(view, { node: parts.node, sprite: parts.sprite!, skew: parts.skew! })
     }
 
+    /** The clip's rectangle, drawn by a mask at the player's origin (its anchor puts the rectangle where it goes). */
+    private placeClipMask(mask: Node): void {
+        const clip = this.clipRect
+        mask.active = !!clip && clip.width > 0 && clip.height > 0
+        if (!clip || !mask.active) return
+        uiNode({ node: mask, size: { width: clip.width, height: clip.height }, anchor: { x: -clip.x / clip.width, y: 1 + clip.y / clip.height } })
+    }
+
+    private clipMaskAt(index: number): Node {
+        let mask = this.clipMasks[index]
+        if (!mask) {
+            mask = uiNode({ name: 'ReanimClip', parent: this.node, layer: this.node.layer, mask: Mask.Type.GRAPHICS_RECT }).node
+            this.clipMasks[index] = mask
+        }
+        this.placeClipMask(mask)
+        return mask
+    }
+
     private batchAt(index: number): KernelBatch {
         let batch = this.batches[index]
         if (!batch) {
@@ -689,26 +736,42 @@ export class ReanimPlayer extends Component {
         state[Header.RATIO] = this.blendDuration > 0 ? Math.min(1, this.blendElapsed / this.blendDuration) : 0
         state[Header.MATRIX_A] = matrix.a; state[Header.MATRIX_B] = matrix.b; state[Header.MATRIX_C] = matrix.c
         state[Header.MATRIX_D] = matrix.d; state[Header.MATRIX_X] = matrix.tx; state[Header.MATRIX_Y] = matrix.ty
-        const order: Node[] = []
+        const order: Array<{ node: Node, clipped: boolean }> = []
+        // A track node moved under another parent (the menu's wood sign) keeps that parent's order.
+        const ours = (node: Node) => node.parent === this.node || this.clipMasks.includes(node.parent!)
         let used = 0
         for (const segment of drawing.segments) {
+            const clipped = segment.clipped
             if ('view' in segment) {
                 this.writeTrackNode(segment.trackId, segment.view)
-                // A track node moved under another parent (the menu's wood sign) keeps that parent's order.
-                if (segment.view.node!.parent === this.node) order.push(segment.view.node!)
-                for (const node of this.followers.get(segment.trackId) ?? []) if (node.parent === this.node) order.push(node)
+                if (ours(segment.view.node!)) order.push({ node: segment.view.node!, clipped })
+                for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
             } else if (shown) {
                 const batch = this.batchAt(used++)
                 // Room for every track and its extra additive image; the kernel clears unused quads.
                 batch.setSource(segment.source, segment.frame.frame, (segment.end - segment.first) * 2)
-                order.push(batch.node)
+                order.push({ node: batch.node, clipped })
             }
         }
         for (let i = used; i < this.batches.length; i++) this.batches[i].clear()
-        if (this.batches.length || this.followers.size) {
-            const children = this.node.children
-            order.forEach((node, index) => { if (children[index] !== node) node.setSiblingIndex(index) })
-        }
+        if (this.batches.length || this.followers.size || this.clipMasks.length) this.arrange(order)
+    }
+
+    /** Puts what draws in drawing order, each run of clipped ones under a clip mask of its own. */
+    private arrange(order: ReadonlyArray<{ node: Node, clipped: boolean }>): void {
+        const top: Node[] = [], runs: Node[][] = []
+        order.forEach(({ node, clipped }, index) => {
+            if (!clipped) { top.push(node); return }
+            if (!order[index - 1]?.clipped) top.push(this.clipMaskAt(runs.push([]) - 1))
+            runs[runs.length - 1].push(node)
+        })
+        for (let i = runs.length; i < this.clipMasks.length; i++) this.clipMasks[i].active = false
+        const place = (parent: Node, nodes: readonly Node[]) => nodes.forEach((node, index) => {
+            if (node.parent !== parent) node.setParent(parent)
+            if (parent.children[index] !== node) node.setSiblingIndex(index)
+        })
+        place(this.node, top)
+        runs.forEach((nodes, index) => place(this.clipMasks[index], nodes))
     }
 
     /** Draws the batched tracks [first, end); the drawing state is the one prepared by the last pose write. */
@@ -743,7 +806,9 @@ export class ReanimPlayer extends Component {
         const tracks = drawing.i32(views.length * TRACK)
         const segments: Segment[] = []
         let run: Extract<Segment, { first: number }> | null = null
+        const clipRect = this.clipRect
         views.forEach(([id, view], index) => {
+            const clipped = !!clipRect && !clipRect.ignore!.includes(id)
             const track = view.track ?? data.tracks.find(candidate => candidate.id === id)
             const override = this.frameOverrides.get(id)
             const overrideSlot = override && !view.node ? images.push(frameGeometry(override)) - 1 : -1
@@ -757,14 +822,15 @@ export class ReanimPlayer extends Component {
             if (image && trackImages.some(other => other && other.texture !== image.texture)) this.createTrackNode(id, view)
             if (view.node) {
                 run = null
-                segments.push({ trackId: id, view })
+                segments.push({ trackId: id, view, clipped })
                 return
             }
-            // Batches split where the texture changes; images of one animation normally share an atlas page.
-            if (run && (!image || image.texture === run.frame.texture)) { run.end = index + 1; return }
+            // Batches split where the texture changes, which images of one animation normally share, and where the
+            // clip starts or ends.
+            if (run && (!image || image.texture === run.frame.texture && run.clipped === clipped)) { run.end = index + 1; return }
             if (!image) return
             const segment: Extract<Segment, { first: number }> = {
-                first: index, end: index + 1, frame: image,
+                first: index, end: index + 1, frame: image, clipped,
                 source: { writeQuads: (...target) => this.writeRun(segment.first, segment.end, ...target) },
             }
             run = segment

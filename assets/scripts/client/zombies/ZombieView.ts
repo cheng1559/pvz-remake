@@ -1,6 +1,6 @@
 import { prepareReanims } from '@/client/reanim/ReanimAssets'
 import { modResources } from '@/client/content/ModResources'
-import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
+import { Color, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { zombieDefinition } from './definitions'
 import { renderOrder } from '@/shared/content/renderOrder'
@@ -82,7 +82,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private latestZombie: ShownZombie | null = null
     /** Its hit flash (Zombie::mJustGotShotCounter) in the frame being drawn. */
     protected flash = NO_FLASH
-    private riseClip?: Node
+    /** Its body is coming up out of a grave (syncRise). */
+    private rising = false
     /** Where its body's clip was at the last snapshot, for the marks of its steps it has come to since. */
     private stepped?: { clip: string, time: number }
 
@@ -154,16 +155,6 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.latestZombie = zombie
         this.flash = this.context.stage?.flashes.zombie(zombie.entityId, world.gameplayTick) ?? NO_FLASH
         this.syncFacing(zombie)
-        if (zombie.riseTicks && !this.riseClip) {
-            this.riseClip = uiNode({ name: 'GraveRiseClip', parent: this.root, position: { x: -50, y: 110 },
-                size: { width: 250, height: 220 }, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT }).node
-            // The mask stays above the ground; the body rises from below it.
-            this.riseClip.setPosition(-50, 110)
-        }
-        if (this.riseClip) {
-            this.riseClip.active = !!zombie.riseTicks
-            if (!zombie.riseTicks && this.player?.node.parent === this.riseClip) this.player.node.setParent(this.root)
-        }
         // Zombie::PlayDeathAnim removes the surprise mark (AttachmentReanimTypeDie).
         if (zombie.state === 'dying' || zombie.state === 'mowered') {
             for (const armor of [this.presentation.helm, this.presentation.shield]) {
@@ -272,13 +263,30 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     get players(): ReanimPlayer[] { return this.layers.shown.filter(player => player.node.isValid) }
 
     private syncRise(zombie: ShownZombie): void {
-        // Only the grave-rise clip owns this offset; a pending landing keeps its jump-origin compensation.
-        if (!this.player || !this.riseClip) return
-        const clip = this.clip(body(zombie).clip)
-        if (zombie.riseTicks) {
-            this.player.node.setParent(this.riseClip)
-            this.place(this.player.node, clip.x + 50, clip.y - 110 - Math.min(200, zombie.riseTicks * 4))
-        } else if (this.player.node.parent === this.root) this.place(this.player.node, clip.x, clip.y)
+        // Only a rise owns this offset; a pending landing keeps its jump-origin compensation.
+        const player = this.player
+        if (!player || !zombie.riseTicks && !this.rising) return
+        const at = this.clip(body(zombie).clip)
+        this.rising = !!zombie.riseTicks
+        if (!zombie.riseTicks) {
+            player.setClip(null)
+            this.place(player.node, at.x, at.y)
+            return
+        }
+        // Still below by what it has to rise, inside the clip (GraveZombiePresentation), which is the zombie's: in the
+        // body's own coordinates, turned round with a body facing right.
+        const sunk = this.sunk(zombie.riseTicks), { clip } = this.graveRise
+        this.place(player.node, at.x, at.y - sunk)
+        const top = sunk + clip.y, bottom = clip.bottom - Math.min(clip.settleTicks, zombie.riseTicks), { x, y } = player.node.position
+        player.setClip({ x: this.mirrored ? x - clip.x - clip.width : clip.x - x, y: top + y, width: clip.width, height: Math.max(0, bottom - top) })
+    }
+
+    private get graveRise() { return this.context.content.presentation.graves.zombie }
+
+    /** How far below the body still is: the original's altitude, PvzpAnimateCurve's whole pixels down to none. */
+    private sunk(riseTicks: number): number {
+        const { depth, riseTicks: ticks } = this.graveRise
+        return Math.round(depth * Math.min(1, riseTicks / ticks))
     }
 
     /** Zombie::DropHelm or DropShield: plays the armor's `dropReanim` on the zombie. */
