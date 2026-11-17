@@ -5,7 +5,7 @@ import type { AchievementTrigger, AchievementTriggerRegistry } from './achieveme
 
 /**
  * The base game's achievement triggers, each one condition of the original (1.2.0.1096; see
- * docs/ACHIEVEMENTS.zh-CN.md), with its numbers and content IDs in the achievement's settings.
+ * docs/ACHIEVEMENTS.md), with its numbers and content IDs in the achievement's settings.
  */
 export function installBuiltinAchievementTriggers(registry: AchievementTriggerRegistry): void {
     for (const [kind, trigger] of Object.entries({

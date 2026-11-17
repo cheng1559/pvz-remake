@@ -252,7 +252,7 @@ export interface LayerSnapshot {
 }
 
 /**
- * The two sides (docs/TEAMS.zh-CN.md): the player's `plants` and the `zombies`. Sides attack each other; a zombie on the
+ * The two sides (docs/TEAMS.md): the player's `plants` and the `zombies`. Sides attack each other; a zombie on the
  * plants' side (the original's mind control) walks right.
  */
 export type Team = 'plants' | 'zombies'

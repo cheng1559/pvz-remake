@@ -1,79 +1,79 @@
-# 开发脚本
+# Development Scripts
 
-按用途分目录，根目录只有说明、Node 模块配置 `package.json`，以及由 Git 忽略、需要自备的原版输入：
+Directories are split by purpose. The root holds only this guide, the Node module configuration `package.json`, and the original's inputs, which Git ignores and you supply yourself:
 
 ```text
 tools/
 ├── build/
-│   └── clean-native-assets.ts  # 原生构建前清掉输出目录里旧的 data/assets（Windows 构建命令调用）
-├── installer/                  # Windows 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss
-├── kernel/build.ts             # C++ 内核编译为 Wasm
-├── mod/                        # Mod 初始化、打包、验证、宿主模块清单生成和配置读取
+│   └── clean-native-assets.ts  # Clears old data/assets from the output directory before a native build (called by the Windows build commands)
+├── installer/                  # Windows installer: package-windows.ts compiles windows.iss with Inno Setup
+├── kernel/build.ts             # Compiles the C++ kernel to Wasm
+├── mod/                        # Mod initialization, packing, validation, host module list generation and configuration reading
 │   ├── cli.ts
 │   ├── content.ts
 │   ├── hosts.ts
 │   └── test.ts
-├── preview/check-imports.ts    # 检查 Cocos 预览的模块映射
-├── profile/ios.ts              # iOS JS 性能采样
-├── pvz/                        # 原版 PAK 导入、转换、anim-defs.json 和 ui-strings.json
-├── resources/                  # 应用图标、字体和图片超分辨率
-│   └── licenses/               # 资源处理工具的第三方许可
-├── local/                      # Git 忽略的本地资源包生成器及其打包接口 package_resources.py
-├── main.pak                    # Git 忽略：原版资源包，build:content 的默认输入
-├── PlantsVsZombies.exe         # Git 忽略：原版程序，导入时从中提取鼠标指针
-└── game.ico                    # Git 忽略：原版图标，build:icons 的默认输入
+├── preview/check-imports.ts    # Checks the Cocos preview's module mapping
+├── profile/ios.ts              # iOS JS performance sampling
+├── pvz/                        # Original PAK import and conversion, anim-defs.json and ui-strings.json
+├── resources/                  # App icons, font and image super-resolution
+│   └── licenses/               # Third-party licenses of the resource processing tools
+├── local/                      # Git-ignored local resource pack generators and their packing interface package_resources.py
+├── main.pak                    # Git-ignored: the original's resource package, the default input of build:content
+├── PlantsVsZombies.exe         # Git-ignored: the original program, from which the import extracts the mouse cursors
+└── game.ico                    # Git-ignored: the original's icon, the default input of build:icons
 ```
 
-常用入口：
+Common entry points:
 
-| 用途 | 命令 |
+| Purpose | Command |
 | --- | --- |
-| 从原版 PAK 和程序导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` |
-| 初始化、打包、验证 Mod | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
-| 重新生成 Mod 宿主模块清单 | `npm run mod:hosts` |
-| 检查 Cocos 预览的模块映射 | `npm run check:preview` |
-| 打包 Windows 安装程序 | `npm run package:windows` |
-| 编译共享 C++ 内核的 Wasm | `npm run build:kernel` |
-| 从原版图标生成网页和原生应用图标 | `npm run build:icons -- --ico /path/to/game.ico` |
-| 字体、图片超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
-| iOS JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
-| 资源转换工具的测试 | `npm run test:tools` |
+| Import the base resources from the original PAK and program and publish the ZIP | `npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` |
+| Initialize, pack and validate a Mod | `npm run mod:init`, `npm run mod:pack`, `npm run mod:test` |
+| Regenerate the Mod host module list | `npm run mod:hosts` |
+| Check the Cocos preview's module mapping | `npm run check:preview` |
+| Package the Windows installer | `npm run package:windows` |
+| Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
+| Generate the web and native app icons from the original icon | `npm run build:icons -- --ico /path/to/game.ico` |
+| Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
+| iOS JS performance sampling | `npx tsx tools/profile/ios.ts ...` |
+| Tests of the resource conversion tools | `npm run test:tools` |
 
-Python 命令在项目根目录执行。`npm run build:content` 调用 `python3 -m tools.pvz`；转换实现集中在 `pvz/`：
+Run Python commands from the project root. `npm run build:content` calls `python3 -m tools.pvz`; the conversion is implemented in `pvz/`:
 
 ```text
 pvz/
-├── __main__.py             # PAK 导入命令入口
-├── anim-defs.json          # 原版动画转换规则
-├── ui-strings.json         # 本项目新增的界面文本，导入时并入 pvz:strings（键不得与原版重复）
-├── importer.py              # 导入流程和资源清单
-├── pak.py                   # PAK 解包、文件名规范化、临时目录
-├── images.py                # 图片及透明通道合并
-├── reanim.py                # Reanim 轨道、片段与动画标记
-├── compiled_reanim.py       # 原版编译动画解码
-├── particles.py             # 粒子 XML 转换
-├── compiled_particles.py    # 原版编译粒子解码
-├── fonts.py                 # 位图字体
-├── cursors.py               # 从原版程序提取鼠标指针
-├── strings.py               # 原版文本
-├── audio.py                 # 音效转换
-├── music/                   # 音乐转换及 libopenmpt 绑定
-└── cache/                   # 由动画渲染植物静帧图集，供资源包自带（如 jiangnan 的手持、种植预览）
+├── __main__.py             # Entry of the PAK import command
+├── anim-defs.json          # The original's animation conversion rules
+├── ui-strings.json         # Interface text this project adds, merged into pvz:strings on import (keys must not repeat the original's)
+├── importer.py              # Import flow and resource manifest
+├── pak.py                   # PAK unpacking, file name normalization, temporary directory
+├── images.py                # Images and alpha channel merging
+├── reanim.py                # Reanim tracks, clips and animation marks
+├── compiled_reanim.py       # Decoding of the original's compiled animations
+├── particles.py             # Particle XML conversion
+├── compiled_particles.py    # Decoding of the original's compiled particles
+├── fonts.py                 # Bitmap fonts
+├── cursors.py               # Extraction of the mouse cursors from the original program
+├── strings.py               # The original's text
+├── audio.py                 # Sound effect conversion
+├── music/                   # Music conversion and libopenmpt bindings
+└── cache/                   # Plant still-frame atlases rendered from the animations, for resource packs to ship (such as jiangnan's held and planting previews)
 ```
 
-原版资源转换规则在 `tools/pvz/anim-defs.json`：
+The original's resource conversion rules are in `tools/pvz/anim-defs.json`:
 
-- 省略 `animations` 时自动读取 Reanim 的 `anim_*` 标记；显式列表用于选取部分片段。没有标记时使用完整的 `default` 动画。
-- `slots` 配置部件挂点；`hiddenTrackPrefixes` 过滤不需要的装备轨道。
-- `exports` 将原版片段映射到游戏使用的资源 ID；Python 中不再维护另一份导出列表。
+- Without `animations`, the Reanim's `anim_*` marks are read automatically; an explicit list selects some of the clips. Without marks, the full `default` animation is used.
+- `slots` configures part attachment points; `hiddenTrackPrefixes` filters out unneeded equipment tracks.
+- `exports` maps the original's clips to the resource IDs the game uses; Python no longer keeps a second export list.
 
-`local/` 保存不纳入 Git 的本地资源包生成器，源码已保留，需要各自的素材输入。
+`local/` holds the local resource pack generators kept out of Git; their sources are kept, and each needs its own asset input.
 
-Node 工具统一使用 TypeScript，通过项目已有的 `tsx` 执行；Python 用于原版资源解码与转换。
+Node tools are all TypeScript, run through the project's existing `tsx`; Python decodes and converts the original's resources.
 
-`mod/content.ts` 供 Mod 打包和无引擎测试读取作者配置；`mod/test.ts` 是 `mod:test` 的验证实现。本地资源生成器登记资源后，通过同在 `local/` 的 `package_resources.py` 调用通用 Mod 打包器。
+`mod/content.ts` reads the author's configuration for Mod packing and engine-free tests; `mod/test.ts` implements the `mod:test` validation. Once a local resource generator has registered its resources, it calls the common Mod packer through `package_resources.py`, also in `local/`.
 
-PAK 只解包到临时目录，转换结果直接写入 `mods/pvz-base/assets/`。日常编辑现有资源后，只需：
+The PAK is only unpacked into a temporary directory, and the conversion results are written straight into `mods/pvz-base/assets/`. After everyday edits to existing resources, you only need:
 
 ```bash
 npm run mod:pack -- pvz-base --publish assets/resources/base.zip

@@ -1,30 +1,30 @@
-# Mod 项目结构
+# Mod Project Layout
 
-仓库只保留 `example` 一个示例，以及通用 Mod 开发工具。其他 `mods/` 子目录用于本地开发，默认由 Git 忽略，源码和资源不随本体提交。
+The repository keeps only one sample, `example`, plus the common Mod development tools. Other `mods/` subdirectories are for local development and are ignored by Git by default; their sources and resources are not committed with the base game.
 
-资源、数据和脚本扩展统一使用同一格式；只创建需要的目录。
+Resources, data and script extensions all use the same format; create only the directories you need.
 
 ```text
 my-mod/
-├── manifest.json             # ID、版本、依赖和可选模块入口
-├── content.json              # 游戏/表现配置索引及资源映射
+├── manifest.json             # ID, version, dependencies and optional module entries
+├── content.json              # Index of gameplay/presentation definitions and resource mappings
 ├── src/
-│   ├── server/index.ts       # 可选的服务端代码
-│   └── client/index.ts       # 可选的客户端代码
+│   ├── server/index.ts       # Optional server code
+│   └── client/index.ts       # Optional client code
 └── assets/
-    ├── gameplay/            # 游戏定义分类 JSON
-    ├── presentation/        # 表现定义分类 JSON
+    ├── gameplay/            # Gameplay definition JSON, by category
+    ├── presentation/        # Presentation definition JSON, by category
     ├── sprites/
     └── audio/
 ```
 
-纯资源 Mod 只需清单、内容索引和资源文件。`content.json` 中所有路径相对于项目根目录。静态游戏定义、表现定义和新增资源自动注册；代码入口只负责自定义行为、视图和方法包装。
+A resource-only Mod needs only the manifest, the content index and the resource files. Every path in `content.json` is relative to the project root. Static gameplay definitions, presentation definitions and new resources register automatically; code entries only handle custom behavior, views and method wrapping.
 
 ```sh
 npm run mod:pack -- mods/example
 npm run mod:test -- dist/mods/example
 ```
 
-只有打包时编译，输出 `dist/mods/<name>/` 和 `<name>.zip`。管理入口统一为 `/mod`；安装、优先级和完整配置格式见 [Mod 文档](../docs/MODS.md)。
+Compilation happens only when packing, which outputs `dist/mods/<name>/` and `<name>.zip`. `/mod` is the single management entry; see the [Mod guide](../docs/MODS.md) for installation, priority and the full configuration format.
 
-- [example](example/README.md)：玩法、资源、客户端视图、命令、存档与生命周期的完整示例。
+- [example](example/README.md): a complete example of gameplay, resources, client views, commands, saves and lifecycle.
