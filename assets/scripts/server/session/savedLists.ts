@@ -8,12 +8,13 @@ import { CRATER } from '@/shared/content/craters'
 import { PLANT_STATES } from '@/shared/content/plantKinds'
 import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
-import { LevelStateResource, type GridItem, type Plant, type Projectile, type Zombie } from '../state/components'
-import type { Item } from '../state/levelState'
+import { LevelStateResource } from '../state/resources'
+import type { GridItem } from '../gridItems/gridItems'
+import type { Item } from '../items/items'
 import type { SavedEntity, SavedFields, SavedOfList } from './save'
-import { PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
-import { type SavedZombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
-import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../projectiles/Projectile'
+import { type Plant, PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
+import { type SavedZombie, type Zombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
+import { type Projectile, PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../projectiles/Projectile'
 import { Mower, type MowerFields } from '../mowers/Mower'
 import type { ServerContent } from './session'
 
@@ -34,7 +35,7 @@ type Live<K extends SavedListKey> = World[K] extends EntityList<infer T> ? T : n
  * How the entities of one typed list are saved: whether they stand at a position (a cell's grid item does not), the
  * shape of their fields (`parse`), and whether the installed content and the level can run them (`check`, as they are
  * saved and as they are restored). Each is saved as the JSON it is and restored so, or as what `restore` makes of it (a
- * zombie, its kind's instance); what Mods keep on it takes its way through JsonComponents.
+ * zombie, its kind's instance); what Mods keep on it takes its way through EntityExtensions.
  */
 export interface SavedList<K extends SavedListKey = SavedListKey> {
     readonly key: K

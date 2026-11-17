@@ -1,6 +1,6 @@
-import type { World } from '@/server/state/World'
+import type { Position, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { type Plant, type Position } from '../state/components'
+import type { Plant } from '../plants/Plant'
 import { isHostile, plantFacingRect, plantTeam, type Team } from '@/shared/content/teams'
 import { plantsInPlay } from '../level/lawn'
 

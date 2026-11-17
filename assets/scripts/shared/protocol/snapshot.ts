@@ -107,7 +107,7 @@ export interface WorldSnapshot {
     /** The session's debug rules, once a debug command has set one. */
     debug?: DebugRules
     /**
-     * What Mods' registered components show, by component ID, and the level's rule (LevelRuleDefinition.snapshot), by
+     * What Mods' registered entity extensions show, by extension ID, and the level's rule (LevelRuleDefinition.snapshot), by
      * its kind; a rule's client view checks its own.
      */
     extensions: Record<string, JsonValue>

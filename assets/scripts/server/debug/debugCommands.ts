@@ -4,9 +4,15 @@ import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
+import {
+    EconomyStateResource,
+    LevelStateResource,
+    RandomResource,
+    SeedBankResource,
+    TutorialResource,
+    WaveResource,
+} from '../state/resources'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
-import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../gridItems/graves'
 import { startRepick } from '../seeds/seedChooser'

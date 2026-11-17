@@ -1,6 +1,6 @@
 import type { EntityId, World } from '@/server/state/World'
 import type { CellPlant } from '@/shared/content/planting'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 import type { Plant } from '../plants/Plant'
 
 /** What stands on the lawn, as the shared cell rules (shared/content/planting, graveAt) and the level read it. */

@@ -2,14 +2,17 @@ import type { EntityId, World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
 import { holdsCell } from '@/shared/content/planting'
+import type { GraveSnapshot } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
-import { type Grave, LevelStateResource, RandomResource } from '../state/components'
-import { WaveResource } from '../state/levelState'
+import { LevelStateResource, RandomResource, WaveResource } from '../state/resources'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped } from '../level/levelAward'
 import { lawnPlants } from '../level/lawn'
 import { gridItems } from './gridItems'
+
+/** A grave (GraveSnapshot), a grid item. */
+export type Grave = Omit<GraveSnapshot, 'entityId'> & { id: EntityId }
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {

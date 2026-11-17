@@ -39,7 +39,7 @@ function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: a
 
 export function register({ host, assets }: GameplayApi): void {
     const registry = host.get('gameplay/registry')
-    const { LevelStateResource: Level, EconomyStateResource: Economy } = host.get('server/state/components')
+    const { LevelStateResource: Level, EconomyStateResource: Economy } = host.get('server/state/resources')
     const { plantsInPlay } = host.get('server/level/lawn')
     const settings = assets.json('assets/settings.json')
     for (const key of ['chargeTicks', 'chargeMultiplier', 'particlePeriodTicks']) {
@@ -48,7 +48,7 @@ export function register({ host, assets }: GameplayApi): void {
 
     // A plant's charge, kept on it as `extensions[Charge]`: registered, it is saved and sent in snapshots' extensions.
     const Charge = 'example:charge'
-    registry.components.register(Charge, (value: any) => {
+    registry.extensions.register(Charge, (value: any) => {
         if (Object.keys(value).length !== 1 || !Number.isSafeInteger(value.remainingTicks)
             || value.remainingTicks <= 0 || value.remainingTicks > settings.chargeTicks) throw new Error('Invalid example charge')
     })

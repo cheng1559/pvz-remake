@@ -3,10 +3,7 @@ import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
 import { Schedule,World } from '@/server/state/World'
-import {
-LevelStateResource,
-RandomResource,
-} from '@/server/state/components'
+import { LevelStateResource, RandomResource } from '@/server/state/resources'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource,createEventQueue } from '@/server/state/events'
 import { damageZombie } from '@/server/zombies/damage'

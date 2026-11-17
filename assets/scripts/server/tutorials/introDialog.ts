@@ -1,4 +1,4 @@
-import { TutorialResource } from '../state/levelState'
+import { TutorialResource } from '../state/resources'
 import type { TutorialScript } from './index'
 
 /** Dave's lines `first` to `last`: CutScene::StartLevelIntro starts at one and AdvanceCrazyDaveText plays on. */

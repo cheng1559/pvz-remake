@@ -6,7 +6,7 @@ import { DANCE_PHASES, type DancePhase, isSummoning } from '@/shared/content/zom
 import type { AnimationRandom } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { array, nonNegativeInteger, oneOf, positiveInteger } from '@/shared/validate'
-import { LevelStateResource, RandomResource } from '../state/components'
+import { LevelStateResource, RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { playZombie, startWalk, zombieBody } from './animation'
 import { countZombiesOnScreen } from './damage'

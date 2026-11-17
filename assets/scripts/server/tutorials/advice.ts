@@ -1,6 +1,6 @@
 import type { World } from '@/server/state/World'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { TutorialResource } from '../state/levelState'
+import { TutorialResource } from '../state/resources'
 
 /** Whether `key` has been shown this game (Board::mHelpDisplayed). */
 export function adviceShown(world: World, key: string): boolean {

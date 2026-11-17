@@ -2,7 +2,7 @@ import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gamep
 import type { GameCommand, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processBoundaryCommands, processCommandPhase } from './commands'
-import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/resources'
 import { savedSeedBank } from '../seeds/seedChooser'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, drainServerEvents } from '../state/events'

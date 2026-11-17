@@ -1,6 +1,7 @@
 import type { GameSystem, World } from '@/server/state/World'
 import { CHILLED_ANIMATION_FACTOR } from '@/shared/content/animation'
-import { LevelStateResource, type Plant } from '../state/components'
+import { LevelStateResource } from '../state/resources'
+import type { Plant } from './Plant'
 import { plantsInPlay } from '../level/lawn'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { meltIce } from '../combat/ice'

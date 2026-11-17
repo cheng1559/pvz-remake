@@ -1,9 +1,8 @@
-import { defineResource, type EntityId, type SystemContext, type World } from '@/server/state/World'
+import { defineResource, type EntityId, type Position, type SystemContext, type World } from '@/server/state/World'
 import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import type { ZombieState } from '@/shared/content/zombieStates'
 import { jsonRoundTrip, type JsonObject, type Team, type ZombieSnapshot } from '@/shared/protocol'
-import type { Position } from '../state/components'
 import { pickWalkClip, startWalk, zombiePace } from './animation'
 
 /** What any zombie is: the fields of every zombie, which its save and its snapshot have; its kind's own go beside them. */

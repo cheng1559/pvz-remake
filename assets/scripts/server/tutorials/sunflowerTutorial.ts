@@ -1,7 +1,6 @@
 import type { World } from '@/server/state/World'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { SeedBankResource } from '../state/components'
-import { TutorialResource, WaveResource } from '../state/levelState'
+import { SeedBankResource, TutorialResource, WaveResource } from '../state/resources'
 import type { TutorialScript } from './index'
 import { displayAdviceOnce } from './advice'
 import { packetAvailability, selectedSeedId } from '../seeds/seedBank'

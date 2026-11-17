@@ -7,7 +7,7 @@ import {
     defineResource,
     type EntityId,
 } from '@/server/state/World'
-import type { Item } from '@/server/state/levelState'
+import type { Item } from '@/server/items/items'
 
 /** An item of the world's `items`, of nothing but its id: the lists hold any object by its id. */
 const item = (id: EntityId) => ({ id }) as Item

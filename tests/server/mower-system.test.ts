@@ -8,11 +8,7 @@ import test from 'node:test'
 
 import { CommandBuffer, Schedule, World } from '@/server/state/World'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
-import {
-    EconomyStateResource,
-    LevelStateResource,
-    RandomResource,
-} from '@/server/state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource } from '@/server/state/resources'
 import { createZombieSystem } from '@/server/zombies/system'
 import { createMower, createMowerSystem } from '@/server/mowers/mowers'
 import type { MowingProjectile } from '@/server/projectiles/MowingProjectile'

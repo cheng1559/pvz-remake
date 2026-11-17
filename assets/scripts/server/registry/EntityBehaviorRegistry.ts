@@ -1,8 +1,8 @@
-import type { Entity, EntityId, GameSystem, SystemContext, World } from '@/server/state/World'
+import type { Entity, EntityId, GameSystem, Position, SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { assertJsonValue, jsonRoundTrip, type JsonObject, type EntityBehaviorState } from '@/shared/protocol'
-import { LevelStateResource, type Position } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 
 interface BehaviorEntity extends EntityBehaviorState { typeId: string }
 interface BehaviorDefinition { readonly behavior?: JsonObject }

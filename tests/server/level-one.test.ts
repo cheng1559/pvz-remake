@@ -5,16 +5,17 @@ import { readGameplaySource } from '../../tools/mod/content'
 import { Schedule,World } from '@/server/state/World'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import {
-EconomyStateResource,
-LevelStateResource,
-RandomResource,
-SeedBankResource,
-} from '@/server/state/components'
+    EconomyStateResource,
+    LevelStateResource,
+    RandomResource,
+    SeedBankResource,
+    TutorialResource,
+    WaveResource,
+} from '@/server/state/resources'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource,createEventQueue } from '@/server/state/events'
 import { createItemSystem } from '@/server/items/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
-import { TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'
 import { TutorialsResource } from '@/server/tutorials'
 import { damageZombie, flattenZombie } from '@/server/zombies/damage'

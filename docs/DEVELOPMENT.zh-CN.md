@@ -91,8 +91,8 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 | 目录 | 内容 |
 | --- | --- |
 | `session/` | 一局游戏的生命周期：`IntegratedGameServer`、`IntegratedGameHost`、`session`、`commands`、`snapshot`、`persistence`、`save`、`savedLists`、`createModHost`，以及生成的 `hostModules` |
-| `state/` | 世界 `World`、状态与资源定义（`components`、`levelState`）、事件队列 `events`、随机数 `DeterministicRng` |
-| `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityBehaviorRegistry`、`JsonComponents` |
+| `state/` | 世界 `World`（含 `Entity`、`Position`、`EntityRemover`）、关卡资源 `resources`、事件队列 `events`、随机数 `DeterministicRng` |
+| `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityBehaviorRegistry`、`EntityExtensions` |
 | `level/` | 关卡流程：`level`、`levelAward`、`waves`、`conveyor`、`loot`、`sun`，场上实体的查询 `lawn` |
 | `rules/` | 关卡规则：注册表与扩展点 `registry`，内置的 `adventure`、`bowling`、`whackAZombie` |
 | `seeds/` | 种子栏与手持物：`seedBank`、`seedChooser`、`planting`、`cursor`、`tools` |
@@ -107,9 +107,9 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 客户端每类实体的视图放在同名目录里（`plants/`、`zombies/`、`projectiles/`、`mowers/`、`items/`、`gridItems/`）。
 
-Mod 通过 `host.get(路径)` 取用模块，ID 就是模块在 `assets/scripts` 下的路径（如 `server/state/components`），清单由 `npm run mod:hosts` 生成；模块挪了位置，ID 随之改变。
+Mod 通过 `host.get(路径)` 取用模块，ID 就是模块在 `assets/scripts` 下的路径（如 `server/state/resources`），清单由 `npm run mod:hosts` 生成；模块挪了位置，ID 随之改变。
 
-`level/level.ts` 负责通用关卡初始化和进度更新。`state/components.ts` 定义战斗实体、经济与关卡状态，`state/levelState.ts` 定义掉落物、波次与教程状态。天空阳光、掉落物、波次与奖励、僵尸呻吟分别由 `level/sun.ts`、`items/items.ts`、`level/waves.ts`、`zombies/groans.ts` 处理，所有关卡共用。波次和呻吟系统的 Mod ID 分别为 `pvz:waves`、`pvz:zombie-groans`，关卡进度系统为 `pvz:level-progress`。
+`level/level.ts` 负责通用关卡初始化和进度更新。`state/resources.ts` 定义关卡、经济、种子栏、波次、教程与天空阳光的状态及其资源；各类实体的类型在各自的模块里（`items/items.ts`、`gridItems/graves.ts`、`gridItems/craters.ts`，以及 `Plant`、`Zombie`、`Projectile`、`Mower` 类）。天空阳光、掉落物、波次与奖励、僵尸呻吟分别由 `level/sun.ts`、`items/items.ts`、`level/waves.ts`、`zombies/groans.ts` 处理，所有关卡共用。波次和呻吟系统的 Mod ID 分别为 `pvz:waves`、`pvz:zombie-groans`，关卡进度系统为 `pvz:level-progress`。
 
 世界（`state/World.ts`）是按类型分开的列表，没有 ECS 组件：`items`、`gridItems`、`plants`、`projectiles`、`mowers`、`zombies`，每个是一个 `EntityList`，按 id 存放对象本身、按 id 顺序遍历，另有世界的 `resources`。实体就是某个列表里的那个对象：`createEntity` 只分配 id（id 不复用），`insert` 放入对象，`destroyEntity` 移出。系统的 `commands` 把这两件事推迟到本阶段结束，`commands.destroyEntity` 当即让所有列表都看不到它（`markDestroy`）。服务端存档（`session/save.ts`，schemaVersion 4）每个列表一个数组，每项是对象的字段加上 `id`、`position`（格子物品没有）和 Mod 的 `extensions`；id 在所有列表间唯一，且小于 `allocator.nextEntity`，各列表条目的解析与校验在 `session/savedLists.ts`。旧存档直接拒绝。
 
@@ -296,4 +296,4 @@ Debug 构建在全局变量 `pvzLevel` 上保留关卡调试入口；Mod 开发�
 
 玩法 `boards.*.bounds` 决定场地水平边界，僵尸动画带 `flag` 层时举旗，旗随 `Zombie::DropFlag` 掉落；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店的物品是玩法 `store` 表，按物品 ID（即档案里购买计数的键）：所在页和格子（`page`、`place` 0–7）、价格或价格档位、戴夫的一句或按档的几句、购买条件、库存规则和购买结果；`storePages` 按顺序列出各页及开放条件（`level`、`completed`，原版 `StoreScreen::IsPageShown`）；买下的金盏花放进 `settings.json` 的 `zenGarden`。这些都由服务端目录实例执行，应用只用玩法表建出目录注入后端。表现 `store` 表写每件物品的外观（`sprite`、`offset`、`highlight`），`storeDialogue` 写商店界面的时间和戴夫的闲聊。
 
-Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。Mod 在实体上的数据记在 `entity.extensions[id]`（JSON 对象），`id` 先用 `GameplayRegistry.components.register(id, validate?)` 登记；登记过的数据每次都校验、复制，随实体存档，并出现在快照的 `extensions` 里。示例见 [Mod 能力示例](../mods/example/README.md) 和 [Mod 文档](MODS.md)。
+Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。Mod 在实体上的数据记在 `entity.extensions[id]`（JSON 对象），`id` 先用 `GameplayRegistry.extensions.register(id, validate?)` 登记；登记过的数据每次都校验、复制，随实体存档，并出现在快照的 `extensions` 里。示例见 [Mod 能力示例](../mods/example/README.md) 和 [Mod 文档](MODS.md)。

@@ -9,10 +9,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import {
-    LevelStateResource,
-    RandomResource,
-} from '@/server/state/components'
+import { LevelStateResource, RandomResource } from '@/server/state/resources'
 import { createPlantAttackSystem } from '@/server/plants/attacks'
 import { createPlantAbilitySystem } from '@/server/plants/abilities'
 import type { Chomper } from '@/server/plants/Chomper'

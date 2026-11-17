@@ -1,4 +1,4 @@
-import { JsonComponents } from './JsonComponents'
+import { EntityExtensions } from './EntityExtensions'
 import { PlantBehaviorRegistry } from '../plants/behaviors'
 import { ZombieBehaviorRegistry } from '../zombies/behaviors'
 import { ZombieRegistry } from '../zombies/ZombieRegistry'
@@ -19,7 +19,7 @@ export class GameplayRegistry {
     readonly zombieBehaviors = new ZombieBehaviorRegistry()
     /** The kinds of zombies (ZombieDefinition.kind): the base's, and a Mod's, which extends one. */
     readonly zombies = new ZombieRegistry()
-    readonly components = new JsonComponents()
+    readonly extensions = new EntityExtensions()
     readonly levelRules = new LevelRuleRegistry()
     readonly achievementTriggers = new AchievementTriggerRegistry()
     readonly projectileMotions = new ProjectileMotionRegistry()
@@ -33,7 +33,7 @@ export class GameplayRegistry {
         installBuiltinProjectileMotions(this.projectileMotions)
     }
     checkpoint(): () => void {
-        const rollback = [this.plantBehaviors.checkpoint(), this.plants.checkpoint(), this.zombieBehaviors.checkpoint(), this.zombies.checkpoint(), this.components.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint(), this.projectiles.checkpoint(), this.tutorials.checkpoint()]
+        const rollback = [this.plantBehaviors.checkpoint(), this.plants.checkpoint(), this.zombieBehaviors.checkpoint(), this.zombies.checkpoint(), this.extensions.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint(), this.projectiles.checkpoint(), this.tutorials.checkpoint()]
         return () => { for (const undo of rollback.reverse()) undo() }
     }
     /** Everything the content names is installed and takes its settings: behaviors, plant, zombie and projectile kinds, level rules, tutorials, achievement triggers. */
@@ -54,7 +54,7 @@ export class GameplayRegistry {
         this.plants.freeze()
         this.zombieBehaviors.freeze()
         this.zombies.freeze()
-        this.components.freeze()
+        this.extensions.freeze()
         this.levelRules.freeze()
         this.achievementTriggers.freeze()
         this.projectileMotions.freeze()

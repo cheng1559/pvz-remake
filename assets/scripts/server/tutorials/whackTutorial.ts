@@ -1,5 +1,4 @@
-import { EconomyStateResource } from '../state/components'
-import { TutorialResource } from '../state/levelState'
+import { EconomyStateResource, TutorialResource } from '../state/resources'
 import { introDialog } from './introDialog'
 import type { TutorialScript } from './index'
 

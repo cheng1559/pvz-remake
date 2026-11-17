@@ -1,6 +1,6 @@
 import { exact, positiveInteger } from '@/shared/validate'
 import { BASE_MOD_ID } from '@/shared/mod'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 import type { AchievementTrigger, AchievementTriggerRegistry } from './achievements'
 
 /**

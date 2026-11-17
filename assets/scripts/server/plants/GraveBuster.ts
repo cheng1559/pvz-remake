@@ -7,7 +7,7 @@ import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { gridItems } from '../gridItems/gridItems'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { RandomResource } from '../state/components'
+import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Plant, type PlantConfig } from './Plant'
 

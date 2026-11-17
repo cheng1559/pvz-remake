@@ -2,10 +2,18 @@ import type { Entity, EntityList, World } from '@/server/state/World'
 import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/components'
+import {
+    EconomyStateResource,
+    LevelStateResource,
+    PacketUpgradeOfferResource,
+    RandomResource,
+    SeedBankResource,
+    SkySunResource,
+    TutorialResource,
+    WaveResource,
+} from '../state/resources'
 import { EventQueueResource } from '../state/events'
 import { AchievementsResource } from '../achievements/achievements'
-import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
 import { SAVED_LISTS, type SavedList } from './savedLists'
 import { savedSeedBank } from '../seeds/seedChooser'
@@ -21,7 +29,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     const lists = Object.fromEntries(SAVED_LISTS.map(list => [list.key, [...world[list.key]].map(value => {
         // An object of a typed list: its id, its position and its Mods' data beside its fields.
         const { id, position, extensions: _, ...fields } = value as Entity & { position?: object }
-        const extensions = gameplay.components.capture(value)
+        const extensions = gameplay.extensions.capture(value)
         const entity = { id, ...(position ? { position: asSaved(position) } : {}), ...(extensions ? { extensions } : {}) } as SavedEntity
         const saved = asSaved(fields)
         list.check?.(saved as never, { content: session, world, entity })
@@ -146,7 +154,7 @@ function restoreEntity(content: ServerContent, world: World, list: SavedList, sa
     // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance), with its id and position.
     const live = Object.assign(list.restore ? list.restore(fields as never, context) : jsonRoundTrip(fields) as object,
         { id, ...(position ? { position: jsonRoundTrip(position) } : {}) })
-    content.gameplay.components.restore(live, extensions ?? {})
+    content.gameplay.extensions.restore(live, extensions ?? {})
     world.insert(world[list.key] as EntityList<Entity>, live)
 }
 

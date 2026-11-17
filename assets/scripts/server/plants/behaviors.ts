@@ -1,7 +1,7 @@
 import type { PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { EntityBehaviorRegistry, type EntityBehavior } from '../registry/EntityBehaviorRegistry'
-import type { Plant } from '../state/components'
+import type { Plant } from './Plant'
 import { plantsInPlay } from '../level/lawn'
 import { plantSkipsTick } from './chill'
 

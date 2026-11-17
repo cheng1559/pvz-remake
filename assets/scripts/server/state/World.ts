@@ -1,12 +1,21 @@
 import type { JsonObject } from '@/shared/protocol'
-import type { GridItem } from './components'
-import type { Item } from './levelState'
+import type { GridItem } from '../gridItems/gridItems'
+import type { Item } from '../items/items'
 import type { Projectile } from '../projectiles/Projectile'
 import type { Mower } from '../mowers/Mower'
 import type { Plant } from '../plants/Plant'
 import type { Zombie } from '../zombies/Zombie'
 
 export type EntityId = number
+
+export interface Position {
+    x: number
+    y: number
+    row: number
+}
+
+/** Removes entities; systems pass their command buffer so queries stay consistent. */
+export interface EntityRemover { destroyEntity(entity: number): unknown }
 
 export interface EntityAllocatorSnapshot {
     nextEntity: EntityId
@@ -32,7 +41,7 @@ export function defineResource<T>(name: string): Resource<T> {
 
 /**
  * What a typed list holds: an object that is its entity, by its id, with what Mods keep on it (`extensions`, by
- * their registered ids: JsonComponents), saved and sent with it.
+ * their registered ids: EntityExtensions), saved and sent with it.
  */
 export interface Entity {
     id: EntityId

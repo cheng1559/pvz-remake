@@ -1,4 +1,5 @@
-import type { Position, Zombie } from '../state/components'
+import type { Position } from '../state/World'
+import type { Zombie } from './Zombie'
 import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, CHILLED_ANIMATION_FACTOR, groundStep, type LayerState, startLayer, startLayers, stepLayers, TICKS_PER_SECOND } from '@/shared/content/animation'
 import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'

@@ -1,6 +1,5 @@
 import type { World } from '@/server/state/World'
-import { LevelStateResource } from '../state/components'
-import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
+import { LevelStateResource, SkySunResource, TutorialResource, WaveResource } from '../state/resources'
 import { adviceShown, displayAdviceOnce } from './advice'
 import type { TutorialScript } from './index'
 import { levelAwardDropped } from '../level/levelAward'

@@ -1,7 +1,7 @@
 import type { CommandBuffer, World } from '@/server/state/World'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { RandomResource } from '../state/components'
-import type { Item } from '../state/levelState'
+import { RandomResource } from '../state/resources'
+import type { Item } from './items'
 import { LEVEL_AWARD } from '@/shared/content/gameplay'
 
 /**

@@ -1,13 +1,9 @@
 import { getBoardBounds, circleRectOverlap } from './collision'
-import {
-    type EntityRemover,
-    type Position,
-    RandomResource,
-    type Zombie,
-} from '../state/components'
+import { RandomResource } from '../state/resources'
+import type { Zombie } from '../zombies/Zombie'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
-import type { World } from '@/server/state/World'
+import type { EntityRemover, Position, World } from '@/server/state/World'
 import { damageZombie, destroyZombie, isTargetableZombie } from '../zombies/damage'
 import { isHostile, plantFacingX, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'

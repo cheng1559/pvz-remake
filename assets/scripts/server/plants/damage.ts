@@ -1,7 +1,6 @@
-import { type EntityRemover } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
-import type { World } from '@/server/state/World'
+import type { EntityRemover, World } from '@/server/state/World'
 import { explode, explosionCenter } from '../combat/explosions'
 import { plantTeam } from '@/shared/content/teams'
 import { getDebugRules } from '../debug/debugRules'

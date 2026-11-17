@@ -1,5 +1,5 @@
 import type { World } from '@/server/state/World'
-import { TutorialResource } from '../state/levelState'
+import { TutorialResource } from '../state/resources'
 import type { TutorialScript } from './index'
 import { daveLines } from './introDialog'
 import { plantsInPlay } from '../level/lawn'

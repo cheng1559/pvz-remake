@@ -1,13 +1,34 @@
-import type { GameSystem, World } from '@/server/state/World'
+import type { EntityId, GameSystem, Position, World } from '@/server/state/World'
 import { collectTarget, type GameplayDefinitions, itemAt, LEVEL_AWARD } from '@/shared/content/gameplay'
-import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, type Position } from '../state/components'
-import type { Item } from '../state/levelState'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource } from '../state/resources'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { canDropLoot, updateMowerCoins } from '../level/loot'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'
 import { seedSunCost } from '../seeds/seedBank'
+
+/** The sun, a coin or the level's award (the original's Coin), on its own above the board (row -1). */
+export interface Item {
+    id: EntityId
+    position: Position
+    typeId: string
+    value: number
+    state: 'available' | 'collecting' | 'fading'
+    velocityX: number
+    velocityY: number
+    accelerationY: number
+    width: number
+    groundY: number
+    disappearTicks: number
+    fadeTicks: number
+    scale: number
+    alpha: number
+    /** Coin::mHitGround. */
+    landed?: true
+    /** Coin::mNeedsBouncyArrow: a pickup arrow appears on landing and the item stays twice as long. */
+    arrow?: true
+}
 
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)

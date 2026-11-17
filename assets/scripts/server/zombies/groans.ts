@@ -1,5 +1,5 @@
 import type { GameSystem } from '@/server/state/World'
-import { LevelStateResource, RandomResource } from '../state/components'
+import { LevelStateResource, RandomResource } from '../state/resources'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { levelAwardDropped } from '../level/levelAward'

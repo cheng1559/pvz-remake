@@ -1,6 +1,6 @@
 import type { GameSystem } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 import { levelAwardDropped } from '../level/levelAward'
 import { plantsInPlay } from '../level/lawn'
 

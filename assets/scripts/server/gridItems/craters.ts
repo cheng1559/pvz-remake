@@ -3,8 +3,12 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { CRATER } from '@/shared/content/craters'
 import { holdsCell } from '@/shared/content/planting'
 import type { Team } from '@/shared/content/teams'
-import { type Crater, LevelStateResource } from '../state/components'
+import type { CraterSnapshot } from '@/shared/protocol'
+import { LevelStateResource } from '../state/resources'
 import { lawnPlants } from '../level/lawn'
+
+/** A crater (CraterSnapshot), a grid item. */
+export type Crater = Omit<CraterSnapshot, 'entityId'> & { id: EntityId }
 
 /** The craters on the lawn. */
 export function craters(world: World): Array<{ entity: EntityId, crater: Crater }> {

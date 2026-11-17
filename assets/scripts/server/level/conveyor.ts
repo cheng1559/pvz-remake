@@ -1,7 +1,6 @@
 import type { GameSystem, World } from '@/server/state/World'
 import { pickWeighted } from '@/shared/random'
-import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
-import { WaveResource } from '../state/levelState'
+import { LevelStateResource, RandomResource, SeedBankResource, WaveResource } from '../state/resources'
 import { levelAwardDropped } from './levelAward'
 
 export function startConveyor(world: World): void {

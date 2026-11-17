@@ -1,6 +1,6 @@
 import type { World } from '@/server/state/World'
 import { displayAdviceOnce } from './advice'
-import { TutorialResource, WaveResource } from '../state/levelState'
+import { TutorialResource, WaveResource } from '../state/resources'
 import { sunflowerReady, sunflowerTutorial } from './sunflowerTutorial'
 import type { TutorialScript } from './index'
 import { plantsInPlay } from '../level/lawn'

@@ -1,6 +1,7 @@
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
-import type { Plant, Zombie } from '../state/components'
+import type { Plant } from '../plants/Plant'
+import type { Zombie } from '../zombies/Zombie'
 
 /** A definition's `unchillable` or `unfreezable`: always (`true`), or in the states it lists. */
 function keptFrom<S extends string>(rule: true | readonly S[] | undefined, state: S | undefined): boolean {

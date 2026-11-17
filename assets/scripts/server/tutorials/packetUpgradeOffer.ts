@@ -1,6 +1,5 @@
-import { EconomyStateResource, PacketUpgradeOfferResource } from '../state/components'
+import { EconomyStateResource, PacketUpgradeOfferResource, TutorialResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { TutorialResource } from '../state/levelState'
 import type { TutorialScript } from './index'
 
 /**

@@ -1,6 +1,6 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/server/state/World'
-import { LevelStateResource, RandomResource } from '../state/components'
+import { LevelStateResource, RandomResource } from '../state/resources'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'

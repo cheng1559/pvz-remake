@@ -1,6 +1,6 @@
 import type { GameSystem } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 import { plantsInPlay } from '../level/lawn'
 
 /** The plants' attacks, each plant by its kind (Plant.attack: a shooter's, Shooter.ts), while the level is played. */

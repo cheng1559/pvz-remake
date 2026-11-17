@@ -1,5 +1,5 @@
 import type { GameSystem } from '@/server/state/World'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 import { plantSkipsTick } from './chill'
 import { plantsInPlay } from '../level/lawn'
 

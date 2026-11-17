@@ -1,14 +1,12 @@
-import type { World } from '@/server/state/World'
+import type { EntityId, Position, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { MowerSnapshot } from '@/shared/protocol'
 import { nonEmptyString } from '@/shared/validate'
 import { STRAIGHT } from '../projectiles/motions'
 import type { MowingProjectile, MowTarget } from '../projectiles/MowingProjectile'
 import { launchProjectile } from '../projectiles/Projectile'
-import type { Position } from '../state/components'
-import type { EntityId } from '@/server/state/World'
+import { WaveResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { WaveResource } from '../state/levelState'
 
 /** What a row's mower is: the fields its save has. */
 export interface MowerFields {

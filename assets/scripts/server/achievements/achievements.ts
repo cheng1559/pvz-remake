@@ -3,7 +3,7 @@ import type { AchievementDefinition, GameplayDefinitions } from '@/shared/conten
 import type { JsonObject, ServerEvent } from '@/shared/protocol/index'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 
 /**
  * The installed achievements, the ones the player has (the profile's, from the start packet; not saved), and each

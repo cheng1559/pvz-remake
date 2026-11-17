@@ -1,13 +1,10 @@
-import type { CommandBuffer, World } from '@/server/state/World'
+import type { CommandBuffer, EntityRemover, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import {
-    EconomyStateResource, type EntityRemover, LevelStateResource, RandomResource,
-} from '../state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource, TutorialResource, WaveResource } from '../state/resources'
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from '../items/itemSpawn'
-import { TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule, zombieValue } from '../rules/registry'
 

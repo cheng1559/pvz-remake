@@ -198,7 +198,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         const behavior = { createState: () => ({}), tick() {} }
         registry.plantBehaviors.register(assets.id, 'broken:leaked', behavior)
         registry.zombieBehaviors.register(assets.id, 'broken:leaked', behavior)
-        registry.components.register('broken:leaked-state')
+        registry.extensions.register('broken:leaked-state')
         host.around(target, 'value', (next: any) => next() + 100)
     }, async ({ host, assets }: any) => {
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
@@ -228,7 +228,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.equal(executor.execute, execute, 'the game command executor is unwrapped')
         assert.equal(result.gameplayDefinitions.length, 1)
         assert.equal(result.presentationDefinitions.length, 0)
-        assert.deepEqual(result.gameplay.components.snapshot(new World()), {})
+        assert.deepEqual(result.gameplay.extensions.snapshot(new World()), {})
         for (const views of [result.views.plants, result.views.zombies]) {
             assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))

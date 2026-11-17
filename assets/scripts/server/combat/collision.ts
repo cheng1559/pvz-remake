@@ -1,5 +1,5 @@
 import type { World } from '@/server/state/World'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource } from '../state/resources'
 
 export function getBoardBounds(world: World) {
     return world.resources.get(LevelStateResource).board.bounds

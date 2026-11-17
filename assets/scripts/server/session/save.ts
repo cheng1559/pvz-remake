@@ -1,16 +1,25 @@
-import type { EntityAllocatorSnapshot, EntityId } from '@/server/state/World'
+import type { EntityAllocatorSnapshot, EntityId, Position } from '@/server/state/World'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
-import type { GridItem, Position, SeedBankState, SeedPacketState } from '../state/components'
+import type { GridItem } from '../gridItems/gridItems'
+import {
+    type SeedBankState,
+    type SeedPacketState,
+    type SkySunState,
+    TUTORIAL_STEPS,
+    type TutorialState,
+    type TutorialStep,
+    type WaveState,
+} from '../state/resources'
+import type { Item } from '../items/items'
 import type { SavedProjectile } from '../projectiles/Projectile'
 import type { MowerFields } from '../mowers/Mower'
 import type { SavedPlant } from '../plants/Plant'
 import type { SavedZombie } from '../zombies/Zombie'
-import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type TutorialStep, type WaveState } from '../state/levelState'
-import type { SavedComponents } from '../registry/JsonComponents'
+import type { SavedExtensions } from '../registry/EntityExtensions'
 import { SAVED_LISTS, type SavedList } from './savedLists'
 
 /** An object of one of the world's typed lists as its save has it beside what SavedEntity holds. */
@@ -20,7 +29,7 @@ export type SavedOfList<T> = T extends unknown ? Omit<T, 'id' | 'position' | 'ex
 export interface SavedEntity {
     id: EntityId
     position?: Position
-    extensions?: SavedComponents
+    extensions?: SavedExtensions
 }
 
 /** The fields each typed list's entities are saved with, by the list's name. */
@@ -301,7 +310,7 @@ function parseSavedEntity(list: SavedList, value: unknown, name: string, nextEnt
     Object.assign(entity, list.parse(fields, name))
     if (extensions !== undefined) {
         entity.extensions = Object.fromEntries(Object.entries(record(extensions, `${name}.extensions`)).map(([id, data]) => {
-            if (!isQualifiedId(id)) throw new TypeError(`Invalid component ID: ${id}`)
+            if (!isQualifiedId(id)) throw new TypeError(`Invalid extension ID: ${id}`)
             return [id, jsonRoundTrip(record(data, `${name}.extensions.${id}`)) as JsonObject]
         }))
     }

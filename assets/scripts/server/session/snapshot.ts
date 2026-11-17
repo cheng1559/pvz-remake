@@ -1,7 +1,6 @@
 import type { WorldSnapshot } from '@/shared/protocol/index'
-import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, SeedBankResource, TutorialResource, WaveResource } from '../state/resources'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
-import { TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
 import { selectedSeedId, selectedTeam } from '../seeds/seedBank'
 import { seedChooserSnapshot } from '../seeds/seedChooser'
@@ -99,7 +98,7 @@ export const snapshot = {
             ...(seedBank.conveyor ? { conveyor: { ticks: seedBank.conveyor.moveTicks } } : {}),
             ...(tutorial.dialogIndex === undefined ? {} : { dialog: { index: tutorial.dialogIndex, ...(question ? { question } : {}) } }),
             ...(world.resources.has(DebugRulesResource) ? { debug: { ...getDebugRules(world) } } : {}),
-            extensions: { ...gameplay.components.snapshot(world),
+            extensions: { ...gameplay.extensions.snapshot(world),
                 ...(ruleSnapshot ? { [level.definition.rules!.kind]: ruleSnapshot } : {}) },
         }
     },

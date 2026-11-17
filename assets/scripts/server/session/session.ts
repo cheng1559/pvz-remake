@@ -5,7 +5,7 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/resources'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../items/items'

@@ -1,11 +1,11 @@
-import type { EntityId, SystemContext, World } from '@/server/state/World'
+import type { EntityId, Position, SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { isHostile, plantFacingX, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { circleRectOverlap } from '../combat/collision'
-import { type Position, RandomResource } from '../state/components'
+import { RandomResource } from '../state/resources'
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
 

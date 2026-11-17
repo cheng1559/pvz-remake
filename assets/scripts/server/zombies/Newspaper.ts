@@ -3,7 +3,7 @@ import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type Zombie
 import type { AnimationRandom } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeFinite } from '@/shared/validate'
-import { RandomResource } from '../state/components'
+import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { playZombie, stepZombie, zombiePace } from './animation'
 import { countZombiesOnScreen } from './damage'

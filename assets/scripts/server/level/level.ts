@@ -1,7 +1,6 @@
 import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
-import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
+import { LevelStateResource, RandomResource, SeedBankResource, SkySunResource, TutorialResource, WaveResource } from '../state/resources'
 import { updateSkySun } from './sun'
 import { getActiveTutorial, levelTutorial } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
