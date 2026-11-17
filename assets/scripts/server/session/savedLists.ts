@@ -3,13 +3,10 @@ import type { LayerState } from '@/shared/content/animation'
 import { LEVEL_AWARD, MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
-import { checkGraveRanges, GRAVE } from '@/shared/content/graves'
-import { CRATER } from '@/shared/content/craters'
 import { PLANT_STATES } from '@/shared/content/plantKinds'
-import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
+import { jsonRoundTrip, parseGridItem, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { LevelStateResource } from '../state/resources'
-import type { GridItem } from '../gridItems/gridItems'
 import type { Item } from '../items/items'
 import type { SavedEntity, SavedFields, SavedOfList } from './save'
 import { type Plant, PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
@@ -33,9 +30,10 @@ type Live<K extends SavedListKey> = World[K] extends EntityList<infer T> ? T : n
 
 /**
  * How the entities of one typed list are saved: whether they stand at a position (a cell's grid item does not), the
- * shape of their fields (`parse`), and whether the installed content and the level can run them (`check`, as they are
- * saved and as they are restored). Each is saved as the JSON it is and restored so, or as what `restore` makes of it (a
- * zombie, its kind's instance); what Mods keep on it takes its way through EntityExtensions.
+ * shape of their fields (`parse`), and whether the installed content and the level can run them, as they are saved and
+ * as they are restored: their fields (`check`), then the object itself (`valid`: a zombie as its kind). Each is saved
+ * as the JSON it is and restored so, or as what `restore` makes of it (a zombie, its kind's instance); what Mods keep
+ * on it takes its way through EntityExtensions.
  */
 export interface SavedList<K extends SavedListKey = SavedListKey> {
     readonly key: K
@@ -43,6 +41,8 @@ export interface SavedList<K extends SavedListKey = SavedListKey> {
     parse(value: unknown, name: string): SavedFields[K]
     check?(fields: SavedFields[K], context: SavedEntityContext): void
     restore?(fields: SavedFields[K], context: SavedEntityContext): Live<K>
+    /** The object as the list has it, with its id and position: the one saved, or the one just restored. */
+    valid?(live: Live<K>, context: SavedEntityContext): void
 }
 
 function savedList<K extends SavedListKey>(entry: SavedList<K>): SavedList<K> { return entry }
@@ -76,10 +76,12 @@ export const SAVED_LISTS: readonly SavedList[] = [
             if ((saved.state === 'mowered') !== (saved.mowered !== undefined) || saved.mowered && saved.mowered.squash.clip !== ZOMBIE_CLIPS.mowered) {
                 throw new Error(`Saved plant ${entity.id} has an invalid squash`)
             }
-            // As its kind: its own fields (a shooter's next shot, a chomper's phase, ...).
-            if (!restorePlant(saved, context).validSaved()) throw new Error(`Saved plant ${entity.id} is invalid for its kind`)
         },
         restore: (saved, context) => restorePlant(saved, context),
+        // As its kind: its own fields (a shooter's next shot, a chomper's phase, ...).
+        valid: (plant, { entity }) => {
+            if (!plant.validSaved()) throw new Error(`Saved plant ${entity.id} is invalid for its kind`)
+        },
     }),
     savedList({
         key: 'zombies', positioned: true,
@@ -136,26 +138,29 @@ export const SAVED_LISTS: readonly SavedList[] = [
                 saved.state === 'dying' && !zombie.animation.clips[body.clip].marks) {
                 throw new Error(`Saved zombie ${entity.id} has an invalid animation state`)
             }
-            // As its kind: its own fields, none in the air but in its kind's jump, a walk on ground but a dancer's steps or a gasp, ...
-            if (!restoreZombie(saved, context).validSaved(zombieClip(zombie.animation, body.clip)!)) {
-                throw new Error(`Saved zombie ${entity.id} is invalid for its kind`)
-            }
         },
         restore: (saved, context) => restoreZombie(saved, context),
+        // As its kind: its own fields, none in the air but in its kind's jump, a walk on ground but a dancer's steps or a gasp, ...
+        valid: (zombie, { content, entity }) => {
+            const body = zombieClip(content.definitions.zombies[zombie.typeId].animation, zombie.animations[ZOMBIE_BODY_LAYER].clip)!
+            if (!zombie.validSaved(body)) throw new Error(`Saved zombie ${entity.id} is invalid for its kind`)
+        },
     }),
     savedList({
         key: 'projectiles', positioned: true, parse: parseSavedProjectile,
         check: (projectile, context) => {
-            const { content: { definitions, gameplay }, world, entity } = context
+            const { content: { definitions, gameplay }, entity } = context
             if (!onBoardRow(context) || !definitions.projectiles[projectile.typeId]) throw new Error(`Unknown saved projectile: ${projectile.typeId}`)
             // Its motion is installed and takes the state it flew with.
             const motion = gameplay.projectileMotions.resolve(projectile.motion)
             if (!motion.parseState && projectile.motionState !== undefined) throw new Error(`Saved projectile ${entity.id} has an invalid motion state`)
             motion.parseState?.(projectile.motionState)
-            // As its kind: its own fields (a mower's chew).
-            if (!restoreProjectile(projectile, context).validSaved(world, entity.position!)) throw new Error(`Saved projectile ${entity.id} is invalid for its kind`)
         },
         restore: (saved, context) => restoreProjectile(saved, context),
+        // As its kind: its own fields (a mower's chew).
+        valid: (projectile, { world, entity }) => {
+            if (!projectile.validSaved(world)) throw new Error(`Saved projectile ${entity.id} is invalid for its kind`)
+        },
     }),
     savedList({
         key: 'mowers', positioned: true,
@@ -174,26 +179,8 @@ export const SAVED_LISTS: readonly SavedList[] = [
         },
     }),
     savedList({
-        // A grave or a crater, of a cell: it has no position.
-        key: 'gridItems', positioned: false,
-        parse: (value, name): SavedOfList<GridItem> => {
-            if (record(value, name).typeId === CRATER) {
-                const crater = exact(value, ['typeId', 'column', 'row', 'ticks'], name, ['team'])
-                return { typeId: CRATER, column: nonNegativeInteger(crater.column, `${name}.column`), row: nonNegativeInteger(crater.row, `${name}.row`),
-                    ticks: positiveInteger(crater.ticks, `${name}.ticks`),
-                    ...(crater.team === undefined ? {} : { team: oneOf(crater.team, ['zombies'] as const, `${name}.team`) }) }
-            }
-            const grave = exact(value, ['typeId', 'column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], name, ['special', 'riseAtTick', 'team'])
-            if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
-            const result = { typeId: GRAVE, column: nonNegativeInteger(grave.column, `${name}.column`), row: nonNegativeInteger(grave.row, `${name}.row`),
-                variant: integer(grave.variant, `${name}.variant`), riseDelay: integer(grave.riseDelay, `${name}.riseDelay`),
-                offsetX: integer(grave.offsetX, `${name}.offsetX`), offsetY: integer(grave.offsetY, `${name}.offsetY`),
-                ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, `${name}.special`) }),
-                ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, `${name}.riseAtTick`) }),
-                ...(grave.team === undefined ? {} : { team: oneOf(grave.team, ['plants'] as const, `${name}.team`) }) } as const
-            checkGraveRanges(result, name)
-            return result
-        },
+        // A grave or a crater, of a cell: it has no position. Its fields are as the snapshot shows them.
+        key: 'gridItems', positioned: false, parse: parseGridItem,
         check: (item, { world, entity }) => {
             const { board } = world.resources.get(LevelStateResource)
             if (item.row >= board.rows || item.column >= board.columns) throw new Error(`Saved grid item ${entity.id} is outside the board`)

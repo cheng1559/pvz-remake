@@ -1,4 +1,4 @@
-import type { World } from '@/server/state/World'
+import type { Entity, World } from '@/server/state/World'
 import type { GridItemSnapshot } from '@/shared/protocol'
 import type { Crater } from './craters'
 import type { Grave } from './graves'
@@ -9,7 +9,13 @@ import type { Grave } from './graves'
  */
 export type GridItem = Grave | Crater
 
-/** The things of the lawn's cells (graves, craters), each with its entity, as the snapshot lists them. */
+/**
+ * The things of the lawn's cells (graves, craters), each with its entity, as the snapshot lists them; what Mods keep on
+ * one goes with the snapshot's `extensions`.
+ */
 export function gridItems(world: World): GridItemSnapshot[] {
-    return [...world.gridItems].map(({ id, ...item }) => ({ entityId: id, ...item }))
+    return [...world.gridItems].map(item => {
+        const { id, extensions: _, ...fields } = item as GridItem & Entity
+        return { entityId: id, ...fields }
+    })
 }

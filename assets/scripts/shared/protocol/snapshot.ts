@@ -1,4 +1,4 @@
-import { record, array, exact, nonEmptyString, boolean, oneOf, finite, nonNegativeFinite, nonNegativeInteger } from '@/shared/validate'
+import { record, array, exact, nonEmptyString, boolean, oneOf, finite, integer, nonNegativeFinite, nonNegativeInteger, positiveInteger, trueFlag } from '@/shared/validate'
 import { ZOMBIE_STATES, type ZombieState } from '@/shared/content/zombieStates'
 import { PLANT_STATES, type PlantState } from '@/shared/content/plantKinds'
 import { GRAVE, checkGraveRanges } from '@/shared/content/graves'
@@ -53,6 +53,30 @@ export interface CraterSnapshot {
  * with what else its type has. A grave or a crater.
  */
 export type GridItemSnapshot = GraveSnapshot | CraterSnapshot
+
+/** A grid item's fields beside its entity: what a snapshot shows next to its `entityId` and a save keeps next to its `id`. */
+export type GridItemFields = Omit<GraveSnapshot, 'entityId'> | Omit<CraterSnapshot, 'entityId'>
+
+/** A grid item's fields (GridItemFields), checked the same way for a snapshot and a save. */
+export function parseGridItem(value: unknown, name: string): GridItemFields {
+    if (record(value, name).typeId === CRATER) {
+        const crater = exact(value, ['typeId', 'column', 'row', 'ticks'], name, ['team'])
+        return { typeId: CRATER, column: nonNegativeInteger(crater.column, `${name}.column`), row: nonNegativeInteger(crater.row, `${name}.row`),
+            // Gone as its count reaches 0 (Board::UpdateGridItems), so never shown or saved at 0.
+            ticks: positiveInteger(crater.ticks, `${name}.ticks`),
+            ...(crater.team === undefined ? {} : { team: oneOf(crater.team, ['zombies'] as const, `${name}.team`) }) }
+    }
+    const grave = exact(value, ['typeId', 'column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], name, ['special', 'riseAtTick', 'team'])
+    if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
+    const result = { typeId: GRAVE, column: nonNegativeInteger(grave.column, `${name}.column`), row: nonNegativeInteger(grave.row, `${name}.row`),
+        variant: integer(grave.variant, `${name}.variant`), riseDelay: integer(grave.riseDelay, `${name}.riseDelay`),
+        offsetX: integer(grave.offsetX, `${name}.offsetX`), offsetY: integer(grave.offsetY, `${name}.offsetY`),
+        ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, `${name}.special`) }),
+        ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, `${name}.riseAtTick`) }),
+        ...(grave.team === undefined ? {} : { team: oneOf(grave.team, ['plants'] as const, `${name}.team`) }) } as const
+    checkGraveRanges(result, name)
+    return result
+}
 
 /** The server's fixed step: one tick of the original's 10 ms Board::Update. Ticks in saves and snapshots count these. */
 export const TICK_SECONDS = 0.01
@@ -448,20 +472,9 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }
     if (snapshot.gridItems !== undefined) array(snapshot.gridItems, 'snapshot.gridItems').forEach((value, index) => {
-        const name = `snapshot.gridItems[${index}]`, grave = record(value, name)
-        nonNegativeInteger(grave.entityId, `${name}.entityId`)
-        if (grave.typeId === CRATER) {
-            for (const key of ['column', 'row', 'ticks']) nonNegativeInteger(grave[key], `${name}.${key}`)
-            if (grave.team !== undefined && grave.team !== 'zombies') throw new TypeError(`${name}.team must be zombies`)
-            return
-        }
-        if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
-        for (const key of ['column', 'row', 'variant', 'riseDelay']) nonNegativeInteger(grave[key], `${name}.${key}`)
-        checkGraveRanges(grave as unknown as GraveSnapshot, name)
-        finite(grave.offsetX, `${name}.offsetX`); finite(grave.offsetY, `${name}.offsetY`)
-        if (grave.special !== undefined && grave.special !== true) throw new TypeError(`${name}.special must be true`)
-        if (grave.riseAtTick !== undefined) nonNegativeInteger(grave.riseAtTick, `${name}.riseAtTick`)
-        if (grave.team !== undefined && grave.team !== 'plants') throw new TypeError(`${name}.team must be plants`)
+        const name = `snapshot.gridItems[${index}]`, { entityId, ...fields } = record(value, name)
+        nonNegativeInteger(entityId, `${name}.entityId`)
+        parseGridItem(fields, name)
     })
     array(snapshot.plants, 'snapshot.plants').forEach((entry, index) => {
         const name = `snapshot.plants[${index}]`

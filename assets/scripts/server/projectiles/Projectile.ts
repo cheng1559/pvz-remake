@@ -176,8 +176,8 @@ export class Projectile {
             ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }), ...(own ? { own } : {}) }
     }
 
-    /** Whether the level can run it as it was saved, at `position`. */
-    validSaved(_world: World, _position: Position): boolean {
+    /** Whether the level can run it as it was saved, where it was. */
+    validSaved(_world: World): boolean {
         return true
     }
 

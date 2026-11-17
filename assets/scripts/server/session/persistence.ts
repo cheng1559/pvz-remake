@@ -21,7 +21,7 @@ import { createSession, createWorld, type ServerContent, type Session } from './
 
 /**
  * Captures a session as a save; `save.ts` defines and validates the format. Each entity is saved only as it would be
- * restored (its list's check), and everything is copied as the JSON it is.
+ * restored (its list's check of its fields and its own as it is), and everything is copied as the JSON it is.
  */
 export function saveSession(session: Session): ServerSaveSnapshot {
     const { world, tick, gameplayTick, mods, gameplay } = session
@@ -31,8 +31,9 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         const { id, position, extensions: _, ...fields } = value as Entity & { position?: object }
         const extensions = gameplay.extensions.capture(value)
         const entity = { id, ...(position ? { position: asSaved(position) } : {}), ...(extensions ? { extensions } : {}) } as SavedEntity
-        const saved = asSaved(fields)
-        list.check?.(saved as never, { content: session, world, entity })
+        const saved = asSaved(fields), context = { content: session, world, entity }
+        list.check?.(saved as never, context)
+        list.valid?.(value as never, context)
         return { ...entity, ...saved }
     })]))
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
@@ -154,6 +155,7 @@ function restoreEntity(content: ServerContent, world: World, list: SavedList, sa
     // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance), with its id and position.
     const live = Object.assign(list.restore ? list.restore(fields as never, context) : jsonRoundTrip(fields) as object,
         { id, ...(position ? { position: jsonRoundTrip(position) } : {}) })
+    list.valid?.(live as never, context)
     content.gameplay.extensions.restore(live, extensions ?? {})
     world.insert(world[list.key] as EntityList<Entity>, live)
 }
