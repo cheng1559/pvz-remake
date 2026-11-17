@@ -328,7 +328,7 @@
   "pvz:dancer": {
     "view": "dancer",
     "packet": {"x": 1, "y": 2, "scale": 0.3, "clip": "moonwalk"},
-    "portrait": {"x": 21, "y": 14, "scale": 0.5, "clip": "moonwalk"},
+    "portrait": {"x": 24, "y": 14.9, "scale": 0.5, "clip": "moonwalk"},
     "held": {"x": 20, "y": 42, "scale": 0.8},
     "nameKey": "DANCING_ZOMBIE",
     "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
@@ -380,8 +380,8 @@
   },
   "pvz:backup_dancer": {
     "view": "dancer",
-    "packet": {"x": -4, "y": 2, "scale": 0.3, "clip": "walk"},
-    "portrait": {"x": 17, "y": 14, "scale": 0.5, "clip": "walk"},
+    "packet": {"x": -3, "y": 2, "scale": 0.3, "clip": "walk"},
+    "portrait": {"x": 16, "y": 19.9, "scale": 0.5, "clip": "walk"},
     "held": {"x": 20, "y": 42, "scale": 0.8},
     "nameKey": "BACKUP_DANCER",
     "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
