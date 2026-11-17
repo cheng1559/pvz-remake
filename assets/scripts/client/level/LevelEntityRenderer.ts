@@ -274,7 +274,10 @@ export class LevelEntityRenderer implements LevelStage {
     /** Where an entity is drawn among the rest; none for an item, which is not on the board's layer. */
     private orderOf(kind: EntityKind, entity: Positioned): number | undefined {
         switch (kind) {
-            case 'plant': return this.plantOrder(entity as unknown as PlantSnapshot)
+            case 'plant': {
+                const plant = entity as unknown as PlantSnapshot
+                return this.plantOrder({ ...plant, row: this.view(plant.entityId, PlantView)?.drawnRow(plant) ?? plant.row })
+            }
             case 'zombie': return this.zombieOrder(entity.row)
             case 'projectile': case 'mower': return this.projectileOrder(entity.typeId, entity.row)
             case 'gridItem': return this.gridItemOrder(entity.typeId, entity.row)
@@ -303,13 +306,10 @@ export class LevelEntityRenderer implements LevelStage {
 
     /**
      * Plant::CalcRenderOrder: within a row, a plant further left draws later, so the chomper's head covers the plant to
-     * its right; rolling bowling nuts draw on the projectile layer.
+     * its right; rolling bowling nuts draw on the projectile layer, in the row their view draws them with (drawnRow).
      */
-    plantOrder(entity: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number {
-        // Plant::UpdateBowling changes draw order before incrementing the downward target row: a plant rolling down
-        // is drawn with the row above.
-        const row = entity.row - (Number(entity.behaviorState?.direction) > 0 ? 1 : 0)
-        return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', row, plantRenderOffset(entity.x))
+    plantOrder(entity: Pick<PlantSnapshot, 'typeId' | 'row' | 'x'>): number {
+        return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', entity.row, plantRenderOffset(entity.x))
     }
 
     zombieOrder(row: number): number {

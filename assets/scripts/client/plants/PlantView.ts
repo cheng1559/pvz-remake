@@ -202,6 +202,11 @@ export class PlantView implements EntityView<PlantSnapshot> {
         return this.presentation.shadow?.scale ?? 1
     }
 
+    /** The row it is drawn with (Plant::CalcRenderOrder's mRow): its own, unless its kind's view says (a nut rolling down). */
+    drawnRow(plant: PlantSnapshot): number {
+        return plant.row
+    }
+
     /**
      * A field of what only its kind shows (PlantSnapshot.own, its server class's snapshotOwn; off the board, the phase
      * it is shown in), read by `read` (a check of shared/validate); none where its kind shows none.

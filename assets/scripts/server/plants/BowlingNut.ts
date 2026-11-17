@@ -2,6 +2,7 @@ import type { EntityId, EntityRemover, SystemContext, World } from '@/server/sta
 import { cellPosition, type GameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
 import { groundStep } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger } from '@/shared/validate'
 import { rectOverlap } from '../combat/collision'
 import { hostilePlants } from '../combat/targets'
@@ -56,6 +57,11 @@ export class BowlingNut extends Plant {
         this.direction = direction
         this.hits = nonNegativeInteger(hits, `${name}.hits`)
         super.restoreOwn(rest, name)
+    }
+
+    /** The way it slants while it does, for the row its view draws it with (BowlingNutView.drawnRow). */
+    protected snapshotOwn(): JsonObject | undefined {
+        return this.direction ? { direction: this.direction } : undefined
     }
 
     roll({ world, commands }: SystemContext): void {

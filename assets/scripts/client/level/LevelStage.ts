@@ -110,7 +110,7 @@ export interface LevelStage {
      * Where each kind of entity is drawn among the rest, as the board draws it, for what a view draws with it. A plant's:
      * Plant::CalcRenderOrder.
      */
-    plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number
+    plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x'>): number
     /** A zombie's draw order in a row. */
     zombieOrder(row: number): number
     /** A projectile's draw order in a row, by its type's layer (a row's mower's too, by the projectile it runs as). */
