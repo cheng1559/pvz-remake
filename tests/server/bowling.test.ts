@@ -1,6 +1,7 @@
 import { withFixedBanks } from '../fixedBankLevels'
 import { type World } from '@/ecs'
 import { PlantComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
+import type { BowlingNut } from '@/server/plants/BowlingNut'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { groundStep } from '@/shared/content/animation'
@@ -90,8 +91,8 @@ test('conveyor packets have distinct identities, cost no sun, obey the line and 
     assert.equal(server.snapshot().sun, 0)
     assert.equal(server.snapshot().conveyorPackets.length, 0)
     assert.equal(server.snapshot().plants[0].typeId, 'pvz:bowling-wallnut')
-    assert.equal(definitions.plants['pvz:wallnut'].behavior, undefined)
-    assert.equal(definitions.plants['pvz:explodenut'].behavior, undefined)
+    assert.equal(definitions.plants['pvz:wallnut'].bowling, undefined)
+    assert.equal(definitions.plants['pvz:explodenut'].bowling, undefined)
     while (server.snapshot().gameplayTick < 400) server.tick()
     assert.equal(server.snapshot().conveyorPackets[0].id, 2)
     assert.equal(server.snapshot().items.length, 0, 'bowling does not spawn sky sun')
@@ -214,7 +215,7 @@ test('a pole vaulter vaults over a rolling nut from afar, where it stands', () =
     const x = server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x
     server.tick()
     const zombie = world.get(near, ZombieComponent)!
-    assert.equal(zombie.state, 'vaulting')
+    assert.equal(zombie.state, 'airborne')
     assert.equal(zombie.speedPerTick, 0)
     assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x, x)
 })
@@ -223,7 +224,7 @@ test('no zombie bites a rolling nut', () => {
     const { server, world, plant } = rollNut()
     // The nut is bouncing into the row, so it strikes nothing yet, while a zombie overlaps it.
     world.get(plant.entityId, PositionComponent)!.y += 40
-    ;(world.get(plant.entityId, PlantComponent)!.behaviorState as { direction: number }).direction = -1
+    ;(world.get(plant.entityId, PlantComponent) as BowlingNut).direction = -1
     const id = spawnZombie(world, definitions, 'pvz:normal', 2, plant.x + 24, plant.y - 30)
     server.tick()
     const zombie = world.get(id, ZombieComponent)!
@@ -235,7 +236,7 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
     for (const [typeId, bounced] of [['pvz:newspaper', false], ['pvz:newspaper', true], ['pvz:screendoor', false], ['pvz:screendoor', true]] as const) {
         const { server, world, plant } = rollNut()
         // Plant::UpdateBowling checks mState != STATE_NOTREADY: a nut that has bounced rolls on a slant.
-        if (bounced) (world.get(plant.entityId, PlantComponent)!.behaviorState as { direction: number }).direction = 1
+        if (bounced) (world.get(plant.entityId, PlantComponent) as BowlingNut).direction = 1
         const id = spawnZombie(world, definitions, typeId, 2, plant.x + 20, plant.y - 30)
         const shield = definitions.zombies[typeId].shield!.health
         server.drainEvents()
@@ -267,21 +268,22 @@ test("a nut rolls on its roll clip's ground as a zombie walks on its walk's (Rea
 
 test("a bowled nut takes Plant::UpdateBowling's numbers unless it writes its own, checked as the content loads", () => {
     // The base nuts write none of them; the explode-o-nut, which strikes no blow, writes nothing of its blows.
-    assert.deepEqual(definitions.plants['pvz:bowling-explodenut'].behavior, { kind: 'bowling', attack: { x: 0, width: 60 } })
-    const variant = (behavior: Record<string, unknown>, change?: (nut: any) => void) => {
+    assert.deepEqual(definitions.plants['pvz:bowling-explodenut'].bowling,
+        { attack: { x: 0, width: 60 }, bounceSpeed: 2, damage: 1800, helmDamage: 900, shieldDamage: 400, bouncedBreaks: [] })
+    const variant = (bowling: Record<string, unknown>, change?: (nut: any) => void) => {
         const changed = structuredClone(source('definitions')), nut = changed.plants['pvz:bowling-wallnut']
-        nut.behavior = { ...nut.behavior, ...behavior }
+        nut.bowling = { ...nut.bowling, ...bowling }
         change?.(nut)
         const parsed = parseGameplayDefinitions(changed)
         return { definitions: parsed, server: new IntegratedGameServer(parsed, parseGameplayLevels(source('levels'), parsed)) }
     }
-    for (const [behavior, error] of [
-        [{ groundDeltas: [17.2] }, /behavior\.groundDeltas is not supported/],
-        [{ damage: 0 }, /behavior\.damage must be positive/],
-        [{ helmDamage: 1.5 }, /behavior\.helmDamage must be a non-negative safe integer/],
-        [{ bounceSpeed: -2 }, /behavior\.bounceSpeed must be positive/],
-        [{ bouncedBreaks: 'door' }, /behavior\.bouncedBreaks must be an array/],
-    ] as const) assert.throws(() => variant(behavior), error)
+    for (const [bowling, error] of [
+        [{ groundDeltas: [17.2] }, /bowling\.groundDeltas is not supported/],
+        [{ damage: 0 }, /bowling\.damage must be positive/],
+        [{ helmDamage: 1.5 }, /bowling\.helmDamage must be a non-negative safe integer/],
+        [{ bounceSpeed: -2 }, /bowling\.bounceSpeed must be positive/],
+        [{ bouncedBreaks: 'door' }, /bowling\.bouncedBreaks must be an array/],
+    ] as const) assert.throws(() => variant(bowling), error)
     assert.throws(() => variant({}, nut => { delete nut.animation.clips.body.ground }), /fps and the ground it rolls on/)
     // A nut that writes its own blow strikes with it.
     const { definitions: changed, server } = variant({ damage: 100 })

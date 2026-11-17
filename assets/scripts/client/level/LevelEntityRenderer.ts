@@ -15,6 +15,9 @@ import { EntityFlashes } from './EntityFlashes'
 import { canShovel, cellPlant } from '@/shared/content/planting'
 import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType } from './LevelStage'
 
+/** What every frame is heard as, once its own events are: StageEventRegistry's `frame` handlers (the disco music's end). */
+const FRAME_EVENT: ServerEvent = { eventId: 0, type: 'frame', data: {} }
+
 /** What an entity of the board is, by the list of the server's snapshot it is in. */
 type EntityKind = 'plant' | 'zombie' | 'projectile' | 'mower' | 'gridItem' | 'item'
 type Positioned = { entityId: number, typeId: string, row: number, x: number, y: number }
@@ -183,6 +186,7 @@ export class LevelEntityRenderer implements LevelStage {
             }
         }
         for (const event of events) for (const handler of handlers.of(event.type, 'after')) handler(this, event, snapshot)
+        for (const handler of handlers.of(FRAME_EVENT.type, 'after')) handler(this, FRAME_EVENT, snapshot)
         // What the frame no longer has goes once its events are heard: what fell off a zombie gone with it (a puff) flies
         // from where it last was.
         for (const id of changes.removed) this.remove(id)
@@ -251,8 +255,8 @@ export class LevelEntityRenderer implements LevelStage {
             const view: EntityView = await (kind === 'plant' ? views.plants.create({ ...context, plant: entity as PlantSnapshot })
                 : kind === 'zombie' ? views.zombies.create({ ...context, zombie: entity as ZombieSnapshot })
                 : kind === 'projectile' ? views.projectiles.create({ ...context, projectile: entity as WorldSnapshot['projectiles'][number] })
-                // A mower is drawn as the mowing projectile it runs as (MowerView, by its type's presentation).
-                : kind === 'mower' ? views.projectiles.create({ ...context, projectile: entity as MowerSnapshot })
+                // A row's mower waiting (MowerView); one set off is a projectile.
+                : kind === 'mower' ? views.mowers.create({ ...context, projectile: entity as MowerSnapshot })
                 : kind === 'gridItem' ? views.gridItems.create({ ...context, item: entity as NonNullable<WorldSnapshot['gridItems']>[number] })
                 : views.items.create({ ...context, item: entity as WorldSnapshot['items'][number] }))
             // A view made for an entity that went meanwhile goes with it.

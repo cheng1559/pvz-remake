@@ -53,7 +53,7 @@
 - 僵尸移动、攻击范围按阵营方向镜像。
 - 刷波、过关、掉落关卡奖励：只统计 `zombies` 阵营的僵尸。
 - 冰冻：只作用于敌对阵营，跟着攻击走（寒冰豌豆只打敌对目标）。原版 `CanBeChilled` 写死被魅惑的僵尸不能冻，只是因为原版只有植物会冰冻；这里去掉了这条，敌方的寒冰豌豆能减速 `plants` 阵营的僵尸，既被魅惑又被减速或冻住的僵尸和植物（原版不会出现，被魅惑的僵尸不能被冻）取两种颜色的平均 (102, 70, 224)，两种状态都看得出（`client/view/tints.ts` 的 `entityTint`），掉落的部件同样。寒冰菇只冻敌对阵营（见下一条）。敌对的寒冰豌豆打中植物也会冻住它（扩展，原版植物不会被冻）：时长同冻僵尸并取较长者，期间植物每两个 tick 跳过一个，射击、蓄力、产阳光、能力计时（引线、土豆雷准备、大嘴花消化等）、眨眼倒计时和保龄球滚动都按一半速度；动画和冰冻僵尸的身体一样由服务端每个 tick 按一半速率推进（`plantPace`，`CHILLED_ANIMATION_FACTOR`），快照里发的就是减半后的速率，客户端照着播放；刚被冻上时播放冰冻音效（`FOLEY_FROZEN`，同 `Zombie::ApplyChill`）；客户端和冰冻僵尸走同一条路径变蓝（`ReanimPlayer.setTint`，`plants/chill.ts`，事件 `plantChilled`，存档字段 `chilledTicks`）。`/plantinvincible` 只挡伤害，不挡冰冻。
-- 冷不冷得到看类型（`server/combat/cold.ts`，植物和僵尸同一套）：定义里的 `unchillable: true` 或 `[状态…]` 表示任何时候或在这些状态下不减速，因此也不冻，寒冰射手的减速同样无效（火炬树桩；原版的冰车、拉着雪橇的雪橇队等）；`unfreezable: true` 或 `[状态…]` 表示不冻，只减速，也不受冰冻的那 20 点伤害（原版 `HitIceTrap` 先减速、`CanBeFrozen` 为假就返回）。植物的状态是技能状态，僵尸的是僵尸状态。本体里`unfreezable` 的有樱桃炸弹、寒冰菇、两种保龄球坚果、墓碑吞噬者、出土中（`rising`）的土豆雷，以及在空中（`vaulting`）的撑杆僵尸；已经索敌的倭瓜、三叶草和火爆辣椒、毁灭菇实现时照此加上，火炬树桩写 `unchillable`。正在死亡、被烧焦、被压扁、正从墓碑爬出的僵尸，和已被摧毁的植物，任何类型都不减速、不冻。
+- 冷不冷得到看类型（`server/combat/cold.ts`，植物和僵尸同一套）：定义里的 `unchillable: true` 或 `[状态…]` 表示任何时候或在这些状态下不减速，因此也不冻，寒冰射手的减速同样无效（火炬树桩；原版的冰车、拉着雪橇的雪橇队等）；`unfreezable: true` 或 `[状态…]` 表示不冻，只减速，也不受冰冻的那 20 点伤害（原版 `HitIceTrap` 先减速、`CanBeFrozen` 为假就返回）。植物的状态是技能状态，僵尸的是僵尸状态。本体里`unfreezable` 的有樱桃炸弹、寒冰菇、两种保龄球坚果、墓碑吞噬者、出土中（`rising`）的土豆雷，以及在空中（`airborne`）的撑杆僵尸；毁灭菇也是；已经索敌的倭瓜、三叶草和火爆辣椒实现时照此加上，火炬树桩写 `unchillable`。正在死亡、被烧焦、被压扁、正从墓碑爬出的僵尸，和已被摧毁的植物，任何类型都不减速、不冻。
 - 寒冰菇：冻住与它敌对的全部僵尸和全部植物（`combat/freeze.ts` 的 `freezeHostiles`）。原版的冰冻放过被魅惑的僵尸（`CanBeChilled`），那正是原版里唯一和它同一方的僵尸；这里放过的是它自己这一方。`zombies` 阵营的寒冰菇冻住 `plants` 阵营的僵尸，也冻住 `plants` 阵营的植物（扩展，原版没有冻植物）：植物和僵尸一样减速 2000 tick、冻住 400–600 tick（已经被减速或被冻的 300–400）、受 20 点伤害（`damagePlant`，会闪一下），冻住期间每个 tick 都跳过（`plantSkipsTick`），射击、产阳光、能力计时和眨眼全部暂停，动画停住（`plantPace` 为 0），挂在它身上的粒子也停在原处（墓碑吞噬者的啃食，`ParticlePlayer.setPaused`），樱桃炸弹也不再抖动，仍然可以被啃、被打；冰块按植物的默认位置画在格子中间、顶边和植物影子的顶边齐平（表现 `iceTrap.plant`，(13, 51)，和僵尸的冰块顶边对齐它影子的 92 一样；植物比同一行的僵尸站得高，影子在 51），碎冰粒子在 (40, 65)，跟着植物一起左右镜像。冻着时被消灭（`destroyEatenPlant`）冰块碎开，被小推车压则直接去掉。场地按被冻的一方记 300 tick（`LevelState.iceTrap`）。存档字段 `frozenTicks`（植物和僵尸）、`level.iceTrap`。
 - 小推车：不碾 `plants` 阵营的僵尸（原版 `EffectedByDamage(127)`，同植物攻击）。
 - 铲子：只能铲 `plants` 阵营的植物，`zombies` 阵营的植物不高亮、铲不掉（同墓碑吞噬者不能铲）。
@@ -62,7 +62,7 @@
 
 - 通用的植物能力 `mindControl: true`：醒着时被敌对僵尸啃到（咀嚼动画的音效帧，`Zombie::AnimateChewSound`），这一下不算啃咬，植物立即消失（血量清零，同一 tick 其他僵尸不会再啃到它），啃它的僵尸改到植物的阵营。数据写在植物定义里，不按植物 ID 判断。
 - 扩展（原版植物不吃植物）：植物一口咬住醒着的敌对魅惑菇时（大嘴花，`plants/abilities.ts` 吞植物的那一处），咬它的植物同样改到魅惑菇的阵营；这一口不算吞下，按咬空（`missed`）收回，咬完回到 `ready`，不嚼不消化（`chomperBit` 的 `ate` 为 false）；白天睡着的魅惑菇照常被吃掉。僵尸和植物走同一个 `mindControl`（`zombies/mindControl.ts`，是否生效看 `mindControls`）。
-- 换阵营时：速度不变，停嘴再走时和所有僵尸一样重新随机（`pickZombieSpeed`，即 `PickRandomSpeed`）；僵尸或植物记上 `mindControlled`（随存档保存、快照发给客户端，只有被魅惑的才染色，种下或放下就在另一方的不算）；发出 `mindControlled` 事件（`entityId`、`plantId`、`typeId`、`team`）；被魅惑的僵尸若是最后一个敌对僵尸，关卡奖励从它身上掉落（`tryDropLevelAward`）。
+- 换阵营时：速度不变，停嘴再走时和所有僵尸一样重新随机（`Zombie.pickSpeed`，即 `PickRandomSpeed`）；僵尸或植物记上 `mindControlled`（随存档保存、快照发给客户端，只有被魅惑的才染色，种下或放下就在另一方的不算）；发出 `mindControlled` 事件（`entityId`、`plantId`、`typeId`、`team`）；被魅惑的僵尸若是最后一个敌对僵尸，关卡奖励从它身上掉落（`tryDropLevelAward`）。
 - 成就 Disco is Undead 以后用一个触发类型观察 `mindControlled`（舞王实现后再配）。
 
 ### 表现
@@ -84,5 +84,7 @@
 种子包也带阵营，含义是“放出来的东西属于哪一方”：植物种子默认 `plants`，僵尸种子默认 `zombies`（`seedTeam`），只有和默认不同时才写进 `seedBank.packets[].team`（随存档保存，快照的 `seedPackets[].team` 和手持的 `cursor.team`）。植物种子的 `zombies` 包种下僵尸阵营的植物，僵尸种子的 `plants` 包放出植物阵营的僵尸；客户端把包里的东西和手持、落点预览画成反向（`PlantPreview` / `ZombiePreview` 的 `setMirrored`）。目前用 `/seed {槽位} {种子名} {team}` 换出。
 
 演示关：`/level pvz:teams-demo`。关卡的 `initialPlants` 可以写 `"team": "zombies"` 预放僵尸阵营的植物。
+
+舞王召唤的伴舞继承舞王的阵营和魅惑标记（原版只复制魅惑标记），伴舞的位置跟着朝向左右翻转；被魅惑的舞王放开原来的伴舞、之后召唤自己一方的，被魅惑的伴舞离开原来的舞王。弹坑的阵营只决定画面朝向：哪一方的植物都不能种在弹坑上，弹坑卡默认属于植物方，毁灭菇留下的弹坑属于毁灭菇那一方。
 
 调试：`/zombie <type> <row> <col> plants` 生成 `plants` 阵营的僵尸，`/plant <type> <row> <col> zombies` 生成 `zombies` 阵营的植物，`/seed <slot> <type> zombies` 换出 `zombies` 阵营的种子包。

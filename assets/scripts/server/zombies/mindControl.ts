@@ -1,24 +1,17 @@
 import type { World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
-import { type EntityRemover, LevelStateResource, type Plant, PlantComponent, ZombieComponent } from '../state/components'
+import { type EntityRemover, PlantComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from '../level/levelAward'
-import { isPlantAsleep } from '../plants/sleep'
-
-/** A plant that mind-controls what eats it (PlantDefinition.mindControl, the hypno-shroom), awake: asleep it does not. */
-export function mindControls(world: World, definitions: GameplayDefinitions, plant: Plant): boolean {
-    const definition = definitions.plants[plant.typeId]
-    return !!definition.mindControl && !isPlantAsleep(definition, world.resources.get(LevelStateResource).board)
-}
 
 /**
- * Zombie::AnimateChewSound for a plant that mind-controls (`mindControls`), eaten by a hostile zombie as it chews or
+ * Zombie::AnimateChewSound for a plant that mind-controls (Plant.mindControls: the hypno-shroom awake), eaten by a hostile zombie as it chews or
  * by a hostile plant as it swallows it whole (a chomper's bite; not in the original, whose plants never eat plants):
  * the plant is gone at once (Plant::Die), so nothing else eats it, and its eater comes over to its side
- * (StartMindControlled), tinted. A zombie walks on at a speed picked as it stops eating, as every zombie does (the
- * original's mVelX = 0.17 is picked over then); if it was the last zombie against the player, the level's award drops
- * from it (TrySpawnLevelAward). The client hears `mindControlled`.
+ * (StartMindControlled), tinted, and its kind hears of it (Zombie.changedSides: a dancer leaves its troupe). A zombie walks on at a speed picked as it
+ * stops eating, as every zombie does (the original's mVelX = 0.17 is picked over then); if it was the last zombie
+ * against the player, the level's award drops from it (TrySpawnLevelAward). The client hears `mindControlled`.
  */
 export function mindControl(world: World, definitions: GameplayDefinitions, eater: number, plantEntity: number, remover: EntityRemover): void {
     const prey = world.get(plantEntity, PlantComponent)!, team = plantTeam(prey)
@@ -29,7 +22,10 @@ export function mindControl(world: World, definitions: GameplayDefinitions, eate
     turned.mindControlled = true
     if (team === (zombie ? 'zombies' : 'plants')) delete turned.team
     else turned.team = team
-    if (zombie) zombie.biteTicks = 0
+    if (zombie) {
+        zombie.biteTicks = 0
+        zombie.changedSides(world, eater)
+    }
     emitServerEvent(world.resources.get(EventQueueResource), 'mindControlled', { entityId: eater, plantId: plantEntity, typeId: turned.typeId, team })
     if (zombie) tryDropLevelAward(world, definitions, remover, eater)
 }

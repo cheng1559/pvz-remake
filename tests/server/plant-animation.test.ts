@@ -30,13 +30,13 @@ function debug(server: IntegratedGameServer, command: string): void {
 test('a potato mine rises and arms on its layers, its light flashing faster as a zombie nears', () => {
     const server = begin('/plant potatomine 3 3')
     const mine = () => server.snapshot().plants[0]
-    const until = (state: string) => { for (let tick = 0; tick < 2000 && mine().ability!.state !== state; tick++) server.tick() }
+    const until = (state: string) => { for (let tick = 0; tick < 2000 && mine().own!.state !== state; tick++) server.tick() }
     assert.deepEqual(mine().animations, { body: { clip: 'buried', time: 0, rate: 12 } })
     until('rising')
     assert.deepEqual(Object.entries(mine().animations!).map(([layer, state]) => [layer, state.clip]), [['body', 'rise']])
     // Its 19 frames at 18 a second are through within the 106 ticks it rises for, and it holds the last.
     for (let tick = 0; tick < 105; tick++) server.tick()
-    assert.deepEqual([mine().ability!.state, mine().animations!.body.time], ['rising', 19])
+    assert.deepEqual([mine().own!.state, mine().animations!.body.time], ['rising', 19])
     until('armed')
     server.tick()
     const { body, light } = mine().animations!
@@ -84,18 +84,18 @@ test('a chomper bites, chews and swallows on its body layer, then idles at its R
     }
     assert.deepEqual(clips, ['idle', 'bite', 'chew', 'swallow', 'ready'])
     // Plant::UpdateChomper: PlayIdleAnim at the Reanim's 12 frames a second.
-    assert.deepEqual([server.snapshot().plants[0].ability!.state, body().rate], ['ready', 12])
+    assert.deepEqual([server.snapshot().plants[0].own!.state, body().rate], ['ready', 12])
 })
 
 test('a grave buster lands for as long as its landing clip takes, then chews', () => {
     const server = begin('/plant gravebuster 3 3')
     const buster = () => server.snapshot().plants[0]
-    const { ticks } = buster().ability!
+    const ticks = Number(buster().own!.ticks)
     assert.deepEqual(buster().animations, { body: { clip: 'land', time: 0, rate: 700 / ticks } })
     for (let tick = 1; tick < ticks; tick++) server.tick()
-    assert.deepEqual([buster().ability!.state, buster().animations!.body.clip], ['landing', 'land'])
+    assert.deepEqual([buster().own!.state, buster().animations!.body.clip], ['landing', 'land'])
     server.tick()
-    assert.deepEqual([buster().ability!.state, buster().animations!.body.clip, buster().animations!.body.rate], ['eating', 'body', 12])
+    assert.deepEqual([buster().own!.state, buster().animations!.body.clip, buster().animations!.body.rate], ['eating', 'body', 12])
 })
 
 test('a wall-nut all but stops while it is chewed, and blinks one of its three ways', () => {

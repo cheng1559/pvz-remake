@@ -4,7 +4,6 @@ import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageIndex, type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
-import { dropZombieFlag } from './flag'
 import { zombiePartDropped } from './parts'
 import { dropZombieLoot } from '../level/loot'
 import { breakIce } from '../combat/ice'
@@ -65,14 +64,8 @@ export function damageZombie(
         zombie.shieldHealth -= absorbed
         remaining -= absorbed
         if (zombie.shieldHealth === 0) {
-            // Zombie::UpdateZombieNewspaper: losing the paper enrages the zombie.
-            const enrage = definition.enrage
-            if (enrage) {
-                zombie.enrageTicks = enrage.pauseTicks
-                zombie.state = 'walking'
-                playZombie(zombie, definition.animation, ZOMBIE_CLIPS.gasp, world.resources.get(RandomResource))
-                zombie.biteTicks = 0
-            }
+            // Its kind hears of it: a newspaper zombie that loses its paper is enraged.
+            zombie.shieldDropped(world.resources.get(RandomResource))
             emitServerEvent(events, 'zombieShieldDropped', {
                 entityId: entity, shield: definition.shield!.type, ...(hit.leaveBody === false ? { silent: true } : {}),
             })
@@ -103,7 +96,7 @@ export function damageZombie(
         zombiePartDropped(world, entity, 'arm')
     }
     if (zombie.hasHead && index === 2) {
-        dropZombieFlag(world, entity)
+        zombie.dropCarried(world, entity)
         zombie.hasHead = false
         zombiePartDropped(world, entity, 'head')
         // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
@@ -177,7 +170,7 @@ export function startZombieDeath(world: World, definitions: GameplayDefinitions,
     if (zombie.state === 'dying') return
     // Zombie::PlayDeathAnim: the ice it dies in breaks off, and it falls at its pace.
     breakIce(world, entity, zombie)
-    dropZombieFlag(world, entity)
+    zombie.dropCarried(world, entity)
     // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
     dropZombieShield(world, definitions, entity, zombie, true)
     const random = world.resources.get(RandomResource)
@@ -201,15 +194,15 @@ export function updateHeadlessZombie(world: World, definitions: GameplayDefiniti
 }
 
 /**
- * Zombie::MowDown: a mower flattens a zombie standing on the lawn; one dying, burned, in its vault or still rising from
- * a grave cannot be flattened as it stands, and goes in a puff instead.
+ * Zombie::MowDown: a mower flattens a zombie standing on the lawn; one dying, burned, in the air (`airborne`) or still
+ * rising from a grave cannot be flattened as it stands, and goes in a puff instead.
  */
 export function isFlattenableZombie(zombie: Zombie): boolean {
-    return zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'vaulting' && !zombie.riseTicks
+    return zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'airborne' && !zombie.riseTicks
 }
 
 /**
- * Standing zombies that ground weapons can hit; vaulting zombies are in the air. Only an `attacker` on the other side
+ * Standing zombies that ground weapons can hit; `airborne` ones are in the air. Only an `attacker` on the other side
  * hits it (Zombie::EffectedByDamage); plants' weapons by default.
  */
 export function isTargetableZombie(zombie: Zombie, attacker: Team = 'plants'): boolean {

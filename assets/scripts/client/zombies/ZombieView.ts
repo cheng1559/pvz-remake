@@ -12,15 +12,15 @@ import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegist
 import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/LevelPresentationSnapshot'
 import { exact } from '@/shared/validate'
-import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
-import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
+import { attachmentTrack, type GraveZombiePresentation, type ZombiePresentationDefinition } from '@/shared/content/presentation'
+import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { animateCurve, ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
+import { MIRRORED_SHIFT, ZOMBIE_PIVOT, zombiePartVisibility } from './zombieParts'
 import { IceTrapView } from '@/client/view/IceTrapView'
 
 /** Sprites a zombie swaps in as it takes damage, by ID: dented helms and shields, the bare arm, the enraged head. */
@@ -30,6 +30,11 @@ export type ZombieViewSprites = Readonly<Record<string, SpriteFrame>>
 export interface ZombieDraw {
     /** Where the body goes in its node, in place of where each of its clips has it (a cached picture draws from the Reanim's origin). */
     position?: { x: number, y: number }
+    /**
+     * At its Reanim's own size, not the zombie's (ZombieDefinition.scale): a cached picture is a Reanimation of its own,
+     * not the zombie (ReanimatorCache::MakeCachedZombieFrame leaves out mScaleZombie), in a packet and in hand.
+     */
+    ownSize?: true
     /** `false`: without its shadow. */
     shadow?: boolean
 }
@@ -59,7 +64,9 @@ const NO_FLASH: ZombieFlash = { flash: 0, through: false, past: false }
  * is on at its time into it, as a plant's view shows its layers. The pictures are the presentation's clip of the same
  * name. On the board the server keeps the animation and `sync` follows its snapshots, with what else the board does to
  * a zombie; off the board whoever shows the zombie gives it what to play (ZombieViewContext.zombie), and it stands so,
- * turning with `turn`. Either way `pose` shows it. A Mod's view extends it as a plant's extends PlantView.
+ * turning with `turn`. Either way `pose` shows it. What only some zombies do is their own views' (DancerView,
+ * PoleVaulterView, NewspaperView, chosen by the presentation's `view`), and a Mod's view extends it as a plant's
+ * extends PlantView.
  */
 export class ZombieView implements EntityView<ZombieSnapshot> {
     /**
@@ -76,26 +83,34 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     /** Its layers: the body, one player for all its clips, which it changes between in place; over it what it carries. */
     private readonly layers: LayerPlayers
     /** The clip its body is on. */
-    private bodyClip: string | null = null
+    protected bodyClip: string | null = null
     private parts = ''
     private mowerDriver: ReanimPlayer | null = null
-    private holdingFlag = false
-    private latestZombie: ShownZombie | null = null
+    /** The zombie as it was last shown. */
+    protected latestZombie: ShownZombie | null = null
     /** Its hit flash (Zombie::mJustGotShotCounter) in the frame being drawn. */
     protected flash = NO_FLASH
     /** Its body is coming up out of a grave (syncRise). */
     private rising = false
+    /** How far the game over has gone at its last syncGameOverWalk, in ticks: its blend goes on by what has gone since. */
+    private gameOverTicks = 0
+    /** The zombies have won: a winner takes its walk into the house at once (bodyBlend). */
+    protected won = false
     /** Where its body's clip was at the last snapshot, for the marks of its steps it has come to since. */
     private stepped?: { clip: string, time: number }
     /** The ice it stands in while frozen (Zombie::DrawIceTrap), around its layers; on the board only. */
     private ice?: IceTrapView
+    /** Its shadow's picture's size, which it is scaled about the middle of (placeShadow). */
+    private shadowSize = { width: 0, height: 0 }
 
     private readonly node: Node
     protected readonly presentation: ZombiePresentationDefinition
     /** Its type, whose clips it draws. */
     readonly typeId: string
-    /** Its gameplay definition: the helm and shield for their full health, and whether it vaults. */
-    private readonly gameplay: Pick<ZombieDefinition, 'helm' | 'shield' | 'vault'>
+    /** Its gameplay definition: the helm and shield for their full health. */
+    private readonly gameplay: Pick<ZombieDefinition, 'helm' | 'shield'>
+    /** Zombie::mScaleZombie: the size its body is drawn at (ZombieDefinition.scale). */
+    protected readonly scale: number
     private readonly draw: ZombieDraw
 
     constructor(protected readonly context: ZombieViewContext) {
@@ -104,6 +119,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.typeId = zombie.typeId
         this.presentation = zombieDefinition(content.presentation, zombie.typeId)
         this.gameplay = definition
+        this.scale = context.draw?.ownSize ? 1 : definition.scale ?? 1
         this.animation = definition.animation
         this.draw = context.draw ?? {}
         this.root = uiNode({ name: 'Layers', parent: this.node }).node
@@ -112,7 +128,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /** The sprites it swaps in as it takes damage; none off the board, where it is shown whole. */
-    private sprites: ZombieViewSprites = {}
+    protected sprites: ZombieViewSprites = {}
 
     /** The body layer's player: what it carries is on its parts. */
     protected get body(): ReanimPlayer { return this.layers.player(ZOMBIE_BODY_LAYER) }
@@ -123,15 +139,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         return player.loadedId ? player : null
     }
 
-    /** Every zombie's swapped sprites and dropped parts, ready before play. */
+    /** Every zombie's swapped sprites and dropped parts, ready before play: once, for its views of every kind. */
     static async preload(content: Content): Promise<void> {
+        if (this !== ZombieView) return
         const ids = new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...swapSprites(zombie),
             ...Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])]))
         await Promise.all([...ids].map(id => modResources.sprite(id)))
     }
 
     async initialize(): Promise<void> {
-        const { content, stage, node, zombie } = this.context
+        const { content, stage, zombie } = this.context
         // Zombie::DrawShadow under it, unless it is drawn without.
         const shadow = this.draw.shadow === false ? undefined : await plantShadow(content, stage)
         if (stage) {
@@ -139,12 +156,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             const look = content.presentation.iceTrap
             this.ice = await IceTrapView.create(this.root, this.root.children[0], look, this.presentation.iceTrap ?? look.zombie)
         }
+        if (shadow) this.shadowSize = { width: shadow.originalSize.width, height: shadow.originalSize.height }
         // Off the board its shadow goes beside its node, under what else is there.
         if (shadow) this.shadowNode = uiNode({
-            name: 'ZombieShadow', parent: stage?.layer ?? node.parent!, anchor: { x: 0, y: 1 }, active: false,
+            name: 'ZombieShadow', parent: stage?.layer ?? this.node.parent!, anchor: { x: 0, y: 1 }, active: false,
             sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
         if (!stage) this.shadowNode?.setSiblingIndex(0)
+        // A zombie of another size has its shadow so (placeShadow).
+        const shadowScale = this.presentation.shadow.scale
+        if (shadowScale !== undefined) this.shadowNode?.setScale(shadowScale, shadowScale, 1)
         await prepareReanims(this.playable())
         if (!stage) this.stand(zombie)
     }
@@ -155,6 +176,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      * a mowed one on the mower's driver). `onBoard` shows the zombie itself.
      */
     sync(zombie: ZombieSnapshot, world: WorldSnapshot): void {
+        this.won = world.result === 'lost'
         const at = boardToLayer(zombie.x, zombie.y)
         this.node.setPosition(at.x, at.y)
         this.latestZombie = zombie
@@ -168,12 +190,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
                 if (armor?.dropReanim) this.attachments.remove(armor.dropReanim.reanimId)
             }
         }
-        this.holdingFlag = zombie.animations[ZOMBIE_FLAG_LAYER] !== undefined
         uiNode({ node: this.node, opacity: zombie.alpha })
         this.placeShadow()
         // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
         if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
-            zombie.state !== 'vaulting' && !zombie.riseTicks
+            zombie.state !== 'airborne' && !zombie.riseTicks
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
         if (zombie.state === 'mowered') {
@@ -210,6 +231,15 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /**
+     * A field of what only its kind shows (ZombieSnapshot.own, its server class's snapshotOwn), read by `read` (a check of
+     * shared/validate); none where its kind shows none, or off the board.
+     */
+    protected own<T>(zombie: ShownZombie, field: string, read: (value: unknown, name: string) => T): T | undefined {
+        const value = zombie.own?.[field]
+        return value === undefined ? undefined : read(value, `${zombie.typeId}.own.${field}`)
+    }
+
+    /**
      * A particle effect of the zombie's in board coordinates, at `order` (`renderOrder`), over everything on the board
      * (RENDER_LAYER_TOP) without one. `mirrored`: the effect turned round, for a zombie facing right.
      */
@@ -233,7 +263,6 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private stand(zombie: ShownZombie): void {
         this.latestZombie = zombie
         this.syncFacing(zombie)
-        this.holdingFlag = zombie.animations[ZOMBIE_FLAG_LAYER] !== undefined
         this.placeShadow()
         if (this.shadowNode) this.shadowNode.active = true
         // The board draws a shield in its own colors, apart from the body's (applyHitFlash); a picture's shield takes the
@@ -262,9 +291,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     private placeShadow(): void {
-        const { x, y, backwardsX } = this.presentation.shadow
-        // Zombie::DrawShadow's place differs for a zombie walking right.
-        this.shadowNode?.setPosition(this.node.position.x + (this.mirrored ? backwardsX ?? x : x), this.node.position.y + y)
+        const { x, y, backwardsX, scale = 1 } = this.presentation.shadow, { width, height } = this.shadowSize
+        // Zombie::DrawShadow's place differs for a zombie walking right; one of a zombie of another size is so about its middle.
+        this.shadowNode?.setPosition(this.node.position.x + (this.mirrored ? backwardsX ?? x : x) + width * (1 - scale) / 2,
+            this.node.position.y + y - height * (1 - scale) / 2)
     }
 
     get players(): ReanimPlayer[] { return this.layers.shown.filter(player => player.node.isValid) }
@@ -282,17 +312,19 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         // Still below by what it has to rise, inside the clip (GraveZombiePresentation), which is the zombie's: in the
         // body's own coordinates, turned round with a body facing right.
-        const sunk = this.sunk(zombie.riseTicks), { clip } = this.graveRise
+        const rise = this.rise(zombie), sunk = this.sunk(rise, zombie.riseTicks), { clip } = rise
         this.place(player.node, at.x, at.y - sunk)
         const top = sunk + clip.y, bottom = clip.bottom - Math.min(clip.settleTicks, zombie.riseTicks), { x, y } = player.node.position
-        player.setClip({ x: this.mirrored ? x - clip.x - clip.width : clip.x - x, y: top + y, width: clip.width, height: Math.max(0, bottom - top) })
+        player.setClip({ x: this.turned ? x - clip.x - clip.width : clip.x - x, y: top + y, width: clip.width, height: Math.max(0, bottom - top) })
     }
 
-    private get graveRise() { return this.context.content.presentation.graves.zombie }
+    /** How it comes up while it rises (`riseTicks`): out of a grave, unless its view has it come up otherwise. */
+    protected rise(_zombie: ShownZombie): GraveZombiePresentation {
+        return this.context.content.presentation.graves.zombie
+    }
 
     /** How far below the body still is: Zombie::UpdateZombieRiseFromGrave's altitude, from -depth up to none. */
-    private sunk(riseTicks: number): number {
-        const { depth, riseTicks: ticks } = this.graveRise
+    private sunk({ depth, riseTicks: ticks }: GraveZombiePresentation, riseTicks: number): number {
         return -animateCurve(ticks, 0, riseTicks, -depth, 0)
     }
 
@@ -343,14 +375,19 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const player = this.player
         if (!player) return
         // The walk goes on from where the server left it, by the server's rule (walkZombie): the clip comes round by
-        // its length while its frames, and the ground under them, are spread over its length less one.
+        // its length while its frames, and the ground under them, are spread over its length less one; at its size.
         const { rate, timeSeconds } = this.playback(zombie, player), cycle = player.durationSeconds, last = player.lastFrameTimeSeconds
         const start = timeSeconds + approachTicks / 100 * rate, time = start + ticks / 100 * rate
         const ground = this.presentation.parts.ground
         const groundAt = (seconds: number) => player.sampleTrack(ground, seconds % cycle / cycle * last)?.x ?? 0
         const distance = ((Math.floor(time / cycle) - Math.floor(start / cycle)) * (groundAt(cycle - 1e-9) - groundAt(0)) + groundAt(time) - groundAt(start)) * cycle / last
-        this.node.setPosition(zombie.x - 400 - distance, 300 - y)
+        this.node.setPosition(zombie.x - 400 - distance * this.scale, 300 - y)
         this.placeShadow()
+        // Its player stands still with the lawn, so a blend it was in as the zombies won (one that had just stopped
+        // eating) goes on by the game over's own ticks.
+        const gone = approachTicks + ticks
+        player.advanceBlend(Math.max(0, gone - this.gameOverTicks) / 100)
+        this.gameOverTicks = gone
         player.seek(time % cycle)
     }
 
@@ -416,9 +453,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     private syncMowered(zombie: ZombieSnapshot): void {
-        // Mowed before its body showed (put down on a running mower), or as it landed from its vault, with no walking
-        // snapshot between: its walk stands in for the driver to take.
-        if (!this.player || this.gameplay.vault && !zombie.hasPole && this.bodyClip === ZOMBIE_CLIPS.jump) {
+        // Mowed before its body showed (put down on a running mower), or showing what its walk stands in for: its walk
+        // for the driver to take.
+        if (!this.player || this.mowedOnWalk(zombie)) {
             this.pose({ ...zombie, animations: { [ZOMBIE_BODY_LAYER]: { clip: ZOMBIE_CLIPS.walk, time: 0, rate: ASSET_FPS } } })
         }
         this.applyParts(zombie)
@@ -442,6 +479,23 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /**
+     * Mowed showing a clip its walk stands in for, with no walking snapshot between (a pole vaulter as it lands), so the
+     * driver takes its walk.
+     */
+    protected mowedOnWalk(_zombie: ZombieSnapshot): boolean {
+        return false
+    }
+
+    /**
+     * How long its body blends into a clip it comes to from the one it is on (`bodyClip`): 0.2 s, or none for one
+     * mowed, whose driver takes its body at once, nor for a winner taking its walk into the house (Zombie::WalkIntoHouse's
+     * StartWalkAnim(0)). A view whose zombie changes clips at once has it so here.
+     */
+    protected bodyBlend(zombie: ShownZombie): number {
+        return zombie.state === 'mowered' || this.won ? 0 : 0.2
+    }
+
+    /**
      * Shows the zombie's animation, each layer at its time. A body that comes to another clip changes to it where it is,
      * blending from the pose it had, so that what is on the zombie (a splat, a dropped helm) stays over it; what it
      * carries goes on the part of the body its clip names (a flag in its hand, drawn between the hand and the arm on the pole).
@@ -450,11 +504,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      */
     protected pose(zombie: ShownZombie, board = true): void {
         const changed = this.bodyClip !== body(zombie).clip
-        // Landing and WalkIntoHouse both use StartWalkAnim(0), without blending the held pole into the walk.
-        const landing = (this.bodyClip === ZOMBIE_CLIPS.jump || this.gameplay.vault && this.bodyClip === ZOMBIE_CLIPS.run && zombie.hasPole === false)
-            && (zombie.state === 'walking' || zombie.state === 'eating')
         this.layers.show(layer => this.shown(layer, zombie), {
-            blend: (layer, _clip, first) => layer === ZOMBIE_BODY_LAYER && !first && !landing && zombie.state !== 'mowered' ? 0.2 : 0,
+            blend: (layer, _clip, first) => layer === ZOMBIE_BODY_LAYER && !first ? this.bodyBlend(zombie) : 0,
             place: (layer, player, clip) => {
                 const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
                 if (player.node.parent === this.root) this.place(player.node, at.x, at.y)
@@ -475,47 +526,64 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private applyParts(zombie: ShownZombie): void {
         const helmStage = armorStage(zombie.helmHealth, this.gameplay.helm), shieldStage = armorStage(zombie.shieldHealth, this.gameplay.shield)
         // Zombie::ShowDoorArms: an eating zombie lowers the shield arms; a dropped shield takes them away for good.
-        const holdingShield = shieldStage >= 0 && zombie.state !== 'eating'
-        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}|${helmStage}|${shieldStage}|${holdingShield ? 1 : 0}`
+        const holdingShield = shieldStage >= 0 && zombie.state !== 'eating', own = this.ownParts(zombie)
+        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${helmStage}|${shieldStage}|${holdingShield ? 1 : 0}|${own.map(([, visible]) => visible ? 1 : 0).join('')}`
         if (!this.player || signature === this.parts) return
         this.parts = signature
         const presentation = this.presentation, parts = presentation.parts
-        const state = { hasHead: zombie.hasHead, hasTongue: zombie.hasTongue, hasArm: zombie.hasArm, holdingFlag: this.holdingFlag, helmStage, shieldStage, holdingShield }
-        for (const [tracks, visible] of zombiePartVisibility(presentation, state)) this.player.setTracksVisible(tracks, visible)
+        const state = { hasHead: zombie.hasHead, hasTongue: zombie.hasTongue, hasArm: zombie.hasArm, helmStage, shieldStage, holdingShield }
+        // Its kind's own parts first: any zombie's that share a track with them have the last word.
+        for (const [tracks, visible] of [...own, ...zombiePartVisibility(presentation, state)]) this.player.setTracksVisible(tracks, visible)
         this.player.setTrackSpriteOverride(parts.upperArm, zombie.hasArm ? null
             : this.sprites[presentation.damagedArmSprite])
-        const enraged = presentation.enragedHead
-        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && body(zombie).clip !== ZOMBIE_CLIPS.gasp ? this.sprites[enraged.sprite] : null)
         // Zombie::TakeHelmDamage and TakeShieldDamage swap in the dented sprite below 2/3 and 1/3 health.
         for (const [armor, stage] of [[presentation.helm, helmStage], [presentation.shield, shieldStage]] as const) {
             if (!armor || stage < 0 || !parts.helms.includes(armor.track)) continue
             this.player.setTrackSpriteOverride(armor.track, stage === 0 ? null : this.sprites[armor.damagedSprites[stage - 1]])
         }
+        this.putOnParts(zombie, this.player)
     }
+
+    /** The tracks only its kind shows or hides, shown or not: the flag zombie's arms, as it carries its flag or not. */
+    protected ownParts(_zombie: ShownZombie): Array<[readonly string[], boolean]> {
+        return []
+    }
+
+    /** What its view puts on its body beyond any zombie's parts, each time they change (applyParts). */
+    protected putOnParts(_zombie: ShownZombie, _player: ReanimPlayer): void {}
 
     private color: 'normal' | 'chilled' | 'mindControlled' | 'mindControlledChilled' | 'burned' = 'normal'
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
+    /** Its body is drawn turned round (syncFacing, turnedRound). */
+    protected turned = false
 
     /**
-     * Zombie::UpdateReanim: a zombie walking right draws its body mirrored (`m00 = -scale`) and 90 further right (see
-     * MIRRORED_SHIFT). Every body animation node is placed through here.
+     * Zombie::UpdateReanim: a zombie drawn turned round has its body mirrored (`m00 = -scale`) and 90 further right (see
+     * MIRRORED_SHIFT), at its size about ZOMBIE_PIVOT. Every body animation node is placed through here.
      */
     private place(node: Node, x: number, y: number): void {
-        node.setPosition(x + (this.mirrored ? MIRRORED_SHIFT : 0), y)
-        node.setScale(this.mirrored ? -1 : 1, 1, 1)
+        const scale = this.scale
+        node.setPosition(x + (this.turned ? MIRRORED_SHIFT * scale : 0) + ZOMBIE_PIVOT.x * (1 - scale), y - ZOMBIE_PIVOT.y * (1 - scale))
+        node.setScale(this.turned ? -scale : scale, scale, 1)
     }
 
-    /** A zombie that changes sides turns its body nodes around. */
+    /** Zombie::UpdateReanim's anOpposite: its body is drawn turned round, facing right on the plants' side. */
+    protected turnedRound(zombie: ShownZombie): boolean {
+        return zombie.team === 'plants'
+    }
+
+    /** A zombie that changes sides turns its body nodes around, as a dancer does to moonwalk in (turnedRound). */
     private syncFacing(zombie: ShownZombie): void {
-        const mirrored = zombie.team === 'plants'
-        if (mirrored === this.mirrored) return
-        const moved = mirrored ? MIRRORED_SHIFT : -MIRRORED_SHIFT
-        this.mirrored = mirrored
+        this.mirrored = zombie.team === 'plants'
+        const turned = this.turnedRound(zombie)
+        if (turned === this.turned) return
+        const scale = this.scale, moved = (turned ? MIRRORED_SHIFT : -MIRRORED_SHIFT) * scale
+        this.turned = turned
         for (const node of [this.player?.node, this.root.getChildByName('MoweredDriver')]) {
             if (!node?.isValid) continue
             node.setPosition(node.position.x + moved, node.position.y)
-            node.setScale(mirrored ? -1 : 1, 1, 1)
+            node.setScale(turned ? -scale : scale, scale, 1)
         }
     }
 
@@ -556,12 +624,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
     }
 
-    /** The presentation's clip of a name: an enraged zombie's own walk and eating in place of the plain ones. */
+    /** The presentation's clip of a name, which a view may have its zombie show another in place of. */
     protected clip(name: string): ClientAnimationClip {
-        const enraged = this.latestZombie?.enraged, clips = this.clips(), { walk, walk2, eat, death, superLongDeath } = ZOMBIE_CLIPS
+        const clips = this.clips(), { death, superLongDeath } = ZOMBIE_CLIPS
         // A zombie drawn without `superLongDeath` falls with its `death`.
-        const clip = clips[enraged && (name === walk || name === walk2) ? 'enragedWalk'
-            : enraged && name === eat ? 'enragedEat' : name] ?? (name === superLongDeath ? clips[death] : undefined)
+        const clip = clips[name] ?? (name === superLongDeath ? clips[death] : undefined)
         if (!clip) throw new Error(`${this.typeId} has no ${name} animation`)
         return clip
     }
@@ -615,16 +682,6 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     /** Zombie::ApplyChill plays FOLEY_FROZEN on the first chill. */
     static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
 
-    /** Zombie::UpdateZombiePolevaulter: the vault, and the step of its landing. */
-    static readonly vaulted: StageEvent = (_stage, event) => {
-        void SoundSystem.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
-    }
-
-    /** Zombie::UpdateZombieNewspaper: one that lost its paper roars when it says so. */
-    static readonly enraged: StageEvent = (stage, event) => {
-        if (event.data.roar === true) SoundSystem.playSounds(stage.content.presentation.zombies[String(event.data.typeId)]?.enrageSounds)
-    }
-
     /** Zombie::UpdateZombieGroan. */
     static readonly groaned: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Groan) }
 
@@ -663,8 +720,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
         // part's flight for a mind-controlled zombie.)
         const mirrored = zombie.team === 'plants', tint = entityTint(!!zombie.mindControlled, isCold(zombie))
-        // One above the zombie.
-        stage.spawnParticle(stage.zombieOrder(zombie.row) + 1, {
+        // One above the zombie, or one under it (the dancer's head).
+        stage.spawnParticle(stage.zombieOrder(zombie.row) + (drop.behind ? -1 : 1), {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
             ...view.dropPosition(stage.layer, drop.track, drop.offset),
             // The pole vaulter's own head and a bare hand are swapped in.
@@ -672,6 +729,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             // Zombie::OverrideParticleColor keeps a mind-controlled zombie's parts purple, a chilled one's blue.
             tint: tint && new Color(tint.r, tint.g, tint.b, 255),
             extraAdditive: !!tint,
+            // Zombie::OverrideParticleScale: at the zombie's size, and the drop's own (ZombieDrop.scale).
+            ...(view.scale * (drop.scale ?? 1) === 1 ? {} : { scale: view.scale * (drop.scale ?? 1) }),
             mirrored,
         })
         SoundSystem.playSounds(drop.sounds)

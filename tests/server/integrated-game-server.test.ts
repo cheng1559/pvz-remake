@@ -3,9 +3,10 @@ import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
 import type { World } from '@/ecs/index'
-import { launchProjectile, STRAIGHT } from '@/server/combat/motions'
+import { STRAIGHT } from '@/server/combat/motions'
+import { launchProjectile } from '@/server/combat/Projectile'
 import {
-PlantAttackComponent,
+MowerComponent,
 PlantComponent,
 PositionComponent,
 ProjectileComponent,
@@ -16,7 +17,6 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { ItemComponent, SkySunResource, TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
 import { getAvailableSun } from '@/server/level/items'
-import { startMower } from '@/server/level/mower'
 import { readyMowers } from '@/server/level/lawn'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
@@ -26,6 +26,8 @@ import { adventureSeeds } from './adventure-seeds'
 import { framePosition } from '@/shared/content/animation'
 import { pickWeighted } from '@/shared/random'
 import { startFromSave } from './start-from-save'
+import { newPlant } from '../plantTypes'
+import type { Shooter } from '@/server/plants/Shooter'
 
 const source = readGameplaySource
 
@@ -82,7 +84,7 @@ test('1-1 starts at tick zero and advances as a JSON-safe authoritative world', 
     assert.equal(initial.sun, 150)
     assert.equal(initial.money, 50)
     // Board::InitLawnMowers: the row's mower is there from the start, waiting where the intro rolls it in.
-    assert.deepEqual(initial.mowers, [{ entityId: 1, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2, state: 'ready' }])
+    assert.deepEqual(initial.mowers, [{ entityId: 1, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2 }])
     assert.deepEqual(initial, second.start(startPacket))
 
     assert.equal(initial.phase, 'intro')
@@ -178,7 +180,7 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     server.drainEvents()
 
     let snapshot = server.snapshot()
-    const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
+    const ready = Math.max(1, Number(server.save().entities.find(entity => entity.plant?.typeId === 'pvz:peashooter')!.plant!.readyAtTick))
     while (gameplayTick(server) < ready) snapshot = server.tick()
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
         'plantFiring', { plantId: 2 },
@@ -349,16 +351,13 @@ test('collecting the award keeps existing entity updates running while spawning 
     const server = new IntegratedGameServer(definitions, levels)
     startGameplay(server)
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    startMower(world, definitions, readyMowers(world).get(2)!)
-    const mower = (snapshot: WorldSnapshot) => snapshot.mowers.find(mower => mower.state === 'triggered')!
+    const waiting = readyMowers(world).get(2)!
+    world.get(waiting, MowerComponent)!.setOff(world, definitions, waiting)
+    const mower = (snapshot: WorldSnapshot) => snapshot.projectiles.find(projectile => projectile.typeId === 'pvz:lawnmower')!
     const peaId = launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
     const plantId = world.createEntity()
     world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
-    world.add(plantId, PlantComponent, {
-        typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0,
-        health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0,
-    })
-    world.add(plantId, PlantAttackComponent, { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } })
+    world.add(plantId, PlantComponent, newPlant<Shooter>(world, 'pvz:peashooter', {}, { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } }))
     const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     damageZombie(world, definitions, corpseId, 270)
     world.resources.get(SkySunResource).atTick = 1

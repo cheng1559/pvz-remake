@@ -1,6 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
 import { renderOrder } from '@/shared/content/renderOrder'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
@@ -45,9 +44,12 @@ const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
 
-/** CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster, leaving out a zombie that carries a flag. */
-export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: Pick<GameplayDefinitions, 'zombies'>, capacity: number): string[] {
-    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && !definitions.zombies[id]?.animation.layers[ZOMBIE_FLAG_LAYER])
+/**
+ * CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster, leaving out the zombie that
+ * leads the flag waves (GameplayDefinitions.flagWave, the flag zombie).
+ */
+export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: Pick<GameplayDefinitions, 'flagWave'>, capacity: number): string[] {
+    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && id !== definitions.flagWave.zombie)
     const total = entries.reduce((sum, [, count]) => sum + count, 0)
     return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
 }

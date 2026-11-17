@@ -3,6 +3,7 @@
     "visual": {
       "nameKey": "example:rapid_pea"
     },
+    "view": "shooter",
     "clips": {
       "body": {
         "reanimId": "pvz:peashooter",

@@ -2,7 +2,7 @@ import type { StageEvent } from '@/client/level/LevelStage'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { easeInOutCurve, lerp } from '@/client/view/GameScreenMath'
 import { MOWER_INTRO_X } from '@/shared/content/gameplay'
-import type { MowerSnapshot, ProjectileSnapshot } from '@/shared/protocol/index'
+import type { MowerSnapshot } from '@/shared/protocol/index'
 import { ProjectileView } from './ProjectileView'
 
 /**
@@ -12,30 +12,26 @@ import { ProjectileView } from './ProjectileView'
 const WAITING = { x: -4, y: -19 }
 
 /**
- * A row's lawn mower from the intro to its end, as LawnMower::Draw draws it: the animation of the mowing projectile it
- * runs as, on the board's plant shadow, as any animated projectile (ProjectileView), synced from its snapshot
- * throughout. Waiting (MowerSnapshot.state `ready`) it is held on its first frame, where the original has its cached
- * frame, and the intro brings it on (CutScene::UpdateIntro, LevelIntro.mowerArrival); set off (LawnMower::StartMower)
- * it plays where it runs. A mowing projectile a shooter fires has no state: it runs from the start.
+ * A row's lawn mower waiting at its house end (Mower), as LawnMower::Draw draws it: as the mowing projectile it sets
+ * off as (ProjectileView, by that type's presentation), its animation held on its first frame where the original has
+ * its cached frame, on the board's plant shadow. The intro brings it on (CutScene::UpdateIntro,
+ * LevelIntro.mowerArrival). Set off (LawnMower::StartMower), it is gone, running on as a projectile (MowingProjectileView).
  */
 export class MowerView extends ProjectileView {
-    /** Whether its animation plays where it runs, or is held where it waits; undefined before its first frame. */
-    private running?: boolean
+    /** Its animation is held where it waits, once loaded. */
+    private held = false
 
-    sync(mower: ProjectileSnapshot & Partial<Pick<MowerSnapshot, 'state'>>): void {
-        const running = mower.state !== 'ready'
+    sync(mower: MowerSnapshot): void {
         // CutScene::UpdateIntro: CalcPosition from MOWER_INTRO_X to where it waits, shown once on its way.
-        const arrival = running ? 1 : this.stage.intro.mowerArrival(mower.row)
+        const arrival = this.stage.intro.mowerArrival(mower.row)
         super.sync(arrival < 1 ? { ...mower, x: Math.round(lerp(MOWER_INTRO_X, mower.x, easeInOutCurve(arrival))) } : mower)
         this.context.node.active = arrival > 0
         if (this.shadowNode?.isValid) this.shadowNode.active = arrival > 0
-        const animation = this.animation, reanim = this.presentation.reanim
-        if (running === this.running || !animation?.node.isValid || !reanim) return
-        this.running = running
-        animation.node.setPosition(running ? reanim.x : WAITING.x, running ? reanim.y : WAITING.y)
-        // Set off, it plays on from the frame it was held on (LawnMower::StartMower's mAnimRate).
-        if (running) animation.play({ loop: true, rate: reanim.rate })
-        else animation.pause()
+        const animation = this.animation
+        if (this.held || !animation?.node.isValid) return
+        this.held = true
+        animation.node.setPosition(WAITING.x, WAITING.y)
+        animation.pause()
     }
 
     /** LawnMower::StartMower. */

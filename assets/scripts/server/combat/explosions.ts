@@ -73,7 +73,7 @@ export function explode(
 function burnZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, position: Position, remover: EntityRemover): void {
     const events = world.resources.get(EventQueueResource)
     // Zombie::ApplyBurn removes bodies that are already falling or in the air.
-    if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'vaulting') {
+    if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'airborne') {
         destroyZombie(world, definitions, entity, remover)
         return
     }

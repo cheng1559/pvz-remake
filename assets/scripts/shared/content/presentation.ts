@@ -6,7 +6,7 @@ import { withFrom } from './from'
 import type { MusicTuneId } from './music'
 import { isQualifiedId } from '@/shared/mod'
 import { isRenderLayer, type RenderLayer } from './renderOrder'
-import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
+import type { PlantState } from './plantKinds'
 import { type JsonObject, jsonRoundTrip } from '@/shared/protocol'
 
 export interface ClientAnimationClip {
@@ -71,12 +71,12 @@ export interface PlantPresentationDefinition {
     readonly layer?: RenderLayer
     /**
      * Plant::DrawShadow: where its shadow lies, about its middle at `scale`; a plant without one (the grave buster) has
-     * none. `states`: its scale while its ability is in one of them, `[from, to]` going from one to the other as its
-     * first layer's clip plays (the sun-shroom's, small, then growing with its anim_grow).
+     * none. `states`, for a `sunshroom` view: its scale while it is in one of its kind's states, `[from, to]` going from
+     * one to the other as its first layer's clip plays (small, then growing with its anim_grow).
      */
     readonly shadow?: {
         readonly x: number; readonly y: number; readonly scale?: number
-        readonly states?: Readonly<Partial<Record<PlantAbilityState, number | readonly [number, number]>>>
+        readonly states?: Readonly<Partial<Record<PlantState, number | readonly [number, number]>>>
     }
     readonly scale: number
     /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
@@ -105,7 +105,7 @@ export interface PlantPresentationDefinition {
     readonly packet?: {
         readonly placement?: SeedPacketPlacement
         readonly x?: number; readonly y?: number; readonly scale?: number; readonly time?: number
-        readonly state?: PlantAbilityState
+        readonly state?: PlantState
     }
     /** AlmanacDialog: how far from a plant's usual place the almanac shows it, in original Y-down pixels (the grave buster's 55 down). */
     readonly almanacOffset?: readonly [number, number]
@@ -114,6 +114,16 @@ export interface PlantPresentationDefinition {
     readonly crackedFaces?: readonly [string, string]
     /** `layer`: the render layer of the effect, in the plant's row below `top` (the potato mine's `particle`). */
     readonly explosion?: { readonly effect: string; readonly x: number; readonly layer: RenderLayer }
+    /**
+     * Reanimation::SetShakeOverride: while its body plays `clip`, each of `tracks` is drawn moved by up to its amount
+     * each way, anew each tick (the doom-shroom's head as its fuse burns, Plant::UpdateDoomShroom).
+     */
+    readonly shake?: { readonly clip: string; readonly tracks: Readonly<Record<string, number>> }
+    /**
+     * Plant::Animate: on the board it is drawn moved by up to this much each way, anew each tick it is not frozen (the
+     * cherry bomb's 1, its fuse lit); for a `fuse` view, as `shake` is.
+     */
+    readonly jitter?: number
     readonly plantedSounds?: readonly PresentationSound[]
     readonly explosionSounds?: readonly PresentationSound[]
     /**
@@ -175,6 +185,21 @@ export interface GridItemPresentationDefinition {
     /** Its render layer and its offset on it: a grave's `graveStone` and 3 (Board::AddAGraveStone). */
     readonly layer: RenderLayer
     readonly offset?: number
+    /**
+     * Where its picture's corner is from its cell's, in original Y-down pixels: a grave's 4 left and 9 above
+     * (GridItem::DrawGraveStone), a crater's 8 left and 40 below (DrawCrater). Its cell's corner without.
+     */
+    readonly cell?: readonly [number, number]
+    /**
+     * A seed that puts it down (a grave or crater seed): its picture's place in the packet, the default's without (a
+     * crater's as the Beghouled crater button has it, SEED_BEGHOULED_BUTTON_CRATER's IMAGE_SEEDS cel).
+     */
+    readonly packet?: SeedPacketPlacement
+}
+
+/** A thing of a cell's GridItemPresentationDefinition.cell. */
+export function gridItemCell(presentation: Pick<PresentationDefinitions, 'gridItems'>, typeId: string): readonly [number, number] {
+    return presentation.gridItems[typeId]?.cell ?? [0, 0]
 }
 
 /** Exactly one of `sprite` and `reanim`. */
@@ -248,6 +273,42 @@ export interface ZombieDrop {
     readonly offset: readonly [number, number]
     readonly image?: string
     readonly sounds?: readonly PresentationSound[]
+    /** It flies off just under the zombie rather than over it (Zombie::DropHead's mRenderOrder - 1 for the dancer). */
+    readonly behind?: true
+    /**
+     * Its picture this much larger than its effect and the zombie's size draw it (the original's 1): the backup dancer's
+     * head, a picture the size of its body's head, which the effect's 0.8 and the zombie's 0.8 would leave smaller.
+     */
+    readonly scale?: number
+}
+
+/**
+ * Zombie::DrawDancerReanim: a leader's spotlight, `floor` under its body and `beam` over it, each with its corner at
+ * its offset from the zombie's place (original Y-down pixels) at `scale`, in one of `colors`: the first until the
+ * zombie is `colorsFrom` ticks old, then every `colorTicks` the `colorStep`th one on (mZombieAge / 100 * 7 % 5).
+ */
+export interface DanceSpotlight {
+    readonly floor: string
+    readonly floorOffset: readonly [number, number]
+    readonly beam: string
+    readonly beamOffset: readonly [number, number]
+    readonly scale: number
+    readonly colors: readonly (readonly [number, number, number])[]
+    readonly colorsFrom: number
+    readonly colorTicks: number
+    readonly colorStep: number
+}
+
+/**
+ * A dancer's look (ZombieDefinition.dance): `music` (FOLEY_DANCER), heard as a leader first snaps its fingers with
+ * few zombies about and on until no dancer with its head is left; a leader's `spotlight` once that snap is over;
+ * how one called up into a troupe comes up out of the ground (`rise`, PHASE_DANCER_RISING: its body as a grave's
+ * zombie's, seen and heard as it starts, PARTICLE_DANCER_RISE and the rumble, at (60, 110) from it).
+ */
+export interface DancePresentation {
+    readonly music?: string
+    readonly spotlight?: DanceSpotlight
+    readonly rise?: GraveZombiePresentation & { readonly particle: string, readonly sounds: readonly PresentationSound[] }
 }
 
 export interface ZombiePresentationDefinition {
@@ -260,9 +321,9 @@ export interface ZombiePresentationDefinition {
     readonly clips: AnimationDefinition
     /**
      * Zombie::DrawShadow: where its shadow lies from the zombie's place, as a plant's; `backwardsX` in place of `x`
-     * for a zombie walking right (mind-controlled), `x` by default.
+     * for a zombie walking right (mind-controlled), `x` by default; `scale`, the zombie's own size, about its middle.
      */
-    readonly shadow: { readonly x: number; readonly y: number; readonly backwardsX?: number }
+    readonly shadow: { readonly x: number; readonly y: number; readonly backwardsX?: number; readonly scale?: number }
     /**
      * Its zombie seed's packet (SeedPacket::DrawSeedPacket for SEED_ZOMBIE_*): where the original has the cached
      * zombie frame, posed at (40, 40), drawn at this offset and scale. `clip` names the animation whose first frame
@@ -270,8 +331,17 @@ export interface ZombiePresentationDefinition {
      * ReanimatorCache::MakeCachedZombieFrame).
      */
     readonly packet?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
-    /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
-    readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
+    /**
+     * Plant::DrawSeedType: its seed's cached zombie in hand drawn at `scale`, its frame `x`, `y` further (original Y-down
+     * pixels; the dancer's 0.8 and (20, 42)), and as it is without. Its `packet` has the same in it already.
+     */
+    readonly held?: { readonly x: number; readonly y: number; readonly scale: number }
+    /**
+     * The almanac's small picture of it (AlmanacDialog::DrawZombies' cached zombie): where its Reanim's origin goes in
+     * the frame, and at what size; `clip` names the animation whose first frame it shows, `idle` unless the original's
+     * cache takes another (the dancers' Reanim has no anim_idle, so the cache draws its first frame, a moonwalk's).
+     */
+    readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
     /** AlmanacDialog::DrawZombies: how far from a zombie's usual place the almanac's card shows it, in original Y-down pixels (the football zombie's 10 left). */
     readonly almanacOffset?: readonly [number, number]
     /** Zombie::DrawIceTrap: its ice when it is frozen, in place of every zombie's (IceTrapPresentation.zombie). */
@@ -299,6 +369,7 @@ export interface ZombiePresentationDefinition {
     }
     /** The gameplay `shield`, held in front; it flashes and recoils on its own track. */
     readonly shield?: ZombieArmorPresentation
+    readonly dance?: DancePresentation
 }
 
 /** How a helm or shield looks: its track, its dented sprites below 2/3 and 1/3 health, and its fall. */
@@ -603,10 +674,8 @@ export interface PresentationDefinitions {
     readonly seedPackets: {
         readonly flash: { readonly id: string }
         readonly selection: { readonly color: readonly [number, number, number] }
-        /** A plant's picture in its packet, unless the plant has its own (`packet.placement`). */
+        /** A plant's picture in its packet, unless the plant has its own (`packet.placement`), or a thing of a cell its own. */
         readonly defaultPlacement: SeedPacketPlacement
-        /** A grave seed's packet: the grave at about a plant's size, centred, a little above the picture window's floor. */
-        readonly grave: SeedPacketPlacement
     }
 }
 
@@ -652,12 +721,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         plants: (value, name) => named(withFrom(record(value, name), 'clips', 'plants'), name, parsePlant),
         zombies: (value, name) => named(withFrom(record(value, name), 'clips', 'zombies'), name, parseZombie),
         projectiles: table(parseProjectile),
-        gridItems: table((value, name) => fields<GridItemPresentationDefinition>(value, name, ['view', 'layer'], { view: nonEmptyString, viewConfig, layer, offset: finite })),
+        gridItems: table((value, name) => fields<GridItemPresentationDefinition>(value, name, ['view', 'layer'], {
+            view: nonEmptyString, viewConfig, layer, offset: finite, cell: pair, packet: placement,
+        })),
         seedPackets: (value, name) => allFields<PresentationDefinitions['seedPackets']>(value, name, {
             flash: (value, name) => allFields<PresentationDefinitions['seedPackets']['flash']>(value, name, { id: nonEmptyString }),
             selection: (value, name) => allFields<PresentationDefinitions['seedPackets']['selection']>(value, name, { color }),
             defaultPlacement: placement,
-            grave: placement,
         }),
     })
     const { plants, zombies } = definitions
@@ -978,13 +1048,10 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         layer,
         shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], {
             x: finite, y: finite, scale: positiveFinite,
-            states: (value, name) => {
-                const states = table((value, name) => Array.isArray(value)
-                    ? pair(value, name).map((scale, index) => positiveFinite(scale, `${name}[${index}]`)) as [number, number]
-                    : positiveFinite(value, name))(value, name)
-                for (const state of Object.keys(states)) oneOf(state, PLANT_ABILITY_STATES, `${name}.${state}`)
-                return states
-            },
+            // States of its kind (PLANT_KIND_STATES), as assertPresented checks against its gameplay definition.
+            states: (value, name) => table((value, name) => Array.isArray(value)
+                ? pair(value, name).map((scale, index) => positiveFinite(scale, `${name}[${index}]`)) as [number, number]
+                : positiveFinite(value, name))(value, name),
         }),
         scale: positiveFinite,
         drawHeightOffset: finite,
@@ -998,12 +1065,16 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         clips,
         packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
             placement, x: finite, y: finite, scale: positiveFinite, time: finite,
-            state: (value, name) => oneOf(value, PLANT_ABILITY_STATES, name),
+            state: nonEmptyString,
         }),
         almanacOffset: pair,
         chewParticle: nonEmptyString,
         crackedFaces: twoSprites,
         explosion: (value, name) => allFields<NonNullable<Plant['explosion']>>(value, name, { effect: nonEmptyString, x: finite, layer }),
+        shake: (value, name) => allFields<NonNullable<Plant['shake']>>(value, name, {
+            clip: nonEmptyString, tracks: (value, name) => named(value, name, positiveFinite),
+        }),
+        jitter: positiveFinite,
         freeze: (value, name) => allFields<NonNullable<Plant['freeze']>>(value, name, { effect: nonEmptyString, layer }),
         iceTrap: (value, name) => iceTrapPlacement(value, name),
         plantedSounds: sounds, explosionSounds: sounds, freezeSounds: sounds, fireSounds: sounds,
@@ -1029,18 +1100,21 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
     type Zombie = ZombiePresentationDefinition
     const cell = (value: unknown, name: string) => integerInRange(value, 0, 4, name)
     const drop = (value: unknown, name: string) => fields<ZombieDrop>(value, name, ['track', 'effect', 'offset'], {
-        track: nonEmptyString, effect: nonEmptyString, moweredEffect: nonEmptyString, offset: pair, image: nonEmptyString, sounds,
+        track: nonEmptyString, effect: nonEmptyString, moweredEffect: nonEmptyString, offset: pair, image: nonEmptyString, sounds, behind: trueFlag, scale: positiveFinite,
     })
     const zombie = fields<Zombie>(value, name, ['nameKey', 'clips', 'shadow', 'parts', 'damagedArmSprite', 'drops'], {
         nameKey: nonEmptyString,
         view: nonEmptyString,
         viewConfig,
         clips,
-        shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite }),
+        shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite, scale: positiveFinite }),
         packet: (value, name) => fields<NonNullable<Zombie['packet']>>(value, name, ['x', 'y', 'scale'], {
             x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
         }),
-        portrait: (value, name) => allFields<NonNullable<Zombie['portrait']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
+        held: (value, name) => allFields<NonNullable<Zombie['held']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
+        portrait: (value, name) => fields<NonNullable<Zombie['portrait']>>(value, name, ['x', 'y', 'scale'], {
+            x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
+        }),
         almanacOffset: pair,
         iceTrap: (value, name) => iceTrapPlacement(value, name),
         parts: parseZombieParts,
@@ -1057,6 +1131,22 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
         }),
         helm: (value, name) => fields<NonNullable<Zombie['helm']>>(value, name, ARMOR_REQUIRED, { ...ARMOR_FIELDS, showsHair: boolean }),
         shield: (value, name) => fields<ZombieArmorPresentation>(value, name, ARMOR_REQUIRED, ARMOR_FIELDS),
+        dance: (value, name) => fields<DancePresentation>(value, name, [], {
+            music: nonEmptyString,
+            spotlight: (value, name) => allFields<DanceSpotlight>(value, name, {
+                floor: nonEmptyString, floorOffset: pair, beam: nonEmptyString, beamOffset: pair, scale: positiveFinite,
+                colors: (value, name) => {
+                    const colors = array(value, name).map((entry, index) => color(entry, `${name}[${index}]`))
+                    if (!colors.length) throw new TypeError(`${name} must not be empty`)
+                    return colors
+                },
+                colorsFrom: nonNegativeInteger, colorTicks: positiveInteger, colorStep: nonNegativeInteger,
+            }),
+            rise: (value, name) => {
+                const { particle, sounds: heard, ...rise } = record(value, name)
+                return { ...graveZombie(rise, name), ...graveRise({ particle, sounds: heard }, name) }
+            },
+        }),
     })
     if (zombie.parts.shieldArms && !zombie.shield) throw new TypeError(`${name}.parts.shieldArms requires a shield`)
     for (const slot of ['helm', 'shield'] as const) {

@@ -2,9 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { EntityFlashes, type FlashEvent } from '@/client/level/EntityFlashes'
-import type { PlantSnapshot, ServerEvent } from '@/shared/protocol/index'
-
-const plant = (produceTicks?: number) => ({ entityId: 1, ...(produceTicks === undefined ? {} : { produceTicks }) }) as PlantSnapshot
+import type { ServerEvent } from '@/shared/protocol/index'
 
 /** The board's flashes hear the frame's events at its gameplay tick, by the handlers StageEventRegistry registers. */
 function hear(flashes: EntityFlashes, tick: number, ...events: [FlashEvent, string, ServerEvent['data']][]): void {
@@ -14,16 +12,17 @@ function hear(flashes: EntityFlashes, tick: number, ...events: [FlashEvent, stri
 test('plant flashes fade from bites, rise over the last 100 production ticks and fade once production holds', () => {
     const flashes = new EntityFlashes()
     hear(flashes, 10, [EntityFlashes.plantHit, 'zombieChewedPlant', { zombieId: 2, plantId: 1 }])
-    assert.equal(flashes.plant(plant(), 10), 25)
-    assert.equal(flashes.plant(plant(), 20), 15)
-    assert.equal(flashes.plant(plant(500), 40), 0)
-    assert.equal(flashes.plant(plant(60), 480), 40, 'the glow rises toward the sun')
-    assert.equal(flashes.plant(plant(60), 481), 39, 'a held countdown starts fading')
-    assert.equal(flashes.plant(plant(60), 491), 29)
+    assert.equal(flashes.plant(1, 10), 25)
+    assert.equal(flashes.plant(1, 20), 15)
+    assert.equal(flashes.producer(1, 40, 500), 0)
+    assert.equal(flashes.producer(1, 480, 60), 40, 'the glow rises toward the sun')
+    assert.equal(flashes.producer(1, 481, 60), 39, 'a held countdown starts fading')
+    assert.equal(flashes.producer(1, 491, 60), 29)
     hear(flashes, 600, [EntityFlashes.produced, 'sunProduced', { entityId: 1, itemId: 9 }])
-    assert.equal(flashes.plant(plant(2400), 610), 90, 'the glow fades after producing')
+    assert.equal(flashes.producer(1, 610, 2400), 90, 'the glow fades after producing')
+    assert.equal(flashes.plant(1, 610), 90, 'which is its flash')
     hear(flashes, 700, [EntityFlashes.plantHit, 'plantHit', { plantId: 1 }])
-    assert.equal(flashes.plant(plant(2400), 700), 25, 'a hostile shot flashes like a bite')
+    assert.equal(flashes.producer(1, 700, 2400), 25, 'a hostile shot flashes like a bite')
 })
 
 test('zombie flashes follow hits, exact shield breaks and burns, and survive a restore', () => {

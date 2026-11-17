@@ -21,7 +21,7 @@ function snapshot(tick: number): WorldSnapshot {
         }],
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],
-        mowers: [{ entityId: 7, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2, state: 'ready' }],
+        mowers: [{ entityId: 7, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2 }],
         tutorial: { step: 'complete' }, extensions: {},
     }
 }
@@ -45,7 +45,7 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     second.items[0].x = 40
     second.items[0].scale = 0.5
     second.items[0].alpha = 155
-    second.mowers = [{ ...second.mowers[0], x: -11, state: 'triggered' }]
+    second.mowers = [{ ...second.mowers[0], x: -11 }]
     const frame: ServerFramePacket = {
         protocolVersion: 1, type: 'frame', serverTick: 2,
         acknowledgedSequence: 2, snapshot: second, events: [],
@@ -62,7 +62,7 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     assert.equal(rendered.items[0].scale, 0.75)
     assert.equal(rendered.items[0].alpha, 205)
     assert.equal(rendered.projectiles.some(entity => entity.entityId === 6), false)
-    assert.deepEqual(rendered.mowers.map(entity => [entity.entityId, entity.x, entity.state]), [[7, -16, 'triggered']], 'a mower runs smoothly, as a projectile')
+    assert.deepEqual(rendered.mowers.map(entity => [entity.entityId, entity.x]), [[7, -16]], 'a mower moves smoothly, as a projectile')
 
     const sameTick = { ...second, sun: 75 }
     assert.throws(() => world.accept(sameTick), /snapshot tick 2; current tick is 2/)
@@ -75,7 +75,7 @@ test('ClientWorld switches the pole vaulter landing origin together with its ani
     const world = new ClientWorld()
     const jumping = snapshot(1)
     Object.assign(jumping.zombies[0], {
-        typeId: 'pvz:pole_vaulter', state: 'vaulting', animations: { body: { clip: 'jump', time: 42.9, rate: 24 } }, x: 400,
+        typeId: 'pvz:pole_vaulter', state: 'airborne', animations: { body: { clip: 'jump', time: 42.9, rate: 24 } }, x: 400,
     })
     world.accept(jumping)
 

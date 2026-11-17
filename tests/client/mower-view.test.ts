@@ -44,11 +44,11 @@ class Player {
 const MOWER = 'pvz:lawnmower', ROW = 2, Y = 303
 const content = {
     definitions: { projectiles: { [MOWER]: { hitbox: { x: 0, y: 0, width: 50, height: 80 } } } },
-    presentation: { projectiles: { [MOWER]: { view: 'mower', reanim: { id: MOWER, x: 6, y: -19, scale: 0.85, rate: 5.8 }, plantShadow: { x: 36, y: 65 }, layer: 'lawnMower' } } },
+    presentation: { projectiles: { [MOWER]: { view: 'mowing', reanim: { id: MOWER, x: 6, y: -19, scale: 0.85, rate: 5.8 }, plantShadow: { x: 36, y: 65 }, layer: 'lawnMower' } } },
 }
 
-/** A mower's view on a board whose intro has brought a row's mower `arrival` of its way on. */
-async function mowerView(mower: object) {
+/** A view of `path` (MowerView, MowingProjectileView) on a board whose intro has brought a row's mower `arrival` of its way on. */
+async function projectileView(path: string, name: string, mower: object) {
     const ProjectileViewModule = load('projectiles/ProjectileView', {
         cc: { Sprite: { SizeMode: { RAW: 0 } } },
         '@/client/level/LevelStage': {
@@ -63,18 +63,18 @@ async function mowerView(mower: object) {
             return { node }
         } },
     })
-    const { MowerView } = load('projectiles/MowerView', { './ProjectileView': ProjectileViewModule })
+    const View = load(`projectiles/${path}`, { './ProjectileView': ProjectileViewModule })[name]
     const intro = { complete: false, arrival: 0, mowerArrival(row: number) { assert.equal(row, ROW); return this.arrival } }
     const stage = { layer: new Node(), content, intro }
-    const node = new Node(), view = new MowerView({ node, content, projectile: mower, stage })
+    const node = new Node(), view = new View({ node, content, projectile: mower, stage })
     await view.initialize()
     return { view, node, stage, intro }
 }
 
-test("a row's mower is one view from the intro to its end: rolled in by the intro's time, held where it waits, then running", async () => {
-    const ready = { entityId: 1, typeId: MOWER, x: MOWER_READY_X, y: Y, row: ROW, state: 'ready' }
-    const { view, node, stage, intro } = await mowerView(ready)
-    // One shadow, the board's plant shadow on the ground layer, as a running projectile's: waiting and running alike.
+test("a row's mower waiting is rolled in by the intro's time and held where it waits, on the board's plant shadow", async () => {
+    const ready = { entityId: 1, typeId: MOWER, x: MOWER_READY_X, y: Y, row: ROW }
+    const { view, node, stage, intro } = await projectileView('MowerView', 'MowerView', ready)
+    // One shadow, the board's plant shadow on the ground layer, as a running projectile's.
     assert.deepEqual(stage.layer.children.map(child => child.name), ['ProjectileShadow'])
     const shadow = stage.layer.children[0], animation = node.children.find(child => child.name === 'ProjectileAnimation')!
     view.sync(ready)
@@ -89,26 +89,21 @@ test("a row's mower is one view from the intro to its end: rolled in by the intr
         assert.equal(shadow.position.x, x + 36 - 400, 'its shadow under it')
     }
     assert.equal(node.position.y, 300 - Y)
-    // LawnMower::StartMower: the same view runs on, playing where it runs; the intro no longer places it.
-    intro.arrival = 0
-    view.sync({ ...ready, x: -17.67, state: 'triggered' })
-    assert.deepEqual([node.active, shadow.active, node.position.x], [true, true, -17.67 - 400])
-    assert.deepEqual([animation.position, animation.component!.playing, animation.component!.rate], [{ x: 6, y: -19 }, true, 5.8])
-    assert.equal(stage.layer.children.length, 1, 'still the one shadow')
+    assert.deepEqual([animation.position, animation.component!.playing], [{ x: -4, y: -19 }, false], 'still held: set off, it is a projectile of its own')
     view.destroy()
     assert.equal(shadow.isValid, false)
 })
 
-test("a mowing projectile a shooter fires is drawn by the mower's view, running from the start", async () => {
+test("a mowing projectile is drawn by its own view, running from the start where it runs", async () => {
     const fired = { entityId: 5, typeId: MOWER, x: 120, y: Y - 40, row: ROW, height: 40 }
-    const { view, node, stage } = await mowerView(fired)
+    const { view, node, stage } = await projectileView('MowingProjectileView', 'MowingProjectileView', fired)
     view.sync(fired)
     const animation = node.children.find(child => child.name === 'ProjectileAnimation')!
-    assert.deepEqual([node.active, animation.position, animation.component!.playing], [true, { x: 6, y: -19 }, true])
+    assert.deepEqual([node.active, animation.position, animation.component!.playing, animation.component!.rate], [true, { x: 6, y: -19 }, true, 5.8])
     assert.equal(stage.layer.children[0].position.y, 300 - (Y - 40) - 65 - 40, 'its shadow on the ground under it')
 })
 
-test("the board makes one view of a mower, the projectile registry's, syncs it for as long as it is there and draws it at the mower's layer", async () => {
+test("the board makes a waiting mower's view by the mowers' registry, syncs it while it waits and draws it at the mower's layer", async () => {
     const node = { isValid: true, active: true, setPosition() {}, destroy() { this.isValid = false } }
     const { LevelEntityRenderer } = load('level/LevelEntityRenderer', {
         '@/client/view/uiNode': { uiNode: () => ({ node }) },
@@ -116,28 +111,28 @@ test("the board makes one view of a mower, the projectile registry's, syncs it f
         './EntityFlashes': load('level/EntityFlashes'),
         './LevelStage': { boardToLayer: (x: number, y: number) => ({ x, y }) },
     })
-    const made: any[] = [], synced: string[] = []
+    const made: any[] = [], synced: number[] = []
     let destroyed = 0
     const content = {
         levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' }, lawnMower: MOWER } } },
         presentation: { projectiles: { [MOWER]: { layer: 'lawnMower' } } },
-        views: { events: { of: () => [] }, projectiles: { async create(context: any) {
+        views: { events: { of: () => [] }, mowers: { async create(context: any) {
             made.push(context.projectile)
-            return { sync(mower: { state: string }) { synced.push(mower.state) }, destroy() { destroyed++ } }
+            return { sync(mower: { x: number }) { synced.push(mower.x) }, destroy() { destroyed++ } }
         } } },
     }
     const board = new LevelEntityRenderer(content, {}, {}, {}, { complete: true }, {})
     const orders: number[] = []
     board.syncLayerOrder = (snapshot: object) => { for (const entry of board.collectLayerEntries(snapshot)) orders.push(entry.order) }
-    const mower = { entityId: 3, typeId: MOWER, x: MOWER_READY_X, y: Y, row: ROW, state: 'ready' }
+    const mower = { entityId: 3, typeId: MOWER, x: MOWER_READY_X, y: Y, row: ROW }
     const frame = (mowers: object[]) => ({ levelId: 'test:level', plants: [], zombies: [], projectiles: [], items: [], mowers, cursor: { mode: 'none' } })
     board.sync(frame([mower]), { added: [3], removed: [] }, [])
     await board.creationTasks.get(3)
-    board.sync(frame([{ ...mower, x: 10, state: 'triggered' }]), { added: [], removed: [] }, [])
-    assert.deepEqual([made, synced], [[mower], ['ready', 'triggered']], 'one view, made as it waits and synced as it runs')
+    board.sync(frame([mower]), { added: [], removed: [] }, [])
+    assert.deepEqual([made, synced], [[mower], [MOWER_READY_X, MOWER_READY_X]], 'one view, made and synced as it waits')
     assert.ok(orders.includes(renderOrderModule.renderOrder('lawnMower', ROW)))
     board.sync(frame([]), { added: [], removed: [3] }, [])
-    assert.deepEqual([destroyed, board.node(3)], [1, undefined], 'gone with its entity')
+    assert.deepEqual([destroyed, board.node(3)], [1, undefined], 'gone with its entity, as it sets off')
 })
 
 test("the intro brings each row's mower on as CutScene::UpdateIntro does: the higher rows later, after the sod and the graves", () => {
@@ -160,4 +155,12 @@ test("the intro brings each row's mower on as CutScene::UpdateIntro does: the hi
     assert.equal(later.mowerArrival(2), 0.5, 'mSodTime and mGraveStoneTime delay it')
     later.ticks = later.endTick
     assert.equal(later.mowerArrival(0), 1, 'a complete intro has every one in place')
+})
+
+test("the street before an adventure level leaves out the zombie that leads the flag waves (CutScene::PlaceStreetZombies)", () => {
+    const { adventurePreviewTypes } = load('level/adventure/AdventureIntro')
+    const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }
+    assert.deepEqual(JSON.parse(JSON.stringify(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:flag' } }, 4))),
+        ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
+    assert.ok(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:conehead' } }, 4).includes('pvz:flag'), 'whichever zombie the settings name')
 })

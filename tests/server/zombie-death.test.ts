@@ -8,13 +8,14 @@ import { startZombieDeath } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
+import { withZombieTypes } from '../zombieTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 
 /** A board whose death roll is `roll` (Rand(100)) and whose rate roll is the middle of 24-30. */
 function dyingZombie(roll: number, { levelId = 'pvz:adventure-1-6', firstAdventure = true, chilled = false, others = 0, typeId = 'pvz:normal' } = {}) {
-    const world = new World()
+    const world = withZombieTypes(new World(), definitions)
     world.resources.set(LevelStateResource, { id: levelId, definition: levels.levels[levelId], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(TutorialResource, { firstAdventure, step: 'complete' } as never)
     world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 99 ? roll : min, nextFloat: () => 0.5 } as never)

@@ -66,11 +66,10 @@ function freezeZombie(world: World, definitions: GameplayDefinitions, entity: nu
  * chilled, and one kept from the cold not even that (server/combat/cold.ts).
  */
 function freezePlant(world: World, definitions: GameplayDefinitions, entity: number, plant: Plant, freeze: FreezeDefinition, remover: EntityRemover): void {
-    const definition = definitions.plants[plant.typeId]
-    if (!plantCanBeChilled(plant, definition)) return
+    if (!plantCanBeChilled(plant)) return
     const cold = plant.chilledTicks > 0 || plant.frozenTicks !== undefined
     if (freeze.chillTicks > 0) chillPlant(world, definitions, entity, plant, freeze.chillTicks)
-    if (!plantCanBeFrozen(plant, definition)) return
+    if (!plantCanBeFrozen(plant)) return
     plant.frozenTicks = frozenTicks(world, freeze, cold)
     if (freeze.damage > 0) damagePlant(world, definitions, entity, freeze.damage, remover)
 }

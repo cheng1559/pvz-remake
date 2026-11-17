@@ -1,18 +1,22 @@
 import type { Component, World } from '@/ecs/index'
 import type { LayerState } from '@/shared/content/animation'
 import { LEVEL_AWARD, MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { hasPlantAttack, PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind } from '@/shared/content/plantAbilities'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
 import { checkGraveRanges, GRAVE } from '@/shared/content/graves'
-import { jsonRoundTrip, MOWER_STATES, TEAMS, type JsonObject } from '@/shared/protocol/index'
+import { CRATER } from '@/shared/content/craters'
+import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import {
-    GridItemComponent, LevelStateResource, MowedPlantComponent, MowerComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent,
-    ZombieComponent, type GridItem, type MowedPlant, type Mower, type Plant, type PlantAbility, type PlantAttack, type Position, type Projectile, type Zombie,
+    GridItemComponent, LevelStateResource, MowedPlantComponent, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent,
+    ZombieComponent, type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
 } from '../state/components'
 import { ItemComponent, type Item } from '../state/levelState'
-import type { SavedEntity } from './save'
+import type { SavedEntity, SavedMowedPlant } from './save'
+import { PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
+import { type SavedZombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
+import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../combat/Projectile'
+import { Mower, type MowerFields } from '../level/Mower'
 import type { ServerContent } from './session'
 
 /** The base components a saved entity holds, by their key in it. */
@@ -25,16 +29,24 @@ export interface SavedComponentContext {
     entity: SavedEntity
 }
 
+/** What the world holds of a saved component that is more than the JSON it is saved as: a zombie is its kind's instance. */
+interface LiveComponents { zombie: Zombie, plant: Plant, mowedPlant: MowedPlant, projectile: Projectile, mower: Mower }
+
+/** What the world holds of a saved component. */
+type LiveComponent<K extends SavedComponentKey> = K extends keyof LiveComponents ? LiveComponents[K] : NonNullable<SavedEntity[K]>
+
 /**
  * How one base component is saved: its key in a saved entity, the shape it is saved in (`parse`), and whether the
- * installed content and the level can run it (`check`, as it is saved and as it is restored). It is saved and restored
- * as the JSON it is; a Mod's components take the same way through JsonComponents.
+ * installed content and the level can run it (`check`, as it is saved and as it is restored). It is saved as the JSON
+ * it is and restored so, or as what `restore` makes of it (a zombie's kind); a Mod's components take the same way
+ * through JsonComponents.
  */
 export interface SavedComponent<K extends SavedComponentKey = SavedComponentKey> {
     readonly key: K
-    readonly component: Component<NonNullable<SavedEntity[K]>>
+    readonly component: Component<LiveComponent<K>>
     parse(value: unknown, name: string): NonNullable<SavedEntity[K]>
     check?(value: NonNullable<SavedEntity[K]>, context: SavedComponentContext): void
+    restore?(value: NonNullable<SavedEntity[K]>, context: SavedComponentContext): LiveComponent<K>
 }
 
 function savedComponent<K extends SavedComponentKey>(entry: SavedComponent<K>): SavedComponent<K> { return entry }
@@ -54,9 +66,15 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
     }),
     savedComponent({
-        // A grave: the only thing of a cell there is.
+        // A grave or a crater.
         key: 'gridItem', component: GridItemComponent,
         parse: (value, name): GridItem => {
+            if (record(value, name).typeId === CRATER) {
+                const crater = exact(value, ['typeId', 'column', 'row', 'ticks'], name, ['team'])
+                return { typeId: CRATER, column: nonNegativeInteger(crater.column, `${name}.column`), row: nonNegativeInteger(crater.row, `${name}.row`),
+                    ticks: positiveInteger(crater.ticks, `${name}.ticks`),
+                    ...(crater.team === undefined ? {} : { team: oneOf(crater.team, ['zombies'] as const, `${name}.team`) }) }
+            }
             const grave = exact(value, ['typeId', 'column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], name, ['special', 'riseAtTick', 'team'])
             if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
             const result = { typeId: GRAVE, column: nonNegativeInteger(grave.column, `${name}.column`), row: nonNegativeInteger(grave.row, `${name}.row`),
@@ -74,7 +92,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
     }),
     savedComponent({
-        key: 'plant', component: PlantComponent, parse: parsePlant,
+        key: 'plant', component: PlantComponent, parse: parseSavedPlant,
         check: (saved, context) => {
             const { content: { definitions, gameplay }, world, entity } = context
             const plant = definitions.plants[saved.typeId]
@@ -84,64 +102,47 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
             if (!onBoardRow(context) || saved.column >= world.resources.get(LevelStateResource).board.columns) {
                 throw new Error(`Saved plant ${entity.entityId} is invalid for the level`)
             }
-            const ability = plantAbilityKind(plant)
-            if ((saved.ability === undefined) !== (ability === undefined) ||
-                saved.ability && !(PLANT_ABILITY_STATES_BY_KIND[ability!] as readonly string[]).includes(saved.ability.state)) {
-                throw new Error(`Saved plant ${entity.entityId} has an invalid ability state`)
-            }
             // A plant the server animates has its layers, each on a clip of its own; the blink is counted down to with them.
             const layers = Object.entries(saved.animations ?? {})
             if (!plant.animation !== !saved.animations || !plant.animation?.blink !== (saved.blinkTicks === undefined) ||
                 layers.some(([layer, state]) => !plant.animation!.clips[state.clip] || layer !== PLANT_BLINK_LAYER && !Object.hasOwn(plant.animation!.layers, layer))) {
                 throw new Error(`Saved plant ${entity.entityId} has an invalid animation state`)
             }
-            // A plant with an attack keeps its timer (PlantAttackComponent); one without has none.
-            if (hasPlantAttack(plant) !== (entity.plantAttack !== undefined)) throw new Error(`Saved entity ${entity.entityId} has an invalid plant attack component`)
+            // As its kind: its own fields (a shooter's next shot, a chomper's state, ...).
+            if (!restorePlant(saved, context).validSaved()) throw new Error(`Saved plant ${entity.entityId} is invalid for its kind`)
         },
+        restore: (saved, context) => restorePlant(saved, context),
     }),
     savedComponent({
         key: 'mowedPlant', component: MowedPlantComponent,
-        parse: (value, name): MowedPlant => {
+        parse: (value, name): SavedMowedPlant => {
             const mowed = exact(value, ['plant', 'squash'], name, ['left'])
-            return { plant: parsePlant(mowed.plant, `${name}.plant`), squash: parseLayer(mowed.squash, `${name}.squash`),
+            return { plant: parseSavedPlant(mowed.plant, `${name}.plant`), squash: parseLayer(mowed.squash, `${name}.squash`),
                 ...(mowed.left === undefined ? {} : { left: trueFlag(mowed.left, `${name}.left`) }) }
         },
         check: (mowed, context) => {
             if (!onBoardRow(context) || !context.content.definitions.plants[mowed.plant.typeId]) throw new Error(`Unknown saved plant: ${mowed.plant.typeId}`)
             if (mowed.squash.clip !== ZOMBIE_CLIPS.mowered) throw new Error(`Saved entity ${context.entity.entityId} has an invalid squash`)
+            restorePlant(mowed.plant, context)
         },
-    }),
-    savedComponent({
-        key: 'plantAttack', component: PlantAttackComponent,
-        parse: (value, name): PlantAttack => {
-            const source = exact(value, ['readyAtTick'], name, ['burst'])
-            const burst = source.burst === undefined ? undefined : exact(source.burst, ['fireAtTick', 'shotsRemaining'], `${name}.burst`)
-            return {
-                readyAtTick: nonNegativeInteger(source.readyAtTick, `${name}.readyAtTick`),
-                ...(burst === undefined ? {} : { burst: {
-                    fireAtTick: nonNegativeInteger(burst.fireAtTick, `${name}.burst.fireAtTick`),
-                    shotsRemaining: positiveInteger(burst.shotsRemaining, `${name}.burst.shotsRemaining`),
-                } }),
-            }
-        },
-        // Only a plant with an attack has one (the plant checks the other way).
-        check: (_attack, { content, entity }) => {
-            const plant = entity.plant && content.definitions.plants[entity.plant.typeId]
-            if (!plant || !hasPlantAttack(plant)) throw new Error(`Saved entity ${entity.entityId} has an invalid plant attack component`)
-        },
+        restore: (mowed, context) => ({ ...mowed, plant: restorePlant(mowed.plant, context) }),
     }),
     savedComponent({
         key: 'zombie', component: ZombieComponent,
-        parse: (value, name): Zombie => {
-            const source = exact(value, [
+        parse: (value, name): SavedZombie => {
+            // Every zombie's fields here; its kind takes its own as it is restored (Zombie.restore), kept as they are.
+            const fields: readonly string[] = ZOMBIE_FIELDS, all = record(value, name)
+            const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
+            const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))), [
                 'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
                 'walkClip', 'animations', 'hasHead', 'hasArm',
-                'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
-            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled', 'frozenTicks'])
+                'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'riseTicks',
+            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled', 'frozenTicks', 'slowed'])
             const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
             const health = nonNegativeInteger(source.health, `${name}.health`)
             if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
             return {
+                ...own,
                 typeId: nonEmptyString(source.typeId, `${name}.typeId`),
                 health,
                 maxHealth,
@@ -159,9 +160,8 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
                 chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
                 ...(source.frozenTicks === undefined ? {} : { frozenTicks: positiveInteger(source.frozenTicks, `${name}.frozenTicks`) }),
-                hasPole: boolean(source.hasPole, `${name}.hasPole`),
-                enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`),
                 riseTicks: nonNegativeInteger(source.riseTicks, `${name}.riseTicks`),
+                ...(source.slowed === undefined ? {} : { slowed: trueFlag(source.slowed, `${name}.slowed`) }),
                 ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
                 ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
                 ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
@@ -173,55 +173,51 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
             const zombie = definitions.zombies[saved.typeId]
             if (!zombie) throw new Error(`Unknown saved zombie: ${saved.typeId}`)
             gameplay.zombieBehaviors.validateState(saved, zombie)
-            if (!onBoardRow(context) || saved.helmHealth > (zombie.helm?.health ?? 0) || saved.shieldHealth > (zombie.shield?.health ?? 0) ||
-                saved.hasPole && !zombie.vault || saved.state === 'vaulting' && !zombie.vault) {
+            if (!onBoardRow(context) || saved.helmHealth > (zombie.helm?.health ?? 0) || saved.shieldHealth > (zombie.shield?.health ?? 0)) {
                 throw new Error(`Saved zombie ${entity.entityId} is invalid for the level`)
             }
             const body = saved.animations[ZOMBIE_BODY_LAYER]
             if (!body || Object.keys(saved.animations).some(layer => !Object.hasOwn(zombie.animation.layers, layer)) || !zombie.animation.clips[saved.walkClip]?.ground ||
                 (saved.state === 'mowered') !== (body.clip === ZOMBIE_CLIPS.mowered) || !zombieClip(zombie.animation, body.clip) ||
-                saved.state === 'walking' && !saved.enrageTicks && !zombie.animation.clips[body.clip].ground ||
                 saved.state === 'dying' && !zombie.animation.clips[body.clip].marks) {
                 throw new Error(`Saved zombie ${entity.entityId} has an invalid animation state`)
             }
+            // As its kind: its own fields, none in the air but in its kind's jump, a walk on ground but a dancer's steps or a gasp, ...
+            if (!restoreZombie(saved, context).validSaved(zombieClip(zombie.animation, body.clip)!)) {
+                throw new Error(`Saved zombie ${entity.entityId} is invalid for its kind`)
+            }
         },
+        restore: (saved, context) => restoreZombie(saved, context),
     }),
     savedComponent({
         key: 'projectile', component: ProjectileComponent,
-        parse: (value, name): Projectile => {
-            const source = exact(value, ['typeId', 'age', 'definition', 'motion'], name, ['team', 'chompCounter', 'motionState', 'hits'])
-            return {
-                typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-                age: nonNegativeInteger(source.age, `${name}.age`),
-                definition: parseProjectileDefinition(source.definition, `${name}.definition`),
-                motion: nonEmptyString(source.motion, `${name}.motion`),
-                ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
-                ...(source.chompCounter === undefined ? {} : { chompCounter: nonNegativeInteger(source.chompCounter, `${name}.chompCounter`) }),
-                ...(source.hits === undefined ? {} : { hits: array(source.hits, `${name}.hits`).map(hit => positiveInteger(hit, `${name}.hits[]`)) }),
-                // Its motion checks it (check).
-                ...(source.motionState === undefined ? {} : { motionState: jsonRoundTrip(record(source.motionState, `${name}.motionState`)) as JsonObject }),
-            }
-        },
+        parse: parseSavedProjectile,
         check: (projectile, context) => {
-            const { content: { definitions, gameplay }, entity } = context
+            const { content: { definitions, gameplay }, world, entity } = context
             if (!onBoardRow(context) || !definitions.projectiles[projectile.typeId]) throw new Error(`Unknown saved projectile: ${projectile.typeId}`)
             // Its motion is installed and takes the state it flew with.
-            const motion = gameplay.projectileMotions.of(projectile)
+            const motion = gameplay.projectileMotions.resolve(projectile.motion)
             if (!motion.parseState && projectile.motionState !== undefined) throw new Error(`Saved projectile ${entity.entityId} has an invalid motion state`)
             motion.parseState?.(projectile.motionState)
-            // A mowing projectile runs on its chew.
-            if (!!projectile.definition.mow !== (projectile.chompCounter !== undefined)) throw new Error(`Saved projectile ${entity.entityId} is invalid for its type`)
+            // As its kind: its own fields (a mower's chew).
+            if (!restoreProjectile(projectile, context).validSaved(world, entity.position!)) throw new Error(`Saved projectile ${entity.entityId} is invalid for its kind`)
         },
+        restore: (saved, context) => restoreProjectile(saved, context),
     }),
     savedComponent({
         key: 'mower', component: MowerComponent,
-        parse: (value, name): Mower => ({ state: oneOf(exact(value, ['state'], name).state, MOWER_STATES, `${name}.state`) }),
-        // A ready one waits where every row's does; a triggered one runs as the level's mowing projectile.
+        parse: (value, name): MowerFields => ({ typeId: nonEmptyString(exact(value, ['typeId'], name).typeId, `${name}.typeId`) }),
+        // It waits where every row's does, to set off as the level's mowing projectile.
         check: (mower, context) => {
             const { world, entity } = context, level = world.resources.get(LevelStateResource), position = entity.position!
-            const ready = mower.state === 'ready'
-            if (!onBoardRow(context) || (ready ? entity.projectile !== undefined || position.x !== MOWER_READY_X || position.y !== mowerY(level.board, position.row)
-                : entity.projectile?.typeId !== level.definition.lawnMower)) throw new Error(`Saved mower ${entity.entityId} is invalid for the level`)
+            if (!onBoardRow(context) || mower.typeId !== level.definition.lawnMower || position.x !== MOWER_READY_X || position.y !== mowerY(level.board, position.row)) {
+                throw new Error(`Saved mower ${entity.entityId} is invalid for the level`)
+            }
+        },
+        restore: (saved, { entity }) => {
+            const mower = new Mower(saved.typeId)
+            mower.restore(saved, `Saved mower ${entity.entityId}`)
+            return mower
         },
     }),
     savedComponent({
@@ -263,15 +259,14 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
 
 /**
  * Whether an entity can run as saved: as a cell's (a grid item, nothing else, no position), or with a position and one
- * domain component (or only a Mod's), each of its components checked against the content and the level. A mower that
- * has set off is one, with the projectile it runs as.
+ * domain component (or only a Mod's), each of its components checked against the content and the level.
  */
 export function checkSavedEntity(content: ServerContent, world: World, entity: SavedEntity): void {
     if (entity.gridItem) {
         if (Object.keys(entity).some(key => key !== 'entityId' && key !== 'gridItem' && key !== 'extensions')) throw new Error(`Saved grid item ${entity.entityId} must have no other component`)
     } else {
         if (!entity.position) throw new Error(`Saved entity ${entity.entityId} has no position`)
-        const kinds = [entity.plant, entity.mowedPlant, entity.zombie, entity.mower ?? entity.projectile, entity.item].filter(value => value !== undefined).length
+        const kinds = [entity.plant, entity.mowedPlant, entity.zombie, entity.mower, entity.projectile, entity.item].filter(value => value !== undefined).length
         if (kinds !== 1 && !(kinds === 0 && entity.extensions && Object.keys(entity.extensions).length)) throw new Error(`Saved entity ${entity.entityId} must have exactly one domain component`)
     }
     const context = { content, world, entity }
@@ -281,13 +276,18 @@ export function checkSavedEntity(content: ServerContent, world: World, entity: S
     }
 }
 
-function parsePlant(value: unknown, name: string): Plant {
-    const source = exact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['ability', 'behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
+/** A saved plant: every plant's fields here; its kind takes its own as it is restored (Plant.restore), kept as they are. */
+function parseSavedPlant(value: unknown, name: string): SavedPlant {
+    const fields: readonly string[] = PLANT_FIELDS, all = record(value, name)
+    const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
+    const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))),
+        ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
+        ['behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
     return {
+        ...own,
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
         seedId: nonEmptyString(source.seedId, `${name}.seedId`),
         column: nonNegativeInteger(source.column, `${name}.column`),
@@ -296,7 +296,6 @@ function parsePlant(value: unknown, name: string): Plant {
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         ...(source.frozenTicks === undefined ? {} : { frozenTicks: positiveInteger(source.frozenTicks, `${name}.frozenTicks`) }),
-        ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
         ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
@@ -305,12 +304,38 @@ function parsePlant(value: unknown, name: string): Plant {
     }
 }
 
-function parsePlantAbility(value: unknown, name: string): PlantAbility {
-    const source = exact(value, ['state', 'ticks'], name, ['prey'])
+/** A saved projectile: every projectile's fields here; its kind takes its own as it is restored (Projectile.restore), kept as they are. */
+function parseSavedProjectile(value: unknown, name: string): SavedProjectile {
+    const fields: readonly string[] = PROJECTILE_FIELDS, all = record(value, name)
+    const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
+    const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))),
+        ['typeId', 'age', 'definition', 'motion'], name, ['team', 'motionState', 'hits'])
     return {
-        state: oneOf(source.state, PLANT_ABILITY_STATES, `${name}.state`), ticks: nonNegativeInteger(source.ticks, `${name}.ticks`),
-        ...(source.prey === undefined ? {} : { prey: oneOf(source.prey, ['plant'] as const, `${name}.prey`) }),
+        ...own,
+        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+        age: nonNegativeInteger(source.age, `${name}.age`),
+        definition: parseProjectileDefinition(source.definition, `${name}.definition`),
+        motion: nonEmptyString(source.motion, `${name}.motion`),
+        ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
+        ...(source.hits === undefined ? {} : { hits: array(source.hits, `${name}.hits`).map(hit => positiveInteger(hit, `${name}.hits[]`)) }),
+        // Its motion checks it (check).
+        ...(source.motionState === undefined ? {} : { motionState: jsonRoundTrip(record(source.motionState, `${name}.motionState`)) as JsonObject }),
     }
+}
+
+/** A saved projectile as its kind: of its type's kind, with its kind's own fields (Projectile.restore). */
+function restoreProjectile(saved: SavedProjectile, { world, entity }: SavedComponentContext): Projectile {
+    return world.resources.get(ProjectileFactoryResource).restore(saved, `Saved projectile ${entity.entityId}`)
+}
+
+/** A saved plant as its kind: of its type's kind, with its kind's own fields (Plant.restore). */
+function restorePlant(saved: SavedPlant, { world, entity }: SavedComponentContext): Plant {
+    return world.resources.get(PlantFactoryResource).restore(saved, `Saved plant ${entity.entityId}`)
+}
+
+/** A saved zombie as its kind: of its type's kind, with its kind's own fields (Zombie.restore). */
+function restoreZombie(saved: SavedZombie, { world, entity }: SavedComponentContext): Zombie {
+    return world.resources.get(ZombieFactoryResource).restore(saved, `Saved zombie ${entity.entityId}`)
 }
 
 /** What the layers of an animation play, a plant's or a zombie's, by layer. */

@@ -35,14 +35,16 @@ export function adventureWaveSettings(rule: LevelRule, level: LevelDefinition, n
 
 /**
  * Board::PickZombieWaves for a first adventure: wave points are wave / 3 + 1; a flag wave (the last of every ten, or
- * of a shorter level; none on level 1, Board::IsFlagWave) first gets min(points, 8) normal zombies and a flag zombie
- * after multiplying its points by 2.5; then the points take `pointsScale`, and the fixed zombies spend them. The final
+ * of a shorter level; none on level 1, Board::IsFlagWave) first gets min(points, `maxPlain`) of its `plain` zombies and
+ * the zombie that leads it (GameplayDefinitions.flagWave: 8 normal zombies, the flag zombie) after multiplying its
+ * points by 2.5; then the points take `pointsScale`, and the fixed zombies spend them. The final
  * wave then gets each weighted zombiePool type it still lacks, in pool order (PutInMissingZombies).
  */
 export const adventureRule: LevelRuleDefinition = {
-    validate(rule, level, _definitions, name) {
+    validate(rule, level, definitions, name) {
         adventureWaveSettings(rule, level, name)
-        if (!level.zombiePool?.some(entry => entry.id === 'pvz:normal')) throw new Error(`${name} needs pvz:normal in the zombiePool`)
+        const plain = definitions.flagWave.plain
+        if (!level.zombiePool?.some(entry => entry.id === plain)) throw new Error(`${name} needs ${plain} in the zombiePool`)
     },
     draft(rule, level, definitions) {
         const { pointsScale, fixedZombies } = adventureWaveSettings(rule, level, 'rules')
@@ -53,10 +55,10 @@ export const adventureRule: LevelRuleDefinition = {
             const put = (id: string) => { zombies.push(id); points -= zombieValue(level, definitions, id) }
             const flagWave = level.adventureIndex !== 1 && wave % perFlag === perFlag - 1
             if (flagWave) {
-                const plain = Math.min(points, 8)
+                const { zombie, plain, maxPlain } = definitions.flagWave, plains = Math.min(points, maxPlain)
                 points = Math.trunc(points * 2.5)
-                for (let index = 0; index < plain; index++) put('pvz:normal')
-                put('pvz:flag')
+                for (let index = 0; index < plains; index++) put(plain)
+                put(zombie)
             }
             points *= pointsScale
             for (const fixed of fixedZombies) {

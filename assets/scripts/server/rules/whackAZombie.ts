@@ -6,6 +6,7 @@ import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { startWalk } from '../zombies/animation'
 import { animateCurve } from '@/shared/content/animation'
+import { craterAt } from '@/shared/content/craters'
 import { damageZombie, destroyZombie } from '../zombies/damage'
 import { damagePlant } from '../plants/damage'
 import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
@@ -14,6 +15,7 @@ import type { Team } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
 import { circleRectOverlap } from '../combat/collision'
 import { graves as lawnGraves, placeGrave, raiseZombieFromGrave } from '../level/graves'
+import { gridItems } from '../level/lawn'
 import { spawnLoot } from '../level/loot'
 import { levelAwardDropped, tryDropLevelAward } from '../level/levelAward'
 import { nextWaveComing } from '../level/waves'
@@ -132,7 +134,8 @@ function placeWhackGraves(world: World, definitions: GameplayDefinitions, count:
     const picks: Array<{ row: number; column: number; weight: number }> = []
     for (let column = whackSettings(definition.rules!).firstGraveColumn; column < board.columns; column++) {
         for (const row of definition.activeRows) {
-            if (graves.some(grave => grave.row === row && grave.column === column)) continue
+            // Board::CanAddGraveStoneAt: not on a grave nor a crater.
+            if (graves.some(grave => grave.row === row && grave.column === column) || craterAt(gridItems(world), row, column)) continue
             picks.push({ row, column, weight: plantsAt(row, column).length ? 1 : 100000 })
         }
     }
@@ -203,7 +206,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
         }
         const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, riseTicks), ZombieComponent)!
         zombie.speedPerTick = 0.5 + random.nextFloat() * (maxSpeed - 0.5)
-        startWalk(zombie, definitions.zombies[typeId].animation, zombie.walkClip, random)
+        startWalk(zombie, definitions.zombies[typeId], zombie.walkClip, random)
     }
     state.groupTicks = random.integer(animateCurve(1, 12, wave, 100, 30), animateCurve(1, 12, wave, 200, 60))
     if (final) {

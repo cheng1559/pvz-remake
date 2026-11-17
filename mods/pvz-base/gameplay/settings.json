@@ -9,6 +9,11 @@
     "maxSlots": 10,
     "startingSeeds": ["pvz:peashooter"]
   },
+  "flagWave": {
+    "zombie": "pvz:flag",
+    "plain": "pvz:normal",
+    "maxPlain": 8
+  },
   "zenGarden": {
     "columns": 8,
     "capacity": 32,

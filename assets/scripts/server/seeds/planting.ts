@@ -3,14 +3,13 @@ import { seedTeam, type Team } from '@/shared/content/teams'
 import { cellPosition, type SeedDefinition, zombieRowY } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
 import {
-    EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
+    EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
     type SeedBankState, ZombieComponent,
 } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { adviceShown, displayAdviceOnce } from '../tutorials/advice'
-import { initialPlantAbility } from '../plants/abilities'
-import { hasPlantAttack } from '@/shared/content/plantAbilities'
+import { PlantFactoryResource } from '../plants/Plant'
 import { startPlantAnimations } from '../plants/animation'
 import { packetAvailability, seedSunCost, selectedSeedId, selectedTeam } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -21,6 +20,8 @@ import { placeGrave } from '../level/graves'
 import { graveAt } from '@/shared/content/graves'
 import { cellPlant, type PlantingLawn, type PlantingRefusal, plantingRefusal } from '@/shared/content/planting'
 import { gridItems, lawnPlants } from '../level/lawn'
+import { placeCrater } from '../level/craters'
+import { craterAt } from '@/shared/content/craters'
 import { isPlantAsleep } from '../plants/sleep'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
@@ -30,11 +31,13 @@ const REJECTIONS: Record<PlantingRefusal, CommandRejectionCode> = {
     'row-not-active': 'row-not-active', 'column-out-of-range': 'column-out-of-range', 'rule-closed': 'column-out-of-range',
     'past-line': 'column-out-of-range', 'cell-occupied': 'cell-occupied', 'cell-has-grave': 'cell-has-grave',
     'not-on-grave': 'cell-has-grave', 'cell-needs-grave': 'cell-needs-grave', 'cell-has-own-grave': 'cell-has-own-grave',
+    'cell-has-crater': 'cell-has-crater', 'not-on-crater': 'cell-has-crater',
 }
 
-/** Board::MouseDownWithPlant: the grave advice a refusal shows. */
+/** Board::MouseDownWithPlant: the advice a refusal of a grave or a crater shows. */
 const GRAVE_ADVICE: Partial<Record<PlantingRefusal, string>> = {
     'not-on-grave': 'ADVICE_PLANT_NOT_ON_GRAVE', 'cell-needs-grave': 'ADVICE_GRAVEBUSTERS_ON_GRAVES',
+    'not-on-crater': 'ADVICE_PLANT_NOT_ON_CRATER',
 }
 
 /**
@@ -134,6 +137,12 @@ export const planting = {
             emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
             return
         }
+        if (seed.kind === 'crater') {
+            placeCrater(world, definitions, row, column, seed.craterTicks, team)
+            spendSeed(session, seed, packet, sunCost)
+            emitServerEvent(world.resources.get(EventQueueResource), 'craterPlaced', { seedId, row, column })
+            return
+        }
         if (session.graveAdvice) {
             emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.graveAdvice })
             session.graveAdvice = undefined
@@ -178,24 +187,15 @@ export const planting = {
             y: cell.y + (offset ? random.integer(offset.min.y, offset.max.y) : 0),
             row,
         })
-        world.add(entity, PlantComponent, {
-            typeId: plantedSeed.id,
-            seedId,
-            column,
-            health: definition.maxHealth,
-            maxHealth: definition.maxHealth,
-            recentlyEatenCounter: 0,
-            chilledTicks: 0,
-            ...(behaviorState === undefined ? {} : { behaviorState }),
-            ...(team === 'zombies' ? { team } : {}),
-        })
-        const ability = initialPlantAbility(definition, random)
-        if (ability) world.get(entity, PlantComponent)!.ability = ability
-        if (hasPlantAttack(definition)) {
-            const delay = (definition.shooter ?? definition.producer)!.initialDelayTicks
-            world.add(entity, PlantAttackComponent, { readyAtTick: gameplayTick + random.integer(delay.min, delay.max) })
-        }
-        startPlantAnimations(world.get(entity, PlantComponent)!, definition, isPlantAsleep(definition, level.board), random)
+        // Made as its kind (PlantFactoryResource), which starts it on what it does of its own (Plant.start).
+        const plant = world.resources.get(PlantFactoryResource).create(plantedSeed.id)
+        plant.seedId = seedId
+        plant.column = column
+        if (behaviorState !== undefined) plant.behaviorState = behaviorState
+        if (team === 'zombies') plant.team = team
+        world.add(entity, PlantComponent, plant)
+        plant.start(random, gameplayTick)
+        startPlantAnimations(plant, definition, isPlantAsleep(definition, level.board), random)
         return entity
     },
 
@@ -216,6 +216,7 @@ function sessionLawn(session: Session): PlantingLawn {
             return entity === undefined ? undefined : world.get(entity, PlantComponent)
         },
         graveAt: (row, column) => graveAt(gridItems(world), row, column),
+        craterAt: (row, column) => craterAt(gridItems(world), row, column),
     }
 }
 

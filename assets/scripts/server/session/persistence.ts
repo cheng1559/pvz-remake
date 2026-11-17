@@ -145,9 +145,11 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     checkSavedEntity(content, world, saved)
     world.activateEntity(saved.entityId)
     content.gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
-    for (const { key, component } of SAVED_COMPONENTS) {
+    const context = { content, world, entity: saved }
+    for (const { key, component, restore } of SAVED_COMPONENTS) {
         const value = saved[key]
-        if (value !== undefined) world.add(saved.entityId, component, jsonRoundTrip(value) as never)
+        // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance).
+        if (value !== undefined) world.add(saved.entityId, component, (restore ? restore(value as never, context) : jsonRoundTrip(value)) as never)
     }
 }
 

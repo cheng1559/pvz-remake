@@ -6,13 +6,17 @@ import type { ZombiePresentationDefinition } from '@/shared/content/presentation
  */
 export const MIRRORED_SHIFT = 90
 
+/**
+ * Zombie::UpdateReanim: a zombie of another size (ZombieDefinition.scale) has its body drawn so about this point of its
+ * Reanim (Y down), and turned round 90 times its size further right.
+ */
+export const ZOMBIE_PIVOT = { x: 30, y: 120 } as const
+
 /** What decides which body parts a zombie shows. */
 export interface ZombiePartState {
     hasHead: boolean
     hasTongue: boolean
     hasArm: boolean
-    /** Carrying its flag (Zombie::ZombieInitialize, DropFlag). */
-    holdingFlag: boolean
     /** -1 without a helm, otherwise its damage index. */
     helmStage: number
     /** -1 without a shield, otherwise its damage index. */
@@ -22,14 +26,12 @@ export interface ZombiePartState {
 }
 
 /**
- * Track visibility for a zombie's parts, in the order it is applied: a later entry wins for a track in two lists.
+ * Track visibility for any zombie's parts, in the order it is applied: a later entry wins for a track in two lists. Its
+ * kind's own come before (ZombieView.ownParts: the flag zombie's arms).
  */
 export function zombiePartVisibility(presentation: ZombiePresentationDefinition, state: ZombiePartState): Array<[readonly string[], boolean]> {
     const parts = presentation.parts, helm = presentation.helm, shield = presentation.shield
     const result: Array<[readonly string[], boolean]> = []
-    if (parts.flagArm) {
-        result.push([parts.flagArm.free, !state.holdingFlag], [parts.flagArm.holding, state.holdingFlag])
-    }
     result.push([parts.head, state.hasHead])
     // Zombie::ZombieInitialize hides the hair under a helm until DropHelm shows it again.
     result.push([parts.hair, state.hasHead && (state.helmStage < 0 || helm?.showsHair === true)])

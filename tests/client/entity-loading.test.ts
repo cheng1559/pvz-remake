@@ -18,6 +18,8 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as zombieAnimationModule from '@/shared/content/zombieAnimation'
 import * as teamsModule from '@/shared/content/teams'
+import * as zombieStatesModule from '@/shared/content/zombieStates'
+import * as presentationModule from '@/shared/content/presentation'
 import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
 
 // Rendering helpers that need the engine; animation frames pass through unchanged.
@@ -37,6 +39,7 @@ const clientStubs: Record<string, unknown> = {
     '@/shared/content/animation': animationModule,
     '@/shared/content/gameplay': gameplayModule,
     '@/shared/content/zombieAnimation': zombieAnimationModule,
+    '@/shared/content/presentation': presentationModule,
 }
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {
@@ -113,7 +116,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     const content = {
         definitions: { boards: { 'test:board': { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } } }, plants: {} },
         levels: { levels: { 'test:level': { board: 'test:board' } } },
-        presentation: { gridItems: { 'pvz:grave': { view: 'grave', layer: 'graveStone', offset: 3 } } },
+        presentation: { gridItems: { 'pvz:grave': { view: 'grave', layer: 'graveStone', offset: 3, cell: [-4, -9] } } },
     }
     const world = (gameplayTick = 0, phase = 'intro') => ({ levelId: 'test:level', phase, gameplayTick, plants: [] })
     let particles = 0
@@ -388,7 +391,7 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
     const view = Object.assign(Object.create(ZombieView.prototype), {
         context: { content: {} }, node: new Node(), shadowNode: new Node(), layers: { player: () => ({ loadedId: null }), shown: [], show() {} }, animation: 'walk',
-        attachments: new EntityAttachments(), mirrored: false,
+        attachments: new EntityAttachments(), mirrored: false, turned: false, scale: 1, shadowSize: { width: 0, height: 0 },
         presentation: presentationFixture.zombies['pvz:newspaper'], gameplay: {}, applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
     view.armorDropped('shield')
@@ -396,17 +399,17 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     const finished = drops[0].player!
     finished.onFinish!()
     assert.equal(finished.node, null, 'Cocos clears a destroyed component node')
-    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }))
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' }))
 
     let finishLoad!: () => void
     loading = new Promise(resolve => { finishLoad = resolve })
     view.armorDropped('shield')
-    view.sync({ state: 'dying', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true })
+    view.sync({ state: 'dying', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' })
     assert.equal(drops[1].isValid, false, 'death removes a drop even while its animation is loading')
     finishLoad()
     await new Promise(resolve => setImmediate(resolve))
     assert.equal(playCount, 1, 'a drop destroyed during loading must not start playing')
-    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }))
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' }))
 })
 
 test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
@@ -548,7 +551,7 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     const shown = new Map<string, boolean>()
     const player = { loadedId: 'pvz:door_zombie_walk', setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, sprites: {},
+        layers: { player: () => player }, presentation, parts: '', gameplay: { shield: { type: 'door', health: 1100 } }, sprites: {},
     })
     const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } } }
     const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
@@ -612,6 +615,28 @@ test('a player changes to another clip of its body in place: its batches stay, a
     player.blendFromPoses.clear()
     player.change('pvz:death', 0.1)
     assert.deepEqual([[...player.views.values()], [...player.blendFromPoses.keys()].sort(), player.blendDuration], [views, ['arm', 'head'], 0.1])
+})
+
+test('a stopped player driven by seek takes its blend on by itself, staying where it is in its clip', () => {
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, isValid: () => true, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/content/reanim': { parseReanim: (json: unknown) => json, sampleReanimTrack: () => null },
+        './ReanimAssets': {},
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
+    })
+    let poses = 0
+    const player = Object.assign(Object.create(ReanimPlayer.prototype), {
+        blendFromPoses: new Map([['arm', { sprite: 'pvz:arm' }]]), blendDuration: 0.2, blendElapsed: 0, timeSeconds: 3,
+        playing: false, drawingStale: false, applyPose() { poses++ },
+    })
+    player.advanceBlend(0.1)
+    assert.deepEqual([player.blendElapsed, player.blendDuration, player.blendFromPoses.size, player.timeSeconds, poses], [0.1, 0.2, 1, 3, 1])
+    player.advanceBlend(0.15)
+    assert.deepEqual([player.blendElapsed, player.blendDuration, player.blendFromPoses.size, player.drawingStale, player.timeSeconds, poses], [0, 0, 0, true, 3, 2],
+        'its blend done, it shows its clip alone')
+    player.advanceBlend(0.1)
+    assert.equal(poses, 2, 'without a blend there is nothing to draw again')
+    assert.throws(() => player.advanceBlend(-1), /finite and non-negative/)
 })
 
 test('an animation loads once for every player with the pictures its packs have for it, and a failed load can retry', async () => {
@@ -808,8 +833,11 @@ test('a layer frozen when its view is made stands still at rate 0, and goes on a
 test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {
     // The base's handlers are the views' statics: any function stands in for them here.
     const statics = new Proxy({}, { get: () => () => {} })
-    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'],
-        ['zombies/ZombieView', 'ZombieView'], ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ShooterView', 'ShooterView'], ['plants/ProducerView', 'ProducerView'],
+        ['plants/SunShroomView', 'SunShroomView'], ['plants/FusePlantView', 'FusePlantView'], ['plants/PotatoMineView', 'PotatoMineView'],
+        ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'], ['plants/BowlingNutView', 'BowlingNutView'],
+        ['zombies/ZombieView', 'ZombieView'], ['zombies/DancerView', 'DancerView'], ['zombies/NewspaperView', 'NewspaperView'], ['zombies/PoleVaulterView', 'PoleVaulterView'],
+        ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
         ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
     const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
     const registry = new StageEventRegistry()
@@ -862,6 +890,27 @@ test('the winner of a lost level takes its shadow with it into the house, and sh
     const view = Object.assign(Object.create(ZombieView.prototype), { node: node('zombie'), shadowNode: node('shadow'), layers: { player: () => ({ loadedId: null }) } })
     view.syncGameOverWalk({ entityId: 1 }, parent, 0, 300)
     assert.deepEqual([view.node.parent, view.node.active, view.shadowNode.parent, view.shadowNode.active], [parent, true, parent, true])
+})
+
+test("the winner's blend into its walk goes on by the game over's ticks, its player standing still with the lawn", () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', {})
+    const steps: unknown[] = []
+    const player = {
+        loadedId: 'pvz:walk', durationSeconds: 1, lastFrameTimeSeconds: 0.9, sampleTrack: () => ({ x: 0 }),
+        advanceBlend(seconds: number) { steps.push(['blend', Math.round(seconds * 1000) / 1000]) },
+        seek(seconds: number) { steps.push(['seek', Math.round(seconds * 1000) / 1000]) },
+    }
+    const node = () => ({ parent: null as unknown, active: true, setParent(to: unknown) { this.parent = to }, setPosition() {} })
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        node: node(), shadowNode: null, scale: 1, gameOverTicks: 0, layers: { player: () => player },
+        presentation: { parts: { ground: '_ground' } }, playback: () => ({ rate: 1, timeSeconds: 0 }), placeShadow() {},
+    })
+    const parent = {}
+    view.syncGameOverWalk({ entityId: 1 }, parent, 0, 300, 5)
+    view.syncGameOverWalk({ entityId: 1 }, parent, 0, 300, 20)
+    view.syncGameOverWalk({ entityId: 1 }, parent, 30, 300, 100)
+    assert.deepEqual(steps, [['blend', 0.05], ['seek', 0.05], ['blend', 0.15], ['seek', 0.2], ['blend', 1.1], ['seek', 0.3]],
+        'its approach and walk both take the blend on, before its pose is drawn where the walk is')
 })
 
 test("the level's award is collected by its own view: its sounds, the starburst, its glow gone and its own effect behind it", async () => {
@@ -920,8 +969,11 @@ test("the level's award is collected by its own view: its sounds, the starburst,
 
 test('each flash event is heard once by its flash handler, before the frame is drawn', () => {
     const statics = new Proxy({}, { get: () => () => {} })
-    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'],
-        ['zombies/ZombieView', 'ZombieView'], ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ShooterView', 'ShooterView'], ['plants/ProducerView', 'ProducerView'],
+        ['plants/SunShroomView', 'SunShroomView'], ['plants/FusePlantView', 'FusePlantView'], ['plants/PotatoMineView', 'PotatoMineView'],
+        ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'], ['plants/BowlingNutView', 'BowlingNutView'],
+        ['zombies/ZombieView', 'ZombieView'], ['zombies/DancerView', 'DancerView'], ['zombies/NewspaperView', 'NewspaperView'], ['zombies/PoleVaulterView', 'PoleVaulterView'],
+        ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
         ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
     const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
     const { EntityFlashes } = clientStubs['./EntityFlashes'] as any
@@ -977,11 +1029,11 @@ test('a mind-controlled zombie is drawn purple, between purple and blue while co
 })
 
 test("a shot leaves the muzzle effect of the plant that fired it just over the row's mowers, mirrored across its hitbox for the zombies' side", () => {
-    const { PlantView } = loadClientModule('plants/PlantView', { '@/shared/content/teams': teamsModule })
+    const { ShooterView } = loadClientModule('plants/ShooterView', { '@/shared/content/teams': teamsModule, './PlantView': { PlantView: class {} } })
     const definitions = gameplayModule.parseGameplayDefinitions(readGameplaySource('definitions'))
     const particles: unknown[][] = []
     const stage = { content: { presentation: presentationFixture, definitions }, particle(...args: unknown[]) { particles.push(args) } }
-    const shot = (data: object) => PlantView.shot(stage, { type: 'projectileFired', data: { typeId: 'pvz:spore', x: 100, y: 120, row: 2, ...data } })
+    const shot = (data: object) => ShooterView.shot(stage, { type: 'projectileFired', data: { typeId: 'pvz:spore', x: 100, y: 120, row: 2, ...data } })
     shot({ plantTypeId: 'pvz:puffshroom' })
     shot({ plantTypeId: 'pvz:scaredyshroom', team: 'zombies' })
     shot({ plantTypeId: 'pvz:snowpea', typeId: 'pvz:snow_pea' })
@@ -1006,4 +1058,73 @@ test('a spore grows from 0.3 of its size to whole over its first 30 ticks, as Pr
     assert.deepEqual([0, 1, 15, 30, 75].map(age => Math.round(ProjectileView.grown(spore, age) * 1000) / 1000), [0.3, 0.323, 0.65, 1, 1])
     assert.equal(ProjectileView.grown(spore, undefined), 1, 'without an age (a waiting mower) it is whole')
     assert.equal(ProjectileView.grown(presentationFixture.projectiles['pvz:pea'], 1), 1, 'a pea does not grow')
+})
+
+test("the zombies that do something of their own add it to the zombie's view: a dancer's facing and rise, a pole vaulter's landing, a newspaper zombie's rage", async () => {
+    const base = loadClientModule('zombies/ZombieView', {})
+    const { DancerView } = loadClientModule('zombies/DancerView', { './ZombieView': base, '@/shared/content/zombieStates': zombieStatesModule })
+    const { PoleVaulterView } = loadClientModule('zombies/PoleVaulterView', { './ZombieView': base })
+    const { NewspaperView } = loadClientModule('zombies/NewspaperView', { './ZombieView': base })
+    const graves = { zombie: { depth: 1 } }, rise = { depth: 2 }
+    const context = { content: { presentation: { graves } } }
+    const dancer = Object.assign(Object.create(DancerView.prototype), { context, presentation: { dance: { rise } } })
+    const plain = Object.assign(Object.create(base.ZombieView.prototype), { context })
+    const moonwalking = { state: 'walking', own: { step: 'moonwalk' } }
+    assert.deepEqual([dancer.turnedRound(moonwalking), dancer.turnedRound({ ...moonwalking, team: 'plants' }), dancer.turnedRound({ ...moonwalking, state: 'eating' }),
+        plain.turnedRound(moonwalking), plain.turnedRound({ team: 'plants' })], [true, false, false, false, true], 'it moonwalks in the other way round from its side, not as it eats')
+    assert.deepEqual([dancer.rise({ own: { step: 'rise' } }), dancer.rise({ own: { step: 'walk' } }), plain.rise({ own: { step: 'rise' } })], [rise, graves.zombie, graves.zombie])
+    assert.throws(() => dancer.turnedRound({ typeId: 'pvz:dancer', own: { step: 'tango' } }), /pvz:dancer\.own\.step/, 'its view reads its own as its kind has it')
+    const danced = (from: string, to: string, won = false, state = 'walking') => {
+        Object.assign(dancer, { bodyClip: from, won })
+        return dancer.bodyBlend({ state, animations: { body: { clip: to } } })
+    }
+    assert.deepEqual([danced('walk', 'raise'), danced('raise', 'walk'), danced('point', 'walk'), danced('walk', 'eat'), danced('eat', 'raise'),
+        danced('raise', 'walk', true), danced('walk', 'mowered', false, 'mowered')], [0.1, 0.1, 0.2, 0.2, 0.2, 0, 0],
+        'from beat to beat over 10 ticks, into its other clips over 20; into the house and mowed at once')
+
+    const vaulter = Object.create(PoleVaulterView.prototype)
+    const blend = (from: string, zombie: object, won = false) => { Object.assign(vaulter, { bodyClip: from, won }); return vaulter.bodyBlend({ state: 'walking', ...zombie }) }
+    assert.deepEqual([blend('jump', { own: { hasPole: false } }), blend('run', { own: { hasPole: false } }, true), blend('jump', { own: { hasPole: false }, state: 'airborne' }),
+        blend('walk', {}), blend('walk', { state: 'mowered' })], [0, 0, 0.2, 0.2, 0],
+        "StartWalkAnim(0) as it lands and as it walks into the house (WalkIntoHouse); a mowed one is its driver at once")
+    vaulter.bodyClip = 'jump'
+    assert.deepEqual([vaulter.mowedOnWalk({ own: { hasPole: false } }), vaulter.mowedOnWalk({ own: { hasPole: true } }), plain.mowedOnWalk({})], [true, false, false])
+
+    const clips = { walk: { id: 'walk' }, walk2: { id: 'walk2' }, eat: { id: 'eat' }, enragedWalk: { id: 'enragedWalk' }, enragedEat: { id: 'enragedEat' }, gasp: { id: 'gasp' } }
+    const newspaper = Object.assign(Object.create(NewspaperView.prototype), {
+        context: { content: { animations: { resolve: () => clips } } }, presentation: { enragedHead: { track: 'head', sprite: 'mad' } }, sprites: { mad: 'madhead' },
+    })
+    const shown = (enraged: boolean) => { newspaper.latestZombie = enraged ? { own: { enraged: true } } : {}; return ['walk', 'walk2', 'eat', 'gasp'].map(name => newspaper.clip(name).id) }
+    assert.deepEqual([shown(false), shown(true)], [['walk', 'walk2', 'eat', 'gasp'], ['enragedWalk', 'enragedWalk', 'enragedEat', 'gasp']])
+    const heads: unknown[] = [], player = { setTrackSpriteOverride: (track: string, sprite: unknown) => heads.push([track, sprite]) }
+    for (const [enraged, clip] of [[false, 'walk'], [true, 'gasp'], [true, 'enragedWalk']] as const) newspaper.putOnParts({ ...enraged ? { own: { enraged } } : {}, animations: { body: { clip } } }, player)
+    assert.deepEqual(heads, [['head', null], ['head', null], ['head', 'madhead']], 'its enraged head once it has gasped')
+
+    // The sprites of every zombie load once, by the base view, not again by each kind.
+    await assert.rejects(() => base.ZombieView.preload({}))
+    assert.equal(await DancerView.preload({}), undefined)
+})
+
+test("each of the base's zombies is drawn by a view the registry has", () => {
+    const view = (name: string) => ({ [name]: class {} })
+    const { ZombieViewRegistry } = loadClientModule('zombies/ZombieViewRegistry', {
+        '@/client/content/EntityViewRegistry': { EntityViewRegistry }, './ZombieView': view('ZombieView'), './DancerView': view('DancerView'),
+        './NewspaperView': view('NewspaperView'), './PoleVaulterView': view('PoleVaulterView'),
+    })
+    const registry = new ZombieViewRegistry()
+    const zombies = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8')) as Record<string, { view?: string }>
+    for (const [id, zombie] of Object.entries(zombies)) assert.ok(registry.has(zombie.view ?? 'zombie'), id)
+    assert.deepEqual(['pvz:pole_vaulter', 'pvz:newspaper', 'pvz:dancer', 'pvz:backup_dancer'].map(id => zombies[id].view), ['polevaulter', 'newspaper', 'dancer', 'dancer'])
+})
+
+test('the flag zombie shows the arm that holds its flag while it carries it, and its free arm once it has let it go', () => {
+    const base = loadClientModule('zombies/ZombieView', {})
+    const { FlagZombieView } = loadClientModule('zombies/FlagZombieView', { './ZombieView': base })
+    const flagArm = { holding: ['Zombie_flaghand'], free: ['anim_innerarm1'], front: 'Zombie_innerarm_screendoor' }
+    const view = Object.assign(Object.create(FlagZombieView.prototype), { presentation: { parts: { flagArm } } })
+    const plain = Object.create(base.ZombieView.prototype)
+    const walk = { body: { clip: 'walk', time: 0, rate: 12 } }, shown = (value: unknown) => JSON.parse(JSON.stringify(value))
+    assert.deepEqual(shown(view.ownParts({ animations: { ...walk, flag: { clip: 'flag', time: 0, rate: 15 } } })), [[flagArm.free, false], [flagArm.holding, true]])
+    assert.deepEqual(shown(view.ownParts({ animations: walk })), [[flagArm.free, true], [flagArm.holding, false]], 'Zombie::DropFlag')
+    assert.deepEqual(shown(plain.ownParts({ animations: walk })), [])
 })

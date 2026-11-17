@@ -43,8 +43,8 @@ export interface LayerState {
 /** What is animated, as far as its animation goes. */
 export interface Animated {
     animations?: Record<string, LayerState>
-    /** The ticks its ability has left are what a clip that fits them lasts. */
-    ability?: { ticks?: number }
+    /** What a clip that fits its ticks lasts, as it starts (a grave buster's landing: what is left of it, GraveBuster). */
+    fitTicks?(): number | undefined
 }
 
 export interface AnimationRandom { nextFloat(): number, integer(min: number, max: number): number }
@@ -61,13 +61,14 @@ export function pace({ fps }: AnimationClip, random: AnimationRandom): number {
 }
 
 /**
- * A layer starts a clip: where the layer it goes with is and at its rate, over the ticks its ability has left, or at a
- * rate of its own. A clip that walks on its ground has none until whoever walks it gives it one.
+ * A layer starts a clip: where the layer it goes with is and at its rate, over the ticks it is to fit (fitTicks), or at
+ * a rate of its own. A clip that walks on its ground has none until whoever walks it gives it one.
  */
 export function startLayer(animation: AnimationDefinition, entity: Animated, clip: string, random: AnimationRandom): LayerState {
     const definition = animation.clips[clip], { sync, fit, start, frames } = definition, layers = entity.animations
     if (sync !== undefined) return { clip, time: layers?.[sync]?.time ?? 0, rate: layers?.[sync]?.rate ?? ASSET_FPS }
-    if (fit && entity.ability?.ticks) return { clip, time: 0, rate: frames * TICKS_PER_SECOND / entity.ability.ticks }
+    const fitted = fit ? entity.fitTicks?.() : undefined
+    if (fitted) return { clip, time: 0, rate: frames * TICKS_PER_SECOND / fitted }
     // With nothing to fit, a clip goes at its own pace if it has one.
     if (fit && !definition.fps) return { clip, time: 0, rate: ASSET_FPS }
     const rate = definition.fps ? pace(definition, random) : 0

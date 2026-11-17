@@ -9,7 +9,7 @@ import { adventureRule, adventureWaveSettings } from '@/server/rules/adventure'
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 // ZombieType order and ZombieDefinition::mStartingLevel of the zombies the adventure levels use.
-const STARTING_LEVEL: Record<string, number> = { 'pvz:normal': 1, 'pvz:conehead': 3, 'pvz:pole_vaulter': 6, 'pvz:buckethead': 8, 'pvz:newspaper': 11, 'pvz:screendoor': 13, 'pvz:football': 16 }
+const STARTING_LEVEL: Record<string, number> = { 'pvz:normal': 1, 'pvz:conehead': 3, 'pvz:pole_vaulter': 6, 'pvz:buckethead': 8, 'pvz:newspaper': 11, 'pvz:screendoor': 13, 'pvz:football': 16, 'pvz:dancer': 18 }
 
 test('adventure fixed zombies are the introduced zombie; the final wave gets every pool type (PutInMissingZombies)', () => {
     for (const [id, level] of Object.entries(levels.levels)) {
@@ -61,4 +61,20 @@ test('levels name only installed level rules, which check their settings', () =>
     server.start({ type: 'startSession', protocolVersion: 1, sequence: 1, levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
     assert.deepEqual(server.save().wave.plan, [{ zombies: ['pvz:normal'] }, { zombies: ['pvz:normal'] }], 'a Mod rule builds the waves')
     assert.deepEqual([server.snapshot().wave.total, server.snapshot().wave.flagWaves], [2, []])
+})
+
+test('a flag wave brings on the zombies the settings name (GameplayDefinitions.flagWave): its plain ones, then the flag zombie in the base', () => {
+    const level = levels.levels['pvz:adventure-1-10']
+    const flagWaves = (content: typeof definitions) => adventureRule.draft(level.rules!, level, content).filter(wave => wave.flagWave)
+    assert.deepEqual(definitions.flagWave, { zombie: 'pvz:flag', plain: 'pvz:normal', maxPlain: 8 })
+    const base = flagWaves(definitions)
+    assert.ok(base.length > 0 && base.every(wave => wave.zombies.includes('pvz:flag')))
+    const changed = flagWaves({ ...definitions, flagWave: { zombie: 'pvz:conehead', plain: 'pvz:buckethead', maxPlain: 1 } })
+    assert.ok(changed.every(wave => wave.zombies.includes('pvz:conehead') && !wave.zombies.includes('pvz:flag')))
+    assert.deepEqual(changed.map(wave => wave.zombies.slice(0, 2)), base.map(() => ['pvz:buckethead', 'pvz:conehead']), 'up to maxPlain of its plain ones first')
+    assert.throws(() => adventureRule.validate!(level.rules!, level, { ...definitions, flagWave: { ...definitions.flagWave, plain: 'pvz:dancer' } }, 'rules'),
+        /rules needs pvz:dancer in the zombiePool/)
+    const source = readGameplaySource('definitions')
+    source.flagWave = { ...source.flagWave, zombie: 'example:missing' }
+    assert.throws(() => parseGameplayDefinitions(source), /flagWave\.zombie/)
 })

@@ -1,5 +1,5 @@
 import type { JsonObject, Team } from '@/shared/protocol'
-import type { PlantAbilityState } from './plantAbilities'
+import type { PlantState } from './plantKinds'
 import type { ZombieState } from './zombieStates'
 
 /** The gameplay definitions' types (GameplayDefinitions, GameplayLevels), and the fixed names and places they share. */
@@ -42,6 +42,12 @@ export interface GameplayDefinitions {
      * GetAwardSeedForLevel(1) = 1); the profile records the rest.
      */
     seedBank: { baseSlots: number; maxSlots: number; startingSeeds: string[] }
+    /**
+     * Board::PickZombieWaves for a flag wave: the zombie it brings on (ZOMBIE_FLAG, `pvz:flag`), which the street before
+     * an adventure level leaves out (CutScene::PlaceStreetZombies), after up to `maxPlain` (8) of its `plain` zombies
+     * (ZOMBIE_NORMAL), which every adventure level's pool has.
+     */
+    flagWave: { zombie: string; plain: string; maxPlain: number }
     /** The board's tools by ID (the shovel), for the levels that offer or award them. */
     tools: Record<string, ToolDefinition>
     /** The store's items by ID, the key of their purchase count in the profile; each stands on a place of a page. */
@@ -182,8 +188,18 @@ export interface GraveSeedDefinition extends SeedCommon {
     kind: 'grave'
 }
 
+/**
+ * A seed that puts down a crater, which the original has no seed for: in any cell of an active row without a crater or
+ * a grave, the plants there gone (placeCrater), for `craterTicks`. It is the plants' side's unless its packet says
+ * otherwise, as a doom-shroom's crater is; the side only turns it round.
+ */
+export interface CraterSeedDefinition extends SeedCommon {
+    kind: 'crater'
+    craterTicks: number
+}
+
 /** A seed, told apart by `kind`: a new kind is one more definition here, none of the others change. */
-export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition | GraveSeedDefinition
+export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition | GraveSeedDefinition | CraterSeedDefinition
 
 export type SeedKind = SeedDefinition['kind']
 
@@ -212,7 +228,10 @@ export interface FreezeDefinition {
 
 export interface PlantTargeting {
     eatingExtraRange: number
-    excludeHeldPole: boolean
+    /**
+     * The key zombies know this targeting by: the inset they take from it (ZombieDefinition.targetingInsets) and
+     * whether their kind passes it over now (Zombie.evades in server/zombies/Zombie.ts: a pole vaulter's `vault.evades`).
+     */
     insetKey?: string
     /**
      * Not in the original, whose plants never face each other: against hostile plants, the attack rect and the blast
@@ -223,26 +242,48 @@ export interface PlantTargeting {
 
 /** At most one ability; a plant without one only blocks, like the wall-nut. */
 export interface PlantDefinition {
+    /**
+     * Its kind, the server's class of it and the client's view of it (`plant` when omitted; PLANT_KIND_STATES): the
+     * base's `shooter`, `scaredyshroom`, `producer`, `sunshroom`, `fuse`, `potatomine`, `chomper`, `gravebuster`,
+     * `hypnoshroom`, `wallnut` and `bowlingnut`, or a Mod's. Its own fields (`shooter`, `producer`, `fuse`, ...) go
+     * with the kind that takes them.
+     */
+    kind?: string
     occupiesCell?: boolean
     plantingOffset?: { min: Point; max: Point }
     /** Mushrooms: asleep, doing nothing, on a board that is not at night. */
     nocturnal?: boolean
     /**
-     * Kept from the cold, always (`true`) or in these states of its ability: no snow pea or ice-shroom chills it, so
-     * none freezes it either (the torchwood). See server/combat/cold.ts.
+     * Kept from the cold: no snow pea or ice-shroom chills it, so none freezes it either (the torchwood). Its kind keeps
+     * it so at times of its own (Plant.keptFromCold). See server/combat/cold.ts.
      */
-    unchillable?: true | PlantAbilityState[]
+    unchillable?: true
     /**
-     * Kept from an ice-shroom's ice, always (`true`) or in these states of its ability: it is only chilled, not frozen
-     * nor hurt (the cherry bomb and the ice-shroom, the bowled nuts, the grave buster, a potato mine `rising`).
+     * Kept from an ice-shroom's ice: it is only chilled, not frozen nor hurt (the cherry bomb and the ice-shroom, the
+     * bowled nuts, the grave buster). Its kind keeps it so at times of its own (Plant.keptFromIce: a potato mine rising).
      */
-    unfreezable?: true | PlantAbilityState[]
+    unfreezable?: true
     /** Projectile::FindCollisionTargetPlant: so low that projectiles fly over it (the puff-shroom, the potato mine). */
     low?: boolean
     maxHealth: number
     body: Rect
     /** JSON configuration consumed by a registered plant behavior. */
     behavior?: JsonObject
+    /**
+     * Wall-nut Bowling's nut (the `bowlingnut` kind, Plant::UpdateBowling): `attack`, Plant::GetPlantAttackRect on the
+     * minigame, the rect its blows land with (its body is GetPlantRect); `bounceSpeed`, how far it goes up or down a
+     * tick on a slant, and how near its row it must be to strike or turn; `damage`, `helmDamage` and `shieldDamage`, its
+     * blow and the blows a helm and a shield take alone; `bouncedBreaks`, the shields (the screen door) a nut that has
+     * bounced strikes with its full blow instead. A nut that blows up on contact (`deathExplosion`) strikes no blow.
+     */
+    bowling?: {
+        attack: { x: number; width: number }
+        bounceSpeed: number
+        damage: number
+        helmDamage: number
+        shieldDamage: number
+        bouncedBreaks: string[]
+    }
     /**
      * A plant that attacks on a rhythm, written as `shooter`, `lobber` or `seeker` (`type`): the three keep the same
      * rhythm and differ in what they aim at and how what they fire flies (PLANT_ATTACKS), as Plant::Fire picks the
@@ -292,9 +333,10 @@ export interface PlantDefinition {
     graveBuster?: { landTicks: { min: number; max: number }; eatTicks: number }
     /**
      * After the fuse it goes off and is gone: with `explosion` it explodes (the cherry bomb), with `freeze` it freezes
-     * (the ice-shroom); exactly one. Zombies cannot damage it meanwhile, unless it is asleep.
+     * (the ice-shroom); exactly one. An explosion may leave a crater in its cell for `crater.ticks` (the doom-shroom's,
+     * Board::AddACrater). Zombies cannot damage it meanwhile, unless it is asleep.
      */
-    fuse?: { ticks: number; explosion?: ExplosionDefinition; freeze?: FreezeDefinition }
+    fuse?: { ticks: number; explosion?: ExplosionDefinition; freeze?: FreezeDefinition; crater?: { ticks: number } }
     /** Arms underground, rises, then explodes when a zombie enters the attack rect. */
     mine?: { armingTicks: number; riseTicks: number; attack: Rect; targeting: PlantTargeting; explosion: ExplosionDefinition }
     /** Swallows the first zombie in reach, then digests before it can bite again. */
@@ -333,8 +375,8 @@ export interface AnimationClip {
     /** In place of `fps`: it starts where that layer is and goes at its rate (a pea shooter's head idles with its body). */
     sync?: string
     /**
-     * It lasts the ticks its plant's ability has left as it starts (a grave buster's landing). With `fps` too, that is its
-     * pace where there is nothing to fit, off the board.
+     * It lasts the ticks its plant has it fit as it starts (Animated.fitTicks: a grave buster's landing). With `fps` too,
+     * that is its pace where there is nothing to fit, off the board.
      */
     fit?: true
     /** Plant::AnimateNuts: while zombies chew the plant it all but stops, and goes on at a rate drawn anew once they leave it. */
@@ -374,26 +416,26 @@ export interface AnimationDefinition {
 }
 
 export interface PlantAnimationDefinition extends AnimationDefinition {
-    /** The clips its layers play from the start as its ability comes to a state (Plant::PlayBodyReanim as mState changes). */
-    states?: Partial<Record<PlantAbilityState, Record<string, string>>>
+    /** The clips its layers play from the start as it comes to a state of its kind (Plant::PlayBodyReanim as mState changes). */
+    states?: Partial<Record<PlantState, Record<string, string>>>
     /** Plant::SetSleeping: the clips its layers play in place of their own while it is asleep (a mushroom by day). */
     asleep?: Record<string, string>
     /**
-     * Plant::PlantInitialize for a plant that is not in play (the almanac, a packet's picture): the state its ability
+     * Plant::PlantInitialize for a plant that is not in play (the almanac, a packet's picture): the state of its kind it
      * is in there, whose clips (`states`) its layers show (the grown sun-shroom, the armed potato mine), and then
      * `layers`, `{layer: clip}`, what some layers show in place of those, `null` for none (the cherry bomb not going
      * off, the armed potato mine without the light it lights in play). Without it, a plant there is as it starts on the board.
      */
-    offBoard?: { state?: PlantAbilityState; layers?: Record<string, string | null> }
+    offBoard?: { state?: PlantState; layers?: Record<string, string | null> }
     /** Plant::FindTargetAndFire: the clip a layer plays from its start as the plant starts a shot. */
     fire?: Record<string, string>
     /**
      * Plant::DoBlink: every `ticks` (400 to 799 by default) the `blink` layer, over the others, plays one of these
      * clips, drawn by their weights (written `clip` for one, `{clip: weight}` for several: a nut's three); not while
-     * the plant is about to shoot or asleep. With `states`, only while its ability is in one of them, the first blink
+     * the plant is about to shoot or asleep. With `states`, only while it is in one of them, the first blink
      * `first` ticks after it comes to one (an armed potato mine's, 400 to 4399).
      */
-    blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; states?: PlantAbilityState[]; first?: { min: number; max: number } }
+    blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; states?: PlantState[]; first?: { min: number; max: number } }
 }
 
 /** The layer a plant blinks on. */
@@ -406,6 +448,12 @@ export const PLANT_BLINK_TICKS = { min: 400, max: 799 }
 export interface ZombieArmor { type: string; health: number }
 
 export interface ZombieDefinition {
+    /**
+     * Its kind, the server's class of it (`zombie` when omitted; server/zombies/ZombieRegistry.ts): `polevaulter`,
+     * `dancer`, `newspaper`, or a Mod's. Its own fields (`vault`, `dance`, `enrage`) go with the kind that takes them.
+     * The base's are named as their presentations' `view`s, the client's classes of them.
+     */
+    kind?: string
     /**
      * Put down facing right from a zombie seed (the original puts none down so), it stands this much further right to
      * line up with the others: Zombie::UpdateReanim draws every zombie 90 further, flipped, which turns the plain
@@ -421,7 +469,7 @@ export interface ZombieDefinition {
     unchillable?: true | ZombieState[]
     /**
      * Zombie::CanBeFrozen by its type: kept from an ice-shroom's ice, always or in these states, it is only chilled,
-     * not frozen nor hurt (a pole vaulter `vaulting`).
+     * not frozen nor hurt (a pole vaulter `airborne` in its jump).
      */
     unfreezable?: true | ZombieState[]
     maxHealth: number
@@ -478,8 +526,67 @@ export interface ZombieDefinition {
         bowlingAttack?: Rect
         landedAttack: Rect
         landingOffset: number
+        /**
+         * The plants' targetings, by their key (PlantTargeting.insetKey), that pass it over while it holds its pole:
+         * the potato mine's (Plant::FindTargetZombie). None when omitted.
+         */
+        evades?: string[]
     }
+    /**
+     * Zombie::mScaleZombie: the size its body is drawn at (the dancers' 0.8), 1 when omitted. Its walk takes it over
+     * its ground at this size, its clip going the faster to keep its speed (UpdateZombieWalking, UpdateAnimSpeed).
+     */
+    scale?: number
+    /** It dances to the lawn's beat with a troupe (the original's dancers; the `dancer` kind, server/zombies/Dancer.ts). */
+    dance?: ZombieDance
 }
+
+/**
+ * A dancer (ZOMBIE_DANCER, ZOMBIE_BACKUP_DANCER). Every dancer on the lawn keeps one beat (DANCE_BEAT): on its first
+ * beats it walks (its `walk`), on the rest it stands with its arm up (its `raise`). A troupe, a leader and those it
+ * called up, stands still while any of it eats or is frozen, and goes slowed while any of it is chilled
+ * (Zombie::ZombieNotWalking, IsMovingAtChilledSpeed). `lead`: it leads a troupe; without it, it is called up into one.
+ */
+export interface ZombieDance {
+    lead?: DanceLead
+}
+
+/** Zombie::UpdateZombieDancer: how a dancer leads its troupe. */
+export interface DanceLead {
+    /**
+     * It comes on moonwalking (its `moonwalk`, at its own pace back over its ground, drawn turned round) for this many
+     * ticks, or until a plant is in its way, then snaps its fingers (its `point`) and calls up its troupe. Its pace is
+     * PlayZombieReanim's alone: UpdateAnimSpeed sets no rate for a clip whose ground runs backwards, so a chill does not
+     * slow it, and one frozen in it stands once thawed until the moonwalk is through (Dancer).
+     */
+    moonwalkTicks: { min: number; max: number }
+    /** The zombie it calls up into each place of its troupe: a dancer without a `lead`. */
+    backup: string
+    /**
+     * The places of its troupe (mFollowerZombieID), each in a row from its own and across from where it stands, turned
+     * round on the plants' side; one in a row zombies do not walk is left empty.
+     */
+    troupe: Array<{ row: number; x: number }>
+    /** It holds the pose this long after calling them up (PHASE_DANCER_SNAPPING_FINGERS_HOLD). */
+    holdTicks: number
+    /**
+     * Zombie::mSummonCounter: missing some of its troupe, with its head, it waits this long, then snaps its fingers
+     * again on the beat its arm goes up, if it is left of `summonBeforeX` (on the plants' side, as far from the right).
+     */
+    summonTicks: number
+    summonBeforeX: number
+    /** Those it calls up come up out of the ground over this many ticks (PHASE_DANCER_RISING), standing still. */
+    riseTicks: number
+}
+
+/**
+ * Zombie::GetDancerFrame: the lawn's dance, the same for every dancer, by the level's ticks: `beats` beats of `ticks`
+ * each, the first `walk` of them walking. The beat after them raises the arm from `armUpFrom` of the way through its
+ * clip; the arm is raised again from the start at `raiseAgain` (PHASE_DANCER_RAISE_LEFT_2). The original counts the
+ * app's updates (mAppCounter), which go on while the game is paused or away from the lawn; the level's ticks keep the
+ * beat to the level, and to its saves.
+ */
+export const DANCE_BEAT = { ticks: 20, beats: 23, walk: 12, raiseAgain: 19, armUpFrom: 0.6 } as const
 
 /** The layer a zombie's body plays on; the others are what it carries, going at their own pace (chill slows the body alone). */
 export const ZOMBIE_BODY_LAYER = 'body'
@@ -496,6 +603,7 @@ export const ZOMBIE_FLAG_LAYER = 'flag'
 export const ZOMBIE_CLIPS = {
     standing: 'idle', standing2: 'idle2', walk: 'walk', walk2: 'walk2', run: 'run', jump: 'jump', eat: 'eat', gasp: 'gasp',
     death: 'death', death2: 'death2', superLongDeath: 'superLongDeath', mowered: 'mowered',
+    moonwalk: 'moonwalk', point: 'point', raise: 'raise',
 } as const
 
 /**
@@ -507,17 +615,19 @@ export const PLANT_ATTACKS = { shooter: 'pvz:straight', lobber: 'pvz:lob', seeke
 export type PlantAttack = keyof typeof PLANT_ATTACKS
 
 /**
- * What a projectile is and does to what it hits: its hitbox, its hit, whether a hit uses it up (`pierce`), and how it
- * flies each way a launcher may send it, each the original's when omitted. Exactly one of `damage` and `mow`.
+ * What a projectile is and does to what it hits: its kind, its hitbox, its hit, whether a hit uses it up (`pierce`),
+ * and how it flies each way a launcher may send it, each the original's when omitted.
  */
 export interface ProjectileDefinition {
-    /** Taken off what it hits. */
-    damage?: number
     /**
-     * A lawn mower's: it crushes what of the other side it hits (Zombie::MowDown, a plant squashed), slowing as it chews
-     * (LawnMower::UpdatePlaying). A level's mowers set off as one when a zombie reaches them (mower.ts).
+     * Its kind, the server's class of it and the client's view of it (`projectile` when omitted; ProjectileRegistry):
+     * a `projectile` takes its `damage` off what it hits; a `mowing` one, a lawn mower running, crushes what of the
+     * other side it hits (Zombie::MowDown, a plant squashed), slowing as it chews (LawnMower::UpdatePlaying): a row's
+     * mower sets off as the level's `lawnMower`, of this kind, when a zombie reaches it (Mower).
      */
-    mow?: true
+    kind?: string
+    /** Taken off what it hits, by a `projectile`. */
+    damage?: number
     /**
      * A hit does not use it up: it hits all it meets, each once, and flies on until its motion ends, as a lawn mower
      * runs through its row. Without it, it hits the nearest thing it meets and is gone.
@@ -558,8 +668,8 @@ export interface ProjectileDefinition {
     turn?: number
 }
 
-/** What of a projectile a plant firing it may have its own way: all but its hitbox and whether it mows. */
-export type ProjectileOverrides = Omit<ProjectileDefinition, 'hitbox' | 'mow'>
+/** What of a projectile a plant firing it may have its own way: all but its hitbox and its kind. */
+export type ProjectileOverrides = Omit<ProjectileDefinition, 'hitbox' | 'kind'>
 
 export interface ItemDefinition {
     /** Sun goes to the sun bank; money (Coin::IsMoney) goes to the player's coins, in original coin units. */

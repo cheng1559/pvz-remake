@@ -7,7 +7,9 @@ import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { Schedule, World } from '@/ecs/index'
 import { mowerY, parseGameplayDefinitions, parseGameplayLevels, PLANT_ATTACKS, type PlantAttack, rowGroundY } from '@/shared/content/gameplay'
-import { launchProjectile, ProjectileMotionsResource, STRAIGHT } from '@/server/combat/motions'
+import { ProjectileMotionsResource, STRAIGHT } from '@/server/combat/motions'
+import { launchProjectile } from '@/server/combat/Projectile'
+import { ProjectileRegistry } from '@/server/combat/ProjectileRegistry'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LevelStateResource, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
@@ -15,6 +17,7 @@ import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { startFromSave } from './start-from-save'
+import { withZombieTypes } from '../zombieTypes'
 
 const LOB = PLANT_ATTACKS.lobber, HOMING = PLANT_ATTACKS.seeker
 
@@ -28,8 +31,10 @@ function firing(type: PlantAttack, overrides: object = {}) {
     const block = plant[was]
     delete plant[was]
     plant[type] = { ...block, projectile: { id: 'pvz:pea', ...overrides } }
-    const definitions = parseGameplayDefinitions(source)
-    return { definitions, levels: parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions) }
+    const definitions = parseGameplayDefinitions(source), levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
+    // What a projectile's kind takes is checked as the content loads (ProjectileRegistry).
+    new ProjectileRegistry().validate(definitions, levels)
+    return { definitions, levels }
 }
 
 function facing(world: World, projectile: number): number {
@@ -77,7 +82,7 @@ test("a lobber's pea arcs over to its target with the damage the plant gives it,
 
 test('a homing projectile turns across the rows to its target and hits only that', () => {
     const { definitions } = firing('shooter')
-    const world = withProjectileMotions(new World())
+    const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
@@ -115,7 +120,7 @@ test('a homing projectile whose target dies flies on as it was going, where it w
 test('a lobbed projectile comes down past a shield onto the body, where a straight one hits the shield', () => {
     const { definitions } = firing('shooter')
     const hit = (motion: string) => {
-        const world = withProjectileMotions(new World())
+        const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
         world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
             phase: 'gameplay', result: 'playing', paused: false })
         world.resources.set(EventQueueResource, createEventQueue())
@@ -138,7 +143,7 @@ function flying(pierce: boolean) {
     const source = readGameplaySource('definitions')
     if (pierce) source.projectiles['pvz:pea'].pierce = true
     const definitions = parseGameplayDefinitions(source)
-    const world = withProjectileMotions(new World())
+    const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board: definitions.boards['pvz:day'],
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
@@ -320,7 +325,7 @@ test("a plant's own way with its projectile is checked as the projectile's attri
     for (const [type, overrides, message] of [['shooter', { speed: 0 }, /speed must be positive/], ['lobber', { gravity: 1 }, /gravity is not supported/],
         ['lobber', { flightTicks: 1.5 }, /flightTicks must be/], ['lobber', { landingOffset: 'low' }, /landingOffset must be finite/],
         ['lobber', { spin: 1 }, /spin must be an array/], ['lobber', { spin: [2, 1] }, /spin must be an ordered range/], ['seeker', { homingSpeed: 0 }, /homingSpeed must be positive/],
-        ['shooter', { hitbox: { x: 0, y: 0, width: 1, height: 1 } }, /hitbox is not supported/], ['shooter', { id: 'pvz:lawnmower', damage: 5 }, /pvz:lawnmower mows/],
+        ['shooter', { hitbox: { x: 0, y: 0, width: 1, height: 1 } }, /hitbox is not supported/], ['shooter', { id: 'pvz:lawnmower', damage: 5 }, /damage is not supported: pvz:lawnmower is of kind mowing/],
         ['seeker', { homingSpeed: 4, turn: 0.01, pierce: true }, undefined]] as const) {
         if (message) assert.throws(() => firing(type, overrides), message)
         else assert.doesNotThrow(() => firing(type, overrides))

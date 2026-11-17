@@ -1,9 +1,9 @@
 import type { CommandBuffer, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
-    EconomyStateResource, type EntityRemover, LevelStateResource, MowerComponent, PositionComponent, RandomResource, ZombieComponent,
+    EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
 } from '../state/components'
-import { readyMowers } from './lawn'
+import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from './itemSpawn'
@@ -63,7 +63,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
         // 2-1 keeps the seed-slot upgrade out of reach until 2-2's dialogue: count coins in flight and a gold coin for
         // each mower on the lawn, set off or not (mLawnMowers.mSize).
         let money = economy.money + definitions.items[typeId].value
-        money += [...world.query(MowerComponent)].length * definitions.items[GOLD].value
+        money += lawnMowerCount(world) * definitions.items[GOLD].value
         for (const entity of world.query(ItemComponent)) {
             const item = world.get(entity, ItemComponent)!
             if (item.state === 'collecting' && definitions.items[item.typeId]?.kind === 'money') money += item.value

@@ -1,20 +1,30 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
+import { nonEmptyString, nonNegativeInteger } from '@/shared/validate'
 import type { StageEvent } from '@/client/level/LevelStage'
 import { PlantView } from './PlantView'
 
-/** Plant::UpdateGraveBuster: it lands, then chews and sinks while the grave disappears. */
+/**
+ * Plant::UpdateGraveBuster (GraveBuster): it lands, then chews and sinks while the grave disappears (GraveView asks it
+ * how far, `eating`). Its own (GraveBuster.snapshotOwn): `state` (landing, eating) and `ticks`, what is left of it.
+ */
 export class GraveBusterView extends PlantView {
+    /** The ticks it has left to eat its grave, while it eats; none before. */
+    eating(plant: PlantSnapshot): number | undefined {
+        return this.own(plant, 'state', nonEmptyString) === 'eating' ? this.own(plant, 'ticks', nonNegativeInteger) : undefined
+    }
+
     protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
         super.onBoard(plant, world)
-        if (plant.ability?.state !== 'eating') return
+        const ticks = this.eating(plant)
+        if (ticks === undefined) return
         const { node, content } = this.context
         // AddAttachedParticle: the chewing particle belongs to the buster and goes away with it.
         if (!node.children.some(child => child.getComponent(ParticlePlayer)?.id === 'pvz:gravebuster')) {
             ParticlePlayer.spawn({ parent: node, id: 'pvz:gravebuster', x: 40, y: -40 })
         }
         // Plant::UpdateReanim sinks the buster 30px over the eating countdown.
-        this.root.setPosition(0, -30 * (1 - plant.ability.ticks / content.definitions.plants[plant.typeId].graveBuster!.eatTicks))
+        this.root.setPosition(0, -30 * (1 - ticks / content.definitions.plants[plant.typeId].graveBuster!.eatTicks))
     }
 
     /**

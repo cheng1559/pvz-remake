@@ -1,4 +1,4 @@
-import { type EntityRemover, LevelStateResource, type Plant, PlantComponent, PositionComponent } from '../state/components'
+import { type EntityRemover, PlantComponent, PositionComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
@@ -6,20 +6,9 @@ import { explode, explosionCenter } from '../combat/explosions'
 import { plantTeam } from '@/shared/content/teams'
 import { getDebugRules } from '../debug/debugRules'
 import { chillPlant } from './chill'
-import { isPlantAsleep } from './sleep'
 import { breakIce } from '../combat/ice'
 
 export const RECENTLY_EATEN_TICKS = 50
-
-/**
- * Zombie::EatPlant: zombies may chew this plant without hurting it, like a lit cherry bomb or a risen potato mine; an
- * ice-shroom asleep, its fuse not lit, they eat as any plant.
- */
-export function isPlantInedible(world: World, definitions: GameplayDefinitions, plant: Plant): boolean {
-    const state = plant.ability?.state
-    if (state === 'fuse') return !isPlantAsleep(definitions.plants[plant.typeId], world.resources.get(LevelStateResource).board)
-    return state === 'rising' || state === 'armed'
-}
 
 /**
  * Damage to a plant: a hostile plant's attack, which follows the original's zombie pea (Projectile::DoImpact; its plants

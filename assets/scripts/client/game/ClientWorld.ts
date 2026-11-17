@@ -71,9 +71,10 @@ export class ClientWorld {
         const frame: WorldSnapshot = {
             ...current,
             plants: interpolate(current.plants, previous?.plants, t),
-            // Landing changes the animation's origin; its pose and position must switch together.
+            // Coming down from the air (a pole vaulter's landing) changes the animation's origin; its pose and position
+            // must switch together.
             zombies: interpolate(current.zombies, previous?.zombies, t,
-                (before, after) => before.state !== 'vaulting' || after.state === 'vaulting'),
+                (before, after) => before.state !== 'airborne' || after.state === 'airborne'),
             projectiles: interpolateProjectiles(current.projectiles, previous?.projectiles, t),
             // A mower set off runs as a projectile (one waiting stays put).
             mowers: interpolateProjectiles(current.mowers, previous?.mowers, t),

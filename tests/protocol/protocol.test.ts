@@ -128,7 +128,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         items: [{
             entityId: 5, typeId: 'pvz:sun', state: 'available', x: 100, y: 60, scale: 1, alpha: 255,
         }],
-        mowers: [{ entityId: 1, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2, state: 'ready' }],
+        mowers: [{ entityId: 1, typeId: 'pvz:lawnmower', x: -21, y: 303, row: 2 }],
         tutorial: { step: 'pick-first-seed' }, extensions: {},
     }
     const packet = { protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot }
@@ -140,14 +140,14 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         conveyorPackets: [{ id: 1, seedId: 'pvz:peashooter', x: 0, selected: true, availability: {} }],
     } }), /multiple selected/)
     assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
-        plants: [{ ...snapshot.plants[0], produceTicks: 1.5 }],
-    } }), /produceTicks/)
+        plants: [{ ...snapshot.plants[0], own: 1.5 }],
+    } }), /plants\[0\]\.own must be an object/)
     snapshot.items[0].alpha = -1
     assert.throws(() => parseServerPacket(packet), /non-negative/)
     snapshot.items[0].alpha = 255
     assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
-        mowers: [{ ...snapshot.mowers[0], state: 'rolling-in' }],
-    } }), /mowers\[0\]\.state/, 'LawnMowerState: ready or triggered')
+        mowers: [{ ...snapshot.mowers[0], state: 'triggered' }],
+    } }), /mowers\[0\]\.state is not supported/, 'a mower set off is a projectile')
     assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
         mowers: [{ ...snapshot.mowers[0], x: Number.NaN }],
     } }), /mowers\[0\]\.x/, 'a mower is placed as a projectile is')

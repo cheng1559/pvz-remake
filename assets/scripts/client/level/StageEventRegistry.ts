@@ -1,12 +1,21 @@
-import { GraveBusterView } from '@/client/plants/GraveBusterView'
+import { BowlingNutView } from '@/client/plants/BowlingNutView'
 import { ChomperView } from '@/client/plants/ChomperView'
+import { FusePlantView } from '@/client/plants/FusePlantView'
+import { GraveBusterView } from '@/client/plants/GraveBusterView'
 import { PlantView } from '@/client/plants/PlantView'
+import { PotatoMineView } from '@/client/plants/PotatoMineView'
+import { ProducerView } from '@/client/plants/ProducerView'
+import { ShooterView } from '@/client/plants/ShooterView'
+import { SunShroomView } from '@/client/plants/SunShroomView'
 import { MowerView } from '@/client/projectiles/MowerView'
 import { ProjectileView } from '@/client/projectiles/ProjectileView'
 import { AwardView } from '@/client/items/AwardView'
 import { ItemView } from '@/client/items/ItemView'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { ZombieView } from '@/client/zombies/ZombieView'
+import { DancerView } from '@/client/zombies/DancerView'
+import { NewspaperView } from '@/client/zombies/NewspaperView'
+import { PoleVaulterView } from '@/client/zombies/PoleVaulterView'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { mirrorX, PLANT_WIDTH, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { EntityFlashes } from './EntityFlashes'
@@ -70,23 +79,26 @@ export class StageEventRegistry {
         }
         const after: Record<string, StageEvent> = {
             zombieHelmDropped: ZombieView.armorDropped, zombieShieldDropped: ZombieView.armorDropped, zombiePartDropped: ZombieView.partDropped,
-            plantPlaced: planted, zombiePlaced: planted, gravePlaced: planted,
-            plantFiring: PlantView.fired, plantAreaAttack: PlantView.areaAttack, mineRising: PlantView.rose, plantExploded: PlantView.exploded,
-            plantFroze: PlantView.froze, iceReleased,
-            plantGrew: PlantView.grew, sunProduced: PlantView.produced, plantChilled: PlantView.chilled, plantMowered: PlantView.mowered,
-            bowlingImpact: PlantView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
+            plantPlaced: planted, zombiePlaced: planted, gravePlaced: planted, craterPlaced: planted,
+            plantFiring: ShooterView.fired, plantAreaAttack: ShooterView.areaAttack, mineRising: PotatoMineView.rose, plantExploded: PlantView.exploded,
+            plantFroze: FusePlantView.froze, iceReleased,
+            plantGrew: SunShroomView.grew, sunProduced: ProducerView.produced, plantChilled: PlantView.chilled, plantMowered: PlantView.mowered,
+            bowlingImpact: BowlingNutView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
             projectileFired: ProjectileView.fired, projectileImpact: ProjectileView.impact, mowerActivated: MowerView.activated,
             zombieChewedPlant: ZombieView.chewed, zombieChewedZombie: ZombieView.chewed, plantEaten: ZombieView.ate, zombieAteZombie: ZombieView.ate,
             mindControlled,
-            zombieRoseFromGrave: ZombieView.rose, zombieChilled: ZombieView.chilled, zombieVaultSound: ZombieView.vaulted,
-            zombieEnraged: ZombieView.enraged, zombieGroaned: ZombieView.groaned, zombieDying: ZombieView.fell,
+            zombieRoseFromGrave: ZombieView.rose, zombieChilled: ZombieView.chilled, zombieVaultSound: PoleVaulterView.vaulted,
+            dancerSnapped: DancerView.snapped, dancerCalledUp: DancerView.calledUp,
+            zombieEnraged: NewspaperView.enraged, zombieGroaned: ZombieView.groaned, zombieDying: ZombieView.fell,
             zombieMowered: ZombieView.mowered, zombieCharred: ZombieView.charred, zombiePuffed: ZombieView.puffed,
             itemSpawned: ItemView.spawned, itemLanded: ItemView.landed, itemCollected: ItemView.collected, levelAwardDropped: AwardView.dropped, levelAwardCollected: AwardView.collected,
         }
         for (const [type, handler] of Object.entries(before)) this.register(type, handler, 'before')
         for (const [type, handler] of Object.entries(after)) this.register(type, handler)
         this.register('plantPlaced', PlantView.planted)
-        this.register('projectileFired', PlantView.shot)
+        this.register('projectileFired', ShooterView.shot)
+        // Every frame, once its own events are heard (LevelEntityRenderer's FRAME_EVENT).
+        this.register('frame', DancerView.danced)
     }
 
     register(type: string, handler: StageEvent, time: StageEventTime = 'after'): void {

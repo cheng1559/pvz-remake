@@ -10,6 +10,7 @@ import { spawnZombie } from '@/server/zombies/spawn'
 import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
 import { TICK_SECONDS } from '@/shared/protocol'
+import { withZombieTypes } from '../zombieTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -18,7 +19,7 @@ const money = (game: LocalIntegratedGame) => game.render().items.filter(item => 
 test('Zombie::DropLoot: a zombie the level does not pick still drops at its own value (mZombieValue)', () => {
     /** What a replay of 1-1 (whose pool has only the plain zombie) drops for `typeId` on a roll of `roll`. */
     const drop = (typeId: string, roll: number, ownedUpgrades = 0) => {
-        const world = new World()
+        const world = withZombieTypes(new World(), definitions)
         world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
         world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
         world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades })

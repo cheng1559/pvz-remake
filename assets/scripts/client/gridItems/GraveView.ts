@@ -7,7 +7,9 @@ import { uiNode } from '@/client/view/uiNode'
 import type { GraveSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { graveRiseCounter } from '@/shared/content/graves'
 import { cellPosition } from '@/shared/content/gameplay'
+import { gridItemCell } from '@/shared/content/presentation'
 import type { GridItemView, GridItemViewContext } from './GridItemView'
+import { GraveBusterView } from '@/client/plants/GraveBusterView'
 
 /** The atlases' looks a row. */
 const COLUMNS = 5
@@ -64,10 +66,11 @@ export class GraveView implements GridItemView {
         const { stage, node, content } = this.context
         if (!stage || !node.isValid) return
         const board = content.definitions.boards[content.levels.levels[world.levelId].board]
-        // Its corner is 4 left of and 9 above its cell, by the cell's own offset; one of the plants' side is turned
-        // round within its own width, as that side's plants and zombies are.
+        // Its corner is 4 left of and 9 above its cell (its presentation's `cell`), by the cell's own offset; one of the
+        // plants' side is turned round within its own width, as that side's plants and zombies are.
         const mirrored = grave.team === 'plants', cell = cellPosition(board, grave.row, grave.column)
-        node.setPosition(cell.x + grave.offsetX - 4 - 400 + (mirrored ? this.width : 0), 300 - cell.y - grave.offsetY + 9)
+        const [cornerX, cornerY] = gridItemCell(content.presentation, grave.typeId)
+        node.setPosition(cell.x + grave.offsetX + cornerX - 400 + (mirrored ? this.width : 0), 300 - cell.y - grave.offsetY - cornerY)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         // The level's own graves rise from the intro's grave tick; a level in play has them risen.
         const ticks = world.phase === 'gameplay' || stage.intro.complete ? Infinity : stage.intro.elapsedTicks - (stage.intro.graveStartTick ?? 0)
@@ -80,9 +83,14 @@ export class GraveView implements GridItemView {
         // mGridItemCounter starts at -delay and Board::UpdateGridItems counts it in the tick the rise starts; a grave
         // added in play starts counting the tick after (graveRiseCounter).
         const counter = graveRiseCounter(grave, world.gameplayTick) ?? ticks + 1 - grave.riseDelay
-        const buster = world.plants.find(plant => plant.row === grave.row && plant.column === grave.column && plant.ability?.state === 'eating')
-        const total = buster && content.definitions.plants[buster.typeId]?.graveBuster?.eatTicks
-        this.layout(counter, buster && total ? this.eaten(buster.ability!.ticks, total) : 0)
+        // A grave buster on it eats it (GraveBusterView.eating).
+        let eaten = 0
+        for (const plant of world.plants) {
+            if (plant.row !== grave.row || plant.column !== grave.column) continue
+            const ticks = stage.view(plant.entityId, GraveBusterView)?.eating(plant), total = content.definitions.plants[plant.typeId]?.graveBuster?.eatTicks
+            if (ticks !== undefined && total) eaten = this.eaten(ticks, total)
+        }
+        this.layout(counter, eaten)
     }
 
     /** GridItem::DrawGraveStone: pixels a grave buster has eaten off the stone's top, `ticks` left of the `total` it eats for. */

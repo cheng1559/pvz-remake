@@ -6,6 +6,7 @@ import { LevelStateResource, PlantComponent, ZombieComponent } from '@/server/st
 import { freezeHostiles } from '@/server/combat/freeze'
 import { chillZombie, damageZombie } from '@/server/zombies/damage'
 import { damagePlant, destroyEatenPlant } from '@/server/plants/damage'
+import type { PotatoMine } from '@/server/plants/PotatoMine'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { ZOMBIE_BODY_LAYER } from '@/shared/content/gameplay'
 import type { ServerEvent, StartSessionPacket } from '@/shared/protocol'
@@ -139,7 +140,7 @@ test('a cold zombie freezes for less, one in the air of its vault is only chille
     debug(server, '/zombie normal 4 9')
     const [cold, vaulting, rising, dying] = [1, 2, 3, 4].map(row => world(server).get(zombieAt(server, row), ZombieComponent)!)
     cold.chilledTicks = 500
-    vaulting.state = 'vaulting'
+    vaulting.state = 'airborne'
     rising.riseTicks = 50
     dying.state = 'dying'
     freezeHostiles(world(server), definitions, 'plants', ice, world(server))
@@ -247,8 +248,9 @@ test('the plants kept from the ice and a pole vaulter in the air are only chille
     const planted = ['cherrybomb 1 1', 'bowling-wallnut 1 3', 'bowling-explodenut 1 5', 'gravebuster 2 1', 'iceshroom 2 3', 'potatomine 3 1', 'potatomine 3 3', 'peashooter 4 1']
     for (const plant of planted) debug(server, `/plant ${plant}`)
     const plant = (row: number, column: number) => world(server).get(plantAt(server, row, column)!, PlantComponent)!
-    plant(3, 1).ability!.state = 'rising'
-    plant(3, 3).ability!.state = 'armed'
+    const mine = (row: number, column: number) => plant(row, column) as PotatoMine
+    mine(3, 1).state = 'rising'
+    mine(3, 3).state = 'armed'
     freezeHostiles(world(server), definitions, 'zombies', ice, world(server))
     for (const [row, column] of [[1, 1], [1, 3], [1, 5], [2, 1], [2, 3], [3, 1]]) {
         const kept = plant(row, column)
@@ -259,7 +261,7 @@ test('the plants kept from the ice and a pole vaulter in the air are only chille
         const frozen = plant(row, column)
         assert.ok(frozen.frozenTicks !== undefined && frozen.health === frozen.maxHealth - ice.damage, `${frozen.typeId} on row ${row} is frozen and hurt`)
     }
-    assert.deepEqual(definitions.zombies['pvz:pole_vaulter'].unfreezable, ['vaulting'], 'Zombie::CanBeFrozen by its type')
+    assert.deepEqual(definitions.zombies['pvz:pole_vaulter'].unfreezable, ['airborne'], 'Zombie::CanBeFrozen by its type')
 })
 
 test('a type kept from the cold takes neither a snow pea’s chill nor the ice', () => {
@@ -282,15 +284,14 @@ test('a type kept from the cold takes neither a snow pea’s chill nor the ice',
     assert.deepEqual([zombie.chilledTicks, zombie.frozenTicks, zombie.health], [0, undefined, zombie.maxHealth])
 })
 
-test('a type is kept from the cold always or in states of its own', () => {
+test('a plant type is kept from the cold always (its kind keeps it in states of its own); a zombie type always or in states it lists', () => {
     const invalid = (change: (source: Record<string, any>) => void) => () => {
         const source = structuredClone(readGameplaySource('definitions')) as Record<string, any>
         change(source)
         parseGameplayDefinitions(source)
     }
-    assert.throws(invalid(source => { source.plants['pvz:potatomine'].unfreezable = ['digesting'] }), /unfreezable\[0\]/, 'a chomper’s state is no mine’s')
-    assert.throws(invalid(source => { source.plants['pvz:wallnut'].unchillable = ['rising'] }), /unchillable\[0\]/, 'a plant without an ability has no states')
-    assert.throws(invalid(source => { source.plants['pvz:potatomine'].unfreezable = ['rising', 'rising'] }), /true or distinct states/)
+    assert.throws(invalid(source => { source.plants['pvz:potatomine'].unfreezable = ['rising'] }), /potatomine\.unfreezable must be true/, 'a mine rising is its kind’s (PotatoMine.keptFromIce)')
+    assert.throws(invalid(source => { source.plants['pvz:wallnut'].unchillable = ['rising'] }), /wallnut\.unchillable must be true/)
     assert.throws(invalid(source => { source.zombies['pvz:pole_vaulter'].unfreezable = ['flying'] }), /unfreezable\[0\]/)
     assert.throws(invalid(source => { source.zombies['pvz:normal'].unchillable = false }), /unchillable/)
 })

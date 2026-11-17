@@ -3,7 +3,7 @@ import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
 import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
-import { PLANT_ABILITY_STATES, PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind, type PlantAbilityState } from './plantAbilities'
+import { plantKindStates } from './plantKinds'
 import { ZOMBIE_STATES } from './zombieStates'
 import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
@@ -33,8 +33,9 @@ function parseProjectileAttributes(source: Record<string, unknown>, name: string
 export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const source = exact(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'achievements', 'seedBank', 'tools', 'store', 'storePages', 'almanac', 'zenGarden',
+        'projectiles', 'items', 'achievements', 'seedBank', 'flagWave', 'tools', 'store', 'storePages', 'almanac', 'zenGarden',
     ], 'gameplay definitions')
+    const flagWave = exact(source.flagWave, ['zombie', 'plain', 'maxPlain'], 'gameplay definitions.flagWave')
     const economy = exact(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
     const seedBank = exact(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
     const zenGarden = exact(source.zenGarden, ['columns', 'capacity', 'template'], 'gameplay definitions.zenGarden')
@@ -52,6 +53,8 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         achievements: mapped(source.achievements, 'achievements', parseAchievement),
         seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots'),
             startingSeeds: qualifiedIdArray(seedBank.startingSeeds, 'seedBank.startingSeeds') },
+        flagWave: { zombie: qualifiedId(flagWave.zombie, 'flagWave.zombie'), plain: qualifiedId(flagWave.plain, 'flagWave.plain'),
+            maxPlain: positiveInteger(flagWave.maxPlain, 'flagWave.maxPlain') },
         tools: mapped(source.tools, 'tools', parseTool),
         store: mapped(source.store, 'store', parseStoreItem),
         storePages: mapped(source.storePages, 'storePages', parseStorePage),
@@ -60,6 +63,8 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
             template: parseZenGardenPlant(zenGarden.template, 'zenGarden.template') },
     }
     if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
+    reference(definitions.flagWave.zombie, definitions.zombies, 'flagWave.zombie')
+    reference(definitions.flagWave.plain, definitions.zombies, 'flagWave.plain')
     for (const id of definitions.seedBank.startingSeeds) reference(id, definitions.seeds, 'seedBank.startingSeeds')
     checkStore(definitions)
     // AlmanacDialog's zombie page: a window per zombie, each at a place of its own.
@@ -90,10 +95,15 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         if (plant.shooter?.projectile) {
             const name = `plants.${id}.${plant.shooter.type}.projectile`
             reference(plant.shooter.projectile, definitions.projectiles, name)
-            if (plant.shooter.overrides?.damage !== undefined && definitions.projectiles[plant.shooter.projectile].mow) throw new Error(`${name}.damage is not supported: ${plant.shooter.projectile} mows`)
         }
         if (plant.producer) reference(plant.producer.item, definitions.items, `plants.${id}.producer.item`)
         if (plant.producer?.growth) reference(plant.producer.growth.smallItem, definitions.items, `plants.${id}.producer.growth.smallItem`)
+    }
+    for (const [id, zombie] of Object.entries(definitions.zombies)) {
+        const lead = zombie.dance?.lead
+        if (!lead) continue
+        const backup = reference(lead.backup, definitions.zombies, `zombies.${id}.dance.lead.backup`)
+        if (!backup.dance || backup.dance.lead) throw new Error(`zombies.${id}.dance.lead.backup must be a dancer without a lead`)
     }
     return definitions
 }
@@ -139,7 +149,7 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
  * given. Only a plant seed has a `placement`, and a grave seed has no `id`.
  */
 function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition {
-    const source = exact(value, ['kind', 'position', 'sunCost', 'cooldownTicks'], name, ['id', 'placement', 'initialCooldownTicks', 'hidden'])
+    const source = exact(value, ['kind', 'position', 'sunCost', 'cooldownTicks'], name, ['id', 'placement', 'initialCooldownTicks', 'hidden', 'craterTicks'])
     const common = {
         position: nonNegativeInteger(source.position, `${name}.position`),
         ...(source.hidden === undefined ? {} : { hidden: trueFlag(source.hidden, `${name}.hidden`) }),
@@ -147,8 +157,9 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
     }
-    if (source.kind !== 'plant' && source.kind !== 'zombie' && source.kind !== 'grave') throw new Error(`${name}.kind must be plant, zombie or grave`)
+    if (source.kind !== 'plant' && source.kind !== 'zombie' && source.kind !== 'grave' && source.kind !== 'crater') throw new Error(`${name}.kind must be plant, zombie, grave or crater`)
     if (source.kind !== 'plant' && source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
+    if (source.kind !== 'crater' && source.craterTicks !== undefined) throw new Error(`${name}.craterTicks is for crater seeds`)
     const id = () => source.id === undefined ? seedId : qualifiedId(source.id, `${name}.id`)
     switch (source.kind) {
         case 'plant':
@@ -157,15 +168,17 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
         case 'zombie':
             return { ...common, kind: 'zombie', id: id() }
         case 'grave':
+        case 'crater':
             if (source.id !== undefined) throw new Error(`${name}.id is for plant and zombie seeds`)
-            return { ...common, kind: 'grave' }
+            return source.kind === 'grave' ? { ...common, kind: 'grave' }
+                : { ...common, kind: 'crater', craterTicks: positiveInteger(source.craterTicks, `${name}.craterTicks`) }
     }
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
     const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exact(value, ['maxHealth', 'body'], name, [...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation', 'unchillable', 'unfreezable'])
+    const source = exact(value, ['maxHealth', 'body'], name, ['kind', ...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'bowling', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation', 'unchillable', 'unfreezable'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
@@ -193,7 +206,9 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         }
         result.plantingOffset = { min, max }
     }
+    if (source.kind !== undefined) result.kind = nonEmptyString(source.kind, `${name}.kind`)
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(record(source.behavior, `${name}.behavior`)) as JsonObject
+    if (source.bowling !== undefined) result.bowling = parseBowling(source.bowling, `${name}.bowling`)
     if (source.animation !== undefined) result.animation = parsePlantAnimation(source.animation, `${name}.animation`)
     const type = attacks.find(key => source[key] !== undefined)
     if (type) {
@@ -260,12 +275,16 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         }
     }
     if (source.fuse) {
-        const fuse = exact(source.fuse, ['ticks'], `${name}.fuse`, ['explosion', 'freeze'])
+        const fuse = exact(source.fuse, ['ticks'], `${name}.fuse`, ['explosion', 'freeze', 'crater'])
         if ((fuse.explosion === undefined) === (fuse.freeze === undefined)) throw new Error(`${name}.fuse needs exactly one of explosion and freeze`)
+        if (fuse.crater !== undefined && fuse.explosion === undefined) throw new Error(`${name}.fuse.crater is an explosion's`)
         result.fuse = {
             ticks: positiveInteger(fuse.ticks, `${name}.fuse.ticks`),
             ...(fuse.explosion === undefined ? {} : { explosion: explosion(fuse.explosion, `${name}.fuse.explosion`) }),
             ...(fuse.freeze === undefined ? {} : { freeze: freeze(fuse.freeze, `${name}.fuse.freeze`) }),
+            ...(fuse.crater === undefined ? {} : {
+                crater: { ticks: positiveInteger(exact(fuse.crater, ['ticks'], `${name}.fuse.crater`).ticks, `${name}.fuse.crater.ticks`) },
+            }),
         }
     }
     if (source.mine) {
@@ -309,16 +328,33 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
     }
     if (source.mindControl !== undefined) result.mindControl = trueFlag(source.mindControl, `${name}.mindControl`)
     if (source.deathExplosion) result.deathExplosion = explosion(source.deathExplosion, `${name}.deathExplosion`)
-    // Off the board it is in a state of its own ability, as the states it is kept from the cold in are.
-    const offBoardState = result.animation?.offBoard?.state, kind = plantAbilityKind(result)
-    const states: readonly PlantAbilityState[] = kind ? PLANT_ABILITY_STATES_BY_KIND[kind] : []
+    // Its kind keeps it from the cold at times of its own (Plant.keptFromCold, keptFromIce); here only always.
     for (const key of ['unchillable', 'unfreezable'] as const) {
-        if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, states)
+        if (source[key] !== undefined) result[key] = trueFlag(source[key], `${name}.${key}`)
     }
-    if (offBoardState !== undefined && !(kind && (PLANT_ABILITY_STATES_BY_KIND[kind] as readonly string[]).includes(offBoardState))) {
-        throw new Error(`${name}.animation.offBoard.state must be a state of the plant's ability`)
+    // What its animation names a state of is a state of its kind (PLANT_KIND_STATES); a Mod's kind names its own.
+    const states = plantKindStates(result.kind), animation = result.animation
+    const named = [...Object.keys(animation?.states ?? {}), ...animation?.blink?.states ?? [],
+        ...animation?.offBoard?.state === undefined ? [] : [animation.offBoard.state]]
+    for (const state of named) {
+        if (states && !states.includes(state)) throw new Error(`${name}.animation names a state its kind does not have: ${state}`)
     }
     return result
+}
+
+/** A bowling nut's rules (PlantDefinition.bowling), with Plant::UpdateBowling's own where it names none. */
+function parseBowling(value: unknown, name: string): NonNullable<PlantDefinition['bowling']> {
+    const source = exact(value, ['attack'], name, ['bounceSpeed', 'damage', 'helmDamage', 'shieldDamage', 'bouncedBreaks'])
+    const attack = exact(source.attack, ['x', 'width'], `${name}.attack`)
+    // Plant::UpdateBowling's own: mY goes 2 a tick on a slant; TakeDamage(1800), TakeHelmDamage(900), TakeShieldDamage(400).
+    const or = (key: 'damage' | 'helmDamage' | 'shieldDamage', otherwise: number) => source[key] === undefined ? otherwise : positiveInteger(source[key], `${name}.${key}`)
+    return {
+        attack: { x: finite(attack.x, `${name}.attack.x`), width: positiveFinite(attack.width, `${name}.attack.width`) },
+        bounceSpeed: source.bounceSpeed === undefined ? 2 : positiveFinite(source.bounceSpeed, `${name}.bounceSpeed`),
+        damage: or('damage', 1800), helmDamage: or('helmDamage', 900), shieldDamage: or('shieldDamage', 400),
+        bouncedBreaks: source.bouncedBreaks === undefined ? []
+            : array(source.bouncedBreaks, `${name}.bouncedBreaks`).map((type, index) => nonEmptyString(type, `${name}.bouncedBreaks[${index}]`)),
+    }
 }
 
 function explosion(value: unknown, name: string): ExplosionDefinition {
@@ -353,7 +389,7 @@ function freeze(value: unknown, name: string): FreezeDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable'])
+    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['kind', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable', 'scale', 'dance'])
     const spawn = exact(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -380,6 +416,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         wave: { points: positiveInteger(wave.points, `${name}.wave.points`), weight: nonNegativeInteger(wave.weight, `${name}.wave.weight`),
             ...(wave.firstWave === undefined ? {} : { firstWave: positiveInteger(wave.firstWave, `${name}.wave.firstWave`) }) },
     }
+    if (source.kind !== undefined) result.kind = nonEmptyString(source.kind, `${name}.kind`)
     if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
     for (const key of ['unchillable', 'unfreezable'] as const) {
         if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, ZOMBIE_STATES)
@@ -409,13 +446,37 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     if (source.vault !== undefined) {
         const vault = exact(source.vault,
             ['runSpeedPerTick', 'attack', 'landedAttack', 'landingOffset'], `${name}.vault`,
-            ['bowlingAttack'])
+            ['bowlingAttack', 'evades'])
         result.vault = {
             runSpeedPerTick: speedRange(vault.runSpeedPerTick, `${name}.vault.runSpeedPerTick`),
             attack: rect(vault.attack, `${name}.vault.attack`),
             ...vault.bowlingAttack === undefined ? {} : { bowlingAttack: rect(vault.bowlingAttack, `${name}.vault.bowlingAttack`) },
             landedAttack: rect(vault.landedAttack, `${name}.vault.landedAttack`),
             landingOffset: finite(vault.landingOffset, `${name}.vault.landingOffset`),
+            ...vault.evades === undefined ? {} : { evades: qualifiedIdArray(vault.evades, `${name}.vault.evades`) },
+        }
+    }
+    if (source.scale !== undefined) result.scale = positiveFinite(source.scale, `${name}.scale`)
+    if (source.dance !== undefined) {
+        const dance = exact(source.dance, [], `${name}.dance`, ['lead'])
+        if (result.vault || result.enrage) throw new Error(`${name}.dance cannot go with vault or enrage`)
+        result.dance = {}
+        if (dance.lead !== undefined) {
+            const lead = exact(dance.lead, ['moonwalkTicks', 'backup', 'troupe', 'holdTicks', 'summonTicks', 'summonBeforeX', 'riseTicks'], `${name}.dance.lead`)
+            const troupe = array(lead.troupe, `${name}.dance.lead.troupe`).map((place, index) => {
+                const at = exact(place, ['row', 'x'], `${name}.dance.lead.troupe[${index}]`)
+                return { row: integer(at.row, `${name}.dance.lead.troupe[${index}].row`), x: finite(at.x, `${name}.dance.lead.troupe[${index}].x`) }
+            })
+            if (!troupe.length) throw new Error(`${name}.dance.lead.troupe must not be empty`)
+            result.dance.lead = {
+                moonwalkTicks: tickRange(lead.moonwalkTicks, `${name}.dance.lead.moonwalkTicks`, 1),
+                backup: qualifiedId(lead.backup, `${name}.dance.lead.backup`),
+                troupe,
+                holdTicks: positiveInteger(lead.holdTicks, `${name}.dance.lead.holdTicks`),
+                summonTicks: positiveInteger(lead.summonTicks, `${name}.dance.lead.summonTicks`),
+                summonBeforeX: finite(lead.summonBeforeX, `${name}.dance.lead.summonBeforeX`),
+                riseTicks: positiveInteger(lead.riseTicks, `${name}.dance.lead.riseTicks`),
+            }
         }
     }
     // The clips the server has it play: those every zombie comes to, and those of what this one does.
@@ -433,6 +494,12 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     }
     for (const id of [...(result.vault ? [clip.jump] : []), ...(result.enrage ? [clip.gasp] : [])]) needs(id, once => once.fps && once.hold, 'is held and has fps')
     for (const id of [clip.standing, clip.standing2]) if (clips[id]) needs(id, standing => standing.fps, 'has fps')
+    if (result.dance) needs(clip.raise, raised => raised.fps && !raised.ground, 'has fps, without a ground')
+    if (result.dance?.lead) {
+        // It moonwalks back over its ground (counted the way it goes) at its own pace, and holds its snap.
+        needs(clip.moonwalk, walked => walked.ground && walked.fps, 'goes back over its ground at its fps')
+        needs(clip.point, point => point.fps && point.hold, 'is held and has fps')
+    }
     return result
 }
 
@@ -506,16 +573,10 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
         for (const layer of Object.keys(result)) if (!Object.hasOwn(layers, layer)) throw new Error(`${entryName}.${layer} must be one of the animation's layers`)
         return result
     }
-    const abilityState = (entry: unknown, entryName: string): PlantAbilityState => {
-        if (!PLANT_ABILITY_STATES.includes(entry as PlantAbilityState)) throw new Error(`${entryName} must be a state of a plant's ability`)
-        return entry as PlantAbilityState
-    }
     if (source.fire !== undefined) result.fire = playing(source.fire, `${name}.fire`)
     if (source.asleep !== undefined) result.asleep = playing(source.asleep, `${name}.asleep`)
-    if (source.states !== undefined) {
-        result.states = named(source.states, `${name}.states`, playing)
-        for (const state of Object.keys(result.states)) abilityState(state, `${name}.states.${state}`)
-    }
+    // Its states are its kind's (parsePlant checks them).
+    if (source.states !== undefined) result.states = named(source.states, `${name}.states`, playing)
     if (source.offBoard !== undefined) {
         const offBoard = exact(source.offBoard, [], `${name}.offBoard`, ['state', 'layers'])
         if (offBoard.state === undefined && offBoard.layers === undefined) throw new Error(`${name}.offBoard must have a state or layers`)
@@ -523,7 +584,7 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
             : named(offBoard.layers, `${name}.offBoard.layers`, (entry, entryName) => entry === null ? null : clipOf(entry, entryName))
         for (const layer of Object.keys(shown ?? {})) if (!Object.hasOwn(layers, layer)) throw new Error(`${name}.offBoard.layers.${layer} must be one of the animation's layers`)
         result.offBoard = {
-            ...(offBoard.state === undefined ? {} : { state: abilityState(offBoard.state, `${name}.offBoard.state`) }),
+            ...(offBoard.state === undefined ? {} : { state: nonEmptyString(offBoard.state, `${name}.offBoard.state`) }),
             ...(shown ? { layers: shown } : {}),
         }
     }
@@ -536,7 +597,7 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
         if (Object.hasOwn(layers, PLANT_BLINK_LAYER)) throw new Error(`${name}.layers must leave ${PLANT_BLINK_LAYER} to the blink`)
         result.blink = {
             clips: blinks, ticks: blink.ticks === undefined ? PLANT_BLINK_TICKS : tickRange(blink.ticks, `${name}.blink.ticks`, 1),
-            ...(blink.states === undefined ? {} : { states: array(blink.states, `${name}.blink.states`).map((state, index) => abilityState(state, `${name}.blink.states[${index}]`)) }),
+            ...(blink.states === undefined ? {} : { states: array(blink.states, `${name}.blink.states`).map((state, index) => nonEmptyString(state, `${name}.blink.states[${index}]`)) }),
             ...(blink.first === undefined ? {} : { first: tickRange(blink.first, `${name}.blink.first`, 1) }),
         }
     }
@@ -544,11 +605,9 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
 }
 
 function parsePlantTargeting(value: unknown, name: string): PlantTargeting {
-    const source = exact(value, ['eatingExtraRange', 'excludeHeldPole'], name, ['insetKey', 'plantReach'])
-    if (typeof source.excludeHeldPole !== 'boolean') throw new Error(`${name}.excludeHeldPole must be boolean`)
+    const source = exact(value, ['eatingExtraRange'], name, ['insetKey', 'plantReach'])
     return {
         eatingExtraRange: nonNegativeFinite(source.eatingExtraRange, `${name}.eatingExtraRange`),
-        excludeHeldPole: source.excludeHeldPole,
         ...(source.insetKey === undefined ? {} : { insetKey: qualifiedId(source.insetKey, `${name}.insetKey`) }),
         ...(source.plantReach === undefined ? {} : { plantReach: nonNegativeFinite(source.plantReach, `${name}.plantReach`) }),
     }
@@ -579,10 +638,10 @@ function groundTrack(value: unknown, name: string): number[] {
 }
 
 export function parseProjectile(value: unknown, name: string): ProjectileDefinition {
-    const source = exact(value, ['hitbox'], name, ['mow', ...Object.keys(PROJECTILE_ATTRIBUTES)])
-    if ((source.damage === undefined) === (source.mow === undefined)) throw new Error(`${name} needs exactly one of damage and mow`)
-    if (source.mow !== undefined && source.mow !== true) throw new Error(`${name}.mow must be true`)
-    return { ...(source.mow ? { mow: true as const } : {}), hitbox: rect(source.hitbox, `${name}.hitbox`), ...parseProjectileAttributes(source, name) }
+    // What its kind takes is the kind's to say (ProjectileRegistry.validate).
+    const source = exact(value, ['hitbox'], name, ['kind', ...Object.keys(PROJECTILE_ATTRIBUTES)])
+    return { ...(source.kind === undefined ? {} : { kind: nonEmptyString(source.kind, `${name}.kind`) }), hitbox: rect(source.hitbox, `${name}.hitbox`),
+        ...parseProjectileAttributes(source, name) }
 }
 
 function parseItem(value: unknown, name: string): ItemDefinition {
@@ -866,8 +925,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
     tools?.forEach((id, index) => reference(id, definitions.tools, `${name}.tools[${index}]`))
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
+    // Of a kind that mows (ProjectileRegistry.validate).
     reference(lawnMower, definitions.projectiles, `${name}.lawnMower`)
-    if (!definitions.projectiles[lawnMower].mow) throw new Error(`${name}.lawnMower must be a projectile that mows`)
     const skySun = source.skySun === undefined ? undefined : qualifiedId(source.skySun, `${name}.skySun`)
     if (skySun) reference(skySun, definitions.items, `${name}.skySun`)
     const graves = source.graves === undefined ? undefined : array(source.graves, `${name}.graves`).map((value, index) => {

@@ -16,13 +16,14 @@ const ZOMBIE_WALK_RATE_FACTOR = 47
 
 /**
  * The part of its rate a layer of a zombie's animation goes at: Zombie::ApplyAnimRate halves a chilled zombie's body
- * alone (CHILLED_ANIMATION_FACTOR; its walking speed follows its `_ground` track) and stops a frozen one's
- * (UpdateAnimSpeed), and what it carries (a flag, a propeller) is a Reanim of its own, at its own rate. The mower's
- * driver is not slowed.
+ * alone (CHILLED_ANIMATION_FACTOR; its walking speed follows its `_ground` track), as one `slowed` (a dancer whose
+ * troupe has one chilled, IsMovingAtChilledSpeed) unless its kind says not (Zombie.chillSlows: a dancer's moonwalk), and
+ * stops a frozen one's (UpdateAnimSpeed), and what it carries (a flag, a propeller) is a Reanim of its own, at its own
+ * rate. The mower's driver is not slowed.
  */
 export function zombiePace(zombie: Zombie, layer = ZOMBIE_BODY_LAYER): number {
     if (layer !== ZOMBIE_BODY_LAYER || zombie.state === 'mowered') return 1
-    return zombie.frozenTicks !== undefined ? 0 : zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
+    return zombie.frozenTicks !== undefined ? 0 : zombie.chillSlows() ? CHILLED_ANIMATION_FACTOR : 1
 }
 
 /** Zombie::ZombieInitialize: every layer starts its clip; the body walks from there (startWalk). */
@@ -45,21 +46,13 @@ export function stepZombie(zombie: Zombie, animation: AnimationDefinition, rando
     stepLayers(zombie.state === 'mowered' ? MOWERED_ANIMATION : animation, zombie, random, { slowed: layer => zombiePace(zombie, layer) })
 }
 
-/** Zombie::UpdateAnimSpeed: the frames a second a walk goes at for a zombie of this speed. */
-export function walkRate(speed: number, clip: AnimationClip): number {
-    const ground = clip.ground!
-    return speed * clip.frames / (ground[ground.length - 1] - ground[0]) * ZOMBIE_WALK_RATE_FACTOR
-}
-
 /**
- * Zombie::PickRandomSpeed, which StartWalkAnim calls each time a zombie sets off walking (from its start, after eating,
- * after its vault, out of the newspaper's gasp): the pole vaulter's run while it holds the pole, the newspaper
- * zombie's enraged walk once its paper is gone, or its own walk.
+ * Zombie::UpdateAnimSpeed: the frames a second a walk goes at for a zombie of this speed, drawn at `scale`
+ * (ZombieDefinition.scale), whose steps are so much the shorter.
  */
-export function pickZombieSpeed(zombie: Pick<Zombie, 'hasPole' | 'shieldHealth'>, definition: ZombieDefinition, random: AnimationRandom): number {
-    const speed = zombie.hasPole && definition.vault ? definition.vault.runSpeedPerTick
-        : definition.enrage && zombie.shieldHealth === 0 ? definition.enrage.speedPerTick : definition.speedPerTick
-    return speed.min + random.nextFloat() * (speed.max - speed.min)
+export function walkRate(speed: number, clip: AnimationClip, scale = 1): number {
+    const ground = clip.ground!
+    return speed * clip.frames / (ground[ground.length - 1] - ground[0]) * ZOMBIE_WALK_RATE_FACTOR / scale
 }
 
 /** Zombie::StartWalkAnim's `Rand(2)`: which of its walks a zombie takes as it sets off (ZombieDefinition.walk2Chance). */
@@ -67,30 +60,20 @@ export function pickWalkClip(definition: ZombieDefinition, random: AnimationRand
     return random.nextFloat() < 1 - definition.walk2Chance ? ZOMBIE_CLIPS.walk : ZOMBIE_CLIPS.walk2
 }
 
-/**
- * Zombie::StartWalkAnim, as a zombie sets off walking again (after eating, after its vault, out of the newspaper's
- * gasp): its speed picked again, then which of its walks it takes, unless it is the enraged newspaper zombie, whose
- * walk is its own (PHASE_NEWSPAPER_MAD, without the `Rand(2)`); one still holding its pole runs.
- */
-export function walkAgain(zombie: Zombie, definition: ZombieDefinition, random: AnimationRandom): void {
-    zombie.speedPerTick = pickZombieSpeed(zombie, definition, random)
-    if (!(definition.enrage && zombie.shieldHealth === 0)) zombie.walkClip = pickWalkClip(definition, random)
-    startWalk(zombie, definition.animation, zombie.hasPole ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
-}
-
-/** Its body starts a walk (its own, or its run), at its speed's rate. */
-export function startWalk(zombie: Zombie, animation: AnimationDefinition, clip: string, random: AnimationRandom): void {
-    playZombie(zombie, animation, clip, random).rate = walkRate(zombie.speedPerTick, animation.clips[clip])
+/** Its body starts a walk (its own, or its run), at its speed's rate; its kind sets a zombie off on the one it takes (Zombie.walkAgain). */
+export function startWalk(zombie: Zombie, definition: ZombieDefinition, clip: string, random: AnimationRandom): void {
+    playZombie(zombie, definition.animation, clip, random).rate = walkRate(zombie.speedPerTick, definition.animation.clips[clip], definition.scale)
 }
 
 /**
  * Zombie::UpdateZombieWalking: a tick of a walk. It goes as far as the ground does between the frames its clip is at,
- * at the clip's rate (Reanimation::GetTrackVelocity on `_ground`). `direction`: -1 walks left (toward the house), 1
- * right (a mind-controlled zombie).
+ * at the clip's rate (Reanimation::GetTrackVelocity on `_ground`), at its size. A walk goes at its speed's rate, a clip
+ * of its own pace at that (a dancer's moonwalk). `direction`: -1 walks left (toward the house), 1 right (a
+ * mind-controlled zombie).
  */
-export function walkZombie(zombie: Zombie, position: Position, animation: AnimationDefinition, random: AnimationRandom, direction: -1 | 1 = -1): void {
-    const state = zombieBody(zombie), clip = animation.clips[state.clip]
-    state.rate = walkRate(zombie.speedPerTick, clip)
-    position.x += direction * groundStep(clip, state, zombiePace(zombie))
+export function walkZombie(zombie: Zombie, position: Position, definition: ZombieDefinition, random: AnimationRandom, direction: -1 | 1 = -1): void {
+    const animation = definition.animation, state = zombieBody(zombie), clip = animation.clips[state.clip]
+    if (!clip.fps) state.rate = walkRate(zombie.speedPerTick, clip, definition.scale)
+    position.x += direction * groundStep(clip, state, zombiePace(zombie)) * (definition.scale ?? 1)
     stepZombie(zombie, animation, random)
 }

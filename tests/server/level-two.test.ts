@@ -28,7 +28,7 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     const server = game()
     const initial = server.snapshot()
     assert.equal(initial.sun, 50)
-    assert.deepEqual(initial.mowers.map(mower => [mower.row, mower.state]), [[1, 'ready'], [2, 'ready'], [3, 'ready']])
+    assert.deepEqual(initial.mowers.map(mower => mower.row), [1, 2, 3])
     assert.deepEqual(initial.seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:sunflower'])
     assert.equal(initial.tutorial.step, 'pick-sunflower')
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:sunflower' }), undefined)
@@ -39,19 +39,20 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     assert.equal(server.snapshot().tutorial.step, 'refresh-sunflower')
     const saved = server.save()
     const producer = saved.entities.find(entity => entity.plant?.typeId === 'pvz:sunflower')!
-    assert.ok(producer.plantAttack!.readyAtTick >= 300 && producer.plantAttack!.readyAtTick <= 1250)
-    const produceTicks = () => server.snapshot().plants.find(plant => plant.typeId === 'pvz:sunflower')!.produceTicks
-    assert.equal(produceTicks(), producer.plantAttack!.readyAtTick - server.snapshot().gameplayTick, 'the snapshot carries the launch counter')
+    const readyAtTick = Number(producer.plant!.readyAtTick)
+    assert.ok(readyAtTick >= 300 && readyAtTick <= 1250)
+    const produceTicks = () => Number(server.snapshot().plants.find(plant => plant.typeId === 'pvz:sunflower')!.own?.produceTicks)
+    assert.equal(produceTicks(), readyAtTick - server.snapshot().gameplayTick, 'the snapshot carries the launch counter')
     const restored = new IntegratedGameServer(definitions, levels)
     restored.start({ ...start, save: saved as unknown as JsonValue })
     let produced = false
-    for (let tick = 1; tick <= producer.plantAttack!.readyAtTick + 2; tick++) {
+    for (let tick = 1; tick <= readyAtTick + 2; tick++) {
         assert.deepEqual(restored.tick(), server.tick())
         const events = server.drainEvents()
         assert.deepEqual(restored.drainEvents(), events)
         if (events.some(event => event.type === 'sunProduced')) {
             produced = true
-            assert.ok(produceTicks()! >= 2350, 'producing restarts the countdown')
+            assert.ok(produceTicks() >= 2350, 'producing restarts the countdown')
         }
     }
     assert.equal(produced, true)

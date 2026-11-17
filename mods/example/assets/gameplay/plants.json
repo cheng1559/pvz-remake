@@ -1,5 +1,6 @@
 {
   "example:rapid_pea": {
+    "kind": "shooter",
     "maxHealth": 300,
     "behavior": {
       "intervalTicks": 100,

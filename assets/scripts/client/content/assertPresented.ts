@@ -1,5 +1,5 @@
 import { type GameplayDefinitions, type GameplayLevels, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { PLANT_ABILITY_STATES_BY_KIND, plantAbilityKind } from '@/shared/content/plantAbilities'
+import { plantKindStates } from '@/shared/content/plantKinds'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 
 /** A registry of views (EntityViewRegistry): whether it draws a type, by the kind its presentation names. */
@@ -11,7 +11,7 @@ const SPARED: readonly string[] = [ZOMBIE_CLIPS.standing2, ZOMBIE_CLIPS.superLon
 /**
  * Everything the gameplay defines can be drawn: each plant, zombie, projectile and item has a presentation whose view
  * is installed, and a plant's or a zombie's has the pictures of every clip its animation plays (the mower's driver too,
- * for a zombie), and a plant is drawn only in states of its ability; each tool has its bank and picture (`tools`); each
+ * for a zombie), and a plant is drawn only in states of its kind; each tool has its bank and picture (`tools`); each
  * level's award has its picture (`awards`, with its pages for a note), or for a seed its plant's.
  * Checked as content is put together, so that a Mod missing some fails to load, not a level to draw.
  */
@@ -26,10 +26,11 @@ export function assertPresented(content: { definitions: Pick<GameplayDefinitions
         const definition = presentation.plants[id]
         if (!definition || !views.plants.draws(presentation, id)) throw new Error(`Plant presentation is not installed: ${id}`)
         if (plant.animation) pictures(id, Object.keys(plant.animation.clips))
-        // What it is drawn in a state of (its packet's picture, its shadow) is a state of its own ability.
-        const kind = plantAbilityKind(plant), states: readonly string[] = kind ? PLANT_ABILITY_STATES_BY_KIND[kind] : []
+        // What it is drawn in a state of (its packet's picture, its shadow) is a state of its kind (PLANT_KIND_STATES; a Mod's
+        // kind names its own).
+        const states = plantKindStates(plant.kind)
         for (const state of [...definition.packet?.state ? [definition.packet.state] : [], ...Object.keys(definition.shadow?.states ?? {})]) {
-            if (!states.includes(state)) throw new Error(`${id} is drawn in a state its ability does not have: ${state}`)
+            if (states && !states.includes(state)) throw new Error(`${id} is drawn in a state its kind does not have: ${state}`)
         }
     }
     for (const [id, zombie] of Object.entries(definitions.zombies)) {

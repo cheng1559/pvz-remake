@@ -4,7 +4,7 @@ import { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
 import { ItemViewRegistry } from '@/client/items/ItemViewRegistry'
 import { StageEventRegistry } from '@/client/level/StageEventRegistry'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
-import { ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
+import { MowerViewRegistry, ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
 
 /**
@@ -15,12 +15,14 @@ export class ClientViews {
     readonly plants = new PlantViewRegistry()
     readonly zombies = new ZombieViewRegistry()
     readonly projectiles = new ProjectileViewRegistry()
+    /** The rows' lawn mowers waiting (Mower): one set off is a projectile's. */
+    readonly mowers = new MowerViewRegistry()
     readonly gridItems = new GridItemViewRegistry()
     readonly items = new ItemViewRegistry()
     readonly events = new StageEventRegistry()
 
     private get registries() {
-        return [this.plants, this.zombies, this.projectiles, this.gridItems, this.items, this.events]
+        return [this.plants, this.zombies, this.projectiles, this.mowers, this.gridItems, this.items, this.events]
     }
 
     /** Undoes what was registered after it, for a Mod that failed to load. */
@@ -35,6 +37,6 @@ export class ClientViews {
 
     /** What the views of the board have ready before `level` starts (ViewPreload). */
     async preload(content: Content, level: LevelDefinition): Promise<void> {
-        await Promise.all([this.plants, this.zombies, this.projectiles, this.gridItems, this.items].map(registry => registry.preload(content, level)))
+        await Promise.all([this.plants, this.zombies, this.projectiles, this.mowers, this.gridItems, this.items].map(registry => registry.preload(content, level)))
     }
 }

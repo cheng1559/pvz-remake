@@ -1,7 +1,7 @@
-import { record, array, nonEmptyString, boolean, oneOf, finite, nonNegativeFinite, nonNegativeInteger } from '@/shared/validate'
+import { record, array, exact, nonEmptyString, boolean, oneOf, finite, nonNegativeFinite, nonNegativeInteger } from '@/shared/validate'
 import { ZOMBIE_STATES, type ZombieState } from '@/shared/content/zombieStates'
-import { PLANT_ABILITY_STATES, type PlantAbilityState } from '@/shared/content/plantAbilities'
 import { GRAVE, checkGraveRanges } from '@/shared/content/graves'
+import { CRATER } from '@/shared/content/craters'
 import type { JsonObject, JsonValue } from '@/shared/protocol/json'
 import type { ServerTick } from '@/shared/protocol/packets'
 
@@ -36,11 +36,22 @@ export interface GraveSnapshot {
     team?: 'plants'
 }
 
+/** A crater (shared/content/craters.ts): it is gone in `ticks` (mGridItemCounter); no plant goes into its cell meanwhile. */
+export interface CraterSnapshot {
+    entityId: EntityId
+    typeId: typeof CRATER
+    column: number
+    row: number
+    ticks: number
+    /** One of the zombies' side (a zombies' doom-shroom's, a crater seed's packet of that side) is drawn turned round. */
+    team?: 'zombies'
+}
+
 /**
  * What stands in a cell without being a plant or a zombie (the original's GridItem): an entity of its type in its cell,
- * with what else its type has. A grave; craters are to come.
+ * with what else its type has. A grave or a crater.
  */
-export type GridItemSnapshot = GraveSnapshot
+export type GridItemSnapshot = GraveSnapshot | CraterSnapshot
 
 /** The server's fixed step: one tick of the original's 10 ms Board::Update. Ticks in saves and snapshots count these. */
 export const TICK_SECONDS = 0.01
@@ -83,7 +94,7 @@ export interface WorldSnapshot {
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
     items: ItemSnapshot[]
-    /** The rows' lawn mowers, waiting or set off: not among `projectiles`, even running. */
+    /** The rows' lawn mowers still waiting; one set off runs on among the `projectiles`. */
     mowers: MowerSnapshot[]
     tutorial: TutorialSnapshot
     /** The game's cursor tools; absent when it has none. */
@@ -179,12 +190,15 @@ export interface PlantSnapshot extends EntityBehaviorState {
     column: number
     health: number
     maxHealth: number
-    /** Fuse, mine or chomper progress; drives the plant animation. */
-    ability?: { state: PlantAbilityState, ticks: number, prey?: 'plant' }
     /** A nocturnal plant on a day board. */
     asleep?: true
-    /** A producer's ticks until its next sun (Plant::mLaunchCounter); held while production is paused. */
-    produceTicks?: number
+    /**
+     * What only its kind shows, which its view reads as its kind has it: the server's class of it writes it
+     * (Plant.snapshotOwn) and the client's class of it reads it: the `state` its animation goes by (PLANT_KIND_STATES),
+     * a producer's `produceTicks` to its next sun (Plant::mLaunchCounter, held while its production is), a chomper's
+     * `prey` (`plant`), a grave buster's `ticks` left eating. None for a plant whose kind shows nothing of its own.
+     */
+    own?: JsonObject
     /** On the zombies' side: the plant faces left. */
     team?: Team
     /** Brought over by swallowing a plant that mind-controls: drawn tinted, as a mind-controlled zombie is. */
@@ -242,14 +256,17 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     chilled?: boolean
     /** Zombie::mIceTrapCounter: frozen by a hostile ice-shroom, it stands still in a block of ice, drawn blue. */
     frozen?: true
-    /** A pole vaulter still carrying the pole. */
-    hasPole?: boolean
-    enraged?: boolean
     riseTicks?: number
     /** Only on the plants' side: it walks right, facing right. */
     team?: 'plants'
     /** Brought over by a plant that mind-controls (the hypno-shroom): drawn tinted (Zombie::mMindControlled). */
     mindControlled?: true
+    /**
+     * What only its kind shows, which its view reads as its kind has it: the server's class of it writes it
+     * (Zombie.snapshotOwn) and the client's class of it reads it (a pole vaulter's `hasPole`, a dancer's `step` and
+     * `age`, an enraged newspaper zombie's `enraged`). None for a zombie whose kind shows nothing of its own.
+     */
+    own?: JsonObject
 }
 
 export interface ProjectileSnapshot {
@@ -268,24 +285,22 @@ export interface ProjectileSnapshot {
     lift?: number
     /** The way it points, when its motion turns it: the angle of its flight from straight right, clockwise on screen. */
     facing?: number
+    /** What only its kind shows (its server class's snapshotOwn), which its kind's view reads; none for the base's. */
+    own?: JsonObject
 }
 
 /**
- * LawnMowerState: waiting at the house end of its row (MOWER_READY), or set off along it (MOWER_TRIGGERED). The
- * original's MOWER_ROLLING_IN is the intro's to show (LevelIntro.mowerArrival); nothing installed squishes a mower
- * (MOWER_SQUISHED).
+ * A row's lawn mower waiting at its house end (the original's LawnMower, MOWER_READY): a Mower, drawn (MowerView) as the
+ * projectile it sets off as, its `typeId` (LevelDefinition.lawnMower). Set off (MOWER_TRIGGERED), it is gone from its
+ * row, running on among the projectiles. The original's MOWER_ROLLING_IN is the intro's to show
+ * (LevelIntro.mowerArrival); nothing installed squishes a mower (MOWER_SQUISHED).
  */
-export type MowerState = 'ready' | 'triggered'
-
-export const MOWER_STATES: readonly MowerState[] = ['ready', 'triggered']
-
-/**
- * A row's lawn mower (the original's LawnMower), one entity from the level's start to its end. It runs as the level's
- * mowing projectile (LevelDefinition.lawnMower), whose type is its `typeId` and draws it; set off, it has what a
- * projectile's snapshot has.
- */
-export interface MowerSnapshot extends ProjectileSnapshot {
-    state: MowerState
+export interface MowerSnapshot {
+    entityId: EntityId
+    typeId: string
+    x: number
+    y: number
+    row: number
 }
 
 export interface ItemSnapshot {
@@ -432,6 +447,11 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     if (snapshot.gridItems !== undefined) array(snapshot.gridItems, 'snapshot.gridItems').forEach((value, index) => {
         const name = `snapshot.gridItems[${index}]`, grave = record(value, name)
         nonNegativeInteger(grave.entityId, `${name}.entityId`)
+        if (grave.typeId === CRATER) {
+            for (const key of ['column', 'row', 'ticks']) nonNegativeInteger(grave[key], `${name}.${key}`)
+            if (grave.team !== undefined && grave.team !== 'zombies') throw new TypeError(`${name}.team must be zombies`)
+            return
+        }
         if (grave.typeId !== GRAVE) throw new TypeError(`${name}.typeId is not a grid item's`)
         for (const key of ['column', 'row', 'variant', 'riseDelay']) nonNegativeInteger(grave[key], `${name}.${key}`)
         checkGraveRanges(grave as unknown as GraveSnapshot, name)
@@ -456,13 +476,9 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         }
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
         if (plant.frozen !== undefined && plant.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
-        if (plant.produceTicks !== undefined) nonNegativeInteger(plant.produceTicks, `${name}.produceTicks`)
         if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
-        if (plant.ability !== undefined) {
-            const ability = record(plant.ability, `${name}.ability`)
-            if (!PLANT_ABILITY_STATES.includes(ability.state as PlantAbilityState)) throw new TypeError(`${name}.ability.state is unknown`)
-            nonNegativeInteger(ability.ticks, `${name}.ability.ticks`)
-        }
+        // Its view reads its own as its kind has it.
+        if (plant.own !== undefined) record(plant.own, `${name}.own`)
         if (plant.animations !== undefined) validateLayers(plant.animations, `${name}.animations`)
         if (plant.mowered !== undefined) {
             const mowered = record(plant.mowered, `${name}.mowered`)
@@ -489,14 +505,18 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         }
         if (zombie.chilled !== undefined) boolean(zombie.chilled, `${name}.chilled`)
         if (zombie.frozen !== undefined && zombie.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
-        if (zombie.enraged !== undefined) boolean(zombie.enraged, `${name}.enraged`)
         if (zombie.riseTicks !== undefined) nonNegativeInteger(zombie.riseTicks, `${name}.riseTicks`)
-        if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)
+        // Its view reads its own as its kind has it.
+        if (zombie.own !== undefined) record(zombie.own, `${name}.own`)
     })
     array(snapshot.projectiles, 'snapshot.projectiles').forEach((entry, index) => validateProjectile(entry, `snapshot.projectiles[${index}]`))
     array(snapshot.mowers, 'snapshot.mowers').forEach((entry, index) => {
-        const name = `snapshot.mowers[${index}]`
-        oneOf(validateProjectile(entry, name).state, MOWER_STATES, `${name}.state`)
+        const name = `snapshot.mowers[${index}]`, mower = exact(entry, ['entityId', 'typeId', 'x', 'y', 'row'], name)
+        nonNegativeInteger(mower.entityId, `${name}.entityId`)
+        nonEmptyString(mower.typeId, `${name}.typeId`)
+        finite(mower.x, `${name}.x`)
+        finite(mower.y, `${name}.y`)
+        nonNegativeInteger(mower.row, `${name}.row`)
     })
     array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').forEach((entry, index) => {
         const name = `snapshot.conveyorPackets[${index}]`, packet = record(entry, name)
@@ -525,7 +545,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     return snapshot as Record<string, JsonValue>
 }
 
-/** A projectile, or a mower, which is drawn as one. */
+/** A projectile. */
 const validateProjectile = (value: unknown, name: string): Record<string, JsonValue> => {
     const projectile = record(value, name)
     nonNegativeInteger(projectile.entityId, `${name}.entityId`)
@@ -537,6 +557,7 @@ const validateProjectile = (value: unknown, name: string): Record<string, JsonVa
     if (projectile.height !== undefined) finite(projectile.height, `${name}.height`)
     if (projectile.lift !== undefined) finite(projectile.lift, `${name}.lift`)
     if (projectile.facing !== undefined) finite(projectile.facing, `${name}.facing`)
+    if (projectile.own !== undefined) record(projectile.own, `${name}.own`)
     return projectile as Record<string, JsonValue>
 }
 

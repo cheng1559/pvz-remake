@@ -4,14 +4,15 @@ import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, MowerComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../level/graves'
 import { startRepick } from '../seeds/seedChooser'
-import { createMower, startMower } from '../level/mower'
-import { readyMowers } from '../level/lawn'
+import { createMower } from '../level/mowers'
+import { gridItems, readyMowers } from '../level/lawn'
+import { craterAt } from '@/shared/content/craters'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
@@ -144,7 +145,9 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             // `plants`: a grave on the plants' side, whose zombies rise on that side.
             const team = args[2]?.toLowerCase()
             if (team !== undefined && team !== 'plants' && team !== 'zombies') return debugSyntax('Team must be plants or zombies')
-            // Challenge::GraveDangerSpawnGraveAt (placeGrave): the plants there die, a grave there gives way.
+            // Board::CanAddGraveStoneAt keeps a grave off a crater. Challenge::GraveDangerSpawnGraveAt (placeGrave): the
+            // plants there die, a grave there gives way.
+            if (craterAt(gridItems(world), grid.row, grid.column!)) return debugCondition('DEBUG_CELL_HAS_CRATER', args[0], args[1])
             placeGrave(world, definitions, grid.row, grid.column!, tick, team === 'plants' ? 'plants' : undefined)
             return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}${team === 'plants' ? ' (plants)' : ''}`)
         }
@@ -213,7 +216,8 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const trigger = args[0].toLowerCase() === 'trigger', level = world.resources.get(LevelStateResource), ready = readyMowers(world)
             const rows = level.definition.activeRows.filter(active => (row === undefined || active === row) && ready.has(active) === trigger)
             for (const changed of rows) {
-                if (trigger) startMower(world, definitions, ready.get(changed)!)
+                const mower = ready.get(changed)
+                if (mower !== undefined) world.get(mower, MowerComponent)!.setOff(world, definitions, mower)
                 else createMower(world, changed)
             }
             return rows.length ? debugSuccess(`Changed ${rows.length} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')

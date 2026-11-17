@@ -2,8 +2,7 @@ import type { GameSystem } from '@/ecs/index'
 import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
 import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
-import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent, RandomResource } from '../state/components'
-import type { PlantAbilityState } from '@/shared/content/plantAbilities'
+import { LevelStateResource, type Plant, PlantComponent, RandomResource } from '../state/components'
 import { plantPace, plantSkipsTick } from './chill'
 import { isPlantAsleep } from './sleep'
 
@@ -13,10 +12,17 @@ import { isPlantAsleep } from './sleep'
  * from the animation (where a pea shooter's mouth is as it sways) is the same for everyone.
  */
 
-/** Plant::PlantInitialize: every layer starts its clip, an asleep plant's taking the place of its own, and the first blink is counted down to. */
+/**
+ * Plant::PlantInitialize: every layer starts its clip, an asleep plant's taking the place of its own, and the first
+ * blink is counted down to; then its kind starts what it plays of its own (Plant.animationStarted: a fuse lit as it goes
+ * down plays its `fuse` state's clips, Plant::UpdateDoomShroom's anim_explode at 23 on its first update, past its idle;
+ * the cherry bomb's own clip is already its explode).
+ */
 export function startPlantAnimations(plant: Plant, definition: PlantDefinition, asleep: boolean, random: AnimationRandom): void {
     const animation = definition.animation
-    if (animation) startPlantLayers(animation, plant, { ...animation.layers, ...(asleep ? animation.asleep : undefined) }, random)
+    if (!animation) return
+    startPlantLayers(animation, plant, { ...animation.layers, ...(asleep ? animation.asleep : undefined) }, random)
+    plant.animationStarted(asleep, random)
 }
 
 /** Plant::FindTargetAndFire: the plant starts a shot, so its blink ends and its layers play their firing clips from the start. */
@@ -27,8 +33,8 @@ export function firePlantAnimation(plant: Plant, definition: PlantDefinition, ra
     playLayers(animation, plant, animation.fire, random)
 }
 
-/** The plant's ability came to a state: its layers play that state's clips, and a plant that blinks from then on counts down to its first. */
-export function plantAbilityAnimation(plant: Plant, definition: PlantDefinition, state: PlantAbilityState, random: AnimationRandom): void {
+/** The plant came to a state of its kind: its layers play that state's clips, and a plant that blinks from then on counts down to its first. */
+export function plantAbilityAnimation(plant: Plant, definition: PlantDefinition, state: string, random: AnimationRandom): void {
     const animation = definition.animation
     if (!animation || !plant.animations) return
     playLayers(animation, plant, animation.states?.[state], random)
@@ -66,10 +72,9 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
                     slowed: () => plantPace(plant),
                     chewed: plant.recentlyEatenCounter > 0,
                     // Plant::UpdateBlink: an asleep plant's blink waits. Plant::DoBlink: one about to shoot, or in a state
-                    // it does not blink in (a potato mine not armed), misses its blink.
+                    // it does not blink in (a potato mine not armed), misses its blink (its kind says, Plant.blinkMisses).
                     blinkWaits: plantSkipsTick(plant) || isPlantAsleep(definition, level.board),
-                    blinkMisses: () => !!world.get(entity, PlantAttackComponent)?.burst
-                        || !!animation.blink?.states && !animation.blink.states.includes(plant.ability?.state!),
+                    blinkMisses: () => plant.blinkMisses(),
                 })
             }
         },

@@ -2,13 +2,18 @@ import { withProjectileMotions } from '../projectileMotions'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Schedule, World } from '@/ecs'
-import { launchProjectile, STRAIGHT } from '@/server/combat/motions'
+import { STRAIGHT } from '@/server/combat/motions'
+import { launchProjectile } from '@/server/combat/Projectile'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
-import { LevelStateResource, PlantComponent, PlantAttackComponent, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
-import { createPlantAttackSystem } from '@/server/plants/shooter'
-import { createPlantAbilitySystem, initialPlantAbility } from '@/server/plants/abilities'
+import { createPlantAttackSystem } from '@/server/plants/attacks'
+import { createPlantAbilitySystem } from '@/server/plants/abilities'
+import { Shooter } from '@/server/plants/Shooter'
+import { Producer } from '@/server/plants/Producer'
+import type { ScaredyShroom } from '@/server/plants/ScaredyShroom'
+import type { SunShroom } from '@/server/plants/SunShroom'
 import { createProductionSystem } from '@/server/plants/production'
 import { ItemComponent } from '@/server/state/levelState'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
@@ -17,11 +22,14 @@ import { createZombieSystem } from '@/server/zombies/system'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { chooserSeeds, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
+import type { GraveSnapshot, JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 import { TICK_SECONDS } from '@/shared/protocol'
+import { withZombieTypes } from '../zombieTypes'
+import { newPlant, withPlantTypes } from '../plantTypes'
+import type { Newspaper } from '@/server/zombies/Newspaper'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -48,7 +56,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
     assert.equal(initial.wave.total, 10)
     assert.deepEqual(initial.gridItems!.map(grave => grave.column), [6, 7, 8, 8])
     assert.equal(new Set(initial.gridItems!.map(grave => `${grave.row}:${grave.column}`)).size, 4)
-    assert.equal(initial.gridItems!.filter(grave => grave.special).length, 1, 'Board::PickSpecialGraveStone marks one stone')
+    assert.equal((initial.gridItems as GraveSnapshot[]).filter(grave => grave.special).length, 1, 'Board::PickSpecialGraveStone marks one stone')
     assert.deepEqual(restore(server.save()).snapshot().gridItems, initial.gridItems, 'the special stone survives a save')
     assert.equal(runCommand(server, { type: 'chooseSeed', seedId: 'pvz:puffshroom' }), 'intro-not-complete')
     for (let index = 201; index <= 207; index++) {
@@ -109,10 +117,10 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
 })
 
 function worldFor(night: boolean) {
-    const world = new World()
+    const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
     world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false })
-    withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(7))
+    withProjectileMotions(world, definitions).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world
 }
@@ -123,12 +131,10 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
         schedule.add('plant', createPlantAttackSystem(definitions))
         const plant = world.createEntity()
         world.add(plant, PositionComponent, { x: 40, y: 80, row: 0 })
-        world.add(plant, PlantComponent, { typeId: 'pvz:puffshroom', seedId: 'pvz:puffshroom', column: 0,
-            health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0 })
-        world.add(plant, PlantAttackComponent, { readyAtTick: 0 })
+        world.add(plant, PlantComponent, newPlant<Shooter>(world, 'pvz:puffshroom', { health: 300, maxHealth: 300 }, { readyAtTick: 0 }))
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 400, 50)
         schedule.run(world, 1)
-        assert.equal(world.get(plant, PlantAttackComponent)!.burst, undefined)
+        assert.equal((world.get(plant, PlantComponent) as Shooter).burst, undefined)
         world.get(zombie, PositionComponent)!.x = 240
         for (let tick = 2; tick <= 200; tick++) schedule.run(world, tick)
         assert.equal([...world.query(ProjectileComponent)].length > 0, night)
@@ -194,19 +200,19 @@ test('breaking a newspaper pauses movement and bites, then enrages; chilled gasp
         const enraged = drainServerEvents(world.resources.get(EventQueueResource)).find(event => event.type === 'zombieEnraged')
         assert.equal(enraged?.data.roar, true, 'a lone headed newspaper roars')
         assert.ok(zombie.speedPerTick >= 0.89 && zombie.speedPerTick <= 0.91)
-        assert.equal(zombie.enrageTicks, 0)
+        assert.equal((zombie as Newspaper).gaspTicks, 0)
         schedule.run(world, duration + 1)
         assert.ok(world.get(entity, PositionComponent)!.x < 500)
     }
 })
 
 function plantAt(world: World, typeId: string, x: number) {
-    const definition = definitions.plants[typeId]
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x, y: 80, row: 0 })
-    world.add(entity, PlantComponent, { typeId, seedId: typeId, column: 0, health: 300, maxHealth: 300,
-        recentlyEatenCounter: 0, chilledTicks: 0, ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}) })
-    world.add(entity, PlantAttackComponent, { readyAtTick: 1 })
+    const plant = newPlant(world, typeId, { health: 300, maxHealth: 300 })
+    // Its first shot or sun on the first tick.
+    if (plant instanceof Shooter || plant instanceof Producer) plant.readyAtTick = 1
+    world.add(entity, PlantComponent, plant)
     return entity
 }
 
@@ -218,7 +224,7 @@ test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, 
     const plant = plantAt(world, 'pvz:scaredyshroom', 40)
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 700, 50)
     const at = world.get(zombie, PositionComponent)!
-    const state = () => world.get(plant, PlantComponent)!.ability!.state
+    const state = () => (world.get(plant, PlantComponent) as ScaredyShroom).state
     let tick = 0
     const run = (ticks: number, until?: () => boolean) => {
         const types: string[] = []
@@ -268,21 +274,21 @@ test('sun-shrooms drop small sun until they grow, produce nothing while growing,
         schedule.add('plant', createProductionSystem(definitions))
         schedule.add('plant', createPlantAbilitySystem(definitions))
         const entity = plantAt(world, 'pvz:sunshroom', 40)
-        const plant = world.get(entity, PlantComponent)!, timer = world.get(entity, PlantAttackComponent)!
+        const plant = world.get(entity, PlantComponent) as SunShroom
         const sun = () => [...world.query(ItemComponent)].map(item => world.get(item, ItemComponent)!).map(item => [item.typeId, item.value])
         let tick = 0
         const run = (ticks: number) => { for (let index = 0; index < ticks; index++) schedule.run(world, ++tick) }
         run(growth.ticks)
         if (!night) {
-            assert.deepEqual([sun(), plant.ability], [[], { state: 'small', ticks: growth.ticks }], 'a sleeping sun-shroom neither grows nor produces')
+            assert.deepEqual([sun(), plant.state, plant.stateTicks], [[], 'small', growth.ticks], 'a sleeping sun-shroom neither grows nor produces')
             continue
         }
         assert.deepEqual(sun()[0], ['pvz:smallsun', 15])
-        assert.equal(plant.ability!.state, 'growing')
+        assert.equal(plant.state, 'growing')
         const produced = sun().length
-        timer.readyAtTick = tick + 1
+        plant.readyAtTick = tick + 1
         run(growth.growingTicks)
-        assert.equal(plant.ability!.state, 'big')
+        assert.equal(plant.state, 'big')
         assert.equal(sun().length, produced, 'production waits for anim_grow')
         run(1)
         assert.deepEqual(sun().at(-1), ['pvz:sun', 25])
@@ -337,7 +343,7 @@ test('grave busters only go on graves, cannot be dug up, then eat the grave and 
     assert.ok(game.drainEvents().some(event => event.type === 'advice' && event.data.key === 'ADVICE_GRAVEBUSTERS_ON_GRAVES'))
     plant(grave.row, grave.column)
     const buster = game.render().plants.find(value => value.typeId === 'pvz:gravebuster')!
-    assert.equal(buster.ability?.state, 'landing')
+    assert.equal(buster.own?.state, 'landing')
     game.command({ type: 'selectTool', toolId: 'pvz:shovel' })
     game.command({ type: 'useToolAt', row: grave.row, column: grave.column })
     game.update(0)

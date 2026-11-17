@@ -1,10 +1,15 @@
 import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
+import type { LayerState } from '@/shared/content/animation'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
-import type { GridItem, MowedPlant, Mower, Plant, PlantAttack, Position, Projectile, SeedBankState, SeedPacketState, Zombie } from '../state/components'
+import type { GridItem, Position, SeedBankState, SeedPacketState } from '../state/components'
+import type { SavedProjectile } from '../combat/Projectile'
+import type { MowerFields } from '../level/Mower'
+import type { SavedPlant } from '../plants/Plant'
+import type { SavedZombie } from '../zombies/Zombie'
 import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type TutorialStep, type WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
 import { SAVED_COMPONENTS } from './savedComponents'
@@ -13,17 +18,23 @@ export interface SavedEntity {
     extensions?: SavedComponents
     entityId: EntityId
     position?: Position
-    plant?: Plant
-    mowedPlant?: MowedPlant
-    plantAttack?: PlantAttack
-    zombie?: Zombie
-    projectile?: Projectile
-    /** A row's mower: a ready one alone, a triggered one with the projectile it runs as. */
-    mower?: Mower
+    /** A plant's fields as they are (Plant), restored as its kind. */
+    plant?: SavedPlant
+    /** A plant a mower squashed: the plant as it was, restored as its kind, and how far it is squashed. */
+    mowedPlant?: SavedMowedPlant
+    /** A zombie's fields as they are (Zombie), restored as its kind. */
+    zombie?: SavedZombie
+    /** A projectile's fields as they are (Projectile), restored as its kind: a mower set off is one. */
+    projectile?: SavedProjectile
+    /** A row's mower waiting at its house end (Mower). */
+    mower?: MowerFields
     item?: Item
     /** What stands in a cell: it has no position. */
     gridItem?: GridItem
 }
+
+/** A mowed plant as its save has it (MowedPlant): the plant's fields as they were. */
+export interface SavedMowedPlant { plant: SavedPlant, squash: LayerState, left?: true }
 
 export interface ServerSaveSnapshot {
     schemaVersion: 3

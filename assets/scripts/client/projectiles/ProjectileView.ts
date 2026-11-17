@@ -25,8 +25,8 @@ const IMPACT_PAST = 60
 const ZOMBIE_MIDDLE = 40
 
 /**
- * A projectile as a view shows it: on the board the server's whole snapshot of it (a mower's too, MowerSnapshot); off
- * it its type.
+ * A projectile as a view shows it: on the board the server's whole snapshot of it (or a waiting mower's, MowerSnapshot,
+ * drawn as the projectile it sets off as); off it its type.
  */
 export type ShownProjectile = Partial<ProjectileSnapshot> & Pick<ProjectileSnapshot, 'typeId'>
 

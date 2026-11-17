@@ -35,6 +35,8 @@ interface TrackView {
     skew?: UISkew
     additive?: Sprite
     renderOverride?: TrackRenderOverride
+    /** Drawn this far from where its animation has it, Y down (setTrackOffset). */
+    offset?: { x: number, y: number }
 }
 
 interface TrackRenderOverride {
@@ -472,6 +474,24 @@ export class ReanimPlayer extends Component {
         this.applyPose(created ? undefined : trackId)
     }
 
+    /**
+     * A track drawn moved by `offset` (Y down) from where its animation has it, as Reanimation::SetShakeOverride shakes
+     * one: through a node of its own, so the rest still draws in batches, in the body's color, tint and flash. `null`
+     * puts it back.
+     */
+    setTrackOffset(trackId: string, offset: { x: number, y: number } | null): void {
+        const view = this.views.get(trackId)
+        if (!view) throw new Error(`unknown reanim track: ${trackId}`)
+        if (offset?.x === view.offset?.x && offset?.y === view.offset?.y) return
+        view.offset = offset ? { x: offset.x, y: offset.y } : undefined
+        const created = offset && !view.node
+        if (created) {
+            this.createTrackNode(trackId, view)
+            this.drawingStale = true
+        }
+        if (view.node) this.applyPose(created ? undefined : trackId)
+    }
+
     /** Also applies to players attached to this one's tracks, like the original color propagation. */
     setExtraAdditiveDraw(enabled: boolean, color: Color = Color.BLACK): void {
         if (this.extraAdditive !== enabled || !sameColor(this.extraAdditiveColor, color)) {
@@ -587,12 +607,26 @@ export class ReanimPlayer extends Component {
             this.timeSeconds = next
         }
         this.applyPose()
-        if (this.blendElapsed >= this.blendDuration) {
-            if (this.blendFromPoses.size) this.drawingStale = true
-            this.blendFromPoses.clear()
-            this.blendDuration = 0
-            this.blendElapsed = 0
+        this.endFinishedBlend()
+    }
+
+    /** Moves its blend on by `deltaSeconds` and leaves it where it is in its clip: for a player stopped and driven by seek. */
+    advanceBlend(deltaSeconds: number): void {
+        if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
+            throw new Error('reanim deltaSeconds must be finite and non-negative')
         }
+        if (this.blendDuration <= 0) return
+        this.blendElapsed += deltaSeconds
+        this.applyPose()
+        this.endFinishedBlend()
+    }
+
+    private endFinishedBlend(): void {
+        if (this.blendElapsed < this.blendDuration) return
+        if (this.blendFromPoses.size) this.drawingStale = true
+        this.blendFromPoses.clear()
+        this.blendDuration = 0
+        this.blendElapsed = 0
     }
 
     snapshot(): ReanimPlaybackSnapshot {
@@ -885,7 +919,7 @@ export class ReanimPlayer extends Component {
         const color = override?.color ?? this.drawColor
         const extraAdditive = override?.extraAdditive ?? this.drawExtraAdditive
         const extraColor = override?.extraAdditiveColor ?? this.drawExtraAdditiveColor
-        node.setPosition(pose.x + (override?.offsetX ?? 0), -pose.y, 0)
+        node.setPosition(pose.x + (override?.offsetX ?? 0) + (view.offset?.x ?? 0), -(pose.y + (view.offset?.y ?? 0)), 0)
         node.angle = -pose.skewX
         const skewDifference = pose.skewX - pose.skewY
         let scaleY = pose.scaleY

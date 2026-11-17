@@ -6,7 +6,7 @@ import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
-import { TICK_SECONDS } from '@/shared/protocol'
+import { TICK_SECONDS, type GraveSnapshot } from '@/shared/protocol'
 import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
@@ -42,7 +42,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     // Every installed plant seed, hidden ones too, by the name /plant takes: without the base namespace.
     const plantSeeds = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].kind === 'plant')
     assert.deepEqual(catalog.plants, plantSeeds.map(id => id.replace(/^pvz:/, '')))
-    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor', 'football'])
+    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor', 'football', 'dancer', 'backup_dancer'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
@@ -61,7 +61,7 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     }
     assert.equal(game.debugCommand('/grave 3 2').ok, true)
     assert.equal(game.debugCommand('/grave 1 9').ok, true, 'debug commands can use inactive board rows')
-    assert.deepEqual(game.render().gridItems!.map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
+    assert.deepEqual((game.render().gridItems as GraveSnapshot[]).map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
         'they rise from the current gameplay tick')
     assert.equal(game.render().paused, true)
     assert.equal(game.render().gameplayTick, tick)
@@ -137,7 +137,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     const rejection = () => game.lastRejection
     assert.equal(rejection()?.code, 'cell-has-grave', 'unlike /grave, a planted grave leaves a grave there alone')
     place(1, 1, 4)
-    assert.deepEqual(game.render().gridItems!.map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
+    assert.deepEqual((game.render().gridItems as GraveSnapshot[]).map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
         [[2, 2, tick, undefined], [2, 5, tick, 'plants'], [1, 4, tick, 'plants']])
     assert.equal(game.render().seedPackets[1]!.team, 'plants')
 
@@ -228,12 +228,14 @@ test('CLI game mutations go through the channel while paused and preserve valid 
     assert.equal(game.debugCommand('/damage 20').ok, true)
     assert.equal(game.render().zombies[0].health, 250)
     const [waiting] = game.render().mowers
+    const running = () => game.render().projectiles.filter(projectile => projectile.typeId === 'pvz:lawnmower')
     assert.equal(game.debugCommand('/lawnmower trigger 3').ok, true)
-    assert.deepEqual(game.render().mowers.map(mower => [mower.entityId, mower.state]), [[waiting.entityId, 'triggered']], 'the same mower sets off')
-    assert.ok(!game.render().projectiles.some(projectile => projectile.typeId === 'pvz:lawnmower'), 'a mower is no projectile of the snapshot')
+    assert.deepEqual(game.render().mowers, [], 'the mower is gone from its row')
+    assert.deepEqual(running().map(projectile => [projectile.row, projectile.x, projectile.entityId !== waiting.entityId]), [[2, waiting.x, true]],
+        'running on from where it waited as a projectile of its own')
     assert.equal(game.debugCommand('/lawnmower trigger 3').ok, false, 'none waits there now')
     assert.equal(game.debugCommand('/lawnmower reset 3').ok, true)
-    assert.deepEqual(game.render().mowers.map(mower => [mower.row, mower.state]), [[2, 'triggered'], [2, 'ready']], 'the row has a new mower waiting, beside the running one')
+    assert.deepEqual([game.render().mowers.map(mower => mower.row), running().length], [[2], 1], 'the row has a new mower waiting, beside the running one')
     assert.equal(game.debugCommand('/item sun 5 4').ok, true)
     game.command({ type: 'resume' })
     game.update(1.2)

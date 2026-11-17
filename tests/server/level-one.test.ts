@@ -24,13 +24,15 @@ import { damageZombie, flattenZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
+import { withZombieTypes } from '../zombieTypes'
+import { newPlant, withPlantTypes } from '../plantTypes'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 
 function setup() {
-    const world = new World()
+    const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
     const definition = levels.levels['pvz:adventure-1-1']
     world.resources.set(LevelStateResource, {
         id: 'pvz:adventure-1-1',
@@ -57,15 +59,7 @@ function setup() {
 function addPlant(world: World, column: number) {
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x: 40 + column * 80, y: 280, row: 2 })
-    world.add(entity, PlantComponent, {
-        typeId: 'pvz:peashooter',
-        seedId: 'pvz:peashooter',
-        column,
-        health: 300,
-        maxHealth: 300,
-        recentlyEatenCounter: 0,
-        chilledTicks: 0,
-    })
+    world.add(entity, PlantComponent, newPlant(world, 'pvz:peashooter', { column }))
 }
 
 test('level one schedules tutorial sun and the first wave from planted Peashooters', () => {

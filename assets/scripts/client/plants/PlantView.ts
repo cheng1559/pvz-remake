@@ -17,14 +17,14 @@ import { renderOrder } from '@/shared/content/renderOrder'
 import { ASSET_FPS } from '@/shared/content/animation'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
-import { mirrorX, PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
+import { PLANT_WIDTH } from '@/shared/content/teams'
 import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
  * almanac, a packet's picture) there is nothing else to it but the countdown to its blink, which its view keeps on
- * with the rest (advance), and the state of its ability it is in there (PlantAnimationDefinition.offBoard).
+ * with the rest (advance), and the state of its kind it is in there (`own.state`, PlantAnimationDefinition.offBoard).
  */
 export type ShownPlant = Partial<PlantSnapshot> & Pick<PlantSnapshot, 'typeId'> & Pick<AnimatedPlant, 'blinkTicks'>
 /** How a view draws its plant, where that is not the board's way. */
@@ -54,8 +54,6 @@ const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
-/** Plant::DoSpecial's aPosX and aPosY: the middle of the plant's 80 by 80 (mWidth, mHeight). */
-const PLANT_MIDDLE = { x: 40, y: 40 }
 /** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
 let locator: { track?: ReanimTrack } | undefined
 
@@ -67,7 +65,8 @@ let locator: { track?: ReanimTrack } | undefined
  *
  * On the board the server keeps the animation and `sync` follows its snapshots, with what else the board does to a
  * plant; off the board the view keeps it itself (`advance`), by the same rules (shared/content/plantAnimation). Either
- * way `pose` shows it.
+ * way `pose` shows it. What only some plants do is their kind's view's (PlantDefinition.kind, its presentation's
+ * `view`: ShooterView, ProducerView, ...), which reads what its server class shows of its own (`own`).
  */
 export class PlantView implements EntityView<PlantSnapshot> {
     /** Effects that belong to the plant, such as Mod-added marks. */
@@ -76,8 +75,6 @@ export class PlantView implements EntityView<PlantSnapshot> {
     /** The layers' players are in it, over the shadow: a view moves the plant's picture by it. */
     protected root!: Node
     private layers!: LayerPlayers
-    /** Tick the current shot started, for a particle that follows it; null until the next sync reports it. */
-    private shotTick?: number | null
     /** The bite or production glow (Plant::mEatenFlashCountdown) of the frame being drawn. */
     protected flash = 0
     private highlighted = false
@@ -191,22 +188,27 @@ export class PlantView implements EntityView<PlantSnapshot> {
         this.placeShadow(plant)
     }
 
-    /**
-     * Plant::DrawShadow: the board's plant shadow at the presentation's place, about its middle at its `scale`, or at
-     * what its `states` has for the state the plant's ability is in; `[from, to]` goes from one to the other as the
-     * first layer's clip plays (a sun-shroom growing: 0.5 + 0.5 * its body's anim_grow time).
-     */
+    /** Plant::DrawShadow: the board's plant shadow at the presentation's place, about its middle at `shadowScale`. */
     private placeShadow(plant: ShownPlant): void {
         const shadow = this.shadow, place = this.presentation.shadow
         if (!shadow?.node.isValid || !place) return
-        const sized = plant.ability && place.states?.[plant.ability.state]
-        let scale = typeof sized === 'number' ? sized : place.scale ?? 1
-        if (Array.isArray(sized)) {
-            const layer = plant.animations?.[Object.keys(this.animation.layers)[0]], frames = layer && this.animation.clips[layer.clip]?.frames
-            scale = sized[0] + (sized[1] - sized[0]) * (layer && frames ? Math.min(1, layer.time / frames) : 0)
-        }
+        const scale = this.shadowScale(plant)
         shadow.node.setPosition(place.x + shadow.width * (1 - scale) / 2, place.y - shadow.height * (1 - scale) / 2, -1)
         shadow.node.setScale(scale, scale, 1)
+    }
+
+    /** How big its shadow is: the presentation's `scale`; a kind's view sizes it by its state (the sun-shroom's). */
+    protected shadowScale(_plant: ShownPlant): number {
+        return this.presentation.shadow?.scale ?? 1
+    }
+
+    /**
+     * A field of what only its kind shows (PlantSnapshot.own, its server class's snapshotOwn; off the board, the state
+     * it is shown in), read by `read` (a check of shared/validate); none where its kind shows none.
+     */
+    protected own<T>(plant: ShownPlant, field: string, read: (value: unknown, name: string) => T): T | undefined {
+        const value = plant.own?.[field]
+        return value === undefined ? undefined : read(value, `${plant.typeId}.own.${field}`)
     }
 
     /** The plant's clips, for what a layer shows (shownLayer). */
@@ -236,19 +238,14 @@ export class PlantView implements EntityView<PlantSnapshot> {
         this.pose(plant)
     }
 
-    /** A particle the presentation has follow a shot (the Fume-shroom's cloud, partway into it). */
-    fire(): void {
-        if (this.presentation.fireParticle) this.shotTick = null
-    }
-
     /**
      * The plant on the board for a frame: where it stands, facing its side's way, and what the board does to any plant
      * (a mowed one is squashed, a chilled one is blue and slow, the shovel over it lights it). `onBoard` shows the
      * plant itself.
      */
     sync(plant: PlantSnapshot, world: WorldSnapshot): void {
-        const { node, stage } = this.context
-        this.flash = stage?.flashes.plant(plant, world.gameplayTick) ?? 0
+        const { node } = this.context
+        this.flash = this.flashed(plant, world.gameplayTick)
         this.syncFrozen(plant)
         // A mowed plant stays as it stood.
         if (plant.mowered) { this.squash(plant); return }
@@ -277,6 +274,11 @@ export class PlantView implements EntityView<PlantSnapshot> {
         if (!frozen && !this.particlesPaused) return
         for (const player of this.context.node.getComponentsInChildren(ParticlePlayer)) player.setPaused(frozen)
         this.particlesPaused = frozen
+    }
+
+    /** How much it flashes on the board at `tick` (EntityFlashes.plant): bitten, hit; a producer's view adds its glow. */
+    protected flashed(plant: PlantSnapshot, tick: number): number {
+        return this.context.stage?.flashes.plant(plant.entityId, tick) ?? 0
     }
 
     /** Plant::mHighlighted: the shovel is over it, so all of it is lit; without it, as much as its flash. */
@@ -339,22 +341,11 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /**
-     * The plant itself on the board, by the server's snapshot: its layers, a particle that follows its shot, its color
-     * and its glow (`flash`). A view adds what its plant does here.
+     * The plant itself on the board, by the server's snapshot: its layers, its color and its glow (`flash`). A view
+     * adds what its plant does here.
      */
-    protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
+    protected onBoard(plant: PlantSnapshot, _world: WorldSnapshot): void {
         this.pose(plant)
-        const cue = this.presentation.fireParticle
-        if (cue && this.shotTick !== undefined) {
-            this.shotTick ??= world.gameplayTick
-            if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
-                // A plant facing left puffs from its mirrored mouth, the cloud blowing left; Plant::UpdateShooting puts the
-                // fume cloud on its row's particle layer.
-                const team = plantTeam(plant)
-                this.particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, renderOrder('particle', plant.row), undefined, team === 'zombies')
-                this.shotTick = undefined
-            }
-        }
         const body = this.body
         if (!body.loadedId) return
         const gray = Math.min(255, this.flash * 3)
@@ -376,42 +367,13 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     destroy(): void {}
 
-    /** A plant put down: what its presentation sounds besides the board's planting (Board::DoPlantingEffects). */
-    static readonly planted: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
-    }
-
-    /** Plant::Fire: the plant starts what follows its shot. */
-    static readonly fired: StageEvent = (stage, event) => {
-        if (typeof event.data.plantId === 'number') stage.view(event.data.plantId, PlantView)?.fire()
-    }
-
     /**
-     * Plant::Fire: the plant's muzzle effect where its shot sets off (PlantPresentationDefinition.muzzle), at
-     * RENDER_LAYER_LAWN_MOWER and 1 in its row. A shot of the zombies' side flies left, so the effect is mirrored across
-     * the projectile's hitbox, as its splat is.
+     * A plant put down: what its presentation sounds besides the board's planting (Board::DoPlantingEffects), as its fuse
+     * is lit: not for one asleep (Plant::UpdateDoomShroom waits to play FOLEY_REVERSE_EXPLOSION until it is awake).
      */
-    static readonly shot: StageEvent = (stage, event) => {
-        const { plantTypeId, typeId, x, y, row } = event.data
-        const muzzle = typeof plantTypeId === 'string' ? stage.content.presentation.plants[plantTypeId]?.muzzle : undefined
-        const hitbox = typeof typeId === 'string' ? stage.content.definitions.projectiles[typeId]?.hitbox : undefined
-        if (!muzzle || !hitbox || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
-        const mirrored = event.data.team === 'zombies'
-        stage.particle(muzzle.effect, x + mirrorX(muzzle.x, 2 * hitbox.x + hitbox.width, mirrored), y + muzzle.y,
-            renderOrder('lawnMower', row, 1), undefined, mirrored)
-    }
-
-    /** Plant::Fire for the Fume-shroom plays the fume, and DoRowAreaDamage a splat for the zombies it hits. */
-    static readonly areaAttack: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.fireSounds)
-        if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
-    }
-
-    /** Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own draw order, so it draws after it, with the dirt's sound. */
-    static readonly rose: StageEvent = (stage, event, world) => {
-        void SoundSystem.playFoley(SoundEffect.DirtRise)
-        const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
-        if (plant) stage.particle('pvz:potatominerise', plant.x + 40, plant.y + 40, stage.plantOrder(plant))
+    static readonly planted: StageEvent = (stage, event, world) => {
+        if (world.plants.find(plant => plant.entityId === event.data.entityId)?.asleep) return
+        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
     }
 
     /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
@@ -425,39 +387,9 @@ export class PlantView implements EntityView<PlantSnapshot> {
         stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
     }
 
-    /** A sun-shroom grows (FOLEY_PLANTGROW). */
-    static readonly grew: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.PlantGrow) }
-
-    /** Plant::UpdateProductionPlant throws its sun (FOLEY_SPAWN_SUN). */
-    static readonly produced: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Throw, 10) }
-
     /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */
     static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
 
-    /**
-     * Plant::DoSpecial for a plant that freezes (the ice-shroom): its presentation's sounds, and its `freeze` effect from
-     * the plant's middle (PARTICLE_ICE_TRAP over everything). The plant is gone by then.
-     */
-    static readonly froze: StageEvent = (stage, event) => {
-        const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
-        SoundSystem.playSounds(presentation?.freezeSounds)
-        const { x, y, row } = event.data, freeze = presentation?.freeze
-        if (!freeze || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
-        stage.particle(freeze.effect, x + PLANT_MIDDLE.x, y + PLANT_MIDDLE.y, renderOrder(freeze.layer, row))
-    }
-
     /** Crushed by a mower, as a zombie is (FOLEY_SPLAT). */
     static readonly mowered: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Splat) }
-
-    /**
-     * Plant::UpdateBowling: a rolling nut hits a zombie. Zombie::TakeShieldDamage rings a screen door; UpdateBowling a
-     * helm without a shield. The board shakes with it.
-     */
-    static readonly bowled: StageEvent = (stage, event) => {
-        stage.shake(1, -2, 'heavy')
-        void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
-        const zombie = stage.content.presentation.zombies[String(event.data.typeId)]
-        if (event.data.shield) SoundSystem.playSounds(zombie?.shield?.bowlingImpactSounds)
-        else if (event.data.helm) SoundSystem.playSounds(zombie?.helm?.bowlingImpactSounds)
-    }
 }

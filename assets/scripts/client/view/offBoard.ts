@@ -47,8 +47,8 @@ export async function createOffBoardPlant(node: Node, typeId: string, options: {
     if (!animation || !node.isValid) return null
     const packet = options.packet ? plantDefinition(game.presentation, typeId).packet : undefined
     const { animations, blinkTicks, state } = startOffBoardPlant(animation, random, { state: packet?.state, at: packet?.time })
-    // In the state of its ability it is in there (a grown sun-shroom), with nothing to count down.
-    const plant: ShownPlant = { typeId, animations, ...(blinkTicks === undefined ? {} : { blinkTicks }), ...(state === undefined ? {} : { ability: { state, ticks: 0 } }) }
+    // In the state of its kind it is in there (a grown sun-shroom), as its view reads it on the board (PlantView.own).
+    const plant: ShownPlant = { typeId, animations, ...(blinkTicks === undefined ? {} : { blinkTicks }), ...(state === undefined ? {} : { own: { state } }) }
     return game.views.plants.create({ node, content: game, plant, draw: options.draw })
 }
 

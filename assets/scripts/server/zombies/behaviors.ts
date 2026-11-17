@@ -9,7 +9,7 @@ export type ZombieBehavior<State extends JsonObject = JsonObject> = EntityBehavi
 export class ZombieBehaviorRegistry extends EntityBehaviorRegistry<'zombie', Zombie, ZombieDefinition> {
     constructor() {
         super('zombie', ZombieComponent, definitions => definitions.zombies, zombie => zombie.health > 0 &&
-            zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating' || zombie.state === 'vaulting'))
+            zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating' || zombie.state === 'airborne'))
     }
 }
 

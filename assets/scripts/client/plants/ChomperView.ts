@@ -1,12 +1,18 @@
 import type { StageEvent } from '@/client/level/LevelStage'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { nonEmptyString } from '@/shared/validate'
 import { PlantView, type ShownPlant } from './PlantView'
 
+/**
+ * The chomper (Chomper): it bites, chews and swallows by its state, which its animation plays on the server
+ * (PlantAnimationDefinition.states). Its own (Chomper.snapshotOwn): `state`, and `prey: 'plant'` when what it chews is
+ * a hostile plant.
+ */
 export class ChomperView extends PlantView {
     pose(plant: ShownPlant): void {
         super.pose(plant)
         // The chew and swallow clips draw the eaten zombie's arm; a swallowed plant has none.
-        this.body.setTracksVisible(this.presentation.parts?.prey ?? [], plant.ability?.prey !== 'plant')
+        this.body.setTracksVisible(this.presentation.parts?.prey ?? [], this.own(plant, 'prey', nonEmptyString) !== 'plant')
     }
 
     /** Plant::UpdateChomper bites (FOLEY_BIGCHOMP). */

@@ -35,6 +35,7 @@
     }
   },
   "pvz:flag": {
+    "view": "flag",
     "packet": {"x": -3, "y": -7, "scale": 0.35},
     "portrait": {"x": 23, "y": 24, "scale": 0.5},
     "nameKey": "FLAG_ZOMBIE",
@@ -158,6 +159,7 @@
     }
   },
   "pvz:pole_vaulter": {
+    "view": "polevaulter",
     "packet": {"x": -8, "y": -12, "scale": 0.35, "clip": "walk"},
     "portrait": {"x": 23, "y": 11, "scale": 0.5},
     "nameKey": "POLE_VAULTING_ZOMBIE",
@@ -197,6 +199,7 @@
     }
   },
   "pvz:newspaper": {
+    "view": "newspaper",
     "packet": {"x": -3, "y": -10, "scale": 0.35},
     "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "NEWSPAPER_ZOMBIE",
@@ -320,6 +323,105 @@
       "offset": [61, -20],
       "impactSounds": [{"audio": "pvz:plastichit", "foley": true}],
       "damagedSprites": ["pvz:zombie_football_helmet2", "pvz:zombie_football_helmet3"]
+    }
+  },
+  "pvz:dancer": {
+    "view": "dancer",
+    "packet": {"x": 1, "y": 2, "scale": 0.3, "clip": "moonwalk"},
+    "portrait": {"x": 21, "y": 14, "scale": 0.5, "clip": "moonwalk"},
+    "held": {"x": 20, "y": 42, "scale": 0.8},
+    "nameKey": "DANCING_ZOMBIE",
+    "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair", "Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_disco_glasses"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand", "Zombie_disco_outerhand_point"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
+    "damagedArmSprite": "pvz:zombie_disco_outerarm_upper_bone",
+    "clips": {
+      "idle": {"reanimId": "pvz:dancer_armraise", "fps": 24, "x": 15, "y": 8},
+      "moonwalk": {"reanimId": "pvz:dancer_moonwalk", "fps": 24, "x": 15, "y": 8},
+      "point": {"reanimId": "pvz:dancer_point", "fps": 24, "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:dancer_walk", "fps": 24, "x": 15, "y": 8},
+      "raise": {"reanimId": "pvz:dancer_armraise", "fps": 24, "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:dancer_eat", "fps": 24, "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:dancer_death", "fps": 24, "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
+    },
+    "drops": {
+      "head": {
+        "track": "anim_head1",
+        "effect": "pvz:zombiehead",
+        "offset": [58, -30],
+        "moweredEffect": "pvz:moweredzombiehead",
+        "image": "pvz:zombiedancerhead_disco",
+        "behind": true,
+        "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]
+      },
+      "arm": {
+        "track": "Zombie_disco_outerarm_lower",
+        "effect": "pvz:zombiearm",
+        "offset": [25, -55],
+        "moweredEffect": "pvz:moweredzombiearm",
+        "image": "pvz:zombie_disco_outerhand",
+        "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]
+      }
+    },
+    "dance": {
+      "music": "pvz:dancer",
+      "spotlight": {
+        "floor": "pvz:spotlight2",
+        "floorOffset": [-30, 60],
+        "beam": "pvz:spotlight",
+        "beamOffset": [-30, -480],
+        "scale": 4,
+        "colors": [[250, 250, 160], [114, 234, 170], [216, 126, 202], [90, 110, 140], [240, 90, 130]],
+        "colorsFrom": 700,
+        "colorTicks": 100,
+        "colorStep": 7
+      }
+    }
+  },
+  "pvz:backup_dancer": {
+    "view": "dancer",
+    "packet": {"x": -4, "y": 2, "scale": 0.3, "clip": "walk"},
+    "portrait": {"x": 17, "y": 14, "scale": 0.5, "clip": "walk"},
+    "held": {"x": 20, "y": 42, "scale": 0.8},
+    "nameKey": "BACKUP_DANCER",
+    "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_backup_stash"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
+    "damagedArmSprite": "pvz:zombie_backup_outerarm_upper_bone",
+    "clips": {
+      "idle": {"reanimId": "pvz:backup_dancer_armraise", "fps": 24, "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:backup_dancer_walk", "fps": 24, "x": 15, "y": 8},
+      "raise": {"reanimId": "pvz:backup_dancer_armraise", "fps": 24, "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:backup_dancer_eat", "fps": 24, "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:backup_dancer_death", "fps": 24, "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
+    },
+    "drops": {
+      "head": {
+        "track": "anim_head1",
+        "effect": "pvz:zombiehead",
+        "offset": [58, -30],
+        "moweredEffect": "pvz:moweredzombiehead",
+        "image": "pvz:zombiebackupdancerhead_disco",
+        "scale": 1.3125,
+        "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]
+      },
+      "arm": {
+        "track": "Zombie_disco_outerarm_lower",
+        "effect": "pvz:zombiearm",
+        "offset": [25, -55],
+        "moweredEffect": "pvz:moweredzombiearm",
+        "image": "pvz:zombie_backup_innerhand",
+        "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]
+      }
+    },
+    "dance": {
+      "rise": {
+        "depth": 200,
+        "riseTicks": 150,
+        "clip": {"x": -200, "y": -78, "width": 520, "bottom": 113, "settleTicks": 0},
+        "particle": "pvz:dancerrise",
+        "sounds": [{"audio": "pvz:gravestone_rumble", "foley": true, "pitchRange": 10}]
+      }
     }
   }
 }

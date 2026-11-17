@@ -1,4 +1,4 @@
-import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 
 /**
  * A flash that fades one step per gameplay tick from `ticks` at gameplay tick `tick`, like Plant::mEatenFlashCountdown
@@ -62,9 +62,16 @@ export class EntityFlashes {
         this.flashes.set(entityId, { tick, ticks: 0 })
     }
 
-    plant(plant: PlantSnapshot, tick: number): number {
-        const id = plant.entityId, ticks = plant.produceTicks
-        if (ticks === undefined) return value(this.flashes.get(id), tick)
+    /** A plant's flash (Plant::mEatenFlashCountdown): bitten, hit, or glowing as it produced. */
+    plant(entityId: number, tick: number): number {
+        return value(this.flashes.get(entityId), tick)
+    }
+
+    /**
+     * A producer's (ProducerView): its flash, or the glow of its countdown to its next sun (`ticks`, its snapshot's
+     * produceTicks), which brightens over the last 100 ticks, whichever is brighter.
+     */
+    producer(id: number, tick: number, ticks: number): number {
         const last = this.countdowns.get(id)
         const glow = Math.max(0, PRODUCTION_FLASH_TICKS - ticks)
         let held = last?.held ?? false

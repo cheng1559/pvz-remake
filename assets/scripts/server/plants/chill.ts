@@ -1,6 +1,6 @@
 import type { GameSystem, World } from '@/ecs/index'
 import { CHILLED_ANIMATION_FACTOR } from '@/shared/content/animation'
-import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent } from '../state/components'
+import { LevelStateResource, type Plant, PlantComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { meltIce } from '../combat/ice'
 import { plantCanBeChilled } from '../combat/cold'
@@ -15,7 +15,7 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
  */
 export function chillPlant(world: World, definitions: GameplayDefinitions, entity: number, plant: Plant, ticks: number): void {
     // A torchwood is kept from the cold (plantCanBeChilled).
-    if (!plantCanBeChilled(plant, definitions.plants[plant.typeId])) return
+    if (!plantCanBeChilled(plant)) return
     if (!plant.chilledTicks) emitServerEvent(world.resources.get(EventQueueResource), 'plantChilled', { entityId: entity })
     plant.chilledTicks = Math.max(plant.chilledTicks, ticks)
 }
@@ -28,8 +28,8 @@ export const plantPace = (plant: Plant): number => plant.frozenTicks !== undefin
 
 /**
  * Counts ice and chills down before the other plant systems run; a plant whose ice runs out acts on that tick. On a
- * tick a plant sits out, its shot and production deadlines move one tick later, so the shooter and production systems
- * need no check of their own.
+ * tick a plant sits out, what it counts to waits a tick (Plant.sitOut: a shooter's next shot, a producer's next sun),
+ * so the shooter and production systems need no check of their own.
  */
 export function createPlantChillSystem(): GameSystem {
     return {
@@ -42,11 +42,7 @@ export function createPlantChillSystem(): GameSystem {
                 if (!plant.chilledTicks && plant.frozenTicks === undefined) continue
                 meltIce(world, entity, plant)
                 if (plant.chilledTicks) plant.chilledTicks--
-                if (!plantSkipsTick(plant)) continue
-                const timer = world.get(entity, PlantAttackComponent)
-                if (!timer) continue
-                timer.readyAtTick++
-                if (timer.burst) timer.burst.fireAtTick++
+                if (plantSkipsTick(plant)) plant.sitOut()
             }
         },
     }

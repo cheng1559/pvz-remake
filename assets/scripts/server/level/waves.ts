@@ -58,7 +58,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             const waveHealth = waves.zombieIds.reduce((total, entity) => {
                 const zombie = world.get(entity, ZombieComponent)
                 // Board::TotalZombiesHealthInWave leaves out mind-controlled zombies.
-                return (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting') && isEnemyZombie(zombie)
+                return (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'airborne') && isEnemyZombie(zombie)
                     ? addWaveHealth(total, zombie) : total
             }, 0)
             // Board::UpdateZombieSpawning returns during the huge wave countdown, so it cannot be shortened.

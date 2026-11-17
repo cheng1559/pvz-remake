@@ -11,29 +11,33 @@ import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import {
     LevelStateResource,
-    PlantAttackComponent,
     PlantComponent,
     PositionComponent,
     ProjectileComponent,
     RandomResource,
     ZombieComponent,
 } from '@/server/state/components'
-import { createPlantAttackSystem } from '@/server/plants/shooter'
-import { createPlantAbilitySystem, initialPlantAbility } from '@/server/plants/abilities'
+import { createPlantAttackSystem } from '@/server/plants/attacks'
+import { createPlantAbilitySystem } from '@/server/plants/abilities'
+import type { Chomper } from '@/server/plants/Chomper'
+import type { PotatoMine } from '@/server/plants/PotatoMine'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { createZombieSystem } from '@/server/zombies/system'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { explode } from '@/server/combat/explosions'
 import type { JsonValue } from '@/shared/protocol/index'
+import { withZombieTypes } from '../zombieTypes'
+import { newPlant, withPlantTypes } from '../plantTypes'
+import type { PoleVaulter } from '@/server/zombies/PoleVaulter'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
 const board = definitions.boards['pvz:day']
 
 function game(config = definitions) {
-    const world = new World()
-    withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(7))
+    const world = withPlantTypes(withZombieTypes(new World(), config), config)
+    withProjectileMotions(world, config).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(LevelStateResource, {
         id: 'pvz:test',
@@ -52,15 +56,11 @@ function game(config = definitions) {
     const run = (ticks = 1) => { for (let index = 0; index < ticks; index++) schedule.run(world, ++tick) }
     const plant = (typeId: string, row: number, column: number) => {
         const entity = world.createEntity()
-        const definition = config.plants[typeId]
         world.add(entity, PositionComponent, { x: board.origin.x + column * board.cell.width, y: board.origin.y + row * board.cell.height, row })
-        world.add(entity, PlantComponent, {
-            typeId, seedId: typeId, column, health: definition.maxHealth, maxHealth: definition.maxHealth, recentlyEatenCounter: 0, chilledTicks: 0,
-            ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}),
-        })
-        if (definition.shooter) world.add(entity, PlantAttackComponent, { readyAtTick: world.resources.get(RandomResource).integer(
-            definition.shooter.initialDelayTicks.min, definition.shooter.initialDelayTicks.max,
-        ) })
+        // Put down as planting.createPlant puts it down.
+        const planted = newPlant(world, typeId, { column })
+        world.add(entity, PlantComponent, planted)
+        planted.start(world.resources.get(RandomResource), tick)
         return entity
     }
     const zombie = (typeId: string, row: number, x: number) =>
@@ -103,7 +103,7 @@ test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring 
 test('a potato mine arms after 15 seconds, rises, then blows up the first zombie that reaches it without leaving a body', () => {
     const { world, run, plant, zombie, events } = game()
     const mine = plant('pvz:potatomine', 2, 2)
-    const ability = () => world.get(mine, PlantComponent)!.ability!
+    const ability = () => world.get(mine, PlantComponent) as PotatoMine
     run(1499)
     assert.equal(ability().state, 'arming')
     run()
@@ -131,7 +131,7 @@ test('a potato mine arms after 15 seconds, rises, then blows up the first zombie
 test('a chomper swallows a zombie in reach, digests for 40 seconds and misses pole vaulters still holding the pole', () => {
     const { world, run, plant, zombie, events } = game()
     const chomper = plant('pvz:chomper', 2, 2)
-    const ability = () => world.get(chomper, PlantComponent)!.ability!
+    const ability = () => world.get(chomper, PlantComponent) as Chomper
     const meal = zombie('pvz:conehead', 2, 250)
     for (let tick = 0; tick < 300 && ability().state === 'ready'; tick++) run()
     assert.equal(ability().state, 'biting')
@@ -202,11 +202,11 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     const state = () => world.get(vaulter, ZombieComponent)!
     assert.ok(state().speedPerTick >= 0.66 && state().speedPerTick <= 0.68)
     assert.equal(state().animations.body.clip, 'run')
-    for (let tick = 0; tick < 2000 && state().state !== 'vaulting'; tick++) run()
-    assert.equal(state().state, 'vaulting')
-    assert.equal(state().hasPole, false)
+    for (let tick = 0; tick < 2000 && state().state !== 'airborne'; tick++) run()
+    assert.equal(state().state, 'airborne')
+    assert.equal((state() as PoleVaulter).hasPole, false)
     const takeoff = world.get(vaulter, PositionComponent)!.x
-    for (let tick = 0; tick < 400 && state().state === 'vaulting'; tick++) run()
+    for (let tick = 0; tick < 400 && state().state === 'airborne'; tick++) run()
     assert.equal(state().animations.body.clip, 'walk')
     assert.ok(world.get(vaulter, PositionComponent)!.x < world.get(wall, PositionComponent)!.x - 40, 'lands behind the wall-nut')
     // Takeoff is about 79px right of the plant, so the original formula adds almost nothing to the 150px landing.
@@ -248,8 +248,8 @@ test('plant abilities and new zombie state survive a server save', () => {
         randomSeed: 3, initialMoney: 0, firstAdventure: false, mods: [], save: saved as unknown as JsonValue,
     })
     assert.deepEqual(restored.save(), saved)
-    assert.deepEqual(snapshot.plants.map(plant => plant.ability?.state).sort(), ['arming', 'fuse', 'ready'])
-    assert.equal(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:pole_vaulter')?.hasPole, true)
+    assert.deepEqual(snapshot.plants.map(plant => plant.own?.state).sort(), ['arming', 'ready', undefined])
+    assert.deepEqual(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:pole_vaulter')?.own, { hasPole: true })
     assert.equal(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:buckethead')?.helmHealth, 1100)
     assert.equal([...(restored as unknown as { session: { world: World } }).session.world.query(ProjectileComponent)].length, 0)
 })

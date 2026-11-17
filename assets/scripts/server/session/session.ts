@@ -12,20 +12,25 @@ import { createItemSystem } from '../level/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
 import { chooserOffer, seedBankStart } from '../seeds/seedChooser'
 import { levelTutorial, TutorialsResource } from '../tutorials'
-import { createMower, createMowerSystem } from '../level/mower'
+import { createMower, createMowerSystem } from '../level/mowers'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
 import { createPlantChillSystem } from '../plants/chill'
 import { createBoardIceSystem } from '../combat/freeze'
+import { createCraterSystem } from '../level/craters'
 import { createPlantAnimationSystem } from '../plants/animation'
 import { createProductionSystem } from '../plants/production'
-import { createPlantAttackSystem } from '../plants/shooter'
+import { createPlantAttackSystem } from '../plants/attacks'
+import { createPlantRollSystem } from '../plants/rolls'
+import { PlantFactoryResource } from '../plants/Plant'
 import { createProjectileSystem } from '../combat/projectiles'
 import { ProjectileMotionsResource } from '../combat/motions'
+import { ProjectileFactoryResource } from '../combat/Projectile'
 import { createWaveSystem } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieBehaviorsResource } from '../zombies/behaviors'
+import { ZombieFactoryResource } from '../zombies/Zombie'
 import { AchievementsResource, observeAchievements } from '../achievements/achievements'
 import { createZombieSystem } from '../zombies/system'
 import { openingCooldown } from '../seeds/seedBank'
@@ -41,6 +46,8 @@ export type CommandRejectionCode =
     | 'column-out-of-range'
     | 'cell-occupied'
     | 'cell-has-grave'
+    /** A crater holds the cell (PLANTING_NOT_ON_CRATER), or a grave or crater seed's cell has one already. */
+    | 'cell-has-crater'
     | 'cell-needs-grave'
     /** A grave buster's cell has a grave of its own side, which it does not eat. */
     | 'cell-has-own-grave'
@@ -82,7 +89,10 @@ export interface Session extends ServerContent {
 export function createWorld(content: ServerContent): World {
     const world = new World()
     world.resources.set(ZombieBehaviorsResource, content.gameplay.zombieBehaviors)
+    world.resources.set(ZombieFactoryResource, content.gameplay.zombies.factory(content.definitions))
+    world.resources.set(PlantFactoryResource, content.gameplay.plants.factory(content.definitions))
     world.resources.set(ProjectileMotionsResource, content.gameplay.projectileMotions)
+    world.resources.set(ProjectileFactoryResource, content.gameplay.projectiles.factory(content.definitions))
     world.resources.set(TutorialsResource, content.gameplay.tutorials)
     world.resources.set(AchievementsResource, {
         definitions: content.definitions.achievements, earned: new Set<string>(), progress: {},
@@ -116,12 +126,14 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
         { phase: 'spawn', system: createWaveSystem(definitions) },
         { phase: 'spawn', system: createBoardIceSystem() },
+        { phase: 'spawn', system: createCraterSystem() },
         ...rule?.systems?.(definitions) ?? [],
         { phase: 'plant', system: createPlantChillSystem() },
         { phase: 'plant', system: createPlantAttackSystem(definitions) },
         { phase: 'plant', system: createProductionSystem(definitions) },
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
         { phase: 'plant', system: createConveyorSystem() },
+        { phase: 'plant', system: createPlantRollSystem() },
         { phase: 'plant', system: gameplay.plantBehaviors.system(definitions) },
         { phase: 'plant', system: plantAnimation },
         { phase: 'zombie', system: createZombieGroanSystem() },

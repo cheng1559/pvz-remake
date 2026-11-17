@@ -34,7 +34,7 @@ test('every almanac card and window is a plant or a zombie its view can draw off
         }
     }
     assert.deepEqual(chooserSeeds(gameplay).filter(seed => presentationFixture.almanac[seed].ground === 'night'),
-        ['pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom', 'pvz:iceshroom'])
+        ['pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom', 'pvz:iceshroom', 'pvz:doomshroom'])
     for (const zombie of Object.keys(gameplay.almanac)) {
         const presentation = presentationFixture.zombies[zombie]
         assert.ok(presentation && presentationFixture.almanac[zombie], `${zombie} has no zombie to show`)
@@ -67,14 +67,14 @@ test('a plant off the board starts as on it, in the state and with the clips it 
     assert.deepEqual(shown('pvz:sunflower', 'packet').animations, { body: { clip: 'body', time: 24 * 0.15, rate: 10 } })
 })
 
-test("a plant off the board is in a state of its own ability, on its animation's layers and clips", () => {
+test("a plant off the board is in a state of its own kind, on its animation's layers and clips", () => {
     const broken = (change: (plants: any) => void) => () => {
         const source = structuredClone(readGameplaySource('definitions')) as any
         change(source.plants)
         parseGameplayDefinitions(source)
     }
-    assert.throws(broken(plants => { plants['pvz:sunshroom'].animation.offBoard = { state: 'armed' } }), /offBoard\.state must be a state of the plant's ability/)
-    assert.throws(broken(plants => { plants['pvz:peashooter'].animation.offBoard = { state: 'big' } }), /offBoard\.state must be a state of the plant's ability/)
+    assert.throws(broken(plants => { plants['pvz:sunshroom'].animation.offBoard = { state: 'armed' } }), /sunshroom\.animation names a state its kind does not have: armed/)
+    assert.throws(broken(plants => { plants['pvz:peashooter'].animation.offBoard = { state: 'big' } }), /peashooter\.animation names a state its kind does not have: big/)
     assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { head: 'idle' } } }), /must be one of the animation's layers/)
     assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { body: 'missing' } } }), /must be one of the animation's clips/)
     assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = {} }), /must have a state or layers/)
@@ -126,5 +126,5 @@ test('/cheatseed opens the whole almanac, with each Mod\'s seeds and then the hi
     ])
     assert.deepEqual(hidden.map(card => [card.seed, card.place, card.hidden]).slice(0, 4),
         [['pvz:explodenut', 0, true], ['pvz:bowling-wallnut', 1, true], ['pvz:bowling-explodenut', 2, true], ['pvz:normal', 8, true]])
-    assert.equal(hidden.at(-1)!.seed, 'pvz:grave')
+    assert.deepEqual(hidden.slice(-2).map(card => card.seed), ['pvz:grave', 'pvz:crater'], 'the grave and crater seeds last')
 })
