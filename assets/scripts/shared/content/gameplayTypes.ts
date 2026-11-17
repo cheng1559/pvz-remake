@@ -744,6 +744,7 @@ export interface LevelDefinition {
     /** The level rule that builds the waves when the level starts and may change the level's play. */
     rules?: LevelRule
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
+    /** Ticks to the first wave; 1800 when omitted (ZOMBIE_COUNTDOWN_FIRST_WAVE). */
     firstWaveTicks?: number
     conveyor?: {
         initialSeed?: string

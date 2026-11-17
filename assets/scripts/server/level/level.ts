@@ -8,6 +8,9 @@ import { planWaves, type LevelRuleRegistry } from '../rules/registry'
 import { seedAffordable } from '../seeds/seedBank'
 import { createGraves } from '../gridItems/graves'
 
+/** Board::InitZombieWaves: ZOMBIE_COUNTDOWN_FIRST_WAVE, the first wave's countdown when the level gives none. */
+const FIRST_WAVE_TICKS = 1800
+
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition
     const script = levelTutorial(world)
@@ -22,7 +25,7 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
     if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,
-        nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
+        nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? FIRST_WAVE_TICKS,
         plan: planWaves(rules.draft(level, definitions), level, world.resources.get(RandomResource)),
         zombieIds: [],
         healthToNextWave: 0,

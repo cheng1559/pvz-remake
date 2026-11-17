@@ -21,7 +21,9 @@ function initialize(world: World, firstAdventure: boolean): void {
     const tutorial = world.resources.get(TutorialResource)
     tutorial.firstAdventure = firstAdventure
     tutorial.step = firstAdventure ? 'pick-sunflower' : 'complete'
-    if (firstAdventure) tutorial.promptAtTick = 500
+    if (!firstAdventure) return
+    tutorial.promptAtTick = 500
+    // Board::InitZombieWaves: the first adventure's level 2 waits twice ZOMBIE_COUNTDOWN for its first wave.
     world.resources.get(WaveResource).nextWaveAtTick = 5000
 }
 
