@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { PlantComponent, SeedBankResource } from '../state/components'
 import { TutorialResource, WaveResource } from '../state/levelState'

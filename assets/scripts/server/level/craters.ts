@@ -1,17 +1,14 @@
-import type { EntityId, GameSystem, World } from '@/ecs'
+import type { EntityId, GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { CRATER } from '@/shared/content/craters'
 import { holdsCell } from '@/shared/content/planting'
 import type { Team } from '@/shared/content/teams'
-import { type Crater, GridItemComponent, LevelStateResource } from '../state/components'
+import { type Crater, LevelStateResource } from '../state/components'
 import { lawnPlants } from './lawn'
 
 /** The craters on the lawn. */
 export function craters(world: World): Array<{ entity: EntityId, crater: Crater }> {
-    return [...world.query(GridItemComponent)].flatMap(entity => {
-        const crater = world.get(entity, GridItemComponent)!
-        return crater.typeId === CRATER ? [{ entity, crater }] : []
-    })
+    return [...world.gridItems].flatMap(crater => crater.typeId === CRATER ? [{ entity: crater.id, crater }] : [])
 }
 
 /**
@@ -22,7 +19,7 @@ export function craters(world: World): Array<{ entity: EntityId, crater: Crater 
 export function placeCrater(world: World, definitions: GameplayDefinitions, row: number, column: number, ticks: number, team: Team): EntityId {
     for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.entity)
     const entity = world.createEntity()
-    world.add(entity, GridItemComponent, { typeId: CRATER, column, row, ticks, ...(team === 'zombies' ? { team } : {}) })
+    world.insert(world.gridItems, { id: entity, typeId: CRATER, column, row, ticks, ...(team === 'zombies' ? { team } : {}) })
     return entity
 }
 

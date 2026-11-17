@@ -1,11 +1,11 @@
-import type { World } from '@/ecs/index'
+import type { Entity, World } from '@/server/state/World'
 import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { EventQueueResource } from '../state/events'
 import { AchievementsResource } from '../achievements/achievements'
-import { ItemComponent, SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
+import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
 import { checkSavedEntity, SAVED_COMPONENTS } from './savedComponents'
 import { savedSeedBank } from '../seeds/seedChooser'
@@ -21,9 +21,13 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     const entities = world.queryableEntities().map(entityId => {
         const extensions = gameplay.components.capture(world, entityId)
         const entity: SavedEntity = { entityId, ...(Object.keys(extensions).length ? { extensions } : {}) }
-        for (const { key, component } of SAVED_COMPONENTS) {
-            const value = world.get(entityId, component)
-            if (value !== undefined) Object.assign(entity, { [key]: asSaved(value) })
+        for (const { key, component, list } of SAVED_COMPONENTS) {
+            const value = component ? world.get(entityId, component) : list!(world).get(entityId)
+            if (value === undefined) continue
+            if (component) { Object.assign(entity, { [key]: asSaved(value) }); continue }
+            // An object of a typed list: its id is the entity's, its position the entity's own.
+            const { id: _, position, ...fields } = value as Entity & { position?: object }
+            Object.assign(entity, { [key]: asSaved(fields), ...(position ? { position: asSaved(position) } : {}) })
         }
         checkSavedEntity(session, world, entity)
         return entity
@@ -130,8 +134,7 @@ export function restoreSession(
     for (const entity of save.wave.zombieIds) {
         if (!world.get(entity, ZombieComponent)) throw new Error(`Saved wave zombie ${entity} is invalid`)
     }
-    const collectingSun = [...world.query(ItemComponent)].reduce((total, entity) => {
-        const item = world.get(entity, ItemComponent)!
+    const collectingSun = [...world.items].reduce((total, item) => {
         return total + (item.state === 'collecting' && definitions.items[item.typeId] ? item.value : 0)
     }, 0)
     if (save.economy.pendingSunSpend > collectingSun) {
@@ -146,10 +149,15 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     world.activateEntity(saved.entityId)
     content.gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
     const context = { content, world, entity: saved }
-    for (const { key, component, restore } of SAVED_COMPONENTS) {
+    // An entity of a typed list is its object, which holds its position.
+    const listed = SAVED_COMPONENTS.some(({ key, list }) => list && saved[key] !== undefined)
+    for (const { key, component, list, restore } of SAVED_COMPONENTS) {
         const value = saved[key]
+        if (value === undefined || listed && component === PositionComponent) continue
         // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance).
-        if (value !== undefined) world.add(saved.entityId, component, (restore ? restore(value as never, context) : jsonRoundTrip(value)) as never)
+        const live = (restore ? restore(value as never, context) : jsonRoundTrip(value)) as never
+        if (component) world.add(saved.entityId, component, live)
+        else world.insert(list!(world), { ...live as object, id: saved.entityId, ...(saved.position ? { position: jsonRoundTrip(saved.position) } : {}) })
     }
 }
 

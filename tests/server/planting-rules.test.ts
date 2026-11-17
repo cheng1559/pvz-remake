@@ -1,7 +1,7 @@
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { World } from '@/ecs'
+import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import type { Session } from '@/server/session/session'
 import { planting } from '@/server/seeds/planting'

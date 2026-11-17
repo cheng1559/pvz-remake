@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
-import { Schedule,World } from '@/ecs/index'
+import { Schedule,World } from '@/server/state/World'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import {
 EconomyStateResource,
@@ -17,7 +17,7 @@ import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource,createEventQueue } from '@/server/state/events'
 import { createItemSystem } from '@/server/level/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
-import { ItemComponent,TutorialResource,WaveResource } from '@/server/state/levelState'
+import { TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'
 import { TutorialsResource } from '@/server/tutorials'
 import { damageZombie, flattenZombie } from '@/server/zombies/damage'
@@ -68,9 +68,9 @@ test('level one schedules tutorial sun and the first wave from planted Peashoote
     schedule.run(world, 1)
 
     schedule.run(world, 400)
-    assert.equal([...world.query(ItemComponent)].length, 0)
+    assert.equal([...world.items].length, 0)
     schedule.run(world, 401)
-    assert.equal([...world.query(ItemComponent)].length, 1)
+    assert.equal([...world.items].length, 1)
     assert.equal(world.resources.get(TutorialResource).step, 'collect-first-sun')
 
     addPlant(world, 1)
@@ -99,11 +99,9 @@ test('level one drops its award from the last effective zombie before its corpse
     schedule.add('item', createItemSystem(definitions))
 
     schedule.run(world, 1)
-    assert.equal([...world.query(ItemComponent)].length, 0)
+    assert.equal([...world.items].length, 0)
     schedule.run(world, 2)
-    const awardId = [...world.query(ItemComponent)][0]
-    const awardPosition = world.get(awardId, PositionComponent)!
-    const award = world.get(awardId, ItemComponent)!
+    const [award] = world.items, awardPosition = award.position
     assert.equal(world.hasEntity(zombieId), true)
     assert.equal(world.hasEntity(headless), false, 'award drop removes active headless zombies without starting a death animation')
     assert.equal(world.get(zombieId, ZombieComponent)!.state, 'dying')
@@ -129,7 +127,7 @@ test('the last zombie vanishes when losing its head drops the award, while burne
 
     damageZombie(world, definitions, last, world.get(last, ZombieComponent)!.health - 1)
 
-    assert.equal([...world.query(ItemComponent)].length, 1)
+    assert.equal([...world.items].length, 1)
     assert.equal(world.hasEntity(last), false, 'Board::RemoveAllZombies also removes the zombie that dropped the award')
     assert.equal(world.get(burned, ZombieComponent)!.state, 'burned', 'award drop preserves burned animation')
 })

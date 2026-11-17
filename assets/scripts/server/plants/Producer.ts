@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/ecs/index'
+import type { EntityId, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'

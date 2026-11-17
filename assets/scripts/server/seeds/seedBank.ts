@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { SeedAvailability, Team } from '@/shared/protocol'
 import { LevelStateResource, type SeedBankState, type SeedCard, type SeedPacketState } from '../state/components'

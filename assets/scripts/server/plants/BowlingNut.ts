@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext, World } from '@/ecs/index'
+import type { EntityId, SystemContext, World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
 import { groundStep } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'

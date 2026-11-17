@@ -1,4 +1,4 @@
-import type { Component, EntityId, World } from '@/ecs/index'
+import type { Component, EntityId, World } from '@/server/state/World'
 import { isQualifiedId, Registry } from '@/shared/mod'
 import { jsonRoundTrip, type JsonObject, type JsonValue } from '@/shared/protocol'
 

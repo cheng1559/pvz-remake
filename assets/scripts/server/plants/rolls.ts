@@ -1,4 +1,4 @@
-import type { GameSystem } from '@/ecs/index'
+import type { GameSystem } from '@/server/state/World'
 import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
 import { plantSkipsTick } from './chill'
 

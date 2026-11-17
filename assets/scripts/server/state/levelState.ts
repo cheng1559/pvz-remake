@@ -1,8 +1,12 @@
-import { defineComponent, defineResource } from '@/ecs/index'
+import { defineResource, type EntityId } from '@/server/state/World'
 import type { JsonObject } from '@/shared/protocol'
+import type { Position } from './components'
 import type { WavePlan } from '../rules/registry'
 
+/** The sun, a coin or the level's award (the original's Coin), on its own above the board (row -1). */
 export interface Item {
+    id: EntityId
+    position: Position
     typeId: string
     value: number
     state: 'available' | 'collecting' | 'fading'
@@ -69,7 +73,6 @@ export interface SkySunState {
     fallen: number
 }
 
-export const ItemComponent = defineComponent<Item>('pvz:item')
 export const TutorialResource = defineResource<TutorialState>('pvz:tutorial-state')
 export const WaveResource = defineResource<WaveState>('pvz:wave-state')
 export const SkySunResource = defineResource<SkySunState>('pvz:sky-sun')

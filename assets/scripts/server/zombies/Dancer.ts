@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext, World } from '@/ecs/index'
+import type { EntityId, SystemContext, World } from '@/server/state/World'
 import { type AnimationClip, DANCE_BEAT, type DanceLead, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { zombieRowY } from '@/shared/content/levelHelpers'
 import { teamDirection, zombieTeam } from '@/shared/content/teams'

@@ -1,4 +1,4 @@
-import { defineResource } from '@/ecs/index'
+import { defineResource } from '@/server/state/World'
 import {
     jsonRoundTrip,
     type JsonObject,

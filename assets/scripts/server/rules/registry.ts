@@ -1,10 +1,10 @@
-import type { GameSystem, Schedule, World } from '@/ecs/index'
+import type { GameSystem, Schedule, World } from '@/server/state/World'
 import type { GameplayDefinitions, GameplayLevels, LevelDefinition, LevelRule } from '@/shared/content/gameplay'
 import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { JsonObject } from '@/shared/protocol'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { pickWeighted } from '@/shared/random'
-import { defineResource } from '@/ecs/index'
+import { defineResource } from '@/server/state/World'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import type { CommandRejectionCode, Session } from '../session/session'
 

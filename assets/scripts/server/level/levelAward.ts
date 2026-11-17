@@ -1,15 +1,15 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
 import { type EntityRemover, LevelStateResource, PositionComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { ItemComponent, WaveResource } from '../state/levelState'
+import { WaveResource } from '../state/levelState'
 import { spawnItem } from './itemSpawn'
 import { levelRule } from '../rules/registry'
 import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
 
 /** Board::HasLevelAwardDropped: the level's award is on the lawn (falling, waiting or being collected). */
 export function levelAwardDropped(world: World): boolean {
-    return [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === LEVEL_AWARD)
+    return [...world.items].some(item => item.typeId === LEVEL_AWARD)
 }
 
 /** Board::AddCoin of the level's award at (x, y), dropped like a coin (COIN_MOTION_COIN). */

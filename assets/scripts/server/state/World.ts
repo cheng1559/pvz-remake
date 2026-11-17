@@ -1,3 +1,6 @@
+import type { GridItem } from './components'
+import type { Item } from './levelState'
+
 export type EntityId = number
 
 export interface EntityAllocatorSnapshot {
@@ -93,6 +96,46 @@ export class SparseSet<T> {
     }
 }
 
+/** What a typed list holds: an object that is its entity, by its id. */
+export interface Entity { id: EntityId }
+
+/**
+ * The world's entities of one type, each an object with its id: iterated in id order, as a query is. An iteration
+ * keeps the ones there as it started: one removed meanwhile is passed over, one added meanwhile waits for the next.
+ */
+export class EntityList<T extends Entity> implements Iterable<T> {
+    private readonly values = new Map<EntityId, T>()
+    private ordered: T[] | undefined
+
+    constructor(private readonly world: World) {}
+
+    /** The one of `id`, unless it is gone (or on its way: World.markDestroy). */
+    get(id: EntityId): T | undefined {
+        return this.world.isQueryable(id) ? this.values.get(id) : undefined
+    }
+
+    has(id: EntityId): boolean {
+        return this.get(id) !== undefined
+    }
+
+    *[Symbol.iterator](): Iterator<T> {
+        const ordered = this.ordered ??= [...this.values.values()].sort((a, b) => a.id - b.id)
+        for (const value of ordered) if (this.values.get(value.id) === value && this.world.isQueryable(value.id)) yield value
+    }
+
+    /** World.insert and CommandBuffer.insert put one in; World.destroyEntity takes it out. */
+    set(value: T): void {
+        this.values.set(value.id, value)
+        this.ordered = undefined
+    }
+
+    delete(id: EntityId): boolean {
+        if (!this.values.delete(id)) return false
+        this.ordered = undefined
+        return true
+    }
+}
+
 type AnyComponent = Component<unknown>
 const addBuffered = Symbol('addBuffered')
 
@@ -159,6 +202,10 @@ export class ResourceStore {
 
 export class World {
     readonly resources = new ResourceStore()
+    /** The sun, coins and the level's award (Coin). */
+    readonly items = new EntityList<Item>(this)
+    /** The things of a cell: graves and craters (GridItem). */
+    readonly gridItems = new EntityList<GridItem>(this)
 
     private nextEntity = 1
     private readonly entities = new Set<EntityId>()
@@ -197,7 +244,18 @@ export class World {
         this.membershipVersion++
         this.pendingDestroy.delete(entity)
         for (const { store } of this.stores.values()) store.delete(entity)
+        for (const list of this.lists()) list.delete(entity)
         return true
+    }
+
+    /** `value` goes into `list`, as the entity it is (its id, World.createEntity's). */
+    insert<T extends Entity>(list: EntityList<T>, value: T): void {
+        this.assertEntity(value.id)
+        list.set(value)
+    }
+
+    private lists(): EntityList<Entity>[] {
+        return [this.items, this.gridItems]
     }
 
     hasEntity(entity: EntityId): boolean {
@@ -290,6 +348,7 @@ export class World {
 type Command =
     | { type: 'create', entity: EntityId }
     | { type: 'destroy', entity: EntityId }
+    | { type: 'insert', list: EntityList<Entity>, value: Entity }
     | { type: 'add', entity: EntityId, component: AnyComponent, value: unknown }
     | { type: 'remove', entity: EntityId, component: AnyComponent }
 
@@ -313,6 +372,11 @@ export class CommandBuffer {
         this.commands.push({ type: 'add', entity, component, value })
     }
 
+    /** World.insert, once the buffer is flushed. */
+    insert<T extends Entity>(list: EntityList<T>, value: T): void {
+        this.commands.push({ type: 'insert', list: list as unknown as EntityList<Entity>, value })
+    }
+
     remove<T>(entity: EntityId, component: Component<T>): void {
         this.commands.push({ type: 'remove', entity, component })
     }
@@ -325,6 +389,7 @@ export class CommandBuffer {
                 case 'create': this.world.activateEntity(command.entity); break
                 case 'destroy': this.world.destroyEntity(command.entity); break
                 case 'add': this.world[addBuffered](command.entity, command.component, command.value); break
+                case 'insert': if (this.world.isQueryable(command.value.id)) command.list.set(command.value); break
                 case 'remove': this.world.remove(command.entity, command.component); break
             }
         }

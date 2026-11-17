@@ -1,9 +1,9 @@
-import type { EntityId, World } from '@/ecs'
+import type { EntityId, World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
 import { holdsCell } from '@/shared/content/planting'
 import { pickWeighted } from '@/shared/random'
-import { type Grave, GridItemComponent, LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
+import { type Grave, LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
@@ -12,17 +12,14 @@ import { gridItems, lawnPlants } from './lawn'
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {
-    return [...world.query(GridItemComponent)].flatMap(entity => {
-        const grave = world.get(entity, GridItemComponent)!
-        return grave.typeId === GRAVE ? [{ entity, grave }] : []
-    })
+    return [...world.gridItems].flatMap(grave => grave.typeId === GRAVE ? [{ entity: grave.id, grave }] : [])
 }
 
 /** Board::AddAGraveStone: a grave in the cell, with its look and how late it rises. `more`: what it has besides. */
 export function createGrave(world: World, row: number, column: number, more: Pick<Grave, 'riseAtTick' | 'team'> = {}): EntityId {
     const random = world.resources.get(RandomResource)
     const entity = world.createEntity()
-    world.add(entity, GridItemComponent, { typeId: GRAVE, column, row, variant: random.integer(0, GRAVE_VARIANTS - 1),
+    world.insert(world.gridItems, { id: entity, typeId: GRAVE, column, row, variant: random.integer(0, GRAVE_VARIANTS - 1),
         riseDelay: random.integer(0, GRAVE_MAX_RISE_DELAY), offsetX: random.integer(-5, 4), offsetY: random.integer(-5, 4), ...more })
     return entity
 }
@@ -56,7 +53,7 @@ export function createGraves(world: World): void {
         }
     }
     // Board::PickSpecialGraveStone, right after placing them: one stone looks different.
-    const special = made.length ? world.get(made[random.integer(0, made.length - 1)], GridItemComponent) : undefined
+    const special = made.length ? world.gridItems.get(made[random.integer(0, made.length - 1)]) : undefined
     if (special?.typeId === GRAVE) special.special = true
 }
 

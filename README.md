@@ -17,7 +17,7 @@ Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Adventure follows the cur
 
 - `assets/scripts/app`: scene entry, local client/server assembly, and save coordination.
 - `assets/scripts/server`: authoritative gameplay, fixed ticks, deterministic RNG, and server saves.
-- `assets/scripts/shared` and `ecs`: protocol, content schemas, channel, and ECS.
+- `assets/scripts/shared`: protocol, content schemas and channel.
 - `assets/scripts/client`: input, rendering, audio, content loading, and shared level presenters.
 - `assets/scripts/core`: the shared game clock (`GameClock`) and the Cocos tweens that follow it (`GameTween`).
 - `mods/pvz-base`: gameplay, presentation, categorized runtime assets, and the explicit resource index.

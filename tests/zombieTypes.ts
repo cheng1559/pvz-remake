@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { type Zombie, ZombieFactoryResource, type ZombieFields } from '@/server/zombies/Zombie'
 import { ZombieRegistry } from '@/server/zombies/ZombieRegistry'

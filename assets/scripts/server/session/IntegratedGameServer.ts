@@ -7,7 +7,6 @@ import { savedSeedBank } from '../seeds/seedChooser'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, drainServerEvents } from '../state/events'
 import { items } from '../level/items'
-import { ItemComponent } from '../state/levelState'
 import { restoreSession, saveSession } from './persistence'
 import type { ServerSaveSnapshot } from './save'
 import { startSession, type CommandResult, type ServerContent, type Session } from './session'
@@ -104,9 +103,8 @@ export class IntegratedGameServer {
         session.gameplayTick++
         session.schedule.run(session.world, session.gameplayTick)
         if (getDebugRules(session.world).collect === 'auto') {
-            for (const entity of session.world.query(ItemComponent)) {
-                const item = session.world.get(entity, ItemComponent)!
-                if (session.definitions.items[item.typeId] && item.state === 'available') items.collect(session, entity)
+            for (const item of session.world.items) {
+                if (session.definitions.items[item.typeId] && item.state === 'available') items.collect(session, item.id)
             }
         }
     }

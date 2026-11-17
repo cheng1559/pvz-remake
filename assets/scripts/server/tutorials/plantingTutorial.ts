@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { LevelStateResource, PlantComponent } from '../state/components'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { adviceShown, displayAdviceOnce } from './advice'

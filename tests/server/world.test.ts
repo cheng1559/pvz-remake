@@ -7,7 +7,7 @@ import {
     World,
     defineComponent,
     defineResource,
-} from '../../assets/scripts/ecs/index'
+} from '@/server/state/World'
 
 test('SparseSet keeps values correct after swap-remove', () => {
     const set = new SparseSet<string>()

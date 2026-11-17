@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
 import { type EntityRemover, PlantComponent, ZombieComponent } from '../state/components'

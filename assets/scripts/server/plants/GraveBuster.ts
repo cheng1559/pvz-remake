@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/ecs/index'
+import type { EntityId, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { graveAt } from '@/shared/content/graves'
 import { plantTeam } from '@/shared/content/teams'

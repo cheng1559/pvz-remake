@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { Plant, type PlantConfig } from './Plant'
 
 /**

@@ -20,7 +20,7 @@ export interface HostModules {
 
 export const HOSTS: readonly HostModules[] = [
     { file: 'client/content/hostModules.ts', exportName: 'CLIENT_HOST_MODULES', side: 'client', roots: ['client', 'shared', 'platform', 'core'] },
-    { file: 'server/session/hostModules.ts', exportName: 'SERVER_HOST_MODULES', side: 'server', roots: ['server', 'shared', 'ecs'] },
+    { file: 'server/session/hostModules.ts', exportName: 'SERVER_HOST_MODULES', side: 'server', roots: ['server', 'shared'] },
 ]
 
 /** The hosts' own files, which give the modules rather than being given. */

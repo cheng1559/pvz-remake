@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 

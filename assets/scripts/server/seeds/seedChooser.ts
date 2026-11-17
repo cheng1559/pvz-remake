@@ -1,4 +1,4 @@
-import type { World } from '@/ecs'
+import type { World } from '@/server/state/World'
 import { chooserSeeds, type GameplayDefinitions, type LevelDefinition } from '@/shared/content/gameplay'
 import { cheatSeedEntries } from '@/shared/content/chooserPages'
 import { chooserEntryKey, type ChooserEntry, type GameCommand, type Team, type WorldSnapshot } from '@/shared/protocol'

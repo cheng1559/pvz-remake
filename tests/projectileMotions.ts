@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { installBuiltinProjectileMotions, ProjectileMotionRegistry, ProjectileMotionsResource } from '@/server/combat/motions'
 import { ProjectileFactoryResource } from '@/server/combat/Projectile'

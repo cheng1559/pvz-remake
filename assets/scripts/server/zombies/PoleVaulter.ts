@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/ecs/index'
+import type { EntityId, SystemContext } from '@/server/state/World'
 import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'

@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantTargeting } from '@/shared/content/gameplay'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { getBoardBounds, rectOverlap } from '../combat/collision'

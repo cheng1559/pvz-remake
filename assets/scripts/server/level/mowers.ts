@@ -1,5 +1,5 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import { LevelStateResource, MowedPlantComponent, MowerComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'

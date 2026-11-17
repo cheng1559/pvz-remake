@@ -1,4 +1,4 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'

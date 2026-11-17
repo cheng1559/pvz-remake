@@ -1,4 +1,4 @@
-import { Schedule, World } from '@/ecs/index'
+import { Schedule, World } from '@/server/state/World'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/protocol/index'

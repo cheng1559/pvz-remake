@@ -1,4 +1,4 @@
-import { Schedule } from '@/ecs/index'
+import { Schedule } from '@/server/state/World'
 import { packetTeam } from '@/shared/content/teams'
 import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'

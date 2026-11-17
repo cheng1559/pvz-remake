@@ -1,5 +1,5 @@
 import { withFixedBanks } from '../fixedBankLevels'
-import { type World } from '@/ecs'
+import { type World } from '@/server/state/World'
 import { PlantComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
 import type { BowlingNut } from '@/server/plants/BowlingNut'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'

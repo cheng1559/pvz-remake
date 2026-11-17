@@ -4,7 +4,7 @@ import {
     SeedBankResource, ZombieComponent,
 } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
+import { TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
 import { selectedSeedId, selectedTeam } from '../seeds/seedBank'
 import { seedChooserSnapshot } from '../seeds/seedChooser'
@@ -58,15 +58,13 @@ export const snapshot = {
         // What any projectile shows, and what only its kind has; a mower set off runs among them.
         const projectiles = [...world.query(PositionComponent, ProjectileComponent)].map(entity => world.get(entity, ProjectileComponent)!.snapshot(world, entity))
         const mowers = [...world.query(PositionComponent, MowerComponent)].map(entity => world.get(entity, MowerComponent)!.snapshot(world, entity))
-        const items = [...world.query(PositionComponent, ItemComponent)].map(entity => {
-            const position = world.get(entity, PositionComponent)!
-            const item = world.get(entity, ItemComponent)!
+        const items = [...world.items].map(item => {
             return {
-                entityId: entity,
+                entityId: item.id,
                 typeId: item.typeId,
                 state: item.state,
-                x: position.x,
-                y: position.y,
+                x: item.position.x,
+                y: item.position.y,
                 scale: item.scale,
                 alpha: item.alpha,
                 ...(item.landed ? { landed: true as const } : {}),

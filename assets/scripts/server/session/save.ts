@@ -1,4 +1,4 @@
-import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
+import type { EntityAllocatorSnapshot, EntityId } from '@/server/state/World'
 import type { LayerState } from '@/shared/content/animation'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
@@ -14,6 +14,9 @@ import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type T
 import type { SavedComponents } from '../registry/JsonComponents'
 import { SAVED_COMPONENTS } from './savedComponents'
 
+/** An object of one of the world's typed lists as a saved entity has it: its id is the entity's, its position beside it. */
+export type SavedOfList<T> = T extends unknown ? Omit<T, 'id' | 'position'> : never
+
 export interface SavedEntity {
     extensions?: SavedComponents
     entityId: EntityId
@@ -28,9 +31,9 @@ export interface SavedEntity {
     projectile?: SavedProjectile
     /** A row's mower waiting at its house end (Mower). */
     mower?: MowerFields
-    item?: Item
+    item?: SavedOfList<Item>
     /** What stands in a cell: it has no position. */
-    gridItem?: GridItem
+    gridItem?: SavedOfList<GridItem>
 }
 
 /** A mowed plant as its save has it (MowedPlant): the plant's fields as they were. */

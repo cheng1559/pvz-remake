@@ -1,4 +1,4 @@
-import { defineResource, type EntityId, type SystemContext, type World } from '@/ecs/index'
+import { defineResource, type EntityId, type SystemContext, type World } from '@/server/state/World'
 import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import type { ZombieState } from '@/shared/content/zombieStates'

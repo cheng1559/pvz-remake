@@ -1,7 +1,7 @@
 import { withProjectileMotions } from '../projectileMotions'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { Schedule, World } from '@/ecs'
+import { Schedule, World } from '@/server/state/World'
 import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
@@ -15,7 +15,6 @@ import { Producer } from '@/server/plants/Producer'
 import type { ScaredyShroom } from '@/server/plants/ScaredyShroom'
 import type { SunShroom } from '@/server/plants/SunShroom'
 import { createProductionSystem } from '@/server/plants/production'
-import { ItemComponent } from '@/server/state/levelState'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { createZombieSystem } from '@/server/zombies/system'
@@ -275,7 +274,7 @@ test('sun-shrooms drop small sun until they grow, produce nothing while growing,
         schedule.add('plant', createPlantAbilitySystem(definitions))
         const entity = plantAt(world, 'pvz:sunshroom', 40)
         const plant = world.get(entity, PlantComponent) as SunShroom
-        const sun = () => [...world.query(ItemComponent)].map(item => world.get(item, ItemComponent)!).map(item => [item.typeId, item.value])
+        const sun = () => [...world.items].map(item => [item.typeId, item.value])
         let tick = 0
         const run = (ticks: number) => { for (let index = 0; index < ticks; index++) schedule.run(world, ++tick) }
         run(growth.ticks)

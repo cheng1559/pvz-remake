@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { World } from '@/ecs'
+import { World } from '@/server/state/World'
 import { dropZombieLoot } from '@/server/level/loot'
 import { EconomyStateResource, LevelStateResource, RandomResource } from '@/server/state/components'
 import { createEventQueue, EventQueueResource } from '@/server/state/events'
-import { ItemComponent, TutorialResource } from '@/server/state/levelState'
+import { TutorialResource } from '@/server/state/levelState'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
@@ -26,7 +26,7 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
         world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
         world.resources.set(EventQueueResource, createEventQueue())
         dropZombieLoot(world, definitions, spawnZombie(world, definitions, typeId, 2, 500, 0), world)
-        return [...world.query(ItemComponent)].map(entity => world.get(entity, ItemComponent)!.typeId)
+        return [...world.items].map(item => item.typeId)
     }
     // Board::DropLootPiece: silver below 2500 times the value.
     assert.deepEqual(drop('pvz:normal', 2500), [], 'a plain zombie, worth 1')

@@ -1,4 +1,4 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import { type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'

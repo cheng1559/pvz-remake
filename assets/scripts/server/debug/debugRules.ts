@@ -1,4 +1,4 @@
-import { defineResource, type World } from '@/ecs/index'
+import { defineResource, type World } from '@/server/state/World'
 import type { DebugRules } from '@/shared/protocol/index'
 
 export const DEFAULT_DEBUG_RULES: Readonly<DebugRules> = {

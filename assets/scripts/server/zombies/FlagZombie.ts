@@ -1,4 +1,4 @@
-import type { EntityId, World } from '@/ecs/index'
+import type { EntityId, World } from '@/server/state/World'
 import { ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
 import { zombiePartDropped } from './parts'
 import { Zombie } from './Zombie'

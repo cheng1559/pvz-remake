@@ -1,5 +1,5 @@
 import { array, boolean, exact, integer, integerInRange, nonEmptyString, nonNegativeInteger, positiveFinite, positiveInteger } from '@/shared/validate'
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
 import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { WaveResource } from '../state/levelState'

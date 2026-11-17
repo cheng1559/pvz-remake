@@ -1,4 +1,4 @@
-import { defineResource } from '@/ecs/index'
+import { defineResource } from '@/server/state/World'
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { EntityBehaviorRegistry, type EntityBehavior } from '../registry/EntityBehaviorRegistry'

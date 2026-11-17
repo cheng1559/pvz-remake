@@ -1,4 +1,4 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import { pickWeighted } from '@/shared/random'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
 import { WaveResource } from '../state/levelState'

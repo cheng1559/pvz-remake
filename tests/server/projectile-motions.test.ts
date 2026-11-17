@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { Schedule, World } from '@/ecs/index'
+import { Schedule, World } from '@/server/state/World'
 import { mowerY, parseGameplayDefinitions, parseGameplayLevels, PLANT_ATTACKS, type PlantAttack, rowGroundY } from '@/shared/content/gameplay'
 import { ProjectileMotionsResource, STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'

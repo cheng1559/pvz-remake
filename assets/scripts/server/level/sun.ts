@@ -1,4 +1,4 @@
-import type { CommandBuffer, World } from '@/ecs/index'
+import type { CommandBuffer, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource } from '../state/components'
 import { SkySunResource } from '../state/levelState'

@@ -1,7 +1,7 @@
-import type { EntityId, World } from '@/ecs'
+import type { EntityId, World } from '@/server/state/World'
 import type { CellPlant } from '@/shared/content/planting'
 import type { GridItemSnapshot } from '@/shared/protocol'
-import { GridItemComponent, LevelStateResource, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent } from '../state/components'
+import { LevelStateResource, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent } from '../state/components'
 
 /** What stands on the lawn, as the shared cell rules (shared/content/planting, graveAt) and the level read it. */
 
@@ -13,7 +13,7 @@ export function lawnPlants(world: World): Array<CellPlant & { entity: EntityId }
 
 /** The things of the lawn's cells (graves), each with its entity, as the snapshot lists them. */
 export function gridItems(world: World): GridItemSnapshot[] {
-    return [...world.query(GridItemComponent)].map(entity => ({ entityId: entity, ...world.get(entity, GridItemComponent)! }))
+    return [...world.gridItems].map(({ id, ...item }) => ({ entityId: id, ...item }))
 }
 
 /**

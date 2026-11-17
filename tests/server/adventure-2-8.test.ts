@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { World } from '@/ecs'
+import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { GridItemComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
+import { PositionComponent, ZombieComponent } from '@/server/state/components'
 import { chillZombie } from '@/server/zombies/damage'
 import { beatPhase, type Dancer } from '@/server/zombies/Dancer'
 import { mindControl } from '@/server/zombies/mindControl'
@@ -40,7 +40,7 @@ function playing() {
     }
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
     const lawn = world(server)
-    for (const entity of [...lawn.query(GridItemComponent)]) lawn.destroyEntity(entity)
+    for (const item of [...lawn.gridItems]) lawn.destroyEntity(item.id)
     return server
 }
 
@@ -338,8 +338,7 @@ test('an awake doom-shroom blows up the lawn around it and leaves a crater no pl
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 4 }), 'cell-has-crater')
     // It wears away: down to its last ticks, then gone.
     const lawn = world(server)
-    const [entity] = [...lawn.query(GridItemComponent)].filter(id => lawn.get(id, GridItemComponent)!.typeId === CRATER)
-    ;(lawn.get(entity, GridItemComponent) as { ticks: number }).ticks = 3
+    ;([...lawn.gridItems].find(item => item.typeId === CRATER) as { ticks: number }).ticks = 3
     ticks(server, 3)
     assert.ok(!server.snapshot().gridItems?.some(item => item.typeId === CRATER))
 })

@@ -1,4 +1,4 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import { CHILLED_ANIMATION_FACTOR } from '@/shared/content/animation'
 import { LevelStateResource, type Plant, PlantComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'

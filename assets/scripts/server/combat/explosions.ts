@@ -9,7 +9,7 @@ import {
 } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { damageZombie, destroyZombie, isTargetableZombie } from '../zombies/damage'
 import { isHostile, plantFacingX, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'

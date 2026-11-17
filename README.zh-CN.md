@@ -15,7 +15,7 @@ npm run preview:debug
 
 - `assets/scripts/app`：场景入口、客户端／服务端组装和存档协调。
 - `assets/scripts/server`：权威战斗逻辑、固定步长、确定性随机和服务端存档。
-- `assets/scripts/shared`、`ecs`：通信协议、资源格式、通道和 ECS。
+- `assets/scripts/shared`：通信协议、资源格式和通道。
 - `assets/scripts/client`：输入、渲染、音频、资源加载和通用关卡展示逻辑。
 - `assets/scripts/core`：全局游戏时钟（`GameClock`）和跟随它的 Cocos Tween（`GameTween`）。
 - `mods/pvz-base`：玩法、表现、按类别存放的运行资源及显式资源清单。

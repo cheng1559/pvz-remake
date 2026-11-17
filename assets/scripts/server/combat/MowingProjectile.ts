@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { startLayer } from '@/shared/content/animation'
 import { type GameplayDefinitions, type ProjectileDefinition, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/teams'

@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { MowerSnapshot } from '@/shared/protocol'
 import { nonEmptyString } from '@/shared/validate'

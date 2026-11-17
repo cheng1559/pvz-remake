@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
-import { Schedule,World } from '@/ecs/index'
+import { Schedule,World } from '@/server/state/World'
 import {
 LevelStateResource,
 PlantComponent,

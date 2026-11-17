@@ -6,7 +6,7 @@ import { mowerY, parseGameplayLevels } from '@/shared/content/gameplay'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { CommandBuffer, Schedule, World } from '@/ecs/index'
+import { CommandBuffer, Schedule, World } from '@/server/state/World'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
@@ -24,7 +24,6 @@ import { createMower, createMowerSystem } from '@/server/level/mowers'
 import type { MowingProjectile } from '@/server/combat/MowingProjectile'
 import { readyMowers } from '@/server/level/lawn'
 import { updateMowerCoins } from '@/server/level/loot'
-import { ItemComponent } from '@/server/state/levelState'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
@@ -334,10 +333,7 @@ test("at the level's end each ready mower turns into gold where it waits, the lo
         updateMowerCoins(world, definitions, commands)
         commands.flush()
     }
-    for (const entity of world.query(PositionComponent, ItemComponent)) {
-        const { x, y } = world.get(entity, PositionComponent)!
-        coins.push([x, y])
-    }
+    for (const { position: { x, y } } of world.items) coins.push([x, y])
     // Board::UpdateLevelEndSequence: AddCoin(mPosX + 40, mPosY + 40), the coin drawn from its corner 10 left and 8 up.
     assert.deepEqual(coins, [4, 2].map(row => [-21 + 40 - 10, mowerY(board, row) + 40 - 8]))
     assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'mowerScored').map(event => event.data),

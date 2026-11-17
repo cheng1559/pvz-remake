@@ -1,4 +1,4 @@
-import type { GameSystem } from '@/ecs/index'
+import type { GameSystem } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
 import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'

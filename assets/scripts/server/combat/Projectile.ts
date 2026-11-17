@@ -1,4 +1,4 @@
-import { type CommandBuffer, defineResource, type SystemContext, type World } from '@/ecs/index'
+import { type CommandBuffer, defineResource, type SystemContext, type World } from '@/server/state/World'
 import type { GameplayDefinitions, ProjectileDefinition, ProjectileOverrides } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, type Team } from '@/shared/content/teams'
 import { jsonRoundTrip, type JsonObject, type ProjectileSnapshot } from '@/shared/protocol'

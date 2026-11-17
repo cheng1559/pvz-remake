@@ -1,4 +1,4 @@
-import type { Component, EntityId, GameSystem, SystemContext } from '@/ecs/index'
+import type { Component, EntityId, GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { assertJsonValue, jsonRoundTrip, type JsonObject, type EntityBehaviorState } from '@/shared/protocol'

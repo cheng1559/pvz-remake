@@ -39,7 +39,7 @@ function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: a
 
 export function register({ host, assets }: GameplayApi): void {
     const registry = host.get('gameplay/registry')
-    const { defineComponent } = host.get('ecs')
+    const { defineComponent } = host.get('server/state/World')
     const { PlantComponent: Plant, PositionComponent: Position, LevelStateResource: Level,
         EconomyStateResource: Economy } = host.get('server/state/components')
     const settings = assets.json('assets/settings.json')

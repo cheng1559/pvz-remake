@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { displayAdviceOnce } from './advice'
 
 /** Coin::Collect: 2-1 explains silver and gold coins the first time one is picked up. */

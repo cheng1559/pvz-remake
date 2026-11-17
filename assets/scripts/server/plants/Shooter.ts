@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext, World } from '@/ecs/index'
+import type { EntityId, SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
 import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'

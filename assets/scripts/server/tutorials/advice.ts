@@ -1,4 +1,4 @@
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { TutorialResource } from '../state/levelState'
 

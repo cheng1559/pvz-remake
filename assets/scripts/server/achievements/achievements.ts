@@ -1,4 +1,4 @@
-import { defineResource, type World } from '@/ecs/index'
+import { defineResource, type World } from '@/server/state/World'
 import type { AchievementDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import type { JsonObject, ServerEvent } from '@/shared/protocol/index'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'

@@ -1,5 +1,5 @@
 import { exact, finite } from '@/shared/validate'
-import { defineResource, type World } from '@/ecs/index'
+import { defineResource, type World } from '@/server/state/World'
 import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions, type ProjectileDefinition } from '@/shared/content/gameplay'
 import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { isHostile, plantFacingRect, plantTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'

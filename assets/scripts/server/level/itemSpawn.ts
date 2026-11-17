@@ -1,7 +1,7 @@
-import type { CommandBuffer, World } from '@/ecs/index'
+import type { CommandBuffer, World } from '@/server/state/World'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { PositionComponent, RandomResource } from '../state/components'
-import { type Item, ItemComponent } from '../state/levelState'
+import { RandomResource } from '../state/components'
+import type { Item } from '../state/levelState'
 import { LEVEL_AWARD } from '@/shared/content/gameplay'
 
 /**
@@ -40,12 +40,12 @@ export interface ItemSpawn {
  * Coin::CoinInitialize: an item at (x, y), moving as `motion` says. It is the caller's to say why it came, with the
  * event of its own (a sky sun, a plant's production, loot, the award).
  */
-export function spawnItem(world: World, commands: Pick<CommandBuffer, 'createEntity' | 'add'>, spawn: ItemSpawn,
+export function spawnItem(world: World, commands: Pick<CommandBuffer, 'createEntity' | 'insert'>, spawn: ItemSpawn,
     x: number, y: number, motion: ItemMotion): number {
     const moving = MOTIONS[motion](world.resources.get(RandomResource), y)
     const entity = commands.createEntity()
-    commands.add(entity, PositionComponent, { x, y, row: -1 })
-    commands.add(entity, ItemComponent, {
+    commands.insert(world.items, {
+        id: entity, position: { x, y, row: -1 },
         typeId: spawn.typeId, value: spawn.value, state: motion === 'mower-coin' ? 'collecting' : 'available',
         // The level's award lands 30 higher than a coin would (Coin::CoinInitialize, IsLevelAward).
         ...moving, groundY: spawn.typeId === LEVEL_AWARD ? moving.groundY - 30 : moving.groundY,

@@ -1,4 +1,4 @@
-import { defineResource, type World } from '@/ecs/index'
+import { defineResource, type World } from '@/server/state/World'
 import type { GameplayDefinitions, GameplayLevels, LevelDefinition, ToolDefinition } from '@/shared/content/gameplay'
 import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
 import type { DialogQuestion } from '@/shared/protocol'

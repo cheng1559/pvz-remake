@@ -4,7 +4,7 @@ import type { Projectile } from '../combat/Projectile'
 import type { Mower } from '../level/Mower'
 import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
-import { defineComponent, defineResource } from '@/ecs/index'
+import { defineComponent, defineResource, type EntityId } from '@/server/state/World'
 import type { CraterSnapshot, GraveSnapshot, Team } from '@/shared/protocol'
 import type { LayerState } from '@/shared/content/animation'
 
@@ -117,11 +117,9 @@ export const ZombieComponent = defineComponent<Zombie>('pvz:zombie')
  * What stands in a cell without being a plant or a zombie (GridItemSnapshot), by its type: its cell is its own, so it
  * has no position.
  */
-export type Grave = Omit<GraveSnapshot, 'entityId'>
-export type Crater = Omit<CraterSnapshot, 'entityId'>
+export type Grave = Omit<GraveSnapshot, 'entityId'> & { id: EntityId }
+export type Crater = Omit<CraterSnapshot, 'entityId'> & { id: EntityId }
 export type GridItem = Grave | Crater
-
-export const GridItemComponent = defineComponent<GridItem>('pvz:grid_item')
 
 /** A projectile in flight, of its kind (combat/Projectile.ts): a mower set off runs as one (MowingProjectile). */
 export const ProjectileComponent = defineComponent<Projectile>('pvz:projectile')

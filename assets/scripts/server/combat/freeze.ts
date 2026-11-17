@@ -1,4 +1,4 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import type { FreezeDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/teams'
 import { plantCanBeChilled, plantCanBeFrozen, zombieCanBeChilled, zombieCanBeFrozen } from './cold'

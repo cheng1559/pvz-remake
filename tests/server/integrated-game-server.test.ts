@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
 import {
@@ -14,7 +14,7 @@ ZombieComponent
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { ItemComponent, SkySunResource, TutorialResource } from '@/server/state/levelState'
+import { SkySunResource, TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
 import { getAvailableSun } from '@/server/level/items'
 import { readyMowers } from '@/server/level/lawn'
@@ -362,15 +362,13 @@ test('collecting the award keeps existing entity updates running while spawning 
     damageZombie(world, definitions, corpseId, 270)
     world.resources.get(SkySunResource).atTick = 1
     const sunId = world.createEntity()
-    world.add(sunId, PositionComponent, { x: 300, y: 300, row: -1 })
-    world.add(sunId, ItemComponent, {
-        typeId: 'pvz:sun', value: 25, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
+    world.insert(world.items, {
+        id: sunId, position: { x: 300, y: 300, row: -1 }, typeId: 'pvz:sun', value: 25, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
         groundY: 300, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
     const awardId = world.createEntity()
-    world.add(awardId, PositionComponent, { x: 400, y: 300, row: -1 })
-    world.add(awardId, ItemComponent, {
-        typeId: LEVEL_AWARD, value: 1, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
+    world.insert(world.items, {
+        id: awardId, position: { x: 400, y: 300, row: -1 }, typeId: LEVEL_AWARD, value: 1, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
         groundY: 300, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
 

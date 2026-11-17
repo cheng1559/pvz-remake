@@ -1,7 +1,7 @@
 import type { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
 import { PositionComponent, RandomResource, ZombieComponent } from '../state/components'
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { pickWalkClip, startWalk, startZombie } from './animation'
 import { ZombieBehaviorsResource } from './behaviors'
 import { ZombieFactoryResource } from './Zombie'

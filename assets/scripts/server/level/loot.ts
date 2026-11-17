@@ -1,4 +1,4 @@
-import type { CommandBuffer, World } from '@/ecs/index'
+import type { CommandBuffer, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
@@ -7,7 +7,7 @@ import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from './itemSpawn'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
+import { TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule, zombieValue } from '../rules/registry'
 
@@ -64,8 +64,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
         // each mower on the lawn, set off or not (mLawnMowers.mSize).
         let money = economy.money + definitions.items[typeId].value
         money += lawnMowerCount(world) * definitions.items[GOLD].value
-        for (const entity of world.query(ItemComponent)) {
-            const item = world.get(entity, ItemComponent)!
+        for (const item of world.items) {
             if (item.state === 'collecting' && definitions.items[item.typeId]?.kind === 'money') money += item.value
         }
         if (money >= rules.savingsCap) return
@@ -76,7 +75,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
 }
 
 /** Coin::CoinInitialize with COIN_MOTION_COIN, or COIN_MOTION_LAWNMOWER_COIN when `collect` (it flies straight to the bank). */
-export function spawnLoot(world: World, definitions: GameplayDefinitions, commands: Pick<CommandBuffer, 'createEntity' | 'add'>,
+export function spawnLoot(world: World, definitions: GameplayDefinitions, commands: Pick<CommandBuffer, 'createEntity' | 'insert'>,
     typeId: string, x: number, y: number, arrow = false, collect = false): number {
     // Coins are drawn from a corner offset of their spawn point; sun keeps it.
     const [dx, dy] = typeId === DIAMOND ? [15, 15] : typeId === SILVER || typeId === GOLD ? [10, 8] : [0, 0]

@@ -1,6 +1,6 @@
 import { getBoardBounds } from './collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import type { GameSystem, SystemContext } from '@/ecs/index'
+import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, ZombieComponent } from '../state/components'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'

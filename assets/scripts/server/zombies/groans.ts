@@ -1,4 +1,4 @@
-import type { GameSystem } from '@/ecs/index'
+import type { GameSystem } from '@/server/state/World'
 import { LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { EventQueueResource, emitServerEvent } from '../state/events'

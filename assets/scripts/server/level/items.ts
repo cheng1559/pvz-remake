@@ -1,14 +1,7 @@
-import type { GameSystem, World } from '@/ecs/index'
+import type { GameSystem, World } from '@/server/state/World'
 import { collectTarget, type GameplayDefinitions, itemAt, LEVEL_AWARD } from '@/shared/content/gameplay'
-import {
-    EconomyStateResource,
-    LevelStateResource,
-    PositionComponent,
-    RandomResource,
-    SeedBankResource,
-    type Position,
-} from '../state/components'
-import { ItemComponent, type Item } from '../state/levelState'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, type Position } from '../state/components'
+import type { Item } from '../state/levelState'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { canDropLoot, updateMowerCoins } from './loot'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -19,8 +12,7 @@ import { seedSunCost } from '../seeds/seedBank'
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)
     let sun = economy.sun - economy.pendingSunSpend
-    for (const entity of world.query(ItemComponent)) {
-        const item = world.get(entity, ItemComponent)!
+    for (const item of world.items) {
         if (item.state === 'collecting' && definitions.items[item.typeId] && definitions.items[item.typeId].kind !== 'money') sun += item.value
     }
     return sun
@@ -33,9 +25,8 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
             const level = world.resources.get(LevelStateResource)
             if ((level.result !== 'playing' && level.result !== 'won') || level.paused) return
             if (level.result === 'won') updateMowerCoins(world, definitions, commands)
-            for (const entity of world.query(PositionComponent, ItemComponent)) {
-                const position = world.get(entity, PositionComponent)!
-                const item = world.get(entity, ItemComponent)!
+            for (const item of world.items) {
+                const { id: entity, position } = item
                 if (item.typeId === LEVEL_AWARD) {
                     if (item.state === 'collecting') continue
                     if (position.y + item.velocityY < item.groundY) {
@@ -128,13 +119,13 @@ export const items = {
     /** Board::MouseDown: the item at (x, y) is collected (itemAt, over the items as the snapshot lists them). */
     collectAt(session: Session, x: number, y: number, award = true): CommandRejectionCode | undefined {
         const { world, definitions } = session
-        const lying = [...world.query(PositionComponent, ItemComponent)].map(entity => ({ entity, ...world.get(entity, ItemComponent)!, ...world.get(entity, PositionComponent)! }))
+        const lying = [...world.items].map(item => ({ entity: item.id, ...item, ...item.position }))
         const item = itemAt(lying, definitions.items, world.resources.get(LevelStateResource).definition, x, y, award)
         return item ? items.collect(session, item.entity) : 'item-not-found'
     },
     collect(session: Session, itemId: number): CommandRejectionCode | undefined {
         const { world, definitions } = session
-        const item = world.get(itemId, ItemComponent)
+        const item = world.items.get(itemId)
         if (!item) return 'item-not-found'
         if (item.state === 'collecting') return 'item-not-found'
 
@@ -142,15 +133,15 @@ export const items = {
         const events = world.resources.get(EventQueueResource)
         if (item.typeId === LEVEL_AWARD) {
             item.state = 'collecting'
-            const position = world.get(itemId, PositionComponent)!
+            const { position } = item
             emitServerEvent(events, 'levelAwardCollected', {
                 entityId: itemId,
                 awardId: level.definition.award.id,
                 x: position.x,
                 y: position.y,
             })
-            for (const entity of world.query(ItemComponent)) {
-                const sun = world.get(entity, ItemComponent)!
+            for (const sun of world.items) {
+                const entity = sun.id
                 if (entity === itemId || !definitions.items[sun.typeId] || sun.state === 'collecting') continue
                 sun.state = 'collecting'
                 sun.disappearTicks = 0

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { World } from '@/ecs'
+import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LevelStateResource, PlantComponent, ZombieComponent } from '@/server/state/components'
 import { freezeHostiles } from '@/server/combat/freeze'

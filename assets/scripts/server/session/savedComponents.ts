@@ -1,4 +1,4 @@
-import type { Component, World } from '@/ecs/index'
+import type { Component, Entity, EntityList, World } from '@/server/state/World'
 import type { LayerState } from '@/shared/content/animation'
 import { LEVEL_AWARD, MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { zombieClip } from '@/shared/content/zombieAnimation'
@@ -8,11 +8,11 @@ import { CRATER } from '@/shared/content/craters'
 import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import {
-    GridItemComponent, LevelStateResource, MowedPlantComponent, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent,
+    LevelStateResource, MowedPlantComponent, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent,
     ZombieComponent, type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
 } from '../state/components'
-import { ItemComponent, type Item } from '../state/levelState'
-import type { SavedEntity, SavedMowedPlant } from './save'
+import type { Item } from '../state/levelState'
+import type { SavedEntity, SavedMowedPlant, SavedOfList } from './save'
 import { PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
 import { type SavedZombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
 import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../combat/Projectile'
@@ -43,7 +43,9 @@ type LiveComponent<K extends SavedComponentKey> = K extends keyof LiveComponents
  */
 export interface SavedComponent<K extends SavedComponentKey = SavedComponentKey> {
     readonly key: K
-    readonly component: Component<LiveComponent<K>>
+    /** Where the world holds it: a component of its entity, or one of its typed lists (`list`), as an object of the entity's id and position. */
+    readonly component?: Component<LiveComponent<K>>
+    readonly list?: (world: World) => EntityList<Entity & { position?: Position }>
     parse(value: unknown, name: string): NonNullable<SavedEntity[K]>
     check?(value: NonNullable<SavedEntity[K]>, context: SavedComponentContext): void
     restore?(value: NonNullable<SavedEntity[K]>, context: SavedComponentContext): LiveComponent<K>
@@ -67,8 +69,8 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
     }),
     savedComponent({
         // A grave or a crater.
-        key: 'gridItem', component: GridItemComponent,
-        parse: (value, name): GridItem => {
+        key: 'gridItem', list: world => world.gridItems,
+        parse: (value, name): SavedOfList<GridItem> => {
             if (record(value, name).typeId === CRATER) {
                 const crater = exact(value, ['typeId', 'column', 'row', 'ticks'], name, ['team'])
                 return { typeId: CRATER, column: nonNegativeInteger(crater.column, `${name}.column`), row: nonNegativeInteger(crater.row, `${name}.row`),
@@ -221,8 +223,8 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
     }),
     savedComponent({
-        key: 'item', component: ItemComponent,
-        parse: (value, name): Item => {
+        key: 'item', list: world => world.items,
+        parse: (value, name): SavedOfList<Item> => {
             const source = exact(value, [
                 'typeId', 'value', 'state', 'velocityX', 'velocityY', 'accelerationY', 'width', 'groundY', 'disappearTicks', 'fadeTicks',
                 'scale', 'alpha',

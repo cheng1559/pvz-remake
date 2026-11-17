@@ -3,7 +3,7 @@ import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, Zo
 import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageIndex, type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import type { World } from '@/ecs/index'
+import type { World } from '@/server/state/World'
 import { zombiePartDropped } from './parts'
 import { dropZombieLoot } from '../level/loot'
 import { breakIce } from '../combat/ice'

@@ -11,10 +11,9 @@ test('runtime imports preserve client-server architecture boundaries', () => {
     // clock and tweens (core) stand on the engine alone.
     check('client', imports(['server', 'app']), 'client -> server/app', violations)
     check('core', imports(['app', 'client', 'server', 'platform']), 'core -> app/client/server/platform', violations)
-    // The server, what it shares with the client and the ECS run without the engine (headless tests, Node hosts).
+    // The server and what it shares with the client run without the engine (headless tests, Node hosts).
     check('server', imports(['app', 'client', 'platform', 'core'], true), 'server -> app/client/platform/core/cc', violations)
     check('shared', imports(['app', 'client', 'server', 'platform', 'core'], true), 'shared -> app/client/server/platform/core/cc', violations)
-    check('ecs', imports(['app', 'shared', 'server', 'client', 'platform', 'core'], true), 'ecs -> app/shared/server/client/platform/core/cc', violations)
     assert.deepEqual(violations, [])
 })
 
