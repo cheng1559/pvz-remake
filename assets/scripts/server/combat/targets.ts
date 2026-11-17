@@ -1,7 +1,8 @@
 import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { type Plant, PlantComponent, type Position, PositionComponent } from '../state/components'
+import { type Plant, type Position } from '../state/components'
 import { isHostile, plantFacingRect, plantTeam, type Team } from '@/shared/content/teams'
+import { plantsInPlay } from '../level/lawn'
 
 /** A plant an attack can hit, with its body on the board as it faces (Plant::GetPlantRect). */
 export interface PlantTarget {
@@ -17,10 +18,10 @@ export interface PlantTarget {
  */
 export function hostilePlants(world: World, definitions: GameplayDefinitions, team: Team, row?: number): PlantTarget[] {
     const targets: PlantTarget[] = []
-    for (const entity of world.query(PositionComponent, PlantComponent)) {
-        const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
+    for (const plant of plantsInPlay(world)) {
+        const { id: entity, position } = plant
         if (row !== undefined && position.row !== row || !isHostile(plantTeam(plant), team)) continue
-        if (plant.health <= 0 || !world.hasEntity(entity)) continue
+        if (plant.health <= 0) continue
         const body = plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant))
         targets.push({ entity, position, plant, rect: { ...body, x: position.x + body.x, y: position.y + body.y } })
     }

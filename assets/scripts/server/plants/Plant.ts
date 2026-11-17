@@ -1,9 +1,10 @@
 import { defineResource, type EntityId, type SystemContext, type World } from '@/server/state/World'
+import type { PlantState } from '@/shared/content/plantKinds'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import { jsonRoundTrip, type JsonObject, type PlantSnapshot, type Team } from '@/shared/protocol'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource, type Position } from '../state/components'
 import { plantPhaseAnimation } from './animation'
 import { plantPace } from './chill'
 import { isPlantAsleep } from './sleep'
@@ -11,6 +12,10 @@ import { isPlantAsleep } from './sleep'
 /** What any plant is: the fields of every plant, which its save and its snapshot have; its kind's own go beside them. */
 export interface PlantFields {
     typeId: string
+    /** What it is in, whatever its kind (PLANT_STATES): in play, or mowed down and being squashed (`mowered`). */
+    state: PlantState
+    /** Mowed down (state `mowered`): how far its squashing is (the mower's driver, MOWERED_CLIP), tipped left for a mower running left. */
+    mowered?: { squash: LayerState, left?: true }
     /** The seed it came from. */
     seedId: string
     column: number
@@ -36,8 +41,8 @@ export interface PlantFields {
 
 /** Every plant's fields by name, those a plant may be without last: what else its save has is its kind's own. */
 export const PLANT_FIELDS = [
-    'typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks',
-    'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks', 'behaviorState',
+    'typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks',
+    'mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks', 'behaviorState',
 ] as const satisfies readonly (keyof PlantFields)[]
 
 /** A plant as its save has it: every plant's fields, and its kind's own beside them (Plant.restore). */
@@ -49,7 +54,11 @@ export type PlantConfig = 'shooter' | 'fright' | 'producer' | 'fuse' | 'mine' | 
 /** Each plant's type, which its save does not keep: it is its type's again as it is restored. */
 const TYPES = new WeakMap<Plant, { definition: PlantDefinition, definitions: GameplayDefinitions }>()
 
-export interface Plant extends PlantFields {}
+export interface Plant extends PlantFields {
+    /** Its entity, and where it stands (World.plants). */
+    id: EntityId
+    position: Position
+}
 
 /**
  * A plant on the lawn, the plant component itself: its fields are all there is to it, which its save keeps as they are
@@ -71,6 +80,7 @@ export class Plant {
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         TYPES.set(this, { definition, definitions })
         this.typeId = typeId
+        this.state = 'idle'
         this.seedId = typeId
         this.column = 0
         this.health = this.maxHealth = definition.maxHealth
@@ -103,6 +113,11 @@ export class Plant {
 
     /** Plant::PlantInitialize, as it is put down at `tick`, before its animation starts: what its kind starts it on. */
     start(_random: DeterministicRng, _tick: number): void {}
+
+    /** In play: what is on the lawn takes it for a plant, as it does not one mowed down (Plant::NotOnGround; lawn.plantsInPlay). */
+    get inPlay(): boolean {
+        return this.state === 'idle'
+    }
 
     /** Asleep: a nocturnal plant on a board not at night (Plant::mIsAsleep), doing nothing. */
     asleep(world: World): boolean {
@@ -164,17 +179,20 @@ export class Plant {
     }
 
     /**
-     * What the client is shown of it, beside its entity and its place, with what only its kind shows (snapshotOwn);
-     * `tick`, the gameplay tick, for one on the lawn (none for one a mower squashed).
+     * What the client is shown of it, with what only its kind shows (snapshotOwn) at the gameplay `tick`; one mowed down
+     * shows how far it is squashed instead, as it stood (not asleep, nothing counting down).
      */
-    snapshot(asleep: boolean, tick?: number): Omit<PlantSnapshot, 'entityId' | 'x' | 'y' | 'row'> {
-        const own = this.snapshotOwn(tick)
+    snapshot(world: World, tick: number): PlantSnapshot {
+        const { position, mowered } = this, inPlay = this.inPlay, own = this.snapshotOwn(inPlay ? tick : undefined)
         return {
+            entityId: this.id,
             typeId: this.typeId,
+            state: this.state,
+            x: position.x, y: position.y, row: position.row,
             column: this.column,
             health: this.health,
             maxHealth: this.maxHealth,
-            ...(asleep ? { asleep: true as const } : {}),
+            ...(inPlay && this.asleep(world) ? { asleep: true as const } : {}),
             ...(this.team === undefined ? {} : { team: this.team }),
             ...(this.mindControlled ? { mindControlled: true as const } : {}),
             ...(this.chilledTicks ? { chilledTicks: this.chilledTicks } : {}),
@@ -182,6 +200,7 @@ export class Plant {
             ...(this.animations ? { animations: pacedLayers(this.animations, () => plantPace(this)) } : {}),
             ...(this.behaviorState ? { behaviorState: jsonRoundTrip(this.behaviorState) } : {}),
             ...(own ? { own } : {}),
+            ...(mowered ? { mowered: { time: mowered.squash.time, ...(mowered.left ? { left: true as const } : {}) } } : {}),
         }
     }
 

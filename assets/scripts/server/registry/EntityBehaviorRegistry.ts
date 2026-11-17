@@ -1,8 +1,8 @@
-import type { Component, Entity, EntityId, EntityList, GameSystem, SystemContext, World } from '@/server/state/World'
+import type { Entity, EntityId, GameSystem, SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { assertJsonValue, jsonRoundTrip, type JsonObject, type EntityBehaviorState } from '@/shared/protocol'
-import { LevelStateResource, PositionComponent, type Position } from '../state/components'
+import { LevelStateResource, type Position } from '../state/components'
 
 interface BehaviorEntity extends EntityBehaviorState { typeId: string }
 interface BehaviorDefinition { readonly behavior?: JsonObject }
@@ -35,8 +35,8 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
 
     constructor(
         private readonly kind: Key,
-        /** Where the world holds them: a component of each entity, or a typed list of them (World.zombies). */
-        private readonly source: Component<Data> | ((world: World) => EntityList<Data & Entity & { position: Position }>),
+        /** Those of the world's that take part (World.zombies, the plants in play). */
+        private readonly source: (world: World) => Iterable<Data & Entity & { position: Position }>,
         private readonly definitions: (definitions: GameplayDefinitions) => Record<string, Definition>,
         private readonly active: (data: Data) => boolean,
     ) {
@@ -90,15 +90,7 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
 
     /** Each entity of the kind in id order, as it stands; an earlier one's blow may have taken one out during the run. */
     private *entries(world: World): Iterable<{ entity: EntityId, data: Data, position: Position }> {
-        const source = this.source
-        if (typeof source === 'function') {
-            for (const data of source(world)) yield { entity: data.id, data, position: data.position }
-            return
-        }
-        for (const entity of world.query(source, PositionComponent)) {
-            const data = world.get(entity, source)
-            if (data) yield { entity, data, position: world.get(entity, PositionComponent)! }
-        }
+        for (const data of this.source(world)) yield { entity: data.id, data, position: data.position }
     }
 
     system(definitions: GameplayDefinitions): GameSystem {

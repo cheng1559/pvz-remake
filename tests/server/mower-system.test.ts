@@ -11,9 +11,6 @@ import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
-    MowedPlantComponent,
-    PlantComponent,
-    PositionComponent,
     RandomResource,
 } from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
@@ -180,8 +177,8 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
     const world = mowerWorld()
     const plant = (team: 'plants' | 'zombies', column: number, row = 2, typeId = 'pvz:wallnut') => {
         const entity = world.createEntity()
-        world.add(entity, PositionComponent, { x: board.origin.x + column * board.cell.width, y: 280, row })
-        world.add(entity, PlantComponent, newPlant(world, typeId, { column, health: 4000, maxHealth: 4000, ...(team === 'zombies' ? { team } : {}) }))
+        world.insert(world.plants, newPlant(world, typeId, { id: entity, position: { x: board.origin.x + column * board.cell.width, y: 280, row },
+            column, health: 4000, maxHealth: 4000, ...(team === 'zombies' ? { team } : {}) }))
         return entity
     }
     const enemy = plant('zombies', 0), friend = plant('plants', 1), otherRow = plant('zombies', 0, 3)
@@ -191,12 +188,12 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
     schedule.add('mower', createMowerSystem(definitions))
     schedule.run(world, 1)
     assert.deepEqual(waiting(world), [2])
-    assert.equal(world.get(enemy, PlantComponent)!.health, 4000)
+    assert.equal(world.plants.get(enemy)!.health, 4000)
 
     const mower = setOff(world)
     let tick = 2
-    while (!world.get(enemy, MowedPlantComponent)) schedule.run(world, tick++)
-    assert.equal(world.get(enemy, PlantComponent), undefined, 'it is no plant any more')
+    while (world.plants.get(enemy)?.state !== 'mowered') schedule.run(world, tick++)
+    assert.equal(world.plants.get(enemy)!.inPlay, false, 'it is out of play')
     let squashing = 0
     while (world.hasEntity(enemy)) { schedule.run(world, tick++); squashing++ }
     assert.equal(squashing, 50, 'it stays for its squashing, as long as a mowed zombie')
@@ -206,8 +203,8 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
         [{ mowerId: mower, plantId: enemy }, { mowerId: mower, plantId: explosive }], 'the client squashes them')
     assert.equal(world.isQueryable(explosive), false)
     assert.ok(!events.some(event => event.type === 'plantExploded'), 'an explode-o-nut is crushed, not set off')
-    assert.equal(world.get(friend, PlantComponent)!.health, 4000)
-    assert.equal(world.get(otherRow, PlantComponent)!.health, 4000)
+    assert.equal(world.plants.get(friend)!.health, 4000)
+    assert.equal(world.plants.get(otherRow)!.health, 4000)
 })
 
 test('a shooter can fire mowing projectiles, each from its mouth on its side, crushing the other side, and gone off the board', () => {
@@ -259,10 +256,15 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     planted.command({ type: 'placePlant', row: 2, column: 1 })
     planted.update(0.01)
     const nut = () => planted.render().plants.find(plant => plant.typeId === 'pvz:wallnut')
-    assert.deepEqual(nut()?.mowered, { time: 0 })
+    assert.deepEqual([nut()?.state, nut()?.mowered], ['mowered', { time: 0 }])
     const squashed = new LocalIntegratedGame(firing, levels, undefined, true)
     squashed.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: planted.saveAtBoundary() })
     assert.deepEqual(squashed.render().plants, planted.render().plants, 'a save keeps it mid-squash')
+    const save = planted.saveAtBoundary() as unknown as { entities: Array<{ plant?: { state: string, mowered?: unknown } }> }
+    const mowed = save.entities.find(entity => entity.plant?.state === 'mowered')!
+    mowed.plant!.state = 'idle'
+    assert.throws(() => new IntegratedGameServer(firing, levels).start({ protocolVersion: 1, sequence: 1, type: 'startSession', levelId: 'pvz:adventure-1-1',
+        randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: save as unknown as JsonValue }), /invalid squash/, 'only a plant mowed down is squashed')
     run(planted, () => !nut())
 })
 

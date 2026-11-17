@@ -1,6 +1,5 @@
 import { withFixedBanks } from '../fixedBankLevels'
 import { type World } from '@/server/state/World'
-import { PlantComponent, PositionComponent } from '@/server/state/components'
 import type { BowlingNut } from '@/server/plants/BowlingNut'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
@@ -223,8 +222,8 @@ test('a pole vaulter vaults over a rolling nut from afar, where it stands', () =
 test('no zombie bites a rolling nut', () => {
     const { server, world, plant } = rollNut()
     // The nut is bouncing into the row, so it strikes nothing yet, while a zombie overlaps it.
-    world.get(plant.entityId, PositionComponent)!.y += 40
-    ;(world.get(plant.entityId, PlantComponent) as BowlingNut).direction = -1
+    world.plants.get(plant.entityId)!.position.y += 40
+    ;(world.plants.get(plant.entityId) as BowlingNut).direction = -1
     const id = spawnZombie(world, definitions, 'pvz:normal', 2, plant.x + 24, plant.y - 30)
     server.tick()
     const zombie = world.zombies.get(id)!
@@ -236,7 +235,7 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
     for (const [typeId, bounced] of [['pvz:newspaper', false], ['pvz:newspaper', true], ['pvz:screendoor', false], ['pvz:screendoor', true]] as const) {
         const { server, world, plant } = rollNut()
         // Plant::UpdateBowling checks mState != STATE_NOTREADY: a nut that has bounced rolls on a slant.
-        if (bounced) (world.get(plant.entityId, PlantComponent) as BowlingNut).direction = 1
+        if (bounced) (world.plants.get(plant.entityId) as BowlingNut).direction = 1
         const id = spawnZombie(world, definitions, typeId, 2, plant.x + 20, plant.y - 30)
         const shield = definitions.zombies[typeId].shield!.health
         server.drainEvents()
@@ -256,7 +255,7 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
 
 test("a nut rolls on its roll clip's ground as a zombie walks on its walk's (Reanimation::GetTrackVelocity)", () => {
     const { server, world, plant } = rollNut()
-    const nut = world.get(plant.entityId, PlantComponent)!, position = world.get(plant.entityId, PositionComponent)!
+    const nut = world.plants.get(plant.entityId)!, position = world.plants.get(plant.entityId)!.position
     const clip = definitions.plants['pvz:bowling-wallnut'].animation!.clips.body
     assert.ok(nut.animations!.body.rate >= 12 && nut.animations!.body.rate <= 18, 'Plant::PlantInitialize: RandRangeFloat(12, 18)')
     for (let tick = 0; tick < 100; tick++) {

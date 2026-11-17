@@ -1,11 +1,12 @@
 import type { World } from '@/server/state/World'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { PlantComponent, SeedBankResource } from '../state/components'
+import { SeedBankResource } from '../state/components'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import type { TutorialScript } from './index'
 import { displayAdviceOnce } from './advice'
 import { packetAvailability, selectedSeedId } from '../seeds/seedBank'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { plantsInPlay } from '../level/lawn'
 
 /** The bank's sunflower packet can be picked up (SeedPacket::CanPickUp). */
 export function sunflowerReady(world: World, definitions: GameplayDefinitions, tick: number): boolean {
@@ -50,7 +51,7 @@ function noteSeedReady(world: World, definitions: GameplayDefinitions, tick: num
 function notePlantPlaced(world: World, definitions: GameplayDefinitions, tick: number, plantId: string): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'complete') return
-    const count = [...world.query(PlantComponent)].filter(entity => world.get(entity, PlantComponent)!.typeId === 'pvz:sunflower').length
+    const count = [...plantsInPlay(world)].filter(plant => plant.typeId === 'pvz:sunflower').length
     if (plantId === 'pvz:sunflower' && count === 2) advice(world, 'ADVICE_MORE_SUNFLOWERS')
     if (count >= 3) {
         tutorial.step = 'complete'

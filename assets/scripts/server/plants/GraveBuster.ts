@@ -7,7 +7,7 @@ import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { gridItems } from '../level/lawn'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { PositionComponent, RandomResource } from '../state/components'
+import { RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Plant, type PlantConfig } from './Plant'
 
@@ -73,7 +73,7 @@ export class GraveBuster extends Plant {
         }
         // Plant::UpdateGraveBuster: the grave and the buster disappear together.
         if (this.phaseTicks > 0) return
-        const position = world.get(entity, PositionComponent)!
+        const position = this.position
         const grave = graveAt(gridItems(world), position.row, this.column), ate = grave !== undefined
         if (grave) world.destroyEntity(grave.entityId)
         commands.destroyEntity(entity)

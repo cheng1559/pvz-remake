@@ -22,6 +22,14 @@ export const PLANT_KIND_PHASES: Readonly<Record<string, readonly string[]>> = {
     bowlingnut: [],
 }
 
+/**
+ * What any plant is in, whatever its kind (Plant.state): in play (`idle`), or crushed by a mower and squashed until it
+ * is gone (`mowered`), when nothing on the lawn takes it for a plant (the original's Plant::NotOnGround).
+ */
+export type PlantState = 'idle' | 'mowered'
+
+export const PLANT_STATES: readonly PlantState[] = ['idle', 'mowered']
+
 /** A phase a plant's animation goes by (PLANT_KIND_PHASES). */
 export type PlantPhase = string
 

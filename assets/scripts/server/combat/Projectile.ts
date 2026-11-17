@@ -2,7 +2,8 @@ import { type CommandBuffer, defineResource, type EntityId, type SystemContext, 
 import type { GameplayDefinitions, ProjectileDefinition, ProjectileOverrides } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, type Team } from '@/shared/content/teams'
 import { jsonRoundTrip, type JsonObject, type ProjectileSnapshot } from '@/shared/protocol'
-import { type Plant, PlantComponent, type Position, type Zombie } from '../state/components'
+import type { Plant, Position, Zombie } from '../state/components'
+import { plantInPlay } from '../level/lawn'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damagePlant } from '../plants/damage'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
@@ -157,7 +158,7 @@ export class Projectile {
         const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
         const splashed = [position.row - 1, position.row, position.row + 1].flatMap(row => hit.rows[row] ?? []).filter(other =>
             other.entity !== target.entity && this.canHit(hit, other, Math.min(right, other.right) - Math.max(left, other.left)) &&
-            world.hasEntity(other.entity) && !('plant' in other && world.get(other.entity, PlantComponent) !== other.plant))
+            world.hasEntity(other.entity) && !('plant' in other && plantInPlay(world, other.entity) !== other.plant))
         // A third of its damage each, or less: all of it comes to no more than seven times its damage.
         const damage = definition.damage!, third = Math.trunc(damage / 3), most = damage * 7
         const each = third * splashed.length > most ? Math.max(1, Math.trunc(damage * most / (third * splashed.length * 3))) : third

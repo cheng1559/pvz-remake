@@ -5,7 +5,6 @@ import { plantTeam } from '@/shared/content/teams'
 import { nonNegativeInteger } from '@/shared/validate'
 import { freezeFromPlant } from '../combat/freeze'
 import { placeCrater } from '../level/craters'
-import { PositionComponent } from '../state/components'
 import { detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
 
@@ -55,7 +54,7 @@ export class FusePlant extends Plant {
     act({ world, commands }: SystemContext, entity: EntityId): void {
         if (this.fuseTicks > 0) this.fuseTicks--
         if (this.fuseTicks > 0) return
-        const { explosion, freeze, crater } = this.fuse, position = world.get(entity, PositionComponent)!
+        const { explosion, freeze, crater } = this.fuse, position = this.position
         if (explosion) detonatePlant(world, this.definitions, entity, explosion, commands)
         else freezeFromPlant(world, this.definitions, entity, freeze!, commands)
         if (crater) placeCrater(world, this.definitions, position.row, this.column, crater.ticks, plantTeam(this))

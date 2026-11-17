@@ -3,9 +3,10 @@ import { defineResource, type World } from '@/server/state/World'
 import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions, type ProjectileDefinition } from '@/shared/content/gameplay'
 import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { isHostile, plantFacingRect, plantTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
-import { LevelStateResource, PlantComponent, type Position, PositionComponent, RandomResource } from '../state/components'
+import { LevelStateResource, type Position, RandomResource } from '../state/components'
 import type { Projectile } from './Projectile'
 import { isTargetableZombie } from '../zombies/damage'
+import { plantInPlay, plantsInPlay } from '../level/lawn'
 
 /** A projectile setting off: what, where, on which side, and what its launcher aimed at. */
 export interface MotionLaunch {
@@ -123,8 +124,8 @@ function numbers<Key extends string>(state: unknown, keys: readonly Key[], name:
 /** A zombie's or a plant's body as it faces (`x` its middle), with the side it is on and how fast it walks on. */
 function targetBody(world: World, definitions: GameplayDefinitions, entity: number):
     { x: number, left: number, width: number, top: number, height: number, team: Team, walk: number } | undefined {
-    const zombie = world.zombies.get(entity), plant = zombie ? undefined : world.get(entity, PlantComponent)
-    const position = zombie ? zombie.position : world.hasEntity(entity) ? world.get(entity, PositionComponent) : undefined
+    const zombie = world.zombies.get(entity), plant = zombie ? undefined : plantInPlay(world, entity)
+    const position = (zombie ?? plant)?.position
     if (!position) return undefined
     if (zombie) {
         const team = zombieTeam(zombie), body = zombieFacingRect(definitions.zombies[zombie.typeId].body, team)
@@ -238,7 +239,7 @@ function prey(world: World, definitions: GameplayDefinitions, entity: number, te
     const body = targetBody(world, definitions, entity)
     if (!body || !isHostile(body.team, team)) return undefined
     const zombie = world.zombies.get(entity)
-    return (zombie ? isTargetableZombie(zombie, team) : world.get(entity, PlantComponent)!.health > 0) ? body : undefined
+    return (zombie ? isTargetableZombie(zombie, team) : plantInPlay(world, entity)!.health > 0) ? body : undefined
 }
 
 interface HomingState { age: number, velocityX: number, velocityY: number, target: number, height: number }
@@ -281,7 +282,7 @@ const homing: ProjectileMotionDefinition<HomingState> = {
     afterHit({ world, definitions, position, projectile, team }, state) {
         let nearest = Infinity
         state.target = 0
-        for (const entity of [...[...world.zombies].map(zombie => zombie.id), ...world.query(PositionComponent, PlantComponent)]) {
+        for (const entity of [...world.zombies, ...plantsInPlay(world)].map(target => target.id)) {
             const body = prey(world, definitions, entity, team)
             if (!body || projectile.hits?.includes(entity)) continue
             const distance = Math.hypot(body.x - position.x, body.top + body.height / 2 - position.y)

@@ -1,8 +1,5 @@
 import type { WorldSnapshot } from '@/shared/protocol/index'
-import {
-    EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantComponent, PositionComponent,
-    SeedBankResource,
-} from '../state/components'
+import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
@@ -40,15 +37,7 @@ export const snapshot = {
             }
         })
         // What any plant shows, and what only its kind has (a producer's next sun, a chomper's prey, ...).
-        const plants: WorldSnapshot['plants'] = [...world.query(PositionComponent, PlantComponent)].map(entity => {
-            const plant = world.get(entity, PlantComponent)!, position = world.get(entity, PositionComponent)!
-            return { entityId: entity, ...plant.snapshot(plant.asleep(world), gameplayTick), x: position.x, y: position.y, row: position.row }
-        })
-        for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
-            const { plant, squash, left } = world.get(entity, MowedPlantComponent)!, position = world.get(entity, PositionComponent)!
-            plants.push({ entityId: entity, ...plant.snapshot(false), x: position.x, y: position.y, row: position.row,
-                mowered: { time: squash.time, ...(left ? { left } : {}) } })
-        }
+        const plants = [...world.plants].map(plant => plant.snapshot(world, gameplayTick))
         // What any zombie shows, and what only its kind has (a pole vaulter's pole, a dancer's phase, a newspaper zombie's rage).
         const zombies = [...world.zombies].map(zombie => ({ entityId: zombie.id, ...zombie.snapshot(), ...zombie.position }))
         // What any projectile shows, and what only its kind has; a mower set off runs among them.

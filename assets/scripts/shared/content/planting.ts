@@ -3,6 +3,7 @@ import type { BoardDefinition, GameplayDefinitions, LevelDefinition, PlantSeedDe
 import { graveAt } from './graves'
 import { craterAt } from './craters'
 import { graveTeam, isHostile, plantTeam, type Team } from './teams'
+import type { PlantState } from './plantKinds'
 
 /**
  * Board::CanPlantAt and the cell rules it stands on, once for both sides: the server plants by them and the client's
@@ -10,13 +11,13 @@ import { graveTeam, isHostile, plantTeam, type Team } from './teams'
  * WorldSnapshot) through a PlantingLawn.
  */
 
-/** A plant as the cell rules read it; a mowed one (PlantSnapshot.mowered) is no plant any more. */
+/** A plant as the cell rules read it; one out of play (a mowed one: PlantState) is no plant any more. */
 export interface CellPlant {
     readonly typeId: string
+    readonly state: PlantState
     readonly row: number
     readonly column: number
     readonly team?: Team
-    readonly mowered?: object
 }
 
 /**
@@ -24,7 +25,7 @@ export interface CellPlant {
  * rolling nut, which keeps the column it was planted in) nor one a mower has crushed holds any.
  */
 export function holdsCell(plants: GameplayDefinitions['plants'], plant: CellPlant, row: number, column: number): boolean {
-    return plant.mowered === undefined && plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column
+    return plant.state === 'idle' && plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column
 }
 
 /** The plant holding a cell (holdsCell), if any. */

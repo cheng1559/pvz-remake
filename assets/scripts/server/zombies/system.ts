@@ -6,12 +6,13 @@ import type { GameSystem, SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { zombiePartDropped } from './parts'
-import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource } from '../state/components'
+import { LevelStateResource, type Plant, type Position, RandomResource } from '../state/components'
 import { damagePlant } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl } from './mindControl'
 import { meltIce } from '../combat/ice'
+import { plantInPlay, plantsInPlay } from '../level/lawn'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /**
@@ -41,13 +42,10 @@ export class ZombieSystem implements GameSystem {
         const level = world.resources.get(LevelStateResource)
         if (level.result === 'lost' || level.paused) return
 
-        for (const entity of world.query(PlantComponent)) {
-            const plant = world.get(entity, PlantComponent)!
-            if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
-        }
+        for (const plant of plantsInPlay(world)) if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
         this.plantRows = []
-        for (const entity of world.query(PositionComponent, PlantComponent)) {
-            const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
+        for (const plant of plantsInPlay(world)) {
+            const { id: entity, position } = plant
             const type = definitions.plants[plant.typeId]
             const body = plantFacingRect(type.body, plantTeam(plant)), left = position.x + body.x
             ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + body.width, rolling: type.occupiesCell === false })
@@ -177,7 +175,7 @@ export class ZombieSystem implements GameSystem {
                             if (victim.health <= 0) emitServerEvent(events, 'zombieAteZombie', { zombieId: entity, targetId: prey })
                         }
                     } else if (target !== undefined) {
-                        const plant = world.get(target, PlantComponent)!
+                        const plant = plantInPlay(world, target)!
                         // Zombie::AnimateChewSound: an awake hypno-shroom turns the zombie as it chews, in place of the chew.
                         if (chewed && plant.mindControls(world)) {
                             mindControl(world, definitions, entity, target, commands)

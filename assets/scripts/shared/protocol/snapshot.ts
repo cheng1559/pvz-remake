@@ -1,5 +1,6 @@
 import { record, array, exact, nonEmptyString, boolean, oneOf, finite, nonNegativeFinite, nonNegativeInteger } from '@/shared/validate'
 import { ZOMBIE_STATES, type ZombieState } from '@/shared/content/zombieStates'
+import { PLANT_STATES, type PlantState } from '@/shared/content/plantKinds'
 import { GRAVE, checkGraveRanges } from '@/shared/content/graves'
 import { CRATER } from '@/shared/content/craters'
 import type { JsonObject, JsonValue } from '@/shared/protocol/json'
@@ -184,6 +185,8 @@ export interface SeedPacketSnapshot {
 export interface PlantSnapshot extends EntityBehaviorState {
     entityId: EntityId
     typeId: string
+    /** What it is in, whatever its kind (PLANT_STATES): in play, or crushed by a mower (`mowered`). */
+    state: PlantState
     x: number
     y: number
     row: number
@@ -210,8 +213,8 @@ export interface PlantSnapshot extends EntityBehaviorState {
     /** What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation). */
     animations?: Record<string, LayerSnapshot>
     /**
-     * A mower crushed it: no plant any more, it is squashed, `time` frames into the mower's driver (MOWERED_CLIP), as a
-     * mowed zombie's body plays it; `left` when the mower ran left.
+     * A mower crushed it (`mowered`): out of play, it is squashed, `time` frames into the mower's driver (MOWERED_CLIP),
+     * as a mowed zombie's body plays it; `left` when the mower ran left.
      */
     mowered?: { time: number, left?: true }
 }
@@ -465,6 +468,8 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const plant = record(entry, name)
         nonNegativeInteger(plant.entityId, `${name}.entityId`)
         nonEmptyString(plant.typeId, `${name}.typeId`)
+        // Mowed down exactly when it shows how far it is squashed.
+        if ((oneOf(plant.state, PLANT_STATES, `${name}.state`) === 'mowered') !== (plant.mowered !== undefined)) throw new TypeError(`${name}.mowered goes with its state`)
         finite(plant.x, `${name}.x`)
         finite(plant.y, `${name}.y`)
         nonNegativeInteger(plant.row, `${name}.row`)

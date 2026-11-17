@@ -6,7 +6,7 @@ import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
-import { LevelStateResource, PlantComponent, PositionComponent, RandomResource } from '@/server/state/components'
+import { LevelStateResource, RandomResource } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
 import { createPlantAttackSystem } from '@/server/plants/attacks'
 import { createPlantAbilitySystem } from '@/server/plants/abilities'
@@ -129,11 +129,10 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
         const world = worldFor(night), schedule = new Schedule()
         schedule.add('plant', createPlantAttackSystem(definitions))
         const plant = world.createEntity()
-        world.add(plant, PositionComponent, { x: 40, y: 80, row: 0 })
-        world.add(plant, PlantComponent, newPlant<Shooter>(world, 'pvz:puffshroom', { health: 300, maxHealth: 300 }, { readyAtTick: 0 }))
+        world.insert(world.plants, newPlant<Shooter>(world, 'pvz:puffshroom', { id: plant, position: { x: 40, y: 80, row: 0 }, health: 300, maxHealth: 300 }, { readyAtTick: 0 }))
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 400, 50)
         schedule.run(world, 1)
-        assert.equal((world.get(plant, PlantComponent) as Shooter).burst, undefined)
+        assert.equal((world.plants.get(plant) as Shooter).burst, undefined)
         world.zombies.get(zombie)!.position.x = 240
         for (let tick = 2; tick <= 200; tick++) schedule.run(world, tick)
         assert.equal([...world.projectiles].map(projectile => projectile.id).length > 0, night)
@@ -207,11 +206,10 @@ test('breaking a newspaper pauses movement and bites, then enrages; chilled gasp
 
 function plantAt(world: World, typeId: string, x: number) {
     const entity = world.createEntity()
-    world.add(entity, PositionComponent, { x, y: 80, row: 0 })
-    const plant = newPlant(world, typeId, { health: 300, maxHealth: 300 })
+    const plant = newPlant(world, typeId, { id: entity, position: { x, y: 80, row: 0 }, health: 300, maxHealth: 300 })
     // Its first shot or sun on the first tick.
     if (plant instanceof Shooter || plant instanceof Producer) plant.readyAtTick = 1
-    world.add(entity, PlantComponent, plant)
+    world.insert(world.plants, plant)
     return entity
 }
 
@@ -223,7 +221,7 @@ test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, 
     const plant = plantAt(world, 'pvz:scaredyshroom', 40)
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 700, 50)
     const at = world.zombies.get(zombie)!.position
-    const state = () => (world.get(plant, PlantComponent) as ScaredyShroom).phase
+    const state = () => (world.plants.get(plant) as ScaredyShroom).phase
     let tick = 0
     const run = (ticks: number, until?: () => boolean) => {
         const types: string[] = []
@@ -273,7 +271,7 @@ test('sun-shrooms drop small sun until they grow, produce nothing while growing,
         schedule.add('plant', createProductionSystem(definitions))
         schedule.add('plant', createPlantAbilitySystem(definitions))
         const entity = plantAt(world, 'pvz:sunshroom', 40)
-        const plant = world.get(entity, PlantComponent) as SunShroom
+        const plant = world.plants.get(entity) as SunShroom
         const sun = () => [...world.items].map(item => [item.typeId, item.value])
         let tick = 0
         const run = (ticks: number) => { for (let index = 0; index < ticks; index++) schedule.run(world, ++tick) }
@@ -369,7 +367,7 @@ test('zombies eat grave busters like other plants', () => {
     const buster = plantAt(world, 'pvz:gravebuster', 40)
     spawnZombie(world, definitions, 'pvz:normal', 0, 40, 50)
     for (let tick = 1; tick <= 300; tick++) schedule.run(world, tick)
-    assert.ok(!world.hasEntity(buster) || world.get(buster, PlantComponent)!.health < 300)
+    assert.ok(!world.hasEntity(buster) || world.plants.get(buster)!.health < 300)
 })
 
 test('a /seed swap to a locked seed after choosing still restores; /seed waits for the chooser', () => {

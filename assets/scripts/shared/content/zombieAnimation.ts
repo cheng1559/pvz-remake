@@ -13,7 +13,7 @@ const SECOND_IN = 4
 export const MOWERED_CLIP: AnimationClip = { frames: 8, fps: { min: 16, max: 16 }, hold: true }
 /**
  * The animation of what is under the mower, whatever it is: the driver, on a zombie's body (its body's layer) and on a
- * mowed plant alike (MowedPlant.squash).
+ * mowed plant alike (Plant.mowered.squash).
  */
 export const MOWERED_ANIMATION: AnimationDefinition = { clips: { [ZOMBIE_CLIPS.mowered]: MOWERED_CLIP }, layers: {} }
 

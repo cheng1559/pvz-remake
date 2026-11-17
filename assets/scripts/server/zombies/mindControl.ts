@@ -1,9 +1,10 @@
 import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
-import { type EntityRemover, PlantComponent } from '../state/components'
+import { type EntityRemover } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from '../level/levelAward'
+import { plantInPlay } from '../level/lawn'
 
 /**
  * Zombie::AnimateChewSound for a plant that mind-controls (Plant.mindControls: the hypno-shroom awake), eaten by a hostile zombie as it chews or
@@ -14,11 +15,11 @@ import { tryDropLevelAward } from '../level/levelAward'
  * against the player, the level's award drops from it (TrySpawnLevelAward). The client hears `mindControlled`.
  */
 export function mindControl(world: World, definitions: GameplayDefinitions, eater: number, plantEntity: number, remover: EntityRemover): void {
-    const prey = world.get(plantEntity, PlantComponent)!, team = plantTeam(prey)
+    const prey = plantInPlay(world, plantEntity)!, team = plantTeam(prey)
     prey.health = 0
     remover.destroyEntity(plantEntity)
     // Each side is written only when it is not the eater's own default: a zombie's the zombies', a plant's the plants'.
-    const zombie = world.zombies.get(eater), turned = zombie ?? world.get(eater, PlantComponent)!
+    const zombie = world.zombies.get(eater), turned = zombie ?? plantInPlay(world, eater)!
     turned.mindControlled = true
     if (team === (zombie ? 'zombies' : 'plants')) delete turned.team
     else turned.team = team

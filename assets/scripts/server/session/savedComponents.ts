@@ -1,18 +1,16 @@
-import type { Component, Entity, EntityList, World } from '@/server/state/World'
+import type { Entity, EntityList, World } from '@/server/state/World'
 import type { LayerState } from '@/shared/content/animation'
 import { LEVEL_AWARD, MOWER_READY_X, mowerY, parseProjectile as parseProjectileDefinition, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
 import { checkGraveRanges, GRAVE } from '@/shared/content/graves'
 import { CRATER } from '@/shared/content/craters'
+import { PLANT_STATES } from '@/shared/content/plantKinds'
 import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
-import {
-    LevelStateResource, MowedPlantComponent, PlantComponent, PositionComponent,
-    type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
-} from '../state/components'
+import { LevelStateResource, type GridItem, type Plant, type Position, type Projectile, type Zombie } from '../state/components'
 import type { Item } from '../state/levelState'
-import type { SavedEntity, SavedMowedPlant, SavedOfList } from './save'
+import type { SavedEntity, SavedOfList } from './save'
 import { PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
 import { type SavedZombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
 import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../combat/Projectile'
@@ -30,7 +28,7 @@ export interface SavedComponentContext {
 }
 
 /** What the world holds of a saved component that is more than the JSON it is saved as: a zombie is its kind's instance. */
-interface LiveComponents { zombie: Zombie, plant: Plant, mowedPlant: MowedPlant, projectile: Projectile, mower: Mower }
+interface LiveComponents { zombie: Zombie, plant: Plant, projectile: Projectile, mower: Mower }
 
 /** What the world holds of a saved component. */
 type LiveComponent<K extends SavedComponentKey> = K extends keyof LiveComponents ? LiveComponents[K] : NonNullable<SavedEntity[K]>
@@ -43,8 +41,7 @@ type LiveComponent<K extends SavedComponentKey> = K extends keyof LiveComponents
  */
 export interface SavedComponent<K extends SavedComponentKey = SavedComponentKey> {
     readonly key: K
-    /** Where the world holds it: a component of its entity, or one of its typed lists (`list`), as an object of the entity's id and position. */
-    readonly component?: Component<LiveComponent<K>>
+    /** The typed list of the world that holds it, as an object of the entity's id and position (none: the position). */
     readonly list?: (world: World) => EntityList<Entity & { position?: Position }>
     parse(value: unknown, name: string): NonNullable<SavedEntity[K]>
     check?(value: NonNullable<SavedEntity[K]>, context: SavedComponentContext): void
@@ -61,7 +58,8 @@ function onBoardRow({ world, entity }: SavedComponentContext): boolean {
 
 export const SAVED_COMPONENTS: readonly SavedComponent[] = [
     savedComponent({
-        key: 'position', component: PositionComponent,
+        // The position of an entity of a typed list, which its object holds.
+        key: 'position',
         parse: (value, name): Position => {
             const source = exact(value, ['x', 'y', 'row'], name)
             return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`), row: integer(source.row, `${name}.row`) }
@@ -94,7 +92,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         },
     }),
     savedComponent({
-        key: 'plant', component: PlantComponent, parse: parseSavedPlant,
+        key: 'plant', list: world => world.plants, parse: parseSavedPlant,
         check: (saved, context) => {
             const { content: { definitions, gameplay }, world, entity } = context
             const plant = definitions.plants[saved.typeId]
@@ -110,24 +108,14 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 layers.some(([layer, state]) => !plant.animation!.clips[state.clip] || layer !== PLANT_BLINK_LAYER && !Object.hasOwn(plant.animation!.layers, layer))) {
                 throw new Error(`Saved plant ${entity.entityId} has an invalid animation state`)
             }
-            // As its kind: its own fields (a shooter's next shot, a chomper's state, ...).
+            // One mowed down shows how far it is squashed, by the mower's driver.
+            if ((saved.state === 'mowered') !== (saved.mowered !== undefined) || saved.mowered && saved.mowered.squash.clip !== ZOMBIE_CLIPS.mowered) {
+                throw new Error(`Saved plant ${entity.entityId} has an invalid squash`)
+            }
+            // As its kind: its own fields (a shooter's next shot, a chomper's phase, ...).
             if (!restorePlant(saved, context).validSaved()) throw new Error(`Saved plant ${entity.entityId} is invalid for its kind`)
         },
         restore: (saved, context) => restorePlant(saved, context),
-    }),
-    savedComponent({
-        key: 'mowedPlant', component: MowedPlantComponent,
-        parse: (value, name): SavedMowedPlant => {
-            const mowed = exact(value, ['plant', 'squash'], name, ['left'])
-            return { plant: parseSavedPlant(mowed.plant, `${name}.plant`), squash: parseLayer(mowed.squash, `${name}.squash`),
-                ...(mowed.left === undefined ? {} : { left: trueFlag(mowed.left, `${name}.left`) }) }
-        },
-        check: (mowed, context) => {
-            if (!onBoardRow(context) || !context.content.definitions.plants[mowed.plant.typeId]) throw new Error(`Unknown saved plant: ${mowed.plant.typeId}`)
-            if (mowed.squash.clip !== ZOMBIE_CLIPS.mowered) throw new Error(`Saved entity ${context.entity.entityId} has an invalid squash`)
-            restorePlant(mowed.plant, context)
-        },
-        restore: (mowed, context) => ({ ...mowed, plant: restorePlant(mowed.plant, context) }),
     }),
     savedComponent({
         key: 'zombie', list: world => world.zombies,
@@ -268,7 +256,7 @@ export function checkSavedEntity(content: ServerContent, world: World, entity: S
         if (Object.keys(entity).some(key => key !== 'entityId' && key !== 'gridItem' && key !== 'extensions')) throw new Error(`Saved grid item ${entity.entityId} must have no other component`)
     } else {
         if (!entity.position) throw new Error(`Saved entity ${entity.entityId} has no position`)
-        const kinds = [entity.plant, entity.mowedPlant, entity.zombie, entity.mower, entity.projectile, entity.item].filter(value => value !== undefined).length
+        const kinds = [entity.plant, entity.zombie, entity.mower, entity.projectile, entity.item].filter(value => value !== undefined).length
         if (kinds !== 1 && !(kinds === 0 && entity.extensions && Object.keys(entity.extensions).length)) throw new Error(`Saved entity ${entity.entityId} must have exactly one domain component`)
     }
     const context = { content, world, entity }
@@ -283,20 +271,24 @@ function parseSavedPlant(value: unknown, name: string): SavedPlant {
     const fields: readonly string[] = PLANT_FIELDS, all = record(value, name)
     const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
     const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))),
-        ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
+        ['typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
+        ['mowered', 'behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
+    const mowered = source.mowered === undefined ? undefined : exact(source.mowered, ['squash'], `${name}.mowered`, ['left'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
     return {
         ...own,
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+        state: oneOf(source.state, PLANT_STATES, `${name}.state`),
         seedId: nonEmptyString(source.seedId, `${name}.seedId`),
         column: nonNegativeInteger(source.column, `${name}.column`),
         health,
         maxHealth,
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
+        ...(mowered ? { mowered: { squash: parseLayer(mowered.squash, `${name}.mowered.squash`),
+            ...(mowered.left === undefined ? {} : { left: trueFlag(mowered.left, `${name}.mowered.left`) }) } } : {}),
         ...(source.frozenTicks === undefined ? {} : { frozenTicks: positiveInteger(source.frozenTicks, `${name}.frozenTicks`) }),
         ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
         ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),

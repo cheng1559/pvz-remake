@@ -1,12 +1,11 @@
 import type { World } from '@/server/state/World'
-import { PlantComponent } from '../state/components'
 import { displayAdviceOnce } from './advice'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { sunflowerReady, sunflowerTutorial } from './sunflowerTutorial'
 import type { TutorialScript } from './index'
+import { plantsInPlay } from '../level/lawn'
 
-const sunflowerCount = (world: World) => [...world.query(PlantComponent)]
-    .filter(entity => world.get(entity, PlantComponent)!.typeId === 'pvz:sunflower').length
+const sunflowerCount = (world: World) => [...plantsInPlay(world)].filter(plant => plant.typeId === 'pvz:sunflower').length
 
 function advice(world: World, key: string, stay = false): void {
     displayAdviceOnce(world, key, stay ? 'tutorial-later-stay' : 'tutorial-later')

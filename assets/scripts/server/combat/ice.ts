@@ -1,7 +1,7 @@
 import type { World } from '@/server/state/World'
 import { plantTeam, zombieTeam } from '@/shared/content/teams'
-import { PlantComponent, PositionComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
+import { plantInPlay } from '../level/lawn'
 
 /** A plant or a zombie that may be frozen (see freeze.ts). */
 interface Freezable { frozenTicks?: number }
@@ -15,9 +15,9 @@ interface Freezable { frozenTicks?: number }
 export function breakIce(world: World, entity: number, frozen: Freezable): void {
     if (frozen.frozenTicks === undefined) return
     delete frozen.frozenTicks
-    // A zombie or a plant (step 4 makes both typed lists).
-    const zombie = world.zombies.get(entity), plant = zombie ? undefined : world.get(entity, PlantComponent)
-    const position = zombie ? zombie.position : world.get(entity, PositionComponent)
+    // A zombie or a plant.
+    const zombie = world.zombies.get(entity), plant = zombie ? undefined : plantInPlay(world, entity)
+    const position = (zombie ?? plant)?.position
     if (!position) return
     // One turned round has its ice turned with it.
     const mirrored = zombie ? zombieTeam(zombie) === 'plants' : !!plant && plantTeam(plant) === 'zombies'

@@ -5,7 +5,7 @@ import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { circleRectOverlap } from '../combat/collision'
-import { type Position, PositionComponent, RandomResource } from '../state/components'
+import { type Position, RandomResource } from '../state/components'
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
 
@@ -53,7 +53,7 @@ export class ScaredyShroom extends Shooter {
         const random = world.resources.get(RandomResource), fright = this.fright, shooter = this.definition.shooter!
         const firing = Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
         if (this.burst || firing) return
-        const near = zombieNear(world, this.definitions, world.get(entity, PositionComponent)!, this, fright)
+        const near = zombieNear(world, this.definitions, this.position, this, fright)
         const next = (phase: FrightPhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks

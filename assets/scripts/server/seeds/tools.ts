@@ -1,4 +1,4 @@
-import { LevelStateResource, PlantComponent, SeedBankResource } from '../state/components'
+import { LevelStateResource, SeedBankResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planting } from './planting'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -7,6 +7,7 @@ import { TutorialResource } from '../state/levelState'
 import { levelTools } from '@/shared/content/gameplay'
 import { clearCursor } from './cursor'
 import { canShovel } from '@/shared/content/planting'
+import { plantInPlay } from '../level/lawn'
 
 /** Cursor tools such as the shovel, each doing what its definition's `kind` does. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
@@ -37,7 +38,7 @@ export const tools = {
         // Board::MouseDownWithTool for a shovel, Board::ToolHitTestHelper: the cell's plant, unless the shovel cannot dig
         // it up (canShovel).
         const found = planting.findPlantAt(session, row, column)
-        const plant = found === undefined ? undefined : world.get(found, PlantComponent)!
+        const plant = found === undefined ? undefined : plantInPlay(world, found)!
         const entity = plant && canShovel(definitions.plants, plant) ? found : undefined
         clearCursor(world)
         if (entity !== undefined) {

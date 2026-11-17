@@ -5,8 +5,6 @@ import { readGameplaySource } from '../../tools/mod/content'
 import { Schedule,World } from '@/server/state/World'
 import {
 LevelStateResource,
-PlantComponent,
-PositionComponent,
 RandomResource,
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
@@ -73,16 +71,15 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
 
     const eating = game()
     const plant = eating.world.createEntity()
-    eating.world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
-    eating.world.add(plant, PlantComponent, newPlant(eating.world, 'pvz:peashooter'))
+    eating.world.insert(eating.world.plants, newPlant(eating.world, 'pvz:peashooter', { id: plant, position: { x: 40, y: 280, row: 2 } }))
     const eater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (let tick = 0; tick < 3; tick++) eating.run()
-    assert.equal(eating.world.get(plant, PlantComponent)!.health, 300)
+    assert.equal(eating.world.plants.get(plant)!.health, 300)
     eating.run()
     assert.equal(eating.world.zombies.get(eater)!.state, 'eating')
-    assert.equal(eating.world.get(plant, PlantComponent)!.health, 296)
+    assert.equal(eating.world.plants.get(plant)!.health, 296)
     for (let tick = 0; tick < 4; tick++) eating.run()
-    assert.equal(eating.world.get(plant, PlantComponent)!.health, 292)
+    assert.equal(eating.world.plants.get(plant)!.health, 292)
     for (let tick = 0; tick < 8; tick++) eating.run()
     assert.equal(
         eating.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieChewedPlant'),
@@ -92,13 +89,13 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     eating.run()
     const eatEvents = eating.world.resources.get(EventQueueResource).events
     assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 0)
-    eating.world.get(plant, PlantComponent)!.health = definitions.zombies['pvz:normal'].bite.damage
+    eating.world.plants.get(plant)!.health = definitions.zombies['pvz:normal'].bite.damage
     const otherEater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (const zombie of [eater, otherEater]) {
         eating.world.zombies.get(zombie)!.biteTicks = definitions.zombies['pvz:normal'].bite.cadenceTicks - 1
     }
     eating.run()
-    assert.equal([...eating.world.query(PlantComponent)].length, 0)
+    assert.equal([...eating.world.plants].length, 0)
     assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 1, 'simultaneous bites emit one eaten event')
     assert.equal(eatEvents.find(event => event.type === 'plantEaten')!.data.plantId, plant)
     eating.run()
@@ -106,15 +103,14 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
 
     const headless = game()
     const ignoredPlant = headless.world.createEntity()
-    headless.world.add(ignoredPlant, PositionComponent, { x: 40, y: 280, row: 2 })
-    headless.world.add(ignoredPlant, PlantComponent, newPlant(headless.world, 'pvz:peashooter'))
+    headless.world.insert(headless.world.plants, newPlant(headless.world, 'pvz:peashooter', { id: ignoredPlant, position: { x: 40, y: 280, row: 2 } }))
     const headlessWalker = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     headless.run()
     assert.equal(headless.world.zombies.get(headlessWalker)!.state, 'eating')
     damageZombie(headless.world, definitions, headlessWalker, 200)
     headless.run()
     assert.equal(headless.world.zombies.get(headlessWalker)!.state, 'eating')
-    assert.equal(headless.world.get(ignoredPlant, PlantComponent)!.health, 300)
+    assert.equal(headless.world.plants.get(ignoredPlant)!.health, 300)
 
     const neverStartedEating = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     damageZombie(headless.world, definitions, neverStartedEating, 200)
@@ -168,26 +164,25 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
 
 
 
-test('zombie target cache follows component replacement, mutation and removal', () => {
+test('zombie targets follow a plant’s position, its state and its removal', () => {
     const { world, run } = game()
     const plant = world.createEntity()
-    world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
-    world.add(plant, PlantComponent, newPlant(world, 'pvz:peashooter'))
+    world.insert(world.plants, newPlant(world, 'pvz:peashooter', { id: plant, position: { x: 40, y: 280, row: 2 } }))
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 70, 280)
     const state = () => world.zombies.get(zombie)!.state
     const resetPosition = () => { world.zombies.get(zombie)!.position.x = 70 }
     run()
     assert.equal(state(), 'eating')
-    world.add(plant, PositionComponent, { x: 400, y: 280, row: 2 })
+    world.plants.get(plant)!.position = { x: 400, y: 280, row: 2 }
     resetPosition(); run()
-    assert.equal(state(), 'walking', 'replacing a position invalidates the cache')
-    world.get(plant, PositionComponent)!.x = 40
+    assert.equal(state(), 'walking', 'a new position is seen')
+    world.plants.get(plant)!.position.x = 40
     resetPosition(); run()
-    assert.equal(state(), 'eating', 'mutating a position is visible through the cached reference')
-    world.add(plant, PlantComponent, newPlant(world, 'pvz:peashooter', { health: 0 }))
+    assert.equal(state(), 'eating', 'a moved position is seen')
+    world.plants.get(plant)!.state = 'mowered'
     resetPosition(); run()
-    assert.equal(state(), 'walking', 'replacing the plant component invalidates the cache')
-    world.remove(plant, PlantComponent)
+    assert.equal(state(), 'walking', 'a plant out of play is no target')
+    world.destroyEntity(plant)
     resetPosition(); run()
     assert.equal(state(), 'walking')
 })
@@ -212,8 +207,7 @@ test('a chilled zombie body goes at half its rate and its flag at its own, which
 test('a zombie that stops eating sets off again as StartWalkAnim does: a new speed and walk; the flag zombie always takes walk2', () => {
     const eating = game()
     const plant = eating.world.createEntity()
-    eating.world.add(plant, PositionComponent, { x: 300, y: 280, row: 2 })
-    eating.world.add(plant, PlantComponent, newPlant(eating.world, 'pvz:peashooter', { column: 3 }))
+    eating.world.insert(eating.world.plants, newPlant(eating.world, 'pvz:peashooter', { id: plant, position: { x: 300, y: 280, row: 2 }, column: 3 }))
     const zombies = Array.from({ length: 12 }, () => spawnZombie(eating.world, definitions, 'pvz:normal', 2, 330, 280))
     const flags = Array.from({ length: 4 }, () => spawnZombie(eating.world, definitions, 'pvz:flag', 2, 330, 280))
     const before = new Map([...zombies, ...flags].map(entity => [entity, { ...eating.world.zombies.get(entity)! }]))

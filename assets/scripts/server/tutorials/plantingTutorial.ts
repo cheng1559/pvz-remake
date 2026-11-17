@@ -1,9 +1,10 @@
 import type { World } from '@/server/state/World'
-import { LevelStateResource, PlantComponent } from '../state/components'
+import { LevelStateResource } from '../state/components'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { adviceShown, displayAdviceOnce } from './advice'
 import type { TutorialScript } from './index'
 import { levelAwardDropped } from '../level/levelAward'
+import { plantsInPlay } from '../level/lawn'
 
 const FIRST_SUN_DELAY_TICKS = 400
 const FIRST_WAVE_DELAY_TICKS = 99
@@ -17,7 +18,7 @@ function canUpdate(world: World): boolean {
 function notePlantPlaced(world: World, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (!tutorial.firstAdventure || tutorial.step === 'complete') return
-    const plantCount = [...world.query(PlantComponent)].length
+    const plantCount = [...plantsInPlay(world)].length
     if (plantCount === 1) {
         tutorial.step = 'first-plant-done'
         world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
@@ -71,7 +72,7 @@ export const plantingTutorial: TutorialScript = {
     beforeSun(world, tick) {
         if (!canUpdate(world)) return
         const tutorial = world.resources.get(TutorialResource)
-        if (tutorial.step === 'pick-first-seed' && [...world.query(PlantComponent)].length >= 1) {
+        if (tutorial.step === 'pick-first-seed' && [...plantsInPlay(world)].length >= 1) {
             tutorial.step = 'first-plant-done'
             world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
         }
@@ -92,7 +93,7 @@ export const plantingTutorial: TutorialScript = {
             tutorial.step = 'pick-second-seed'
             tutorial.promptAtTick = undefined
         }
-        if (tutorial.step !== 'complete' && [...world.query(PlantComponent)].length >= 2) {
+        if (tutorial.step !== 'complete' && [...plantsInPlay(world)].length >= 2) {
             tutorial.step = 'complete'
             tutorial.promptAtTick = undefined
             world.resources.get(WaveResource).nextWaveAtTick = tick + FIRST_WAVE_DELAY_TICKS

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { PlantComponent } from '@/server/state/components'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { parseServerPacket, type StartSessionPacket, type WorldSnapshot } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
@@ -92,11 +91,10 @@ test("a plant's snapshot lists its own fields: the server's counters, and anythi
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    const [entity] = world.query(PlantComponent)
-    const plant = world.get(entity, PlantComponent)!
+    const [plant] = world.plants
     Object.assign(plant, { chilledTicks: 30, blinkTicks: 400, recentlyEatenCounter: 5, serverOnly: 1 })
     const [shown] = received(server.snapshot()).plants
     assert.deepEqual(Object.keys(shown).sort(),
-        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'typeId', 'x', 'y'])
+        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'state', 'typeId', 'x', 'y'])
     assert.equal(shown.chilledTicks, 30)
 })

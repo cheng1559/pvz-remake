@@ -1,14 +1,28 @@
 import type { EntityId, World } from '@/server/state/World'
 import type { CellPlant } from '@/shared/content/planting'
 import type { GridItemSnapshot } from '@/shared/protocol'
-import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
+import { LevelStateResource } from '../state/components'
+import type { Plant } from '../plants/Plant'
 
 /** What stands on the lawn, as the shared cell rules (shared/content/planting, graveAt) and the level read it. */
 
-/** The lawn's plants, each with its entity and row. Mowed plants are no plants any more, so they are not among them. */
+/**
+ * The plants in play (Plant.inPlay), in id order: what the lawn takes for its plants, every system but the squashing of
+ * a mowed one and what is saved or shown of all of them (World.plants).
+ */
+export function* plantsInPlay(world: World): Generator<Plant> {
+    for (const plant of world.plants) if (plant.inPlay) yield plant
+}
+
+/** The plant of `id` while it is in play. */
+export function plantInPlay(world: World, id: EntityId): Plant | undefined {
+    const plant = world.plants.get(id)
+    return plant?.inPlay ? plant : undefined
+}
+
+/** The lawn's plants, each with its entity and row (plantsInPlay). */
 export function lawnPlants(world: World): Array<CellPlant & { entity: EntityId }> {
-    return [...world.query(PositionComponent, PlantComponent)].map(entity =>
-        ({ ...world.get(entity, PlantComponent)!, row: world.get(entity, PositionComponent)!.row, entity }))
+    return [...plantsInPlay(world)].map(plant => ({ ...plant, row: plant.position.row, entity: plant.id }))
 }
 
 /** The things of the lawn's cells (graves), each with its entity, as the snapshot lists them. */

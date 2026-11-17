@@ -10,7 +10,7 @@ function snapshot(tick: number): WorldSnapshot {
         sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
-            entityId: 1, typeId: 'pvz:peashooter',
+            entityId: 1, typeId: 'pvz:peashooter', state: 'idle',
             x: 0, y: 0, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{

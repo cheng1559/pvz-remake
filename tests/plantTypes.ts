@@ -10,9 +10,10 @@ export function withPlantTypes(world: World, definitions: GameplayDefinitions): 
 }
 
 /**
- * A plant of `typeId` as its kind makes it, with `fields` of a test's own (a world given withPlantTypes). `own`: its
- * kind's fields (a shooter's `readyAtTick`, a chomper's `state`), set as they are.
+ * A plant of `typeId` as its kind makes it, with `fields` of a test's own (a world given withPlantTypes; its `id` and
+ * `position` to insert it into World.plants). `own`: its kind's fields (a shooter's `readyAtTick`, a chomper's
+ * `phase`), set as they are.
  */
-export function newPlant<P extends Plant = Plant>(world: World, typeId: string, fields: Partial<PlantFields> = {}, own: Partial<P> = {}): P {
+export function newPlant<P extends Plant = Plant>(world: World, typeId: string, fields: Partial<PlantFields & Pick<Plant, 'id' | 'position'>> = {}, own: Partial<P> = {}): P {
     return Object.assign(world.resources.get(PlantFactoryResource).create(typeId), fields, own) as P
 }

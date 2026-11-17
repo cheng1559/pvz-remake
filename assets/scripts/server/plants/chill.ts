@@ -1,6 +1,7 @@
 import type { GameSystem, World } from '@/server/state/World'
 import { CHILLED_ANIMATION_FACTOR } from '@/shared/content/animation'
-import { LevelStateResource, type Plant, PlantComponent } from '../state/components'
+import { LevelStateResource, type Plant } from '../state/components'
+import { plantsInPlay } from '../level/lawn'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { meltIce } from '../combat/ice'
 import { plantCanBeChilled } from '../combat/cold'
@@ -37,10 +38,9 @@ export function createPlantChillSystem(): GameSystem {
         run({ world }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
-            for (const entity of world.query(PlantComponent)) {
-                const plant = world.get(entity, PlantComponent)!
+            for (const plant of plantsInPlay(world)) {
                 if (!plant.chilledTicks && plant.frozenTicks === undefined) continue
-                meltIce(world, entity, plant)
+                meltIce(world, plant.id, plant)
                 if (plant.chilledTicks) plant.chilledTicks--
                 if (plantSkipsTick(plant)) plant.sitOut()
             }

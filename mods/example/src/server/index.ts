@@ -40,8 +40,8 @@ function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: a
 export function register({ host, assets }: GameplayApi): void {
     const registry = host.get('gameplay/registry')
     const { defineComponent } = host.get('server/state/World')
-    const { PlantComponent: Plant, PositionComponent: Position, LevelStateResource: Level,
-        EconomyStateResource: Economy } = host.get('server/state/components')
+    const { LevelStateResource: Level, EconomyStateResource: Economy } = host.get('server/state/components')
+    const { plantsInPlay } = host.get('server/level/lawn')
     const settings = assets.json('assets/settings.json')
     for (const key of ['chargeTicks', 'chargeMultiplier', 'particlePeriodTicks']) {
         if (!Number.isSafeInteger(settings[key]) || settings[key] <= 0) throw new Error(`Invalid example setting: ${key}`)
@@ -95,13 +95,10 @@ export function register({ host, assets }: GameplayApi): void {
         if (row === null || column === null || row < 1 || row > level.board.rows || column < 1 || column > level.board.columns) {
             return cli.debugSyntax(`Use row 1-${level.board.rows} and col 1-${level.board.columns}`)
         }
-        const entity = [...world.query(Plant, Position)].find((id: number) => {
-            const plant = world.get(id, Plant), position = world.get(id, Position)
-            return ['example:rapid_pea', 'example:beacon'].includes(plant.typeId)
-                && plant.health > 0 && plant.column === column - 1 && position.row === row - 1
-        })
-        if (entity === undefined) return cli.debugCondition('example:cli_need_plant')
-        world.add(entity, Charge, { remainingTicks: settings.chargeTicks })
+        const plant = [...plantsInPlay(world)].find(plant => ['example:rapid_pea', 'example:beacon'].includes(plant.typeId)
+            && plant.health > 0 && plant.column === column - 1 && plant.position.row === row - 1)
+        if (plant === undefined) return cli.debugCondition('example:cli_need_plant')
+        world.add(plant.id, Charge, { remainingTicks: settings.chargeTicks })
         return cli.debugSuccess(`Charged for ${settings.chargeTicks} ticks`)
     })
 }

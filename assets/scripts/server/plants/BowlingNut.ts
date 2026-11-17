@@ -6,12 +6,13 @@ import { nonNegativeInteger } from '@/shared/validate'
 import { rectOverlap } from '../combat/collision'
 import { hostilePlants } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { type EntityRemover, LevelStateResource, PlantComponent, type Position, PositionComponent, RandomResource } from '../state/components'
+import { type EntityRemover, LevelStateResource, type Position, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { TutorialResource } from '../state/levelState'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
 import { damagePlant, detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
+import { plantInPlay } from '../level/lawn'
 
 /**
  * Plant::UpdateBowling moves the nut by its body's `_ground` track: the layer whose clip (with a pace of its own) it
@@ -62,7 +63,7 @@ export class BowlingNut extends Plant {
         const definitions = this.definitions, definition = this.definition, rules = this.rules
         const board = world.resources.get(LevelStateResource).board
         const random = world.resources.get(RandomResource)
-        const position = world.get(entity, PositionComponent)!
+        const position = this.position
         const roll = this.animations?.[ROLL_LAYER]
         if (!roll) return
         // Plant::UpdateBowling: a clip with a `_ground` track rolls the nut as far as its ground goes at the clip's rate
@@ -137,7 +138,7 @@ export class BowlingNut extends Plant {
             return
         }
         // A nut gone by the other's blast takes no blow.
-        const typeId = world.get(target, PlantComponent)?.typeId
+        const typeId = plantInPlay(world, target)?.typeId
         if (typeId === undefined) return
         damagePlant(world, this.definitions, target, this.rules.damage, remover)
         emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
@@ -159,6 +160,6 @@ interface Rolling { entity: EntityId; nut: BowlingNut; position: Position }
 
 /** The plant at `entity` when it is a rolling nut too (a Mod's included). */
 function rollingNut(world: World, entity: EntityId): Rolling | undefined {
-    const plant = world.get(entity, PlantComponent), position = world.get(entity, PositionComponent)
-    return plant instanceof BowlingNut && position ? { entity, nut: plant, position } : undefined
+    const plant = plantInPlay(world, entity)
+    return plant instanceof BowlingNut ? { entity, nut: plant, position: plant.position } : undefined
 }

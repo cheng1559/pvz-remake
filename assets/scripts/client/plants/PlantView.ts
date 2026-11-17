@@ -248,7 +248,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
         this.flash = this.flashed(plant, world.gameplayTick)
         this.syncFrozen(plant)
         // A mowed plant stays as it stood.
-        if (plant.mowered) { this.squash(plant); return }
+        if (plant.state === 'mowered') { this.squash(plant); return }
         // A plant on the zombies' side faces left, mirrored across its width.
         const mirrored = plant.team === 'zombies', at = boardToLayer(plant.x + (mirrored ? PLANT_WIDTH : 0), plant.y)
         node.setPosition(at.x, at.y)

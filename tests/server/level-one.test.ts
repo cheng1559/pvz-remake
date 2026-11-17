@@ -7,8 +7,6 @@ import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import {
 EconomyStateResource,
 LevelStateResource,
-PlantComponent,
-PositionComponent,
 RandomResource,
 SeedBankResource,
 } from '@/server/state/components'
@@ -56,9 +54,7 @@ function setup() {
 }
 
 function addPlant(world: World, column: number) {
-    const entity = world.createEntity()
-    world.add(entity, PositionComponent, { x: 40 + column * 80, y: 280, row: 2 })
-    world.add(entity, PlantComponent, newPlant(world, 'pvz:peashooter', { column }))
+    world.insert(world.plants, newPlant(world, 'pvz:peashooter', { id: world.createEntity(), position: { x: 40 + column * 80, y: 280, row: 2 }, column }))
 }
 
 test('level one schedules tutorial sun and the first wave from planted Peashooters', () => {

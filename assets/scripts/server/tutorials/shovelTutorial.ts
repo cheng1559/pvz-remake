@@ -1,8 +1,8 @@
 import type { World } from '@/server/state/World'
-import { PlantComponent } from '../state/components'
 import { TutorialResource } from '../state/levelState'
 import type { TutorialScript } from './index'
 import { daveLines } from './introDialog'
+import { plantsInPlay } from '../level/lawn'
 
 /** CutScene::StartLevelIntro on Wall-nut Bowling: 2400 on a first adventure, else 2411; 2410 once the lawn is dug clean. */
 const OPENING = daveLines(2400, 2406), REPEAT = daveLines(2411, 2415), AFTER_DIG = daveLines(2410, 2415)
@@ -37,7 +37,7 @@ export const shovelTutorial: TutorialScript = {
     plantRemoved(world) {
         const tutorial = world.resources.get(TutorialResource)
         if (!tutorial.step.startsWith('shovel-')) return
-        if ([...world.query(PlantComponent)].length) tutorial.step = 'shovel-keep-digging'
+        if ([...plantsInPlay(world)].length) tutorial.step = 'shovel-keep-digging'
         else {
             tutorial.step = 'dave-bowling'
             tutorial.dialogIndex = AFTER_DIG[0]

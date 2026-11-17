@@ -4,7 +4,7 @@ import { plantTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger } from '@/shared/validate'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { EconomyStateResource, PositionComponent, RandomResource } from '../state/components'
+import { EconomyStateResource, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { spawnItem } from '../level/itemSpawn'
 import { Plant, type PlantConfig } from './Plant'
@@ -69,7 +69,7 @@ export class Producer extends Plant {
         if (this.readyAtTick - tick > 0) return
         const random = world.resources.get(RandomResource), producer = this.producer
         this.readyAtTick = tick + random.integer(Math.max(1, producer.cadenceTicks - 150), producer.cadenceTicks)
-        const position = world.get(entity, PositionComponent)!
+        const position = this.position
         const itemId = this.producedItem(), item = this.definitions.items[itemId]
         const events = world.resources.get(EventQueueResource)
         if (plantTeam(this) === 'zombies') {

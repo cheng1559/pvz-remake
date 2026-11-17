@@ -14,7 +14,6 @@
         }
     },
     "include": [
-        "assets/scripts/ecs/**/*.ts",
         "assets/scripts/shared/**/*.ts",
         "assets/scripts/server/**/*.ts",
         "tests/**/*.ts"

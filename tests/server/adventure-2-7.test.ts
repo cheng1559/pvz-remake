@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { LevelStateResource, PlantComponent } from '@/server/state/components'
+import { LevelStateResource } from '@/server/state/components'
 import { freezeHostiles } from '@/server/combat/freeze'
 import { chillZombie, damageZombie } from '@/server/zombies/damage'
 import { damagePlant, destroyEatenPlant } from '@/server/plants/damage'
@@ -167,7 +167,7 @@ test('a zombies\' ice-shroom freezes the plants\' side: its plants stop, its zom
     debug(server, '/plantinvincible')
     server.drainEvents()
     ticks(server, 100)
-    const plant = world(server).get(shooter, PlantComponent)!
+    const plant = world(server).plants.get(shooter)!
     assert.ok(plant.frozenTicks! >= 400 && plant.frozenTicks! <= 600, `the plant is frozen for ${plant.frozenTicks}`)
     assert.equal(plant.chilledTicks, ice.chillTicks)
     assert.equal(plant.health, 280, 'and hurt as a zombie is')
@@ -193,14 +193,14 @@ test('an ice-shroom asleep by day is eaten as any plant, and an awake one is not
     const asleep = plantAt(day, 3, 3)!
     const dayEvents = ticks(day, 600)
     assert.ok(!dayEvents.some(event => event.type === 'plantFroze'), 'Plant::UpdateIceShroom waits while it sleeps')
-    assert.ok((world(day).get(asleep, PlantComponent)?.health ?? 0) < 300, 'Zombie::EatPlant eats it')
+    assert.ok((world(day).plants.get(asleep)?.health ?? 0) < 300, 'Zombie::EatPlant eats it')
 
     const night = playing()
     debug(night, '/plant iceshroom 3 3')
     debug(night, '/zombie normal 3 4')
     const awake = plantAt(night, 3, 3)!
     ticks(night, 99)
-    assert.equal(world(night).get(awake, PlantComponent)!.health, 300)
+    assert.equal(world(night).plants.get(awake)!.health, 300)
 })
 
 test('the ice survives a save, and a zombie that dies in it or a plant destroyed in it breaks it off', () => {
@@ -247,7 +247,7 @@ test('the plants kept from the ice and a pole vaulter in the air are only chille
     // The zombies' ice reaches every plant of the plants' side.
     const planted = ['cherrybomb 1 1', 'bowling-wallnut 1 3', 'bowling-explodenut 1 5', 'gravebuster 2 1', 'iceshroom 2 3', 'potatomine 3 1', 'potatomine 3 3', 'peashooter 4 1']
     for (const plant of planted) debug(server, `/plant ${plant}`)
-    const plant = (row: number, column: number) => world(server).get(plantAt(server, row, column)!, PlantComponent)!
+    const plant = (row: number, column: number) => world(server).plants.get(plantAt(server, row, column)!)!
     const mine = (row: number, column: number) => plant(row, column) as PotatoMine
     mine(3, 1).phase = 'rising'
     mine(3, 3).phase = 'armed'
@@ -275,7 +275,7 @@ test('a type kept from the cold takes neither a snow pea’s chill nor the ice',
     debug(server, '/plant peashooter 3 1')
     debug(server, '/zombie normal 3 9')
     const shooter = plantAt(server, 3, 1)!, walker = zombieAt(server, 3)
-    const plant = world(server).get(shooter, PlantComponent)!, zombie = world(server).zombies.get(walker)!
+    const plant = world(server).plants.get(shooter)!, zombie = world(server).zombies.get(walker)!
     damagePlant(world(server), cold, shooter, 20, world(server), 1000)
     chillZombie(world(server), cold, walker, zombie, 1000)
     freezeHostiles(world(server), cold, 'plants', ice, world(server))

@@ -115,7 +115,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         }],
         conveyorPackets: [],
         plants: [{
-            entityId: 2, typeId: 'pvz:peashooter',
+            entityId: 2, typeId: 'pvz:peashooter', state: 'idle',
             x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
@@ -142,6 +142,9 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
         plants: [{ ...snapshot.plants[0], own: 1.5 }],
     } }), /plants\[0\]\.own must be an object/)
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        plants: [{ ...snapshot.plants[0], mowered: { time: 0 } }],
+    } }), /plants\[0\]\.mowered goes with its state/, 'only a plant mowed down is squashed')
     snapshot.items[0].alpha = -1
     assert.throws(() => parseServerPacket(packet), /non-negative/)
     snapshot.items[0].alpha = 255

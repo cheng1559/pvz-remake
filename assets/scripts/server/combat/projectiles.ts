@@ -2,7 +2,8 @@ import { getBoardBounds } from './collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
+import { LevelStateResource } from '../state/components'
+import { plantInPlay, plantsInPlay } from '../level/lawn'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
@@ -33,10 +34,9 @@ export class ProjectileSystem implements GameSystem {
         for (const zombie of world.zombies) {
             add({ entity: zombie.id, position: zombie.position, zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
         }
-        for (const entity of world.query(PositionComponent, PlantComponent)) {
-            const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
+        for (const plant of plantsInPlay(world)) {
             const definition = definitions.plants[plant.typeId]
-            add({ entity, position, plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
+            add({ entity: plant.id, position: plant.position, plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
         const mowers: Projectile[] = []
@@ -110,7 +110,7 @@ export class ProjectileSystem implements GameSystem {
             if (aim === ('zombie' in target ? 'plants' : 'zombies')) continue
             if (!projectile.canHit(hit, target, overlap) || projectile.hits?.includes(target.entity)) continue
             // An earlier projectile may have finished it during the same run.
-            if (!world.hasEntity(target.entity) || 'plant' in target && world.get(target.entity, PlantComponent) !== target.plant) continue
+            if (!world.hasEntity(target.entity) || 'plant' in target && plantInPlay(world, target.entity) !== target.plant) continue
             if (definition.pierce) (all ??= []).push(target)
             else if (!nearest || nearer(target, nearest) < 0) nearest = target
         }

@@ -4,9 +4,8 @@ import type { Projectile } from '../combat/Projectile'
 import type { Mower } from '../level/Mower'
 import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
-import { defineComponent, defineResource, type EntityId } from '@/server/state/World'
+import { defineResource, type EntityId } from '@/server/state/World'
 import type { CraterSnapshot, GraveSnapshot, Team } from '@/shared/protocol'
-import type { LayerState } from '@/shared/content/animation'
 
 export type { Mower, Plant, Projectile, Zombie }
 
@@ -95,22 +94,6 @@ export interface LevelState {
     iceTrap?: Partial<Record<Team, number>>
 }
 
-export const PositionComponent = defineComponent<Position>('pvz:position')
-
-/** A plant: the instance of its kind's class, all there is to it (plants/Plant.ts). */
-export const PlantComponent = defineComponent<Plant>('pvz:plant')
-
-
-/**
- * A plant a mower has crushed, as it stood: no plant any more (nothing aims at it, eats it or holds its cell by it), it
- * stays for the squashing, as a mowed zombie does: `squash` plays the mower's driver (MOWERED_ANIMATION) as a mowed
- * zombie's body does, and it is gone once that is through. `left`: the mower ran left, so it tips that way.
- */
-export interface MowedPlant { plant: Plant, squash: LayerState, left?: true }
-
-export const MowedPlantComponent = defineComponent<MowedPlant>('pvz:mowed_plant')
-
-/** A zombie: the instance of its kind's class, all there is to it (zombies/Zombie.ts). */
 
 /**
  * What stands in a cell without being a plant or a zombie (GridItemSnapshot), by its type: its cell is its own, so it

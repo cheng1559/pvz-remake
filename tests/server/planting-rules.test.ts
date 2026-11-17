@@ -25,7 +25,7 @@ function lawn(lawnPlants: WorldSnapshot['plants'] = [], graves: Array<{ row: num
     return snapshotLawn(definitions, level, { plants: lawnPlants, gridItems }, rule)
 }
 function plant(typeId: string, row: number, column: number, more: Partial<WorldSnapshot['plants'][number]> = {}): WorldSnapshot['plants'][number] {
-    return { entityId: row * 10 + column, typeId, x: 0, y: 0, row, column, health: 300, maxHealth: 300, ...more }
+    return { entityId: row * 10 + column, typeId, state: 'idle', x: 0, y: 0, row, column, health: 300, maxHealth: 300, ...more }
 }
 
 test('a plant holds its own cell only, while it is one that occupies its cell and no mower has crushed it', () => {
@@ -34,8 +34,8 @@ test('a plant holds its own cell only, while it is one that occupies its cell an
     assert.equal(holdsCell(plants, nut, 2, 4), false)
     assert.equal(holdsCell(plants, nut, 1, 3), false)
     assert.equal(holdsCell(plants, plant('pvz:bowling-wallnut', 2, 3), 2, 3), false, 'a rolling nut keeps its column but holds no cell')
-    assert.equal(holdsCell(plants, plant('pvz:wallnut', 2, 3, { mowered: { time: 0 } }), 2, 3), false, 'a mowed plant is no plant any more')
-    const lawnPlants = [plant('pvz:bowling-wallnut', 2, 3), plant('pvz:wallnut', 2, 3, { mowered: { time: 4 } }), nut]
+    assert.equal(holdsCell(plants, plant('pvz:wallnut', 2, 3, { state: 'mowered', mowered: { time: 0 } }), 2, 3), false, 'a mowed plant is no plant any more')
+    const lawnPlants = [plant('pvz:bowling-wallnut', 2, 3), plant('pvz:wallnut', 2, 3, { state: 'mowered', mowered: { time: 4 } }), nut]
     assert.equal(cellPlant(plants, lawnPlants, 2, 3), nut)
     assert.equal(cellPlant(plants, lawnPlants, 2, 2), undefined)
 })
@@ -111,8 +111,8 @@ test('the planting preview and the server agree on a cell whose plant a mower is
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 1 }), 'cell-occupied')
 
     debug(server, '/lawnmower trigger 3')
-    for (let tick = 0; tick < 500 && !server.snapshot().plants.some(plant => plant.mowered); tick++) server.tick()
-    assert.ok(server.snapshot().plants.some(plant => plant.typeId === 'pvz:wallnut' && plant.mowered), 'the snapshot still shows it, squashed')
+    for (let tick = 0; tick < 500 && !server.snapshot().plants.some(plant => plant.state === 'mowered'); tick++) server.tick()
+    assert.ok(server.snapshot().plants.some(plant => plant.typeId === 'pvz:wallnut' && plant.state === 'mowered' && plant.mowered), 'the snapshot still shows it, squashed')
     assert.equal(preview(), undefined, 'the preview offers the cell')
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 1 }), undefined, 'and the server plants there')
 })

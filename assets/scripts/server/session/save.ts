@@ -1,5 +1,4 @@
 import type { EntityAllocatorSnapshot, EntityId } from '@/server/state/World'
-import type { LayerState } from '@/shared/content/animation'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
@@ -23,8 +22,6 @@ export interface SavedEntity {
     position?: Position
     /** A plant's fields as they are (Plant), restored as its kind. */
     plant?: SavedPlant
-    /** A plant a mower squashed: the plant as it was, restored as its kind, and how far it is squashed. */
-    mowedPlant?: SavedMowedPlant
     /** A zombie's fields as they are (Zombie), restored as its kind. */
     zombie?: SavedZombie
     /** A projectile's fields as they are (Projectile), restored as its kind: a mower set off is one. */
@@ -36,8 +33,6 @@ export interface SavedEntity {
     gridItem?: SavedOfList<GridItem>
 }
 
-/** A mowed plant as its save has it (MowedPlant): the plant's fields as they were. */
-export interface SavedMowedPlant { plant: SavedPlant, squash: LayerState, left?: true }
 
 export interface ServerSaveSnapshot {
     schemaVersion: 3

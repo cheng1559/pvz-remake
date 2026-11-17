@@ -7,7 +7,7 @@ import { ProjectileMotionsResource } from '../combat/motions'
 import { launchProjectile } from '../combat/Projectile'
 import { hostilePlants } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { type Position, PositionComponent, RandomResource } from '../state/components'
+import { type Position, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
 import { firePlantAnimation, plantTrackPoint } from './animation'
@@ -72,7 +72,7 @@ export class Shooter extends Plant {
         const definitions = this.definitions, definition = this.definition, shooter = this.shooter
         // Mushrooms sleep on day boards.
         if (this.asleep(world)) return
-        const position = world.get(entity, PositionComponent)!
+        const position = this.position
         const random = world.resources.get(RandomResource), events = world.resources.get(EventQueueResource)
         if (this.burst) {
             if (tick < this.burst.fireAtTick) return

@@ -153,7 +153,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             ? {
                 ...entity,
                 plant: {
-                    typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0,
+                    typeId: 'pvz:peashooter', state: 'idle', seedId: 'pvz:peashooter', column: 0,
                     health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0, readyAtTick: 0,
                 },
             }

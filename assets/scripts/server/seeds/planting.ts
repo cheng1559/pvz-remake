@@ -2,10 +2,7 @@ import type { SeedAvailability } from '@/shared/protocol/index'
 import { seedTeam, type Team } from '@/shared/content/teams'
 import { cellPosition, type SeedDefinition, zombieRowY } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
-import {
-    EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
-    type SeedBankState,
-} from '../state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, type SeedBankState } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { adviceShown, displayAdviceOnce } from '../tutorials/advice'
@@ -19,7 +16,7 @@ import { clearCursor } from './cursor'
 import { placeGrave } from '../level/graves'
 import { graveAt } from '@/shared/content/graves'
 import { cellPlant, type PlantingLawn, type PlantingRefusal, plantingRefusal } from '@/shared/content/planting'
-import { gridItems, lawnPlants } from '../level/lawn'
+import { gridItems, lawnPlants, plantInPlay } from '../level/lawn'
 import { placeCrater } from '../level/craters'
 import { craterAt } from '@/shared/content/craters'
 import { isPlantAsleep } from '../plants/sleep'
@@ -182,18 +179,20 @@ export const planting = {
         const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.id, definition)
         const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
         const entity = world.createEntity(), cell = cellPosition(level.board, row, column)
-        world.add(entity, PositionComponent, {
+        const position = {
             x: cell.x + (offset ? random.integer(offset.min.x, offset.max.x) : 0),
             y: cell.y + (offset ? random.integer(offset.min.y, offset.max.y) : 0),
             row,
-        })
+        }
         // Made as its kind (PlantFactoryResource), which starts it on what it does of its own (Plant.start).
         const plant = world.resources.get(PlantFactoryResource).create(plantedSeed.id)
+        plant.id = entity
+        plant.position = position
         plant.seedId = seedId
         plant.column = column
         if (behaviorState !== undefined) plant.behaviorState = behaviorState
         if (team === 'zombies') plant.team = team
-        world.add(entity, PlantComponent, plant)
+        world.insert(world.plants, plant)
         plant.start(random, gameplayTick)
         startPlantAnimations(plant, definition, isPlantAsleep(definition, level.board), random)
         return entity
@@ -213,7 +212,7 @@ function sessionLawn(session: Session): PlantingLawn {
         level: definition, board, rule: levelRule(world),
         plantAt: (row, column) => {
             const entity = planting.findPlantAt(session, row, column)
-            return entity === undefined ? undefined : world.get(entity, PlantComponent)
+            return entity === undefined ? undefined : plantInPlay(world, entity)
         },
         graveAt: (row, column) => graveAt(gridItems(world), row, column),
         craterAt: (row, column) => craterAt(gridItems(world), row, column),

@@ -3,20 +3,19 @@ import type { FreezeDefinition, GameplayDefinitions } from '@/shared/content/gam
 import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/teams'
 import { plantCanBeChilled, plantCanBeFrozen, zombieCanBeChilled, zombieCanBeFrozen } from './cold'
 import { TEAMS } from '@/shared/protocol'
-import {
-    type EntityRemover, LevelStateResource, type Plant, PlantComponent, PositionComponent, RandomResource, type Zombie,
-} from '../state/components'
+import { type EntityRemover, LevelStateResource, type Plant, RandomResource, type Zombie } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { chillZombie, damageZombie } from '../zombies/damage'
 import { chillPlant } from '../plants/chill'
 import { damagePlant } from '../plants/damage'
+import { plantInPlay, plantsInPlay } from '../level/lawn'
 
 /**
  * Plant::DoSpecial for a plant that freezes (the ice-shroom): FOLEY_FROZEN and PARTICLE_ICE_TRAP where it stands
  * (`plantFroze`), the ice (Plant::IceZombies), and it is gone.
  */
 export function freezeFromPlant(world: World, definitions: GameplayDefinitions, entity: number, freeze: FreezeDefinition, remover: EntityRemover): void {
-    const plant = world.get(entity, PlantComponent)!, position = world.get(entity, PositionComponent)!, team = plantTeam(plant)
+    const plant = plantInPlay(world, entity)!, position = plant.position, team = plantTeam(plant)
     emitServerEvent(world.resources.get(EventQueueResource), 'plantFroze', {
         entityId: entity, typeId: plant.typeId, x: position.x, y: position.y, row: position.row, ...(team === 'zombies' ? { team } : {}),
     })
@@ -34,9 +33,8 @@ export function freezeHostiles(world: World, definitions: GameplayDefinitions, t
     for (const zombie of world.zombies) {
         if (isHostile(zombieTeam(zombie), team)) freezeZombie(world, definitions, zombie.id, zombie, freeze, remover)
     }
-    for (const entity of world.query(PlantComponent)) {
-        const plant = world.get(entity, PlantComponent)
-        if (plant && isHostile(plantTeam(plant), team) && world.hasEntity(entity)) freezePlant(world, definitions, entity, plant, freeze, remover)
+    for (const plant of plantsInPlay(world)) {
+        if (isHostile(plantTeam(plant), team)) freezePlant(world, definitions, plant.id, plant, freeze, remover)
     }
     if (freeze.boardTicks <= 0) return
     const level = world.resources.get(LevelStateResource)

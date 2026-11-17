@@ -2,6 +2,7 @@ import type { GridItem } from './components'
 import type { Item } from './levelState'
 import type { Projectile } from '../combat/Projectile'
 import type { Mower } from '../level/Mower'
+import type { Plant } from '../plants/Plant'
 import type { Zombie } from '../zombies/Zombie'
 
 export type EntityId = number
@@ -209,6 +210,8 @@ export class World {
     readonly items = new EntityList<Item>(this)
     /** The things of a cell: graves and craters (GridItem). */
     readonly gridItems = new EntityList<GridItem>(this)
+    /** The plants, of their kinds (Plant), a mowed one too until it is squashed (Plant.state; lawn.plantsInPlay). */
+    readonly plants = new EntityList<Plant>(this)
     /** What flies, of its kind (Projectile): a mower set off runs as one (MowingProjectile). */
     readonly projectiles = new EntityList<Projectile>(this)
     /** The rows' lawn mowers waiting at their house ends (Mower). */
@@ -264,7 +267,7 @@ export class World {
     }
 
     private lists(): EntityList<Entity>[] {
-        return [this.items, this.gridItems, this.projectiles, this.mowers, this.zombies]
+        return [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
     }
 
     hasEntity(entity: EntityId): boolean {

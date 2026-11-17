@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { PlantComponent } from '@/server/state/components'
 import { WaveResource } from '@/server/state/levelState'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
@@ -201,7 +200,7 @@ test('a hostile snow pea chills a plant, which then does everything at half spee
 test('a chilled plant animates every tick at half its rate, as a chilled zombie\'s body, and a view is sent that rate', () => {
     const server = begin()
     debug(server, '/plant sunflower 3 1')
-    const id = plants(server)[0].entityId, plant = world(server).get(id, PlantComponent)!
+    const id = plants(server)[0].entityId, plant = world(server).plants.get(id)!
     const step = () => {
         const before = structuredClone(plant.animations!)
         server.tick()

@@ -5,7 +5,7 @@ import { plantFacingRect, plantTeam, zombieFacingRect, zombieTeam } from '@/shar
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { rectOverlap } from '../combat/collision'
-import { type Position, PositionComponent, RandomResource } from '../state/components'
+import { type Position, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { isTargetableZombie } from '../zombies/damage'
 import { detonatePlant } from './damage'
@@ -61,7 +61,7 @@ export class PotatoMine extends Plant {
 
     act({ world, commands }: SystemContext, entity: EntityId): void {
         if (this.phaseTicks > 0) this.phaseTicks--
-        const random = world.resources.get(RandomResource), position = world.get(entity, PositionComponent)!
+        const random = world.resources.get(RandomResource), position = this.position
         const next = (phase: MinePhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks

@@ -6,7 +6,7 @@ import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'
 import { nonNegativeInteger } from '@/shared/validate'
 import { getDebugRules } from '../debug/debugRules'
 import { dropZombieLoot } from '../level/loot'
-import { MowedPlantComponent, type Plant, PlantComponent, type Position, RandomResource, type Zombie } from '../state/components'
+import { type Plant, type Position, RandomResource, type Zombie } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { destroyZombie, dropZombieHelm, dropZombieShield, flattenZombie, isFlattenableZombie } from '../zombies/damage'
 import { zombiePartDropped } from '../zombies/parts'
@@ -97,16 +97,17 @@ export class MowingProjectile extends Projectile {
     }
 
     /**
-     * It crushes a plant past its own end (an explode-o-nut does not go off): it stops being a plant at once and stays
-     * as a mowed one for its squashing, as a mowed zombie does, tipped the way it runs (`team`).
+     * It crushes a plant past its own end (an explode-o-nut does not go off): it is out of play at once (`mowered`) and
+     * stays for its squashing, as a mowed zombie does, tipped the way it runs (`team`).
      */
     private mowPlant(world: World, mowerId: number, target: { entity: number, plant: Plant }, team: Team): void {
         this.chompCounter = CHOMP_ACTIVE_TICKS
-        world.remove(target.entity, PlantComponent)
+        const { plant } = target
         // Its ice goes with it, breaking nothing off, as a mowed zombie's (Zombie::MowDown).
-        delete target.plant.frozenTicks
+        delete plant.frozenTicks
         const squash = startLayer(MOWERED_ANIMATION, {}, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
-        world.add(target.entity, MowedPlantComponent, { plant: target.plant, squash, ...(team === 'zombies' ? { left: true as const } : {}) })
+        plant.state = 'mowered'
+        plant.mowered = { squash, ...(team === 'zombies' ? { left: true as const } : {}) }
         emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId, plantId: target.entity })
     }
 }

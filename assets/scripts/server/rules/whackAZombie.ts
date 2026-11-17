@@ -1,7 +1,7 @@
 import { array, boolean, exact, integer, integerInRange, nonEmptyString, nonNegativeInteger, positiveFinite, positiveInteger } from '@/shared/validate'
 import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
-import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource } from '../state/components'
+import { type EntityRemover, EconomyStateResource, LevelStateResource, RandomResource } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { startWalk } from '../zombies/animation'
@@ -15,7 +15,7 @@ import type { Team } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
 import { circleRectOverlap } from '../combat/collision'
 import { graves as lawnGraves, placeGrave, raiseZombieFromGrave } from '../level/graves'
-import { gridItems } from '../level/lawn'
+import { gridItems, plantInPlay, plantsInPlay } from '../level/lawn'
 import { spawnLoot } from '../level/loot'
 import { levelAwardDropped, tryDropLevelAward } from '../level/levelAward'
 import { nextWaveComing } from '../level/waves'
@@ -128,9 +128,8 @@ const HAMMER_TEAM: Team = 'plants'
 function placeWhackGraves(world: World, definitions: GameplayDefinitions, count: number, riseAtTick?: number): void {
     const { definition, board } = world.resources.get(LevelStateResource)
     const graves = lawnGraves(world).map(({ grave }) => grave)
-    const plants = [...world.query(PositionComponent, PlantComponent)]
-    const plantsAt = (row: number, column: number) => plants.filter(entity =>
-        world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
+    const plants = [...plantsInPlay(world)]
+    const plantsAt = (row: number, column: number) => plants.filter(plant => plant.position.row === row && plant.column === column).map(plant => plant.id)
     const picks: Array<{ row: number; column: number; weight: number }> = []
     for (let column = whackSettings(definition.rules!).firstGraveColumn; column < board.columns; column++) {
         for (const row of definition.activeRows) {
@@ -193,9 +192,9 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
     let typeId = typeHit < chances.pail[phase] && count < 3 ? zombies.pail
         : typeHit < chances.pail[phase] + chances.cone[phase] ? zombies.cone : zombies.plain
     // A grave a grave buster is eating raises nothing.
-    const plants = [...world.query(PositionComponent, PlantComponent)]
-    const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
-        && world.get(entity, PlantComponent)!.column === grave.column && definitions.plants[world.get(entity, PlantComponent)!.typeId].graveBuster))
+    const plants = [...plantsInPlay(world)]
+    const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(plant => plant.position.row === grave.row
+        && plant.column === grave.column && definitions.plants[plant.typeId].graveBuster))
     let maxSpeed = animateCurve(1, 12, wave, 1, 3, 'ease-in')
     count = Math.min(count, graves.length)
     for (let index = 0; index < count; index++) {
@@ -231,8 +230,8 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     let top: { entity: number; row: number; plant?: true } | undefined
     const reached = (position: { x: number; y: number }, body: { x: number; y: number; width: number; height: number }) =>
         circleRectOverlap(x, y - 20, hammerRadius, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })
-    for (const entity of world.query(PositionComponent, PlantComponent)) {
-        const plant = world.get(entity, PlantComponent)!, position = world.get(entity, PositionComponent)!
+    for (const plant of plantsInPlay(world)) {
+        const { id: entity, position } = plant
         if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(position, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row, plant: true }
     }
@@ -247,7 +246,7 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     if (top.plant) {
         damagePlant(world, definitions, top.entity, hammerDamage, remover)
         // What is left says whether the blow ended it: a plant kept from harm (`/plantinvincible`) is not.
-        const left = world.get(top.entity, PlantComponent), killed = !left || left.health === 0
+        const left = plantInPlay(world, top.entity), killed = !left || left.health === 0
         emitServerEvent(events, 'plantWhacked', { plantId: top.entity, x, y, ...(killed ? { killed } : {}) })
         return
     }

@@ -5,10 +5,6 @@ import { readGameplaySource } from '../../tools/mod/content'
 import type { World } from '@/server/state/World'
 import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
-import {
-PlantComponent,
-PositionComponent,
-} from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { SkySunResource, TutorialResource } from '@/server/state/levelState'
@@ -155,6 +151,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
     assert.deepEqual([peashooter], [{
         entityId: 2,
         typeId: 'pvz:peashooter',
+        state: 'idle',
         column: 0,
         health: 300,
         maxHealth: 300,
@@ -353,8 +350,8 @@ test('collecting the award keeps existing entity updates running while spawning 
     const mower = (snapshot: WorldSnapshot) => snapshot.projectiles.find(projectile => projectile.typeId === 'pvz:lawnmower')!
     const peaId = launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
     const plantId = world.createEntity()
-    world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
-    world.add(plantId, PlantComponent, newPlant<Shooter>(world, 'pvz:peashooter', {}, { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } }))
+    world.insert(world.plants, newPlant<Shooter>(world, 'pvz:peashooter', { id: plantId, position: { x: 40, y: 280, row: 2 } },
+        { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } }))
     const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     damageZombie(world, definitions, corpseId, 270)
     world.resources.get(SkySunResource).atTick = 1

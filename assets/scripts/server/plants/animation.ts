@@ -2,7 +2,8 @@ import type { GameSystem } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
 import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
-import { LevelStateResource, type Plant, PlantComponent, RandomResource } from '../state/components'
+import { LevelStateResource, type Plant, RandomResource } from '../state/components'
+import { plantsInPlay } from '../level/lawn'
 import { plantPace, plantSkipsTick } from './chill'
 import { isPlantAsleep } from './sleep'
 
@@ -63,8 +64,7 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
             const random = world.resources.get(RandomResource)
-            for (const entity of world.query(PlantComponent)) {
-                const plant = world.get(entity, PlantComponent)!
+            for (const plant of plantsInPlay(world)) {
                 const definition = definitions.plants[plant.typeId], animation = definition.animation
                 if (!animation || !plant.animations) continue
                 stepPlantAnimation(animation, plant, random, {

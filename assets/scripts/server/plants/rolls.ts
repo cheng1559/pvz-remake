@@ -1,6 +1,7 @@
 import type { GameSystem } from '@/server/state/World'
-import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
+import { LevelStateResource } from '../state/components'
 import { plantSkipsTick } from './chill'
+import { plantsInPlay } from '../level/lawn'
 
 /**
  * The plants that roll (Plant.roll: a bowling nut's, BowlingNut.ts), in play, also once the level is won; one chilled
@@ -13,11 +14,8 @@ export function createPlantRollSystem(): GameSystem {
             const { world } = context
             const level = world.resources.get(LevelStateResource)
             if (level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
-            for (const entity of world.query(PositionComponent, PlantComponent)) {
-                // An earlier nut's blow may have taken this one out.
-                const plant = world.get(entity, PlantComponent)
-                if (plant && plant.health > 0 && !plantSkipsTick(plant)) plant.roll(context, entity)
-            }
+            // An earlier nut's blow may take one out: it is passed over.
+            for (const plant of plantsInPlay(world)) if (plant.health > 0 && !plantSkipsTick(plant)) plant.roll(context, plant.id)
         },
     }
 }
