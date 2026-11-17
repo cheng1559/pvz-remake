@@ -32,7 +32,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
             if (level.result === 'lost' || level.paused) return
             const ready = readyMowers(world)
             if (ready.size) for (const zombie of [...world.zombies]) {
-                const { id: entity, position } = zombie
+                const { position } = zombie
                 const mower = ready.get(position.row)
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
                 if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
@@ -41,7 +41,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                 const left = waiting.position.x + hitbox.x
                 if (Math.min(left + hitbox.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
                     ready.delete(position.row)
-                    waiting.setOff(world, definitions, { entity, position, zombie })
+                    waiting.setOff(world, definitions, zombie)
                 }
             }
             // A mowed plant is squashed as a mowed zombie is, by the driver it plays, then gone.

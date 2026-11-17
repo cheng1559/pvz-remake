@@ -19,7 +19,7 @@ export function createPlantAbilitySystem(_definitions: GameplayDefinitions): Gam
             // An earlier plant's blast or bite may take one out: it is passed over.
             for (const plant of plantsInPlay(world)) {
                 if (plantSkipsTick(plant) || plant.asleep(world)) continue
-                plant.act(context, plant.id)
+                plant.act(context)
             }
         },
     }

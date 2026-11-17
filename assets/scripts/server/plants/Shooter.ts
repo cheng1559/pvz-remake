@@ -1,4 +1,4 @@
-import type { EntityId, Position, SystemContext, World } from '@/server/state/World'
+import type { SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
 import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'
@@ -68,7 +68,7 @@ export class Shooter extends Plant {
         return !!this.burst || super.blinkMisses()
     }
 
-    attack({ world, commands, tick }: SystemContext, entity: EntityId): void {
+    attack({ world, commands, tick }: SystemContext): void {
         const definitions = this.definitions, definition = this.definition, shooter = this.shooter
         // Mushrooms sleep on day boards.
         if (this.asleep(world)) return
@@ -78,11 +78,11 @@ export class Shooter extends Plant {
             if (tick < this.burst.fireAtTick) return
             if (shooter.area) {
                 // Plant::Fire for the Fume-shroom: DoRowAreaDamage instead of a projectile.
-                const hits = targets(world, definitions, position, this)
+                const hits = targets(world, definitions, this)
                 for (const zombie of hits.zombies) damageZombie(world, definitions, zombie, shooter.area.damage,
                     { hitsShieldAndBody: shooter.area.hitsShieldAndBody }, commands)
                 for (const target of hits.plants) damagePlant(world, definitions, target, shooter.area.damage, commands)
-                emitServerEvent(events, 'plantAreaAttack', { plantId: entity, typeId: this.typeId, hits: hits.zombies.length + hits.plants.length })
+                emitServerEvent(events, 'plantAreaAttack', { plantId: this.id, typeId: this.typeId, hits: hits.zombies.length + hits.plants.length })
                 delete this.burst
                 return
             }
@@ -91,7 +91,7 @@ export class Shooter extends Plant {
             // Plant::GetPeaHeadOffset: the mouth is where the part it is on is now.
             const anchor = shooter.anchor ? plantTrackPoint(this, definition, shooter.anchor.layer, shooter.anchor.track) : { x: 0, y: 0 }
             // What it aims at, for a motion that takes a target.
-            const target = targets(world, definitions, position, this).nearest
+            const target = targets(world, definitions, this).nearest
             // Where it sets off: Plant::Fire's aOriginX and aOriginY, the projectile's corner.
             const origin = {
                 x: position.x + plantFacingX(anchor.x + shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
@@ -108,13 +108,13 @@ export class Shooter extends Plant {
             })
             // The client puts the plant's muzzle effect where it set off (PlantPresentationDefinition.muzzle).
             emitServerEvent(events, 'projectileFired', {
-                plantId: entity, plantTypeId: this.typeId, projectileId: projectile, typeId: shooter.projectile!, ...origin,
+                plantId: this.id, plantTypeId: this.typeId, projectileId: projectile, typeId: shooter.projectile!, ...origin,
                 ...(team === 'zombies' ? { team } : {}),
             })
             if (--this.burst.shotsRemaining > 0) {
                 this.burst.fireAtTick = tick + shooter.burstIntervalTicks
                 firePlantAnimation(this, definition, random)
-                emitServerEvent(events, 'plantFiring', { plantId: entity })
+                emitServerEvent(events, 'plantFiring', { plantId: this.id })
             } else {
                 delete this.burst
             }
@@ -122,10 +122,10 @@ export class Shooter extends Plant {
         }
         if (tick < this.readyAtTick) return
         this.readyAtTick = tick + random.integer(shooter.cadenceTicks.min, shooter.cadenceTicks.max)
-        if (targets(world, definitions, position, this).nearest === undefined) return
+        if (targets(world, definitions, this).nearest === undefined) return
         this.burst = { fireAtTick: tick + shooter.windupTicks - 1, shotsRemaining: shooter.shotsPerBurst }
         firePlantAnimation(this, definition, random)
-        emitServerEvent(events, 'plantFiring', { plantId: entity })
+        emitServerEvent(events, 'plantFiring', { plantId: this.id })
     }
 }
 
@@ -141,10 +141,9 @@ export class Shooter extends Plant {
 function targets(
     world: World,
     definitions: GameplayDefinitions,
-    plantPosition: Position,
     plant: Plant,
 ): { zombies: number[], plants: number[], nearest?: number } {
-    const { body: plantBody, shooter } = definitions.plants[plant.typeId]
+    const plantPosition = plant.position, { body: plantBody, shooter } = definitions.plants[plant.typeId]
     const team = plantTeam(plant), direction = teamDirection(team), anywhere = shooter?.type === 'seeker'
     const bounds = getBoardBounds(world), reach = shooter?.range ?? Infinity
     const front = plantPosition.x + plantFacingX(plantBody.width, team)
@@ -174,6 +173,6 @@ function targets(
     const overLow = shooter && !shooter.area && world.resources.get(ProjectileMotionsResource).resolve(PLANT_ATTACKS[shooter.type]).overLow
     const plants = hostilePlants(world, definitions, team, anywhere ? undefined : plantPosition.row)
         .filter(target => !(overLow && definitions.plants[target.plant.typeId].low) && (anywhere || ahead(target.rect.x, target.rect.width)))
-    for (const target of plants) near(target.entity, target.rect)
-    return { zombies, plants: plants.map(target => target.entity), nearest }
+    for (const target of plants) near(target.plant.id, target.rect)
+    return { zombies, plants: plants.map(target => target.plant.id), nearest }
 }

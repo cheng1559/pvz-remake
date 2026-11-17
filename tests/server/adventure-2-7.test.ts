@@ -277,7 +277,7 @@ test('a type kept from the cold takes neither a snow pea’s chill nor the ice',
     const shooter = plantAt(server, 3, 1)!, walker = zombieAt(server, 3)
     const plant = world(server).plants.get(shooter)!, zombie = world(server).zombies.get(walker)!
     damagePlant(world(server), cold, shooter, 20, world(server), 1000)
-    chillZombie(world(server), cold, walker, zombie, 1000)
+    chillZombie(world(server), cold, zombie, 1000)
     freezeHostiles(world(server), cold, 'plants', ice, world(server))
     freezeHostiles(world(server), cold, 'zombies', ice, world(server))
     assert.deepEqual([plant.chilledTicks, plant.frozenTicks, plant.health], [0, undefined, plant.maxHealth - 20], 'only the pea’s damage')

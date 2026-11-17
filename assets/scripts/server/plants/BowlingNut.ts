@@ -1,4 +1,4 @@
-import type { EntityId, EntityRemover, Position, SystemContext, World } from '@/server/state/World'
+import type { EntityId, EntityRemover, SystemContext, World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
 import { groundStep } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
@@ -58,7 +58,7 @@ export class BowlingNut extends Plant {
         super.restoreOwn(rest, name)
     }
 
-    roll({ world, commands }: SystemContext, entity: EntityId): void {
+    roll({ world, commands }: SystemContext): void {
         const definitions = this.definitions, definition = this.definition, rules = this.rules
         const board = world.resources.get(LevelStateResource).board
         const random = world.resources.get(RandomResource)
@@ -72,7 +72,7 @@ export class BowlingNut extends Plant {
         const clip = definition.animation!.clips[roll.clip], team = plantTeam(this), facing = teamDirection(team)
         if (clip?.ground) position.x += facing * groundStep(clip, roll)
         if (facing > 0 ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
-            commands.destroyEntity(entity)
+            commands.destroyEntity(this.id)
             return
         }
         position.y += this.direction * rules.bounceSpeed
@@ -88,26 +88,25 @@ export class BowlingNut extends Plant {
         })?.id
         // A hostile plant takes the body blow; it is no zombie impact, so `hits` does not count it.
         const plantTarget = target === undefined
-            ? hostilePlants(world, definitions, team, position.row).find(candidate => rectOverlap(nut, candidate.rect) > 0)?.entity : undefined
+            ? hostilePlants(world, definitions, team, position.row).find(candidate => rectOverlap(nut, candidate.rect) > 0)?.plant.id : undefined
         if (target === undefined && plantTarget === undefined) {
             if (direction) { position.row += direction; this.direction = direction }
             return
         }
-        const self: Rolling = { entity, nut: this, position }
         if (plantTarget !== undefined) {
             // Two hostile nuts meeting strike each other at once, both blows landing before either moves on, so the
             // outcome does not depend on which of them the run reaches first: each takes the other's blow and bounces,
             // and an explode-o-nut goes off. An explode-o-nut goes off first, so a plain nut's blow never lands on a
             // nut already blowing up.
             const other = rollingNut(world, plantTarget)
-            const blows: [Rolling, number][] = other ? [[self, plantTarget], [other, entity]] : [[self, plantTarget]]
-            blows.sort(([left], [right]) => Number(!!right.nut.definition.deathExplosion) - Number(!!left.nut.definition.deathExplosion))
-            for (const [rolling, struck] of blows) rolling.nut.strike(world, commands, rolling, struck)
-            for (const [rolling] of blows) if (world.hasEntity(rolling.entity)) rolling.nut.bounce(rolling.position, board.rows, random)
+            const blows: [BowlingNut, number][] = other ? [[this, plantTarget], [other, this.id]] : [[this, plantTarget]]
+            blows.sort(([left], [right]) => Number(!!right.definition.deathExplosion) - Number(!!left.definition.deathExplosion))
+            for (const [nut, struck] of blows) nut.strike(world, commands, struck)
+            for (const [nut] of blows) if (world.hasEntity(nut.id)) nut.bounce(board.rows, random)
             return
         }
         if (definition.deathExplosion) {
-            detonatePlant(world, definitions, entity, definition.deathExplosion, commands)
+            detonatePlant(world, definitions, this.id, definition.deathExplosion, commands)
             return
         }
         const struck = target!
@@ -125,15 +124,15 @@ export class BowlingNut extends Plant {
         const level = world.resources.get(LevelStateResource).definition
         if (!world.resources.get(TutorialResource).firstAdventure || level.adventureIndex > 10) this.hits++
         emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
-            entityId: struck, typeId: zombie.typeId, helm, shield: shieldType !== undefined, plantId: entity, plantTypeId: this.typeId, hits: this.hits,
+            entityId: struck, typeId: zombie.typeId, helm, shield: shieldType !== undefined, plantId: this.id, plantTypeId: this.typeId, hits: this.hits,
         })
-        this.bounce(position, board.rows, random)
+        this.bounce(board.rows, random)
     }
 
     /** A nut's blow on a hostile plant: an explode-o-nut's blast, which takes the nut too, otherwise its damage. */
-    private strike(world: World, remover: EntityRemover, rolling: Rolling, target: number): void {
+    private strike(world: World, remover: EntityRemover, target: number): void {
         if (this.definition.deathExplosion) {
-            detonatePlant(world, this.definitions, rolling.entity, this.definition.deathExplosion, remover)
+            detonatePlant(world, this.definitions, this.id, this.definition.deathExplosion, remover)
             return
         }
         // A nut gone by the other's blast takes no blow.
@@ -141,24 +140,21 @@ export class BowlingNut extends Plant {
         if (typeId === undefined) return
         damagePlant(world, this.definitions, target, this.rules.damage, remover)
         emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
-            entityId: target, typeId, target: 'plant', helm: false, shield: false, plantId: rolling.entity, plantTypeId: this.typeId, hits: this.hits,
+            entityId: target, typeId, target: 'plant', helm: false, shield: false, plantId: this.id, plantTypeId: this.typeId, hits: this.hits,
         })
     }
 
     /** Plant::UpdateBowling: after an impact it turns back the way it slanted (and away from an edge row), or, rolling straight, picks a way. */
-    private bounce(position: Position, rows: number, random: DeterministicRng): void {
-        const direction = position.row === rows - 1 || this.direction > 0 ? -1
+    private bounce(rows: number, random: DeterministicRng): void {
+        const position = this.position, direction = position.row === rows - 1 || this.direction > 0 ? -1
             : position.row === 0 || this.direction < 0 ? 1 : random.integer(0, 1) ? -1 : 1
         position.row += direction
         this.direction = direction
     }
 }
 
-/** A nut as it rolls: its entity, itself and where it is. */
-interface Rolling { entity: EntityId; nut: BowlingNut; position: Position }
-
 /** The plant at `entity` when it is a rolling nut too (a Mod's included). */
-function rollingNut(world: World, entity: EntityId): Rolling | undefined {
+function rollingNut(world: World, entity: EntityId): BowlingNut | undefined {
     const plant = plantInPlay(world, entity)
-    return plant instanceof BowlingNut ? { entity, nut: plant, position: plant.position } : undefined
+    return plant instanceof BowlingNut ? plant : undefined
 }

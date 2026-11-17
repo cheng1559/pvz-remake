@@ -89,7 +89,7 @@ export class Dancer extends Zombie {
     }
 
     /** Zombie::IsMovingAtChilledSpeed, as the zombies' tick starts: one of its troupe is chilled. */
-    beforeTick(world: World, _entity: EntityId): void {
+    beforeTick(world: World): void {
         if (this.troupeOf(world).some(member => member.chilledTicks > 0)) this.slowed = true
         else delete this.slowed
     }
@@ -114,8 +114,8 @@ export class Dancer extends Zombie {
     }
 
     /** Zombie::UpdateActions: a tick of its dance, which stands while it eats. */
-    act({ world, tick }: SystemContext, entity: EntityId, _plants: PlantFinder): boolean {
-        if (this.state !== 'eating') this.updateDance(world, entity, tick)
+    act({ world, tick }: SystemContext, _plants: PlantFinder): boolean {
+        if (this.state !== 'eating') this.updateDance(world, tick)
         return false
     }
 
@@ -138,7 +138,7 @@ export class Dancer extends Zombie {
     }
 
     /** Zombie::ZombieNotWalking: it walks on its walking phases alone, while none of its troupe stands still. */
-    walks(world: World, _entity: EntityId): boolean {
+    walks(world: World): boolean {
         return danceWalks(this.phase) && !this.troupeOf(world).some(member => member.state === 'eating' || member.frozenTicks !== undefined)
     }
 
@@ -156,11 +156,11 @@ export class Dancer extends Zombie {
      * it or its new troupe eats or is frozen and go slowed while any of them is chilled. One of a troupe leaves its
      * leader's place and has no leader again.
      */
-    changedSides(world: World, entity: EntityId): void {
+    changedSides(world: World): void {
         if (this.troupe) this.troupe = this.troupe.map(() => null)
         if (this.leader !== undefined) {
             const leader = world.zombies.get(this.leader), places = leader instanceof Dancer ? leader.troupe : undefined
-            const index = places?.indexOf(entity) ?? -1
+            const index = places?.indexOf(this.id) ?? -1
             if (index >= 0) places![index] = null
             delete this.leader
         }
@@ -198,12 +198,12 @@ export class Dancer extends Zombie {
      * about) and is held; then it goes by the beat. Missing some of its troupe, with its head, it waits its
      * `summonTicks`, then snaps again on the beat its arm goes up if it is far enough in.
      */
-    private updateDance(world: World, entity: EntityId, tick: number): void {
+    private updateDance(world: World, tick: number): void {
         const definition = this.definition, lead = this.lead
         const random = world.resources.get(RandomResource)
         if (lead && this.summonTicks !== undefined && --this.summonTicks <= 0) {
             // Zombie::GetDancerFrame's beat 12, on which its arm goes up.
-            if (beatPhase(tick) === 'armUp' && this.hasHead && farEnoughIn(world, entity, lead.summonBeforeX)) {
+            if (beatPhase(tick) === 'armUp' && this.hasHead && farEnoughIn(this, lead.summonBeforeX)) {
                 delete this.summonTicks
                 this.phase = 'resummon'
                 playZombie(this, definition.animation, ZOMBIE_CLIPS.point, random)
@@ -221,10 +221,10 @@ export class Dancer extends Zombie {
             if (point.time < definition.animation.clips[point.clip].frames) return
             if (this.phase === 'summon') {
                 emitServerEvent(world.resources.get(EventQueueResource), 'dancerSnapped', {
-                    entityId: entity, typeId: this.typeId, music: countZombiesOnScreen(world) <= MUSIC_MAX_ZOMBIES,
+                    entityId: this.id, typeId: this.typeId, music: countZombiesOnScreen(world) <= MUSIC_MAX_ZOMBIES,
                 })
             }
-            this.summonTroupe(world, entity)
+            this.summonTroupe(world)
             this.phase = 'hold'
             this.phaseTicks = lead!.holdTicks
             return
@@ -235,7 +235,7 @@ export class Dancer extends Zombie {
         }
         const phase = beatPhase(tick)
         if (phase !== this.phase) this.playPhase(phase, random)
-        if (lead && this.hasHead && this.summonTicks === undefined && this.missingTroupe(world, entity)) this.summonTicks = lead.summonTicks
+        if (lead && this.hasHead && this.summonTicks === undefined && this.missingTroupe(world)) this.summonTicks = lead.summonTicks
     }
 
     /**
@@ -263,7 +263,7 @@ export class Dancer extends Zombie {
     }
 
     /** Zombie::NeedsMoreBackupDancers: an empty place of its troupe in a row zombies walk. */
-    private missingTroupe(world: World, entity: EntityId): boolean {
+    private missingTroupe(world: World): boolean {
         return this.troupe!.some((id, index) => (id === null || !world.hasEntity(id)) && this.troupePlace(world, index) !== undefined)
     }
 
@@ -274,7 +274,7 @@ export class Dancer extends Zombie {
      * (`dancerCalledUp`: PARTICLE_DANCER_RISE and FOLEY_GRAVESTONE_RUMBLE). It counts against no wave
      * (Board::TotalZombiesHealthInWave leaves out one with a leader).
      */
-    private summonTroupe(world: World, entity: EntityId): void {
+    private summonTroupe(world: World): void {
         if (!this.hasHead) return
         const lead = this.lead!, places = this.troupe!
         const board = world.resources.get(LevelStateResource).board
@@ -290,16 +290,16 @@ export class Dancer extends Zombie {
             if (this.mindControlled) backup.mindControlled = true
             backup.riseTicks = lead.riseTicks
             backup.phase = 'rise'
-            backup.leader = entity
+            backup.leader = this.id
             zombieBody(backup).rate = 0
             places[index] = backupId
-            emitServerEvent(world.resources.get(EventQueueResource), 'dancerCalledUp', { entityId: backupId, typeId: lead.backup, row: place.row, leaderId: entity })
+            emitServerEvent(world.resources.get(EventQueueResource), 'dancerCalledUp', { entityId: backupId, typeId: lead.backup, row: place.row, leaderId: this.id })
         }
     }
 }
 
 /** Left of `x` going the zombies' way; on the plants' side, as far from the right. */
-function farEnoughIn(world: World, entity: EntityId, x: number): boolean {
-    const zombie = world.zombies.get(entity)!, at = zombie.position.x
+function farEnoughIn(zombie: Zombie, x: number): boolean {
+    const at = zombie.position.x
     return teamDirection(zombieTeam(zombie)) < 0 ? at < x : at > 800 - x
 }

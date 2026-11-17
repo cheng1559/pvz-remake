@@ -1,6 +1,6 @@
 import { type CommandBuffer, defineResource, type EntityId, type Position, type SystemContext, type World } from '@/server/state/World'
 import type { GameplayDefinitions, ProjectileDefinition, ProjectileOverrides } from '@/shared/content/gameplay'
-import { isHostile, plantTeam, type Team } from '@/shared/content/teams'
+import { isHostile, plantTeam, projectileTeam, type Team } from '@/shared/content/teams'
 import { jsonRoundTrip, type JsonObject, type ProjectileSnapshot } from '@/shared/protocol'
 import type { Plant } from '../plants/Plant'
 import type { Zombie } from '../zombies/Zombie'
@@ -15,13 +15,17 @@ import { heightOverRow, type MotionStep, type ProjectileMotionDefinition, Projec
  * that does damage flies over, Projectile::FindCollisionTargetPlant for the zombie pea). Nothing moves during a run.
  */
 export type ProjectileTarget = ProjectileBody & { left: number, right: number }
-/** A zombie or a plant a projectile may meet, where it is. */
-export type ProjectileBody = { entity: number, position: Position } & ({ zombie: Zombie } | { plant: Plant, low: boolean })
+/** A zombie or a plant a projectile may meet. */
+export type ProjectileBody = { zombie: Zombie } | { plant: Plant, low: boolean }
+
+/** The zombie or the plant a projectile meets. */
+export function bodyOf(target: ProjectileBody): Zombie | Plant {
+    return 'zombie' in target ? target.zombie : target.plant
+}
 
 /** One projectile's tick: its motion's step, with what its hit needs (ProjectileSystem). */
 export interface ProjectileHit extends MotionStep {
     commands: SystemContext['commands']
-    definition: ProjectileDefinition
     motion: ProjectileMotionDefinition
     /** Everything a projectile can meet, by row (ProjectileSystem.rows). */
     rows: readonly ProjectileTarget[][]
@@ -101,13 +105,12 @@ export class Projectile {
     }
 
     /**
-     * It sets off at `position`, which its motion may adjust, for `team` (the plants' when its launcher gives none),
+     * It sets off where it is, which its motion may adjust, for `team` (the plants' when its launcher gives none),
      * aimed at `target`: its motion starts what it keeps (ProjectileMotionDefinition.launch).
      */
-    launch(world: World, definitions: GameplayDefinitions, position: Position, team?: Team, target?: number): void {
+    launch(world: World, definitions: GameplayDefinitions, team?: Team, target?: number): void {
         if (team) this.team = team
-        const state = world.resources.get(ProjectileMotionsResource).resolve(this.motion)
-            .launch?.({ world, definitions, definition: this.definition, position, team: team ?? 'plants', target })
+        const state = world.resources.get(ProjectileMotionsResource).resolve(this.motion).launch?.({ world, definitions, projectile: this, target })
         if (state === undefined) delete this.motionState
         else this.motionState = state
     }
@@ -118,7 +121,8 @@ export class Projectile {
     }
 
     /** Whether it hits `target`, which it overlaps by `overlap`: a standing zombie of the other side, or a plant it does not fly over. */
-    canHit({ team, motion }: ProjectileHit, target: ProjectileTarget, overlap: number): boolean {
+    canHit({ motion }: ProjectileHit, target: ProjectileTarget, overlap: number): boolean {
+        const team = projectileTeam(this)
         // Plant::GetDamageRangeFlags: no projectile reaches a zombie in its vault, a thrown one no more than the others.
         if ('zombie' in target) return overlap > 0 && isTargetableZombie(target.zombie, team)
         return !(motion.overLow && target.low) && overlap > PLANT_HIT_OVERLAP && isHostile(plantTeam(target.plant), team) && target.plant.health > 0
@@ -126,10 +130,10 @@ export class Projectile {
 
     /** Projectile::DoImpact: it hits `target`, taking its damage off it, and off what else its splash reaches. */
     strike(hit: ProjectileHit, target: ProjectileTarget): void {
-        const { world, definitions, entity, position, definition, team, motion } = hit
+        const { world, definitions, motion } = hit, { position, definition } = this, team = projectileTeam(this)
         const impact = {
-            projectileId: entity,
-            targetId: target.entity,
+            projectileId: this.id,
+            targetId: bodyOf(target).id,
             typeId: this.typeId,
             ...(team === 'zombies' ? { team } : {}),
             x: position.x,
@@ -158,8 +162,8 @@ export class Projectile {
         // Projectile::DoSplashDamage: what else it would hit there, on its row and the rows next to it.
         const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
         const splashed = [position.row - 1, position.row, position.row + 1].flatMap(row => hit.rows[row] ?? []).filter(other =>
-            other.entity !== target.entity && this.canHit(hit, other, Math.min(right, other.right) - Math.max(left, other.left)) &&
-            world.hasEntity(other.entity) && !('plant' in other && plantInPlay(world, other.entity) !== other.plant))
+            bodyOf(other) !== bodyOf(target) && this.canHit(hit, other, Math.min(right, other.right) - Math.max(left, other.left)) &&
+            world.hasEntity(bodyOf(other).id) && !('plant' in other && plantInPlay(world, other.plant.id) !== other.plant))
         // A third of its damage each, or less: all of it comes to no more than seven times its damage.
         const damage = definition.damage!, third = Math.trunc(damage / 3), most = damage * 7
         const each = third * splashed.length > most ? Math.max(1, Math.trunc(damage * most / (third * splashed.length * 3))) : third
@@ -170,7 +174,7 @@ export class Projectile {
     snapshot(world: World): ProjectileSnapshot {
         const { id: entity, position } = this
         const motion = world.resources.get(ProjectileMotionsResource).of(this)
-        const height = motion.height?.(this.motionState) ?? heightOverRow(world, this.definition, position), facing = motion.facing?.(this.motionState)
+        const height = motion.height?.(this.motionState) ?? heightOverRow(world, this), facing = motion.facing?.(this.motionState)
         const lift = motion.lift?.(this.motionState) ?? 0, own = this.snapshotOwn()
         return { entityId: entity, typeId: this.typeId, ...position, age: this.age, ...(this.team === 'zombies' ? { team: 'zombies' as const } : {}),
             ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }), ...(own ? { own } : {}) }
@@ -188,10 +192,10 @@ export class Projectile {
 }
 
 /** Takes `damage` off a target as a projectile does: chilling it, and past a zombie's shield for one coming down. */
-function damageTarget({ world, definitions, commands, definition, motion }: ProjectileHit, target: ProjectileTarget, damage: number): void {
+function damageTarget({ world, definitions, commands, projectile: { definition }, motion }: ProjectileHit, target: ProjectileTarget, damage: number): void {
     if ('zombie' in target) {
-        damageZombie(world, definitions, target.entity, damage, { chillTicks: definition.chillTicks, ...(motion.fromAbove ? { bypassShield: true } : {}) }, commands)
-    } else damagePlant(world, definitions, target.entity, damage, commands, definition.chillTicks)
+        damageZombie(world, definitions, target.zombie.id, damage, { chillTicks: definition.chillTicks, ...(motion.fromAbove ? { bypassShield: true } : {}) }, commands)
+    } else damagePlant(world, definitions, target.plant.id, damage, commands, definition.chillTicks)
 }
 
 /** How a level's world makes its projectiles, each of its type's kind (ProjectileRegistry). */
@@ -227,7 +231,7 @@ export function launchProjectile(world: World, definitions: GameplayDefinitions,
     const projectile = world.resources.get(ProjectileFactoryResource).create(launch.typeId, definition, launch.motion)
     projectile.id = entity
     projectile.position = { ...launch.position }
-    projectile.launch(world, definitions, projectile.position, launch.team, launch.target)
+    projectile.launch(world, definitions, launch.team, launch.target)
     creator.insert(world.projectiles, projectile)
     return entity
 }

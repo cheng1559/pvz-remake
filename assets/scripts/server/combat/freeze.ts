@@ -33,10 +33,10 @@ export function freezeFromPlant(world: World, definitions: GameplayDefinitions, 
  */
 export function freezeHostiles(world: World, definitions: GameplayDefinitions, team: Team, freeze: FreezeDefinition, remover: EntityRemover): void {
     for (const zombie of world.zombies) {
-        if (isHostile(zombieTeam(zombie), team)) freezeZombie(world, definitions, zombie.id, zombie, freeze, remover)
+        if (isHostile(zombieTeam(zombie), team)) freezeZombie(world, definitions, zombie, freeze, remover)
     }
     for (const plant of plantsInPlay(world)) {
-        if (isHostile(plantTeam(plant), team)) freezePlant(world, definitions, plant.id, plant, freeze, remover)
+        if (isHostile(plantTeam(plant), team)) freezePlant(world, definitions, plant, freeze, remover)
     }
     if (freeze.boardTicks <= 0) return
     const level = world.resources.get(LevelStateResource)
@@ -49,14 +49,14 @@ export function freezeHostiles(world: World, definitions: GameplayDefinitions, t
  * its shield. Zombie::CanBeChilled spares one dying or rising from a grave, or kept from the cold by its type; one its
  * type keeps from the ice (CanBeFrozen: a pole vaulter in the air) is only chilled (server/combat/cold.ts).
  */
-function freezeZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, freeze: FreezeDefinition, remover: EntityRemover): void {
+function freezeZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie, freeze: FreezeDefinition, remover: EntityRemover): void {
     const definition = definitions.zombies[zombie.typeId]
     if (!zombieCanBeChilled(zombie, definition)) return
     const cold = zombie.chilledTicks > 0 || zombie.frozenTicks !== undefined
-    if (freeze.chillTicks > 0) chillZombie(world, definitions, entity, zombie, freeze.chillTicks)
+    if (freeze.chillTicks > 0) chillZombie(world, definitions, zombie, freeze.chillTicks)
     if (!zombieCanBeFrozen(zombie, definition)) return
     zombie.frozenTicks = frozenTicks(world, freeze, cold)
-    if (freeze.damage > 0) damageZombie(world, definitions, entity, freeze.damage, { bypassShield: true }, remover)
+    if (freeze.damage > 0) damageZombie(world, definitions, zombie.id, freeze.damage, { bypassShield: true }, remover)
 }
 
 /**
@@ -64,13 +64,13 @@ function freezeZombie(world: World, definitions: GameplayDefinitions, entity: nu
  * as a hostile plant's hit does); frozen, it does nothing (plants/chill.ts). One its type keeps from the ice is only
  * chilled, and one kept from the cold not even that (server/combat/cold.ts).
  */
-function freezePlant(world: World, definitions: GameplayDefinitions, entity: number, plant: Plant, freeze: FreezeDefinition, remover: EntityRemover): void {
+function freezePlant(world: World, definitions: GameplayDefinitions, plant: Plant, freeze: FreezeDefinition, remover: EntityRemover): void {
     if (!plantCanBeChilled(plant)) return
     const cold = plant.chilledTicks > 0 || plant.frozenTicks !== undefined
-    if (freeze.chillTicks > 0) chillPlant(world, definitions, entity, plant, freeze.chillTicks)
+    if (freeze.chillTicks > 0) chillPlant(world, definitions, plant, freeze.chillTicks)
     if (!plantCanBeFrozen(plant)) return
     plant.frozenTicks = frozenTicks(world, freeze, cold)
-    if (freeze.damage > 0) damagePlant(world, definitions, entity, freeze.damage, remover)
+    if (freeze.damage > 0) damagePlant(world, definitions, plant.id, freeze.damage, remover)
 }
 
 function frozenTicks(world: World, freeze: FreezeDefinition, cold: boolean): number {

@@ -1,4 +1,3 @@
-import type { Position } from '../state/World'
 import type { Zombie } from './Zombie'
 import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, CHILLED_ANIMATION_FACTOR, groundStep, type LayerState, startLayer, startLayers, stepLayers, TICKS_PER_SECOND } from '@/shared/content/animation'
@@ -72,9 +71,9 @@ export function startWalk(zombie: Zombie, definition: ZombieDefinition, clip: st
  * of its own pace at that (a dancer's moonwalk). `direction`: -1 walks left (toward the house), 1 right (a
  * mind-controlled zombie).
  */
-export function walkZombie(zombie: Zombie, position: Position, definition: ZombieDefinition, random: AnimationRandom, direction: -1 | 1 = -1): void {
+export function walkZombie(zombie: Zombie, definition: ZombieDefinition, random: AnimationRandom, direction: -1 | 1 = -1): void {
     const animation = definition.animation, state = zombieBody(zombie), clip = animation.clips[state.clip]
     if (!clip.fps) state.rate = walkRate(zombie.speedPerTick, clip, definition.scale)
-    position.x += direction * groundStep(clip, state, zombiePace(zombie)) * (definition.scale ?? 1)
+    zombie.position.x += direction * groundStep(clip, state, zombiePace(zombie)) * (definition.scale ?? 1)
     stepZombie(zombie, animation, random)
 }

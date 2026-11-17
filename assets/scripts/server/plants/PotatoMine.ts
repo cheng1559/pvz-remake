@@ -1,4 +1,4 @@
-import type { EntityId, Position, SystemContext, World } from '@/server/state/World'
+import type { SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { animateCurve } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
@@ -58,9 +58,9 @@ export class PotatoMine extends Plant {
         return super.keptFromIce() || this.phase === 'rising'
     }
 
-    act({ world, commands }: SystemContext, entity: EntityId): void {
+    act({ world, commands }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
-        const random = world.resources.get(RandomResource), position = this.position
+        const random = world.resources.get(RandomResource)
         const next = (phase: PotatoMinePhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks
@@ -70,15 +70,15 @@ export class PotatoMine extends Plant {
             case 'arming':
                 if (this.phaseTicks > 0) break
                 next('rising', this.mine.riseTicks)
-                emitServerEvent(world.resources.get(EventQueueResource), 'mineRising', { entityId: entity })
+                emitServerEvent(world.resources.get(EventQueueResource), 'mineRising', { entityId: this.id })
                 break
             case 'rising':
                 if (this.phaseTicks === 0) next('armed', 0)
                 break
             case 'armed':
-                if (findAbilityTarget(world, this.definitions, position, this, this.mine) !== undefined) {
-                    detonatePlant(world, this.definitions, entity, this.mine.explosion, commands)
-                } else flashMineLight(world, this.definitions, position, this)
+                if (findAbilityTarget(world, this.definitions, this, this.mine) !== undefined) {
+                    detonatePlant(world, this.definitions, this.id, this.mine.explosion, commands)
+                } else flashMineLight(world, this.definitions, this)
                 break
         }
     }
@@ -94,8 +94,8 @@ export class PotatoMine extends Plant {
  * mine's reach (Plant::DistanceToClosestZombie), down to 3 with one within 50, so the light flashes faster as one nears.
  */
 const MINE_LIGHT = { layer: 'light', body: 'body', near: 50, far: 200, fast: 3, slower: 2 }
-function flashMineLight(world: World, definitions: GameplayDefinitions, position: Position, plant: Plant): void {
-    const light = plant.animations?.[MINE_LIGHT.layer], body = plant.animations?.[MINE_LIGHT.body]
+function flashMineLight(world: World, definitions: GameplayDefinitions, plant: Plant): void {
+    const position = plant.position, light = plant.animations?.[MINE_LIGHT.layer], body = plant.animations?.[MINE_LIGHT.body]
     const definition = definitions.plants[plant.typeId]
     if (!light || !body) return
     const team = plantTeam(plant), reach = plantFacingRect(definition.mine!.attack, team)

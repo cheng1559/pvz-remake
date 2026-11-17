@@ -1,4 +1,4 @@
-import type { Position, World } from '@/server/state/World'
+import type { World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantTargeting } from '@/shared/content/gameplay'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { getBoardBounds, rectOverlap } from '../combat/collision'
@@ -14,12 +14,11 @@ import type { Plant } from './Plant'
 export function findAbilityTarget(
     world: World,
     definitions: GameplayDefinitions,
-    plantPosition: Position,
     plant: Plant,
     { attack, targeting }: { attack: { x: number, width: number }, targeting: PlantTargeting },
     biting = false,
 ): number | undefined {
-    const team = plantTeam(plant), forward = teamDirection(team) > 0
+    const plantPosition = plant.position, team = plantTeam(plant), forward = teamDirection(team) > 0
     let target: number | undefined
     let targetX = Infinity
     const bounds = getBoardBounds(world)
@@ -46,8 +45,8 @@ export function findAbilityTarget(
         consider(entity, { x: position.x + body.x, width: body.width }, inset,
             zombie.state === 'eating' || biting ? targeting.eatingExtraRange : 0)
     }
-    for (const { entity, rect } of hostilePlants(world, definitions, team, plantPosition.row)) {
-        consider(entity, rect, 0, biting ? targeting.eatingExtraRange : 0, targeting.plantReach)
+    for (const { plant: other, rect } of hostilePlants(world, definitions, team, plantPosition.row)) {
+        consider(other.id, rect, 0, biting ? targeting.eatingExtraRange : 0, targeting.plantReach)
     }
     return target
 }

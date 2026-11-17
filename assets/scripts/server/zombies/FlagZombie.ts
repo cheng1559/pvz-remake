@@ -1,4 +1,4 @@
-import type { EntityId, World } from '@/server/state/World'
+import type { World } from '@/server/state/World'
 import { ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
 import { zombiePartDropped } from './parts'
 import { Zombie } from './Zombie'
@@ -15,9 +15,9 @@ export class FlagZombie extends Zombie {
     }
 
     /** Zombie::DropFlag: its flag falls off, heard and seen by the client as a part (`zombiePartDropped`). */
-    dropCarried(world: World, entity: EntityId): void {
+    dropCarried(world: World): void {
         if (!this.animations[ZOMBIE_FLAG_LAYER]) return
         delete this.animations[ZOMBIE_FLAG_LAYER]
-        zombiePartDropped(world, entity, 'flag')
+        zombiePartDropped(world, this.id, 'flag')
     }
 }

@@ -12,7 +12,7 @@ export function createPlantAttackSystem(_definitions: GameplayDefinitions): Game
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
             // An earlier plant's area attack may take one out: it is passed over.
-            for (const plant of plantsInPlay(world)) plant.attack(context, plant.id)
+            for (const plant of plantsInPlay(world)) plant.attack(context)
         },
     }
 }

@@ -8,6 +8,7 @@ import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { zombiePartDropped } from './parts'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Plant } from '../plants/Plant'
+import type { Zombie } from './Zombie'
 import { damagePlant } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
@@ -20,7 +21,7 @@ const CHILLED_BITE_CADENCE_FACTOR = 2
  * A plant's body span on its row; plants do not move during a run. `rolling`: a plant off the grid (a rolling nut),
  * which a pole vaulter vaults over (`vault.bowlingAttack`) but no zombie bites.
  */
-interface PlantTarget { entity: number, position: Position, plant: Plant, left: number, right: number, rolling: boolean }
+interface PlantTarget { plant: Plant, left: number, right: number, rolling: boolean }
 
 export function createZombieSystem(definitions: GameplayDefinitions): GameSystem { return new ZombieSystem(definitions) }
 
@@ -46,15 +47,14 @@ export class ZombieSystem implements GameSystem {
         for (const plant of plantsInPlay(world)) if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
         this.plantRows = []
         for (const plant of plantsInPlay(world)) {
-            const { id: entity, position } = plant
-            const type = definitions.plants[plant.typeId]
+            const { position } = plant, type = definitions.plants[plant.typeId]
             const body = plantFacingRect(type.body, plantTeam(plant)), left = position.x + body.x
-            ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + body.width, rolling: type.occupiesCell === false })
+            ;(this.plantRows[position.row] ??= []).push({ plant, left, right: left + body.width, rolling: type.occupiesCell === false })
         }
 
         const sides = new Set([...world.zombies].map(zombie => zombieTeam(zombie)))
         this.bothSides = sides.size > 1
-        for (const zombie of world.zombies) zombie.beforeTick(world, zombie.id)
+        for (const zombie of world.zombies) zombie.beforeTick(world)
         // An earlier zombie's bite may have blown one up: the list passes it over.
         for (const zombie of world.zombies) {
             const { id: entity, position } = zombie
@@ -99,17 +99,17 @@ export class ZombieSystem implements GameSystem {
                 continue
             }
             if (zombie.health <= 0) {
-                startZombieDeath(world, definitions, entity, zombie)
+                startZombieDeath(world, definitions, zombie)
                 continue
             }
             // Zombie::UpdatePlaying: the ice counts down first, so a zombie whose ice runs out acts on that tick.
-            meltIce(world, entity, zombie)
+            meltIce(world, zombie)
             if (zombie.chilledTicks > 0) zombie.chilledTicks--
             if (zombie.frozenTicks !== undefined) {
                 // Zombie::IsImmobilizied: it neither moves nor eats, its body still (zombiePace); what it carries goes on,
                 // and a headless one goes on dying.
                 stepZombie(zombie, animation, random)
-                if (!zombie.hasHead) updateHeadlessZombie(world, definitions, entity, zombie)
+                if (!zombie.hasHead) updateHeadlessZombie(world, definitions, zombie)
                 continue
             }
             if (zombie.riseTicks) {
@@ -118,7 +118,7 @@ export class ZombieSystem implements GameSystem {
                 zombie.riseTicks--
                 continue
             }
-            if (zombie.pauses(context, entity)) continue
+            if (zombie.pauses(context)) continue
             this.updateActive(context, entity)
             if (world.resources.get(LevelStateResource).result === 'lost') return
         }
@@ -132,12 +132,12 @@ export class ZombieSystem implements GameSystem {
         const hostilePlants = (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
 
         // Zombie::UpdateActions: what its kind does of its own, which may take the tick (a pole vaulter's vault).
-        if (!zombie.act(context, entity, (attack, rollingAttack) => findPlantTarget(world, hostilePlants, position, attack, rollingAttack))) {
+        if (!zombie.act(context, (attack, rollingAttack) => findPlantTarget(world, hostilePlants, position, attack, rollingAttack))) {
             // Zombie::UpdateEating bites an enemy zombie first, then a plant (CheckIfPreyCaught, if its kind eats now).
             const attack = zombieFacingRect(zombie.attackRect(), team)
             const eats = zombie.eats()
-            const prey = eats && this.bothSides ? findZombieTarget(world, definitions, entity, team, position, attack) : undefined
-            let target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack)?.entity : undefined
+            const prey = eats && this.bothSides ? findZombieTarget(world, definitions, zombie, attack) : undefined
+            let target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack)?.plant.id : undefined
             // Zombie::EatPlant: a plant its kind does not bite (it ends a leader's moonwalk).
             if (target !== undefined && zombie.passesPlant()) target = undefined
             if (target === undefined && prey === undefined) {
@@ -148,9 +148,9 @@ export class ZombieSystem implements GameSystem {
                 }
                 zombie.biteTicks = 0
                 // Zombie::ZombieNotWalking: it walks unless its kind stands it still (a dancer off its walking steps).
-                if (zombie.walks(world, entity)) walkZombie(zombie, position, definition, random, teamDirection(team))
+                if (zombie.walks(world)) walkZombie(zombie, definition, random, teamDirection(team))
                 else stepZombie(zombie, animation, random)
-                if (!zombie.hasHead) updateHeadlessZombie(world, definitions, entity, zombie)
+                if (!zombie.hasHead) updateHeadlessZombie(world, definitions, zombie)
             } else {
                 if (zombie.state !== 'eating') {
                     zombie.state = 'eating'
@@ -159,7 +159,7 @@ export class ZombieSystem implements GameSystem {
                 const body = zombieBody(zombie), eat = animation.clips[ZOMBIE_CLIPS.eat], previous = body.time
                 stepZombie(zombie, animation, random)
                 if (!zombie.hasHead) {
-                    updateHeadlessZombie(world, definitions, entity, zombie)
+                    updateHeadlessZombie(world, definitions, zombie)
                 } else {
                     // Zombie::EatZombie bites an enemy zombie as it bites a plant, but through the shield and without
                     // a flash. The client flashes a chewed plant.
@@ -214,11 +214,10 @@ export class ZombieSystem implements GameSystem {
 function findZombieTarget(
     world: World,
     definitions: GameplayDefinitions,
-    self: number,
-    team: ReturnType<typeof zombieTeam>,
-    position: Position,
+    zombie: Zombie,
     attack: { x: number, width: number },
 ): number | undefined {
+    const { id: self, position } = zombie, team = zombieTeam(zombie)
     const left = position.x + attack.x, right = left + attack.width
     for (const other of world.zombies) {
         const { id: entity, position: at } = other
@@ -244,14 +243,14 @@ function findPlantTarget(
     let target: PlantTarget | undefined
     // Runs for every zombie on every tick, so the span overlap test comes before entity lookups.
     for (let i = 0; i < plants.length; i++) {
-        const candidate = plants[i], { entity, position, plant } = candidate
+        const candidate = plants[i], { plant } = candidate, { id: entity, position } = plant
         const reach = candidate.rolling ? rollingAttack : attack
         if (!reach) continue
         const left = zombiePosition.x + reach.x
         if (Math.min(left + reach.width, candidate.right) - Math.max(left, candidate.left) < 20) continue
         // An earlier zombie may have finished this plant during the same run.
         if (plant.health <= 0 || !world.hasEntity(entity)) continue
-        if (!target || position.x < target.position.x || (position.x === target.position.x && entity < target.entity)) target = candidate
+        if (!target || position.x < target.plant.position.x || (position.x === target.plant.position.x && entity < target.plant.id)) target = candidate
     }
     return target
 }

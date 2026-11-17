@@ -1,4 +1,4 @@
-import type { Entity, EntityId, GameSystem, Position, SystemContext, World } from '@/server/state/World'
+import type { Entity, GameSystem, Position, SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { assertJsonValue, jsonRoundTrip, type JsonObject, type EntityBehaviorState } from '@/shared/protocol'
@@ -8,8 +8,6 @@ interface BehaviorEntity extends EntityBehaviorState { typeId: string }
 interface BehaviorDefinition { readonly behavior?: JsonObject }
 
 export type EntityBehaviorContext<Key extends string, Data, Definition, State extends JsonObject = JsonObject> = SystemContext & {
-    readonly entity: EntityId
-    readonly position: Position
     readonly definition: Readonly<Definition>
     readonly state: State
     readonly definitions: Readonly<GameplayDefinitions>
@@ -88,11 +86,6 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
         behavior.validateState?.(state, definition)
     }
 
-    /** Each entity of the kind in id order, as it stands; an earlier one's blow may have taken one out during the run. */
-    private *entries(world: World): Iterable<{ entity: EntityId, data: Data, position: Position }> {
-        for (const data of this.source(world)) yield { entity: data.id, data, position: data.position }
-    }
-
     system(definitions: GameplayDefinitions): GameSystem {
         const table = this.definitions(definitions)
         return {
@@ -101,11 +94,12 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
                 const { world } = context
                 const level = world.resources.get(LevelStateResource)
                 if (this.behaviors.size === 0 || level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
-                for (const { entity, data, position } of this.entries(world)) {
+                // Each entity of the kind in id order, as it stands; an earlier one's blow may have taken one out during the run.
+                for (const data of this.source(world)) {
                     const behavior = this.behaviors.get(data.typeId)
                     if (!behavior || !this.active(data) || level.result === 'won' && !behavior.tickAfterWin) continue
                     behavior.tick({
-                        ...context, entity, definitions, [this.kind]: data, position,
+                        ...context, definitions, [this.kind]: data,
                         definition: table[data.typeId], state: data.behaviorState!,
                     } as EntityBehaviorContext<Key, Data, Definition>)
                 }

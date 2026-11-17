@@ -175,7 +175,7 @@ test('a troupe stands still while one of it is frozen, and goes slowed while one
     ticks(server, DANCE_BEAT.ticks * DANCE_BEAT.beats)
     assert.equal(zombie(server, leader).x, from, 'it never walks')
     delete lawn.zombies.get(backups[0])!.frozenTicks
-    chillZombie(lawn, definitions, backups[1], lawn.zombies.get(backups[1])!, 1000)
+    chillZombie(lawn, definitions, lawn.zombies.get(backups[1])!, 1000)
     ticks(server, 1)
     const own = lawn.zombies.get(leader)!.animations[ZOMBIE_BODY_LAYER].rate
     assert.equal(zombie(server, leader).animations[ZOMBIE_BODY_LAYER].rate, own / 2, 'its body at half its rate')
@@ -188,7 +188,7 @@ test('a moonwalk is not slowed by a chill, and one frozen in it stands once thaw
     const leader = zombiesOf(server, 'pvz:dancer')[0].entityId, lawn = world(server)
     ticks(server, 20)
     // UpdateAnimSpeed sets its moonwalk no rate (its ground runs backwards), so ApplyAnimRate's chill never comes to it.
-    chillZombie(lawn, definitions, leader, lawn.zombies.get(leader)!, 1000)
+    chillZombie(lawn, definitions, lawn.zombies.get(leader)!, 1000)
     ticks(server, 1)
     assert.deepEqual([zombie(server, leader).chilled, zombie(server, leader).animations[ZOMBIE_BODY_LAYER].rate], [true, 24], 'tinted, at its own pace')
     const frames = definitions.zombies['pvz:dancer'].animation.clips.moonwalk.frames, before = zombie(server, leader).animations[ZOMBIE_BODY_LAYER].time
@@ -248,9 +248,9 @@ test('a dancer on the plants\' side calls up its troupe on its side; a mind-cont
     const hypnotized = lawn.zombies.get(leader)!, stander = lawn.zombies.get(letGo[0]) as Dancer
     const [state, phase] = [hypnotized.state, stander.phase]
     stander.phase = 'walk'
-    assert.equal(stander.walks(lawn, letGo[0]), true)
+    assert.equal(stander.walks(lawn), true)
     hypnotized.state = 'eating'
-    assert.equal(stander.walks(lawn, letGo[0]), false, 'one it let go stands while it eats')
+    assert.equal(stander.walks(lawn), false, 'one it let go stands while it eats')
     hypnotized.state = state
     stander.phase = phase
     until(server, () => phaseOf(zombie(server, leader)) === 'hold', lead.summonTicks + 2 * DANCE_BEAT.ticks * DANCE_BEAT.beats)

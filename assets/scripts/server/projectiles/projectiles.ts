@@ -7,7 +7,7 @@ import { plantInPlay, plantsInPlay } from '../level/lawn'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
-import type { Projectile, ProjectileBody, ProjectileHit, ProjectileTarget } from './Projectile'
+import { bodyOf, type Projectile, type ProjectileBody, type ProjectileHit, type ProjectileTarget } from './Projectile'
 
 /** How far above or below the screen a projectile is gone, as one that lost what it homed on. */
 const OFF_BOARD_Y = 200
@@ -28,15 +28,15 @@ export class ProjectileSystem implements GameSystem {
         if (level.result === 'lost' || level.paused) return
         this.rows = []
         const add = (target: ProjectileBody, body: { x: number, width: number }) => {
-            const left = target.position.x + body.x
-            ;(this.rows[target.position.row] ??= []).push({ ...target, left, right: left + body.width })
+            const { position } = bodyOf(target), left = position.x + body.x
+            ;(this.rows[position.row] ??= []).push({ ...target, left, right: left + body.width })
         }
         for (const zombie of world.zombies) {
-            add({ entity: zombie.id, position: zombie.position, zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
+            add({ zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
         }
         for (const plant of plantsInPlay(world)) {
             const definition = definitions.plants[plant.typeId]
-            add({ entity: plant.id, position: plant.position, plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
+            add({ plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
         const mowers: Projectile[] = []
@@ -57,8 +57,7 @@ export class ProjectileSystem implements GameSystem {
         // it meets is its kind's (Projectile.canHit, strike).
         const motions = world.resources.get(ProjectileMotionsResource)
         const motion = motions.of(projectile)
-        const step: ProjectileHit = { world, definitions, commands, entity, position, projectile, definition, team, motion, rows: this.rows,
-            speedScale: projectile.speedScale() }
+        const step: ProjectileHit = { world, definitions, commands, projectile, motion, rows: this.rows, speedScale: projectile.speedScale() }
         const moved = motion.move(step, projectile.motionState), landed = moved === 'landed'
         const bounds = getBoardBounds(world)
         // Projectile::CheckForCollision: a spore reaching its age vanishes before it can hit.
@@ -75,7 +74,7 @@ export class ProjectileSystem implements GameSystem {
         for (const target of definition.pierce ? met : met.slice(0, 1)) {
             projectile.strike(step, target)
             if (!definition.pierce) continue
-            ;(projectile.hits ??= []).push(target.entity)
+            ;(projectile.hits ??= []).push(bodyOf(target).id)
             motion.afterHit?.(step, projectile.motionState)
         }
         if (met.length && !definition.pierce) {
@@ -96,21 +95,24 @@ export class ProjectileSystem implements GameSystem {
      * what a piercing one has hit already.
      */
     private targets(hit: ProjectileHit, aim: Exclude<MotionAim, 'none'>): ProjectileTarget[] {
-        const { world, position, projectile, definition, team } = hit
+        const { world, projectile } = hit, { position, definition } = projectile
         const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
-        const candidates = typeof aim === 'number' ? this.rows.flat().filter(target => target?.entity === aim) : this.rows[position.row] ?? NONE
-        const direction = teamDirection(team)
-        const nearer = (a: ProjectileTarget, b: ProjectileTarget) =>
-            direction * (a.position.x - b.position.x) || Number('zombie' in b) - Number('zombie' in a) || a.entity - b.entity
+        const candidates = typeof aim === 'number' ? this.rows.flat().filter(target => bodyOf(target).id === aim) : this.rows[position.row] ?? NONE
+        const direction = teamDirection(projectileTeam(projectile))
+        const nearer = (a: ProjectileTarget, b: ProjectileTarget) => {
+            const first = bodyOf(a), second = bodyOf(b)
+            return direction * (first.position.x - second.position.x) || Number('zombie' in b) - Number('zombie' in a) || first.id - second.id
+        }
         let nearest: ProjectileTarget | undefined, all: ProjectileTarget[] | undefined
         // Runs for every projectile on every tick: the span overlap test comes before entity lookups, and a miss makes nothing.
         for (let i = 0; i < candidates.length; i++) {
             const target = candidates[i]
             const overlap = Math.min(right, target.right) - Math.max(left, target.left)
             if (aim === ('zombie' in target ? 'plants' : 'zombies')) continue
-            if (!projectile.canHit(hit, target, overlap) || projectile.hits?.includes(target.entity)) continue
+            const body = bodyOf(target)
+            if (!projectile.canHit(hit, target, overlap) || projectile.hits?.includes(body.id)) continue
             // An earlier projectile may have finished it during the same run.
-            if (!world.hasEntity(target.entity) || 'plant' in target && plantInPlay(world, target.entity) !== target.plant) continue
+            if (!world.hasEntity(body.id) || 'plant' in target && plantInPlay(world, body.id) !== target.plant) continue
             if (definition.pierce) (all ??= []).push(target)
             else if (!nearest || nearer(target, nearest) < 0) nearest = target
         }

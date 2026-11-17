@@ -48,22 +48,22 @@ export function explode(
         if (rect.x > getBoardBounds(world).right || !circleRectOverlap(x, y, explosion.radius, rect)) continue
         // Zombie::ApplyBurn chars a zombie whose body has less health than the blast; a tougher one only takes the damage.
         const burned = explosion.burn && zombie.health < explosion.damage
-        if (burned) burnZombie(world, definitions, entity, zombie, position, remover)
+        if (burned) burnZombie(world, definitions, zombie, remover)
         else damageZombie(world, definitions, entity, explosion.damage, { leaveBody: false }, remover)
         if (burned || zombie.health === 0 || isDeadOrDying(zombie)) kills++
     }
     // Hostile plants take the blast's damage; `kills` stays the zombies'.
     const plantX = x + teamDirection(team) * plantReach
-    for (const { entity, position, rect } of hostilePlants(world, definitions, team)) {
-        if (Math.abs(position.row - origin.row) > explosion.rowRange) continue
+    for (const { plant, rect } of hostilePlants(world, definitions, team)) {
+        if (Math.abs(plant.position.row - origin.row) > explosion.rowRange) continue
         if (rect.x > getBoardBounds(world).right || !circleRectOverlap(plantX, y, explosion.radius, rect)) continue
-        damagePlant(world, definitions, entity, explosion.damage, remover)
+        damagePlant(world, definitions, plant.id, explosion.damage, remover)
     }
     return kills
 }
 
-function burnZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, position: Position, remover: EntityRemover): void {
-    const events = world.resources.get(EventQueueResource)
+function burnZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie, remover: EntityRemover): void {
+    const { id: entity, position } = zombie, events = world.resources.get(EventQueueResource)
     // Zombie::ApplyBurn removes bodies that are already falling or in the air.
     if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'airborne') {
         destroyZombie(world, definitions, entity, remover)

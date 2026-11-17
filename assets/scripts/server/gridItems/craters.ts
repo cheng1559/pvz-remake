@@ -11,8 +11,8 @@ import { lawnPlants } from '../level/lawn'
 export type Crater = Omit<CraterSnapshot, 'entityId'> & { id: EntityId }
 
 /** The craters on the lawn. */
-export function craters(world: World): Array<{ entity: EntityId, crater: Crater }> {
-    return [...world.gridItems].flatMap(crater => crater.typeId === CRATER ? [{ entity: crater.id, crater }] : [])
+export function craters(world: World): Crater[] {
+    return [...world.gridItems].filter((item): item is Crater => item.typeId === CRATER)
 }
 
 /**
@@ -21,7 +21,7 @@ export function craters(world: World): Array<{ entity: EntityId, crater: Crater 
  * (placeGrave). `team`: the side it was made by, which only turns it round (CraterSnapshot.team).
  */
 export function placeCrater(world: World, definitions: GameplayDefinitions, row: number, column: number, ticks: number, team: Team): EntityId {
-    for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.entity)
+    for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.id)
     const entity = world.createEntity()
     world.insert(world.gridItems, { id: entity, typeId: CRATER, column, row, ticks, ...(team === 'zombies' ? { team } : {}) })
     return entity
@@ -34,7 +34,7 @@ export function createCraterSystem(): GameSystem {
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result !== 'playing' || level.paused) return
-            for (const { entity, crater } of craters(world)) if (--crater.ticks <= 0) commands.destroyEntity(entity)
+            for (const crater of craters(world)) if (--crater.ticks <= 0) commands.destroyEntity(crater.id)
         },
     }
 }

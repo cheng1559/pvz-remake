@@ -1,10 +1,10 @@
-import type { World } from '@/server/state/World'
+import type { EntityId, World } from '@/server/state/World'
 import { plantTeam, zombieTeam } from '@/shared/content/teams'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { plantInPlay } from '../level/lawn'
 
 /** A plant or a zombie that may be frozen (see freeze.ts). */
-interface Freezable { frozenTicks?: number }
+interface Freezable { id: EntityId, frozenTicks?: number }
 
 /**
  * Zombie::RemoveIceTrap with PARTICLE_ICE_TRAP_RELEASE: the ice it is in breaks off, as it does when it runs out, when
@@ -12,9 +12,10 @@ interface Freezable { frozenTicks?: number }
  * its ice without (Zombie::MowDown, ApplyBurn), which only clears `frozenTicks`. The event says where the entity
  * stands, for one gone by the time it is heard of.
  */
-export function breakIce(world: World, entity: number, frozen: Freezable): void {
+export function breakIce(world: World, frozen: Freezable): void {
     if (frozen.frozenTicks === undefined) return
     delete frozen.frozenTicks
+    const entity = frozen.id
     // A zombie or a plant.
     const zombie = world.zombies.get(entity), plant = zombie ? undefined : plantInPlay(world, entity)
     const position = (zombie ?? plant)?.position
@@ -28,6 +29,6 @@ export function breakIce(world: World, entity: number, frozen: Freezable): void 
 }
 
 /** Zombie::UpdatePlaying: a tick of the ice, which breaks off as it runs out. */
-export function meltIce(world: World, entity: number, frozen: Freezable): void {
-    if (frozen.frozenTicks !== undefined && --frozen.frozenTicks <= 0) breakIce(world, entity, frozen)
+export function meltIce(world: World, frozen: Freezable): void {
+    if (frozen.frozenTicks !== undefined && --frozen.frozenTicks <= 0) breakIce(world, frozen)
 }

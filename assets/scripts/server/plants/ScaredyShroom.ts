@@ -1,4 +1,4 @@
-import type { EntityId, Position, SystemContext, World } from '@/server/state/World'
+import type { SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { isHostile, plantFacingX, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
@@ -47,12 +47,12 @@ export class ScaredyShroom extends Shooter {
         return this.phase
     }
 
-    act({ world, tick }: SystemContext, entity: EntityId): void {
+    act({ world, tick }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), fright = this.fright, shooter = this.definition.shooter!
         const firing = Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
         if (this.burst || firing) return
-        const near = zombieNear(world, this.definitions, this.position, this, fright)
+        const near = zombieNear(world, this.definitions, this, fright)
         const next = (phase: ScaredyShroomPhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks
@@ -84,9 +84,8 @@ export class ScaredyShroom extends Shooter {
  * A hostile zombie not dead or dying with its body within the fright's circle, on the plant's row or the rows beside
  * it. The circle's center is from the plant's corner, mirrored for a plant facing left.
  */
-function zombieNear(world: World, definitions: GameplayDefinitions, position: Position, plant: Plant,
-    fright: NonNullable<PlantDefinition['fright']>): boolean {
-    const team = plantTeam(plant), x = position.x + plantFacingX(fright.center.x, team), y = position.y + fright.center.y
+function zombieNear(world: World, definitions: GameplayDefinitions, plant: Plant, fright: NonNullable<PlantDefinition['fright']>): boolean {
+    const position = plant.position, team = plantTeam(plant), x = position.x + plantFacingX(fright.center.x, team), y = position.y + fright.center.y
     for (const zombie of world.zombies) {
         const at = zombie.position
         if (Math.abs(at.row - position.row) > fright.rowRange || isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), team)) continue

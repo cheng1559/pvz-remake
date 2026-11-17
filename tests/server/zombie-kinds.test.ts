@@ -92,12 +92,12 @@ test('the flag zombie lets its flag go once, as it loses its head, falls or is m
     world.insert(world.zombies, Object.assign(flag, { id: entity, position: { x: 0, y: 0, row: 0 } }))
     flag.animations = { body: { clip: 'walk', time: 0, rate: 12 }, flag: { clip: 'flag', time: 0, rate: 15 } }
     assert.ok(flag instanceof FlagZombie)
-    flag.dropCarried(world, entity)
-    flag.dropCarried(world, entity)
+    flag.dropCarried(world)
+    flag.dropCarried(world)
     assert.deepEqual([Object.keys(flag.animations), drainServerEvents(world.resources.get(EventQueueResource)).map(event => event.data.part)], [['body'], ['flag']])
     const plain = factory.create('pvz:normal')
     plain.animations = { body: { clip: 'walk', time: 0, rate: 12 }, flag: { clip: 'flag', time: 0, rate: 15 } }
-    plain.dropCarried(world, entity)
+    plain.dropCarried(world)
     assert.deepEqual(Object.keys(plain.animations), ['body', 'flag'])
     assert.throws(() => new ZombieRegistry().validate(changed(zombies => { zombies['pvz:normal'].kind = 'flag' })), /pvz:normal of kind flag needs a flag layer/)
 })

@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/server/state/World'
+import type { SystemContext } from '@/server/state/World'
 import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import type { AnimationRandom } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
@@ -50,7 +50,7 @@ export class Newspaper extends Zombie {
     }
 
     /** It gasps, its body going on, then walks on enraged and roars, with its head on and at most 10 zombies on screen. */
-    pauses({ world }: SystemContext, entity: EntityId): boolean {
+    pauses({ world }: SystemContext): boolean {
         if (!this.gaspTicks) return false
         const random = world.resources.get(RandomResource)
         stepZombie(this, this.definition.animation, random)
@@ -58,7 +58,7 @@ export class Newspaper extends Zombie {
         if (this.gaspTicks === 0) {
             this.walkAgain(random)
             emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', {
-                entityId: entity, typeId: this.typeId, roar: this.hasHead && countZombiesOnScreen(world) <= 10,
+                entityId: this.id, typeId: this.typeId, roar: this.hasHead && countZombiesOnScreen(world) <= 10,
             })
         }
         return true

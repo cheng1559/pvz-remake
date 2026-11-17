@@ -1,7 +1,7 @@
-import type { Position, World } from '@/server/state/World'
+import type { World } from '@/server/state/World'
 import { startLayer } from '@/shared/content/animation'
 import { type GameplayDefinitions, type ProjectileDefinition, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantTeam, projectileTeam, type Team, zombieTeam } from '@/shared/content/teams'
 import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'
 import { nonNegativeInteger } from '@/shared/validate'
 import { getDebugRules } from '../debug/debugRules'
@@ -19,9 +19,6 @@ const CHOMP_READY_TICKS = 25
 const CHOMP_ACTIVE_TICKS = 50
 /** The original's mower slows from its 3.33 a tick to 1 as it chews: this much of its speed. */
 const CHOMP_SPEED_SCALE = 1 / 3.33
-
-/** A zombie a mowing projectile meets. */
-export type MowTarget = { entity: number, position: Position, zombie: Zombie }
 
 export interface MowingProjectile {
     /** LawnMower::mChompCounter: the ticks left chewing, slowed. */
@@ -54,18 +51,19 @@ export class MowingProjectile extends Projectile {
     }
 
     /** It takes the other side's zombies (mowsZombie), and their plants unless /plantinvincible keeps them. */
-    canHit({ world, team }: ProjectileHit, target: ProjectileTarget, overlap: number): boolean {
+    canHit({ world }: ProjectileHit, target: ProjectileTarget, overlap: number): boolean {
+        const team = projectileTeam(this)
         return overlap > 0 && ('zombie' in target ? mowsZombie(target.zombie, team) : !getDebugRules(world).plantInvincible && isHostile(plantTeam(target.plant), team))
     }
 
-    strike({ world, definitions, entity, team }: ProjectileHit, target: ProjectileTarget): void {
-        if ('zombie' in target) this.mowZombie(world, definitions, entity, target)
-        else this.mowPlant(world, entity, target, team)
+    strike({ world, definitions }: ProjectileHit, target: ProjectileTarget): void {
+        if ('zombie' in target) this.mowZombie(world, definitions, target.zombie)
+        else this.mowPlant(world, target.plant)
     }
 
-    /** LawnMower::StartMower: as `entity` sets off, it crushes the zombie that set it off, chewing on it for less. */
-    mowTrigger(world: World, definitions: GameplayDefinitions, entity: number, trigger: MowTarget): void {
-        this.mowZombie(world, definitions, entity, trigger)
+    /** LawnMower::StartMower: as it sets off, it crushes the zombie that set it off, chewing on it for less. */
+    mowTrigger(world: World, definitions: GameplayDefinitions, trigger: Zombie): void {
+        this.mowZombie(world, definitions, trigger)
         this.chompCounter = CHOMP_READY_TICKS
     }
 
@@ -74,43 +72,44 @@ export class MowingProjectile extends Projectile {
      * death. One that cannot be flattened as it stands (dying, burned, in its vault, rising from a grave) goes in a
      * puff instead: its head, arm and armor drop, and it is gone at once (DieWithLoot).
      */
-    private mowZombie(world: World, definitions: GameplayDefinitions, mowerId: number, { entity, position, zombie }: MowTarget): void {
+    private mowZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
+        const { id: entity, position } = zombie
         this.chompCounter = CHOMP_ACTIVE_TICKS
         const events = world.resources.get(EventQueueResource)
         if (!isFlattenableZombie(zombie)) {
-            emitServerEvent(events, 'zombiePuffed', { mowerId, zombieId: entity, x: position.x, y: position.y, row: position.row })
+            emitServerEvent(events, 'zombiePuffed', { mowerId: this.id, zombieId: entity, x: position.x, y: position.y, row: position.row })
             for (const part of ['head', 'arm'] as const) {
                 const has = part === 'head' ? 'hasHead' : 'hasArm'
                 if (!zombie[has]) continue
                 zombie[has] = false
                 zombiePartDropped(world, entity, part)
             }
-            dropZombieHelm(world, definitions, entity, zombie)
-            dropZombieShield(world, definitions, entity, zombie)
+            dropZombieHelm(world, definitions, zombie)
+            dropZombieShield(world, definitions, zombie)
             destroyZombie(world, definitions, entity, world)
             return
         }
-        dropZombieShield(world, definitions, entity, zombie)
-        dropZombieHelm(world, definitions, entity, zombie)
-        zombie.dropCarried(world, entity)
+        dropZombieShield(world, definitions, zombie)
+        dropZombieHelm(world, definitions, zombie)
+        zombie.dropCarried(world)
         flattenZombie(world, definitions, zombie)
         dropZombieLoot(world, definitions, entity, world)
-        emitServerEvent(events, 'zombieMowered', { mowerId, zombieId: entity })
+        emitServerEvent(events, 'zombieMowered', { mowerId: this.id, zombieId: entity })
     }
 
     /**
      * It crushes a plant past its own end (an explode-o-nut does not go off): it is out of play at once (`mowered`) and
      * stays for its squashing, as a mowed zombie does, tipped the way it runs (`team`).
      */
-    private mowPlant(world: World, mowerId: number, target: { entity: number, plant: Plant }, team: Team): void {
+    private mowPlant(world: World, plant: Plant): void {
+        const team = projectileTeam(this)
         this.chompCounter = CHOMP_ACTIVE_TICKS
-        const { plant } = target
         // Its ice goes with it, breaking nothing off, as a mowed zombie's (Zombie::MowDown).
         delete plant.frozenTicks
         const squash = startLayer(MOWERED_ANIMATION, {}, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
         plant.state = 'mowered'
         plant.mowered = { squash, ...(team === 'zombies' ? { left: true as const } : {}) }
-        emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId, plantId: target.entity })
+        emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId: this.id, plantId: plant.id })
     }
 }
 

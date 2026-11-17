@@ -15,7 +15,7 @@ export function createPlantRollSystem(): GameSystem {
             const level = world.resources.get(LevelStateResource)
             if (level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
             // An earlier nut's blow may take one out: it is passed over.
-            for (const plant of plantsInPlay(world)) if (plant.health > 0 && !plantSkipsTick(plant)) plant.roll(context, plant.id)
+            for (const plant of plantsInPlay(world)) if (plant.health > 0 && !plantSkipsTick(plant)) plant.roll(context)
         },
     }
 }

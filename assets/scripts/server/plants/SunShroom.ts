@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/server/state/World'
+import type { SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
@@ -54,7 +54,7 @@ export class SunShroom extends Producer {
         return this.phase === 'small' ? this.growth.smallItem : super.producedItem()
     }
 
-    act({ world }: SystemContext, entity: EntityId): void {
+    act({ world }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource)
         if (this.phase === 'small') {
@@ -63,7 +63,7 @@ export class SunShroom extends Producer {
             this.phase = 'growing'
             this.phaseTicks = this.growth.growingTicks
             this.playPhase(this.phase, random)
-            emitServerEvent(world.resources.get(EventQueueResource), 'plantGrew', { entityId: entity, typeId: this.typeId })
+            emitServerEvent(world.resources.get(EventQueueResource), 'plantGrew', { entityId: this.id, typeId: this.typeId })
         } else if (this.phase === 'growing' && this.phaseTicks === 0) {
             this.phase = 'big'
             this.playPhase(this.phase, random)

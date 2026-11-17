@@ -23,7 +23,7 @@ function dyingZombie(roll: number, { levelId = 'pvz:adventure-1-6', firstAdventu
     const entity = spawnZombie(world, definitions, typeId, 2, 500, 0)
     const zombie = world.zombies.get(entity)!
     if (chilled) zombie.chilledTicks = 100
-    startZombieDeath(world, definitions, entity, zombie)
+    startZombieDeath(world, definitions, zombie)
     return zombie
 }
 

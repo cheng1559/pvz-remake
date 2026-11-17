@@ -3,6 +3,7 @@ import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type Zombie
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import type { ZombieState } from '@/shared/content/zombieStates'
 import { jsonRoundTrip, type JsonObject, type Team, type ZombieSnapshot } from '@/shared/protocol'
+import type { Plant } from '../plants/Plant'
 import { pickWalkClip, startWalk, zombiePace } from './animation'
 
 /** What any zombie is: the fields of every zombie, which its save and its snapshot have; its kind's own go beside them. */
@@ -68,7 +69,7 @@ export type SavedZombie = ZombieFields & { readonly [own: string]: unknown }
 
 /** The plant a zombie's attack reaches on its row, a rolling nut by `rollingAttack` (ZombieSystem's findPlantTarget). */
 export type PlantFinder = (attack: { x: number, width: number }, rollingAttack?: { x: number, width: number }) =>
-    { entity: EntityId, position: Position, rolling: boolean } | undefined
+    { plant: Plant, rolling: boolean } | undefined
 
 /** A type's own definition fields, each taken by the kinds that say so (`config`): a pole vaulter's `vault`, ... */
 export type ZombieConfig = 'vault' | 'dance' | 'enrage'
@@ -180,13 +181,13 @@ export class Zombie {
     }
 
     /** As the zombies' tick starts, before any of them acts (a dancer's troupe's pace). */
-    beforeTick(_world: World, _entity: EntityId): void {}
+    beforeTick(_world: World): void {}
 
     /** Zombie::Update's counters, each tick it is on the lawn whatever it does (a dancer's age). */
     count(): void {}
 
     /** A tick it spends on its own before it would act, true if it did (the newspaper zombie's gasp). */
-    pauses(_context: SystemContext, _entity: EntityId): boolean {
+    pauses(_context: SystemContext): boolean {
         return false
     }
 
@@ -194,7 +195,7 @@ export class Zombie {
      * Zombie::UpdateActions: what it does of its own each tick it acts, true if it took the tick so, neither walking nor
      * eating (a pole vaulter's vault); `plants` finds the plant an attack reaches on its row.
      */
-    act(_context: SystemContext, _entity: EntityId, _plants: PlantFinder): boolean {
+    act(_context: SystemContext, _plants: PlantFinder): boolean {
         return false
     }
 
@@ -219,7 +220,7 @@ export class Zombie {
     }
 
     /** Zombie::ZombieNotWalking: it walks this tick; otherwise it stands, its body going on. */
-    walks(_world: World, _entity: EntityId): boolean {
+    walks(_world: World): boolean {
         return true
     }
 
@@ -232,7 +233,7 @@ export class Zombie {
     }
 
     /** Zombie::DropFlag and the like: it lets go of what it carries, as it loses its head, falls or is mowed (a flag). */
-    dropCarried(_world: World, _entity: EntityId): void {}
+    dropCarried(_world: World): void {}
 
     /** Zombie::WalkIntoHouse: as it wins, how it walks into the house. */
     intoHouse(_random: AnimationRandom): void {}
@@ -241,7 +242,7 @@ export class Zombie {
     shieldDropped(_random: AnimationRandom): void {}
 
     /** Zombie::StartMindControlled: it has come over to a plant's side (mindControl). */
-    changedSides(_world: World, _entity: EntityId): void {}
+    changedSides(_world: World): void {}
 
     /** Plant::UpdateChomper's doMiss: a chomper's bite misses it now. */
     dodgesBite(): boolean {

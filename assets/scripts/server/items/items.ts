@@ -54,7 +54,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 if (item.typeId === LEVEL_AWARD) {
                     if (item.state === 'collecting') continue
                     if (position.y + item.velocityY < item.groundY) {
-                        moveItemWithinHorizontalBounds(world, position, item)
+                        moveItemWithinHorizontalBounds(world, item)
                         position.y += item.velocityY
                         item.velocityY += item.accelerationY
                     } else {
@@ -104,7 +104,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 }
                 if (item.accelerationY) item.scale = Math.min(definitions.items[item.typeId]?.scale ?? 1, item.scale + 0.02)
                 if (position.y + item.velocityY < item.groundY) {
-                    moveItemWithinHorizontalBounds(world, position, item)
+                    moveItemWithinHorizontalBounds(world, item)
                     position.y += item.velocityY
                     item.velocityY += item.accelerationY
                     continue
@@ -125,7 +125,8 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
     }
 }
 
-function moveItemWithinHorizontalBounds(world: World, position: Position, item: Item): void {
+function moveItemWithinHorizontalBounds(world: World, item: Item): void {
+    const position = item.position
     position.x += item.velocityX
     const bounds = world.resources.get(LevelStateResource).board.bounds
     const maxX = bounds.right - item.width
@@ -143,9 +144,9 @@ export const items = {
     /** Board::MouseDown: the item at (x, y) is collected (itemAt, over the items as the snapshot lists them). */
     collectAt(session: Session, x: number, y: number, award = true): CommandRejectionCode | undefined {
         const { world, definitions } = session
-        const lying = [...world.items].map(item => ({ entity: item.id, ...item, ...item.position }))
+        const lying = [...world.items].map(item => ({ ...item, ...item.position }))
         const item = itemAt(lying, definitions.items, world.resources.get(LevelStateResource).definition, x, y, award)
-        return item ? items.collect(session, item.entity) : 'item-not-found'
+        return item ? items.collect(session, item.id) : 'item-not-found'
     },
     collect(session: Session, itemId: number): CommandRejectionCode | undefined {
         const { world, definitions } = session

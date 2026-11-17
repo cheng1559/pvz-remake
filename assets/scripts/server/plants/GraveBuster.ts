@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/server/state/World'
+import type { SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { graveAt } from '@/shared/content/graves'
 import { plantTeam } from '@/shared/content/teams'
@@ -61,7 +61,7 @@ export class GraveBuster extends Plant {
         return this.phaseTicks
     }
 
-    act({ world, commands }: SystemContext, entity: EntityId): void {
+    act({ world, commands }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         if (this.phase === 'landing') {
             if (this.phaseTicks > 0) return
@@ -75,11 +75,11 @@ export class GraveBuster extends Plant {
         const position = this.position
         const grave = graveAt(gridItems(world), position.row, this.column), ate = grave !== undefined
         if (grave) world.destroyEntity(grave.entityId)
-        commands.destroyEntity(entity)
+        commands.destroyEntity(this.id)
         // The buster as it stood, for its draw order (Plant::CalcRenderOrder); `team`: a buster of the zombies' side,
         // facing left, whose dirt turns round with it.
         emitServerEvent(world.resources.get(EventQueueResource), 'graveBusted', {
-            entityId: entity, typeId: this.typeId, row: position.row, column: this.column, x: position.x, y: position.y,
+            entityId: this.id, typeId: this.typeId, row: position.row, column: this.column, x: position.x, y: position.y,
             ...(plantTeam(this) === 'zombies' ? { team: 'zombies' } : {}),
         })
         // The original drops its loot piece even without a grave, which planting never allows but `/plant` does; here

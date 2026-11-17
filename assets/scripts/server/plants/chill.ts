@@ -15,10 +15,10 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
  * production, ability timers and blinks included. A hostile ice-shroom freezes it (combat/freeze.ts): it sits out
  * every tick it is frozen, its animation standing still, as a frozen zombie's body does.
  */
-export function chillPlant(world: World, definitions: GameplayDefinitions, entity: number, plant: Plant, ticks: number): void {
+export function chillPlant(world: World, definitions: GameplayDefinitions, plant: Plant, ticks: number): void {
     // A torchwood is kept from the cold (plantCanBeChilled).
     if (!plantCanBeChilled(plant)) return
-    if (!plant.chilledTicks) emitServerEvent(world.resources.get(EventQueueResource), 'plantChilled', { entityId: entity })
+    if (!plant.chilledTicks) emitServerEvent(world.resources.get(EventQueueResource), 'plantChilled', { entityId: plant.id })
     plant.chilledTicks = Math.max(plant.chilledTicks, ticks)
 }
 
@@ -41,7 +41,7 @@ export function createPlantChillSystem(): GameSystem {
             if (level.result === 'lost' || level.paused) return
             for (const plant of plantsInPlay(world)) {
                 if (!plant.chilledTicks && plant.frozenTicks === undefined) continue
-                meltIce(world, plant.id, plant)
+                meltIce(world, plant)
                 if (plant.chilledTicks) plant.chilledTicks--
                 if (plantSkipsTick(plant)) plant.sitOut()
             }

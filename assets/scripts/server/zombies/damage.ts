@@ -57,7 +57,7 @@ export function damageZombie(
     // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
     // mind-controlled zombies only because the original's chills are all the plants'; a chill reaches whatever a
     // hostile attack hits, so an enemy snow pea chills a zombie on the plants' side.
-    if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, definitions, entity, zombie, hit.chillTicks)
+    if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, definitions, zombie, hit.chillTicks)
     let remaining = damage
     if (shield) {
         const absorbed = Math.min(zombie.shieldHealth, remaining)
@@ -96,14 +96,14 @@ export function damageZombie(
         zombiePartDropped(world, entity, 'arm')
     }
     if (zombie.hasHead && index === 2) {
-        zombie.dropCarried(world, entity)
+        zombie.dropCarried(world)
         zombie.hasHead = false
         zombiePartDropped(world, entity, 'head')
         // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
         dropZombieLoot(world, definitions, entity, remover)
     }
     // The award drop may already have removed this zombie.
-    if (zombie.health === 0 && world.hasEntity(entity)) startZombieDeath(world, definitions, entity, zombie)
+    if (zombie.health === 0 && world.hasEntity(entity)) startZombieDeath(world, definitions, zombie)
 }
 
 /** Instant kills still drop loot at the zombie's position, before it is taken out (Zombie::DieWithLoot). */
@@ -128,29 +128,29 @@ export function flattenZombie(world: World, definitions: GameplayDefinitions, zo
  * Zombie::ApplyChill: chilled for `ticks`, or what it has left if longer, unless it cannot be (zombieCanBeChilled); the
  * first chill sounds (`zombieChilled`).
  */
-export function chillZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, ticks: number): void {
+export function chillZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie, ticks: number): void {
     if (!zombieCanBeChilled(zombie, definitions.zombies[zombie.typeId])) return
-    if (zombie.chilledTicks === 0) emitServerEvent(world.resources.get(EventQueueResource), 'zombieChilled', { entityId: entity })
+    if (zombie.chilledTicks === 0) emitServerEvent(world.resources.get(EventQueueResource), 'zombieChilled', { entityId: zombie.id })
     zombie.chilledTicks = Math.max(zombie.chilledTicks, ticks)
 }
 
 /** Zombie::DropHelm: a helm still worn falls off. */
-export function dropZombieHelm(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
+export function dropZombieHelm(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     const helm = definitions.zombies[zombie.typeId].helm
     if (!helm || zombie.helmHealth <= 0) return
     zombie.helmHealth = 0
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: entity, helm: helm.type })
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: zombie.id, helm: helm.type })
 }
 
 /**
  * Zombie::DropShield: a shield still held falls off. `bypassed` (DAMAGE_BYPASSES_SHIELD) skips the newspaper's rip
  * and surprise.
  */
-export function dropZombieShield(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, bypassed = false): void {
+export function dropZombieShield(world: World, definitions: GameplayDefinitions, zombie: Zombie, bypassed = false): void {
     const shield = definitions.zombies[zombie.typeId].shield
     if (!shield || zombie.shieldHealth <= 0) return
     zombie.shieldHealth = 0
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieShieldDropped', { entityId: entity, shield: shield.type, ...(bypassed ? { bypassed: true } : {}) })
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieShieldDropped', { entityId: zombie.id, shield: shield.type, ...(bypassed ? { bypassed: true } : {}) })
 }
 
 /** LawnApp::HasFinishedAdventure || mLevel > 5. */
@@ -166,19 +166,19 @@ export function countZombiesOnScreen(world: World, except?: number): number {
     return count
 }
 
-export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
+export function startZombieDeath(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     if (zombie.state === 'dying') return
     // Zombie::PlayDeathAnim: the ice it dies in breaks off, and it falls at its pace.
-    breakIce(world, entity, zombie)
-    zombie.dropCarried(world, entity)
+    breakIce(world, zombie)
+    zombie.dropCarried(world)
     // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
-    dropZombieShield(world, definitions, entity, zombie, true)
+    dropZombieShield(world, definitions, zombie, true)
     const random = world.resources.get(RandomResource)
     const animation = definitions.zombies[zombie.typeId].animation, { superLongDeath, death2 } = ZOMBIE_CLIPS
     const roll = random.integer(0, 99)
     // Zombie::PlayDeathAnim: a 99 plays the super long death from level 6 (or after the adventure), unchilled, with at
     // most five zombies on screen; above 50 is anim_death2. Each for a zombie whose animation has it.
-    const clip = roll === 99 && animation.clips[superLongDeath] && canDoSuperLongDeath(world) && zombie.chilledTicks === 0 && countZombiesOnScreen(world, entity) <= 5
+    const clip = roll === 99 && animation.clips[superLongDeath] && canDoSuperLongDeath(world) && zombie.chilledTicks === 0 && countZombiesOnScreen(world, zombie.id) <= 5
         ? superLongDeath : roll > 50 && animation.clips[death2] ? death2 : ZOMBIE_CLIPS.death
     zombie.state = 'dying'
     // The clip's pace is drawn for it; a chilled zombie stays chilled, and so slowed, while it falls.
@@ -186,11 +186,11 @@ export function startZombieDeath(world: World, definitions: GameplayDefinitions,
     zombie.deathTicksRemaining = Math.ceil(animation.clips[clip].frames / (body.rate * zombiePace(zombie)) * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
 }
 
-export function updateHeadlessZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
+export function updateHeadlessZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     if (world.resources.get(RandomResource).integer(0, 4) !== 0) return
     // Zombie::UpdatePlaying decays sturdier bodies faster.
     zombie.health = Math.max(0, zombie.health - (zombie.maxHealth >= 500 ? 3 : 1))
-    if (zombie.health === 0) startZombieDeath(world, definitions, entity, zombie)
+    if (zombie.health === 0) startZombieDeath(world, definitions, zombie)
 }
 
 /**

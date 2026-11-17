@@ -28,7 +28,7 @@ export function damagePlant(
 ): void {
     const plant = plantInPlay(world, entity)
     if (!plant || plant.health <= 0) return
-    if (chillTicks !== undefined) chillPlant(world, definitions, entity, plant, chillTicks)
+    if (chillTicks !== undefined) chillPlant(world, definitions, plant, chillTicks)
     if (getDebugRules(world).plantInvincible) return
     const events = world.resources.get(EventQueueResource)
     if (eater !== undefined) plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
@@ -43,7 +43,7 @@ export function damagePlant(
 export function destroyEatenPlant(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
     const plant = plantInPlay(world, entity)!
     // The ice it is in breaks off, as off a zombie that dies in it.
-    breakIce(world, entity, plant)
+    breakIce(world, plant)
     const explosion = definitions.plants[plant.typeId].deathExplosion
     if (explosion) detonatePlant(world, definitions, entity, explosion, remover)
     else remover.destroyEntity(entity)

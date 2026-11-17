@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext, World } from '@/server/state/World'
+import type { SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, playLayers } from '@/shared/content/animation'
 import { plantTeam } from '@/shared/content/teams'
@@ -51,12 +51,12 @@ export class FusePlant extends Plant {
         return !this.asleep(world)
     }
 
-    act({ world, commands }: SystemContext, entity: EntityId): void {
+    act({ world, commands }: SystemContext): void {
         if (this.fuseTicks > 0) this.fuseTicks--
         if (this.fuseTicks > 0) return
         const { explosion, freeze, crater } = this.fuse, position = this.position
-        if (explosion) detonatePlant(world, this.definitions, entity, explosion, commands)
-        else freezeFromPlant(world, this.definitions, entity, freeze!, commands)
+        if (explosion) detonatePlant(world, this.definitions, this.id, explosion, commands)
+        else freezeFromPlant(world, this.definitions, this.id, freeze!, commands)
         if (crater) placeCrater(world, this.definitions, position.row, this.column, crater.ticks, plantTeam(this))
     }
 }

@@ -1,4 +1,4 @@
-import type { EntityId, Position, SystemContext } from '@/server/state/World'
+import type { Position, SystemContext } from '@/server/state/World'
 import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
@@ -53,17 +53,17 @@ export class PoleVaulter extends Zombie {
      * In the air, a tick of its jump, landing it walking (StartWalkAnim(0)); holding its pole, with its head, it jumps
      * over the first plant its vault reaches, a rolling nut from much further and where it stands.
      */
-    act(context: SystemContext, entity: EntityId, plants: PlantFinder): boolean {
-        const { world } = context, random = world.resources.get(RandomResource), position = this.position
+    act(context: SystemContext, plants: PlantFinder): boolean {
+        const { world } = context, random = world.resources.get(RandomResource)
         if (this.state === 'airborne') {
-            if (this.updateVault(context, entity, position)) this.walkAgain(random)
+            if (this.updateVault(context)) this.walkAgain(random)
             return true
         }
         if (!this.hasPole || !this.hasHead || this.state !== 'walking') return false
         const team = zombieTeam(this)
         const target = plants(zombieFacingRect(this.vault.attack, team), zombieFacingRect(this.vault.bowlingAttack ?? this.vault.attack, team))
         if (!target) return false
-        this.startVault(position, target.position, random, target.rolling)
+        this.startVault(target.plant.position, random, target.rolling)
         return true
     }
 
@@ -107,7 +107,7 @@ export class PoleVaulter extends Zombie {
         return this.state === 'airborne' ? !this.hasPole : super.validSaved(body)
     }
 
-    private startVault(position: Position, plantPosition: Position, random: AnimationRandom, inPlace: boolean): void {
+    private startVault(plantPosition: Position, random: AnimationRandom, inPlace: boolean): void {
         this.state = 'airborne'
         const jump = playZombie(this, this.definition.animation, ZOMBIE_CLIPS.jump, random)
         this.biteTicks = 0
@@ -117,23 +117,23 @@ export class PoleVaulter extends Zombie {
         // put down on the plant's own cell does not jump back (the original's zombies never stand there). Over a
         // rolling nut it jumps where it stands.
         const durationTicks = this.definition.animation.clips[ZOMBIE_CLIPS.jump].frames / jump.rate * TICKS_PER_SECOND
-        const x = Math.trunc(position.x)
+        const x = Math.trunc(this.position.x)
         const distance = teamDirection(zombieTeam(this)) < 0 ? x - plantPosition.x - 80
             : plantPosition.x - x - (ZOMBIE_WIDTH - PLANT_WIDTH) - 80
         this.speedPerTick = inPlace ? 0 : Math.max(0, distance) / durationTicks
     }
 
     /** A tick of its jump, true once it has landed (PHASE_POLEVAULTER_POST_VAULT), walking again. */
-    private updateVault({ world }: SystemContext, entity: EntityId, position: Position): boolean {
-        const pace = zombiePace(this)
+    private updateVault({ world }: SystemContext): boolean {
+        const position = this.position, pace = zombiePace(this)
         const jump = zombieBody(this), clip = this.definition.animation.clips[ZOMBIE_CLIPS.jump], previous = jump.time
         stepZombie(this, this.definition.animation, world.resources.get(RandomResource))
         // A zombie facing right vaults right.
         const direction = teamDirection(zombieTeam(this))
         position.x += direction * this.speedPerTick * pace
         const events = world.resources.get(EventQueueResource)
-        if (passedMark(clip, previous, jump.time, POLE_VAULT_STEP_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'grassstep' })
-        if (passedMark(clip, previous, jump.time, POLE_VAULT_SOUND_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'polevault' })
+        if (passedMark(clip, previous, jump.time, POLE_VAULT_STEP_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: this.id, sound: 'grassstep' })
+        if (passedMark(clip, previous, jump.time, POLE_VAULT_SOUND_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: this.id, sound: 'polevault' })
         if (jump.time < clip.frames) return false
         position.x += direction * this.vault.landingOffset
         this.state = 'walking'

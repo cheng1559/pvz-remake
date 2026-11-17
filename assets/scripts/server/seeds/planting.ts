@@ -201,7 +201,7 @@ export const planting = {
 
     /** The plant holding a cell (holdsCell), if any. */
     findPlantAt(session: Session, row: number, column: number): number | undefined {
-        return cellPlant(session.definitions.plants, lawnPlants(session.world), row, column)?.entity
+        return cellPlant(session.definitions.plants, lawnPlants(session.world), row, column)?.id
     },
 }
 

@@ -15,8 +15,8 @@ import { gridItems } from './gridItems'
 export type Grave = Omit<GraveSnapshot, 'entityId'> & { id: EntityId }
 
 /** The graves on the lawn, in the order they were made. */
-export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {
-    return [...world.gridItems].flatMap(grave => grave.typeId === GRAVE ? [{ entity: grave.id, grave }] : [])
+export function graves(world: World): Grave[] {
+    return [...world.gridItems].filter((item): item is Grave => item.typeId === GRAVE)
 }
 
 /** Board::AddAGraveStone: a grave in the cell, with its look and how late it rises. `more`: what it has besides. */
@@ -38,7 +38,7 @@ export function createGrave(world: World, row: number, column: number, more: Pic
  */
 export function placeGrave(world: World, definitions: GameplayDefinitions, row: number, column: number, riseAtTick: number | undefined,
     team?: 'plants'): EntityId {
-    for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.entity)
+    for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.id)
     const old = graveAt(gridItems(world), row, column)
     if (old) world.destroyEntity(old.entityId)
     return createGrave(world, row, column, { ...(riseAtTick === undefined ? {} : { riseAtTick }), ...(team ? { team } : {}) })
@@ -86,7 +86,7 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
     // Board::UpdateGame stops the rise counter after HasLevelAwardDropped.
     if (levelAwardDropped(world)) return
     const choices = definition.graveZombies!, random = world.resources.get(RandomResource)
-    for (const { grave } of graves(world)) {
+    for (const grave of graves(world)) {
         // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves
         // rose in the intro.
         if ((graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) < GRAVE_RISEN_COUNTER) continue

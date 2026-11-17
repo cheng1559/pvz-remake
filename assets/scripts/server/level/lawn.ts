@@ -19,9 +19,9 @@ export function plantInPlay(world: World, id: EntityId): Plant | undefined {
     return plant?.inPlay ? plant : undefined
 }
 
-/** The lawn's plants, each with its entity and row (plantsInPlay). */
-export function lawnPlants(world: World): Array<CellPlant & { entity: EntityId }> {
-    return [...plantsInPlay(world)].map(plant => ({ ...plant, row: plant.position.row, entity: plant.id }))
+/** The lawn's plants, each with its row (plantsInPlay), as the cells' rules take them (CellPlant). */
+export function lawnPlants(world: World): Array<CellPlant & { id: EntityId }> {
+    return [...plantsInPlay(world)].map(plant => ({ ...plant, row: plant.position.row }))
 }
 
 /**

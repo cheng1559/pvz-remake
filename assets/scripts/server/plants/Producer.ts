@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/server/state/World'
+import type { SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
@@ -63,7 +63,7 @@ export class Producer extends Plant {
         return this.producer.item
     }
 
-    produce({ world, commands, tick }: SystemContext, entity: EntityId, stopped: boolean): void {
+    produce({ world, commands, tick }: SystemContext, stopped: boolean): void {
         // A sleeping mushroom and a growing sun-shroom skip UpdateProductionPlant, holding the launch counter.
         if (stopped || this.asleep(world) || this.holdsProduction()) { this.readyAtTick++; return }
         if (this.readyAtTick - tick > 0) return
@@ -79,13 +79,13 @@ export class Producer extends Plant {
             const economy = world.resources.get(EconomyStateResource)
             const drained = Math.min(economy.sun, item.value)
             economy.sun -= drained
-            emitServerEvent(events, 'sunDrained', { entityId: entity, sun: drained })
+            emitServerEvent(events, 'sunDrained', { entityId: this.id, sun: drained })
             return
         }
         // It comes out small and grows to its size as it rises (Coin::Update).
         const spawned = spawnItem(world, commands, { typeId: itemId, value: item.value, width: item.width, scale: 0.4 * (item.scale ?? 1) },
             position.x, position.y, 'plant')
-        emitServerEvent(events, 'sunProduced', { entityId: entity, itemId: spawned })
+        emitServerEvent(events, 'sunProduced', { entityId: this.id, itemId: spawned })
     }
 
     /** The ticks to its next, held while its production is (ProducerView's glow). */

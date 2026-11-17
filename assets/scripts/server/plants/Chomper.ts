@@ -1,4 +1,4 @@
-import type { EntityId, SystemContext } from '@/server/state/World'
+import type { SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
@@ -51,10 +51,10 @@ export class Chomper extends Plant {
         return this.phase
     }
 
-    act({ world, commands }: SystemContext, entity: EntityId): void {
+    act({ world, commands }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const definitions = this.definitions, chomper = this.chomper
-        const random = world.resources.get(RandomResource), position = this.position
+        const random = world.resources.get(RandomResource)
         const next = (phase: ChomperPhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks
@@ -63,11 +63,11 @@ export class Chomper extends Plant {
         }
         switch (this.phase) {
             case 'ready':
-                if (findAbilityTarget(world, definitions, position, this, chomper) !== undefined) next('biting', chomper.biteDelayTicks)
+                if (findAbilityTarget(world, definitions, this, chomper) !== undefined) next('biting', chomper.biteDelayTicks)
                 break
             case 'biting': {
                 if (this.phaseTicks > 0) break
-                const target = findAbilityTarget(world, definitions, position, this, chomper, true)
+                const target = findAbilityTarget(world, definitions, this, chomper, true)
                 // A zombie that dodges the bite slips away, as in Plant::UpdateChomper (its kind says so: a pole vaulter
                 // holding its pole, not frozen). A hostile plant is swallowed whole, unless zombies could not hurt it
                 // either (a lit cherry bomb, a rising or armed potato mine): it slips away.
@@ -78,13 +78,13 @@ export class Chomper extends Plant {
                 // is not swallowed, so the bite goes on as one that missed, with nothing to chew.
                 const turned = bit && !zombie && prey!.mindControls(world), ate = bit && !turned
                 if (ate && zombie) destroyZombie(world, definitions, target!, commands)
-                else if (turned) mindControl(world, definitions, entity, target!, commands)
+                else if (turned) mindControl(world, definitions, this.id, target!, commands)
                 else if (ate) destroyEatenPlant(world, definitions, target!, commands)
                 next(ate ? 'got-one' : 'missed', chomper.biteTicks - chomper.biteDelayTicks)
                 // The client hides the eaten zombie's arm while it chews a plant.
                 if (ate && !zombie) this.prey = 'plant'
                 emitServerEvent(world.resources.get(EventQueueResource), 'chomperBit', {
-                    entityId: entity, ate, ...(ate ? zombie ? { zombieId: target } : { plantId: target } : {}),
+                    entityId: this.id, ate, ...(ate ? zombie ? { zombieId: target } : { plantId: target } : {}),
                 })
                 break
             }

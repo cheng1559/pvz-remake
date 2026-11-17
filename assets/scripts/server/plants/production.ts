@@ -15,7 +15,7 @@ export function createProductionSystem(_definitions: GameplayDefinitions): GameS
             const { world } = context
             const level = world.resources.get(LevelStateResource)
             const stopped = level.result !== 'playing' || level.paused || levelAwardDropped(world)
-            for (const plant of plantsInPlay(world)) plant.produce(context, plant.id, stopped)
+            for (const plant of plantsInPlay(world)) plant.produce(context, stopped)
         },
     }
 }

@@ -3,8 +3,9 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { MowerSnapshot } from '@/shared/protocol'
 import { nonEmptyString } from '@/shared/validate'
 import { STRAIGHT } from '../projectiles/motions'
-import type { MowingProjectile, MowTarget } from '../projectiles/MowingProjectile'
+import type { MowingProjectile } from '../projectiles/MowingProjectile'
 import { launchProjectile } from '../projectiles/Projectile'
+import type { Zombie } from '../zombies/Zombie'
 import { WaveResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 
@@ -40,7 +41,7 @@ export class Mower {
      * crushes the zombie that reached it (`trigger`) first; `/lawnmower trigger` sets one off with none
      * (Board::mWaveRowGotLawnMowered: its row's zombies are picked less for a while). The projectile, by its entity.
      */
-    setOff(world: World, definitions: GameplayDefinitions, trigger?: MowTarget): number {
+    setOff(world: World, definitions: GameplayDefinitions, trigger?: Zombie): number {
         const { position } = this
         if (world.resources.has(WaveResource)) {
             const wave = world.resources.get(WaveResource)
@@ -50,7 +51,7 @@ export class Mower {
         world.destroyEntity(this.id)
         const running = launchProjectile(world, definitions, world, { typeId: this.typeId, position, motion: STRAIGHT })
         emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', { entityId: running, row: position.row })
-        if (trigger) (world.projectiles.get(running) as MowingProjectile).mowTrigger(world, definitions, running, trigger)
+        if (trigger) (world.projectiles.get(running) as MowingProjectile).mowTrigger(world, definitions, trigger)
         return running
     }
 

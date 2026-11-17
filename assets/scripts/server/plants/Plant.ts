@@ -128,16 +128,16 @@ export class Plant {
     sitOut(): void {}
 
     /** Plant::UpdateShooter, in the plants' attacks (plants/shooter.ts): it shoots. */
-    attack(_context: SystemContext, _entity: EntityId): void {}
+    attack(_context: SystemContext): void {}
 
     /** Plant::UpdateProductionPlant (plants/production.ts): it produces; `stopped` while none does (the award dropped). */
-    produce(_context: SystemContext, _entity: EntityId, _stopped: boolean): void {}
+    produce(_context: SystemContext, _stopped: boolean): void {}
 
     /** Plant::UpdateAbilities (plants/abilities.ts), awake and neither chilled nor frozen this tick: what it does of its own. */
-    act(_context: SystemContext, _entity: EntityId): void {}
+    act(_context: SystemContext): void {}
 
     /** Plant::UpdateBowling (plants/rolls.ts): it rolls, also once the level is won. */
-    roll(_context: SystemContext, _entity: EntityId): void {}
+    roll(_context: SystemContext): void {}
 
     /** The phase of its kind its animation goes by (its definition's `animation.phases`, `blink.phases`; PLANT_KIND_PHASES), if any. */
     animationPhase(): string | undefined {

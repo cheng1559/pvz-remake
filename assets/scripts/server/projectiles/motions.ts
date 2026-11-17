@@ -1,21 +1,21 @@
 import { exact, finite } from '@/shared/validate'
-import { defineResource, type Position, type World } from '@/server/state/World'
-import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions, type ProjectileDefinition } from '@/shared/content/gameplay'
+import { defineResource, type World } from '@/server/state/World'
+import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
-import { isHostile, plantFacingRect, plantTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantFacingRect, plantTeam, projectileTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Projectile } from './Projectile'
 import { isTargetableZombie } from '../zombies/damage'
 import { plantInPlay, plantsInPlay } from '../level/lawn'
 
-/** A projectile setting off: what, where, on which side, and what its launcher aimed at. */
+/**
+ * A projectile setting off, on its side (projectileTeam) where it is, which a motion may adjust, and what its launcher
+ * aimed at.
+ */
 export interface MotionLaunch {
     world: World
     definitions: GameplayDefinitions
-    definition: ProjectileDefinition
-    /** Where it sets off, which a motion may adjust. */
-    position: Position
-    team: Team
+    projectile: Projectile
     /** The zombie or plant aimed at, when the launcher aimed at one. */
     target?: number
 }
@@ -24,10 +24,7 @@ export interface MotionLaunch {
 export interface MotionStep {
     world: World
     definitions: GameplayDefinitions
-    entity: number
-    position: Position
     projectile: Projectile
-    team: Team
     /** A factor on its own speed this tick (Projectile.speedScale): a mower slows as it chews. */
     speedScale: number
 }
@@ -108,7 +105,7 @@ export class ProjectileMotionRegistry {
 export const ProjectileMotionsResource = defineResource<ProjectileMotionRegistry>('pvz:projectile-motions')
 
 /** How far over the ground of its row a projectile is: as far as its shadow lies under it (Projectile::mShadowY). */
-export function heightOverRow(world: World, definition: ProjectileDefinition, position: Position): number {
+export function heightOverRow(world: World, { definition, position }: Pick<Projectile, 'definition' | 'position'>): number {
     return rowGroundY(world.resources.get(LevelStateResource).board, position.row) - (position.y + definition.hitbox.y + definition.hitbox.height)
 }
 
@@ -150,10 +147,10 @@ const STRAIGHT_SPEED = 3.33
  */
 const straight: ProjectileMotionDefinition<{ ticksLeft: number } | undefined> = {
     overLow: true,
-    launch: ({ definition: { lifetimeTicks } }) => lifetimeTicks === undefined ? undefined : { ticksLeft: lifetimeTicks },
+    launch: ({ projectile: { definition: { lifetimeTicks } } }) => lifetimeTicks === undefined ? undefined : { ticksLeft: lifetimeTicks },
     parseState: state => state === undefined ? undefined : numbers(state, ['ticksLeft'], 'straight'),
-    move({ position, projectile, team, speedScale }, state) {
-        position.x += teamDirection(team) * (projectile.definition.speed ?? STRAIGHT_SPEED) * speedScale
+    move({ projectile, speedScale }, state) {
+        projectile.position.x += teamDirection(projectileTeam(projectile)) * (projectile.definition.speed ?? STRAIGHT_SPEED) * speedScale
         if (state && --state.ticksLeft <= 0) return 'gone'
     },
 }
@@ -185,9 +182,10 @@ const LOB = {
  * down from where it set off), whatever its size.
  */
 const lob: ProjectileMotionDefinition<LobState> = {
-    launch({ world, definitions, definition, position, team, target }) {
+    launch({ world, definitions, projectile, target }) {
+        const { definition, position } = projectile
         const { hitbox, flightTicks = LOB.flightTicks, rotation = LOB.rotation, spin: [slowest, fastest] = LOB.spin } = definition
-        const direction = teamDirection(team), body = target === undefined ? undefined : targetBody(world, definitions, target)
+        const direction = teamDirection(projectileTeam(projectile)), body = target === undefined ? undefined : targetBody(world, definitions, target)
         const board = world.resources.get(LevelStateResource).board, { left, right } = board.bounds
         // Thrown left, it is the mirror image of one thrown right that comes down there: its hitbox, which does not
         // start at its corner, as far the other side of where it aims.
@@ -207,7 +205,7 @@ const lob: ProjectileMotionDefinition<LobState> = {
         }
     },
     parseState: state => numbers(state, LOB_STATE, 'lob'),
-    move({ position }, state) {
+    move({ projectile: { position } }, state) {
         state.age++
         state.rotation += state.rotationSpeed
         state.velocityZ += LOB.gravity
@@ -216,12 +214,12 @@ const lob: ProjectileMotionDefinition<LobState> = {
         position.y = state.baseY + state.z
         if (state.z === state.ground) return 'landed'
     },
-    aim({ world, position, projectile }, state) {
+    aim({ world, projectile }, state) {
         // Projectile::UpdateLobMotion checks its height only after the first ticks: then it must be coming down, and
         // low enough over the ground, wherever it was thrown from: lower for a plant than for a zombie.
         if (state.age <= LOB.collisionDelayTicks) return 'row'
         if (state.velocityZ < 0) return 'none'
-        const height = heightOverRow(world, projectile.definition, position) - (projectile.definition.landingOffset ?? 0)
+        const height = heightOverRow(world, projectile) - (projectile.definition.landingOffset ?? 0)
         const zombies = height < LOB.zombieLandingHeight, plants = height < LOB.plantLandingHeight
         return zombies && plants ? 'row' : zombies ? 'zombies' : plants ? 'plants' : 'none'
     },
@@ -255,12 +253,13 @@ const HOMING = { speed: 2, turn: 0.001 }
  * as it set off, its shadow going with it (mShadowY += mVelY).
  */
 const homing: ProjectileMotionDefinition<HomingState> = {
-    launch({ world, definition, position, team, target }) {
-        return { age: 0, velocityX: teamDirection(team) * (definition.homingSpeed ?? HOMING.speed), velocityY: 0, target: target ?? 0,
-            height: heightOverRow(world, definition, position) }
+    launch({ world, projectile, target }) {
+        return { age: 0, velocityX: teamDirection(projectileTeam(projectile)) * (projectile.definition.homingSpeed ?? HOMING.speed), velocityY: 0,
+            target: target ?? 0, height: heightOverRow(world, projectile) }
     },
     parseState: state => numbers(state, HOMING_STATE, 'homing'),
-    move({ world, definitions, position, projectile, team }, state) {
+    move({ world, definitions, projectile }, state) {
+        const { position } = projectile, team = projectileTeam(projectile)
         state.age++
         const { hitbox, homingSpeed: speed = HOMING.speed, turn = HOMING.turn } = projectile.definition
         // Projectile::UpdateNormalMotion: with nothing left to home on it flies on as it was going.
@@ -279,7 +278,8 @@ const homing: ProjectileMotionDefinition<HomingState> = {
         const board = world.resources.get(LevelStateResource).board
         position.row = Math.max(0, Math.min(board.rows - 1, Math.floor((position.y + hitbox.y + hitbox.height / 2 - board.origin.y) / board.cell.height)))
     },
-    afterHit({ world, definitions, position, projectile, team }, state) {
+    afterHit({ world, definitions, projectile }, state) {
+        const { position } = projectile, team = projectileTeam(projectile)
         let nearest = Infinity
         state.target = 0
         for (const entity of [...world.zombies, ...plantsInPlay(world)].map(target => target.id)) {
@@ -289,8 +289,8 @@ const homing: ProjectileMotionDefinition<HomingState> = {
             if (distance < nearest) { nearest = distance; state.target = entity }
         }
     },
-    aim({ world, definitions, position, projectile, team }, state) {
-        const body = prey(world, definitions, state.target, team)
+    aim({ world, definitions, projectile }, state) {
+        const { position } = projectile, body = prey(world, definitions, state.target, projectileTeam(projectile))
         if (!body) return 'none'
         // Projectile::CheckForCollision: over the target's body, in height as well.
         const hitbox = projectile.definition.hitbox, left = position.x + hitbox.x, top = position.y + hitbox.y

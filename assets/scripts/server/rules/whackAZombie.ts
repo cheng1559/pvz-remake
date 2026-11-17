@@ -127,7 +127,7 @@ const HAMMER_TEAM: Team = 'plants'
  */
 function placeWhackGraves(world: World, definitions: GameplayDefinitions, count: number, riseAtTick?: number): void {
     const { definition, board } = world.resources.get(LevelStateResource)
-    const graves = lawnGraves(world).map(({ grave }) => grave)
+    const graves = lawnGraves(world)
     const plants = [...plantsInPlay(world)]
     const plantsAt = (row: number, column: number) => plants.filter(plant => plant.position.row === row && plant.column === column).map(plant => plant.id)
     const picks: Array<{ row: number; column: number; weight: number }> = []
@@ -193,7 +193,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
         : typeHit < chances.pail[phase] + chances.cone[phase] ? zombies.cone : zombies.plain
     // A grave a grave buster is eating raises nothing.
     const plants = [...plantsInPlay(world)]
-    const graves = lawnGraves(world).map(({ grave }) => grave).filter(grave => !plants.some(plant => plant.position.row === grave.row
+    const graves = lawnGraves(world).filter(grave => !plants.some(plant => plant.position.row === grave.row
         && plant.column === grave.column && definitions.plants[plant.typeId].graveBuster))
     let maxSpeed = animateCurve(1, 12, wave, 1, 3, 'ease-in')
     count = Math.min(count, graves.length)
@@ -294,7 +294,7 @@ export const whackAZombieRule: LevelRuleDefinition = {
      */
     initialize(world, definitions) {
         const level = world.resources.get(LevelStateResource).definition
-        for (const { entity } of lawnGraves(world)) world.destroyEntity(entity)
+        for (const grave of lawnGraves(world)) world.destroyEntity(grave.id)
         placeWhackGraves(world, definitions, whackSettings(level.rules!).graves)
         const state: WhackState = { groupTicks: 0, hammer: true }
         world.resources.get(WaveResource).ruleState = { ...state }
