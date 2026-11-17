@@ -332,8 +332,10 @@ export class AdviceWidget {
     }
 
     private _pulseAlpha() {
+        // MessageWidget::Draw: CURVE_BOUNCE_SLOW_MIDDLE, the bounce eased out (PvzpCurveInvQuad) so it lingers bright.
         const t = (this._pulseTick % 75) / 75
-        const peak = 1 - Math.abs(t * 2 - 1)
+        const bounce = 1 - Math.abs(t * 2 - 1)
+        const peak = 2 * bounce - bounce * bounce
         return Math.round(ADVICE_TEXT_MIN_ALPHA + (255 - ADVICE_TEXT_MIN_ALPHA) * peak)
     }
 }
