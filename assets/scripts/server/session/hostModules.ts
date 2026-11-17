@@ -75,7 +75,7 @@ import * as m71 from '@/server/session/IntegratedGameServer'
 import * as m72 from '@/server/session/commands'
 import * as m73 from '@/server/session/persistence'
 import * as m74 from '@/server/session/save'
-import * as m75 from '@/server/session/savedComponents'
+import * as m75 from '@/server/session/savedLists'
 import * as m76 from '@/server/session/session'
 import * as m77 from '@/server/session/snapshot'
 import * as m78 from '@/server/state/DeterministicRng'
@@ -225,7 +225,7 @@ export const SERVER_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'server/session/commands': m72,
     'server/session/persistence': m73,
     'server/session/save': m74,
-    'server/session/savedComponents': m75,
+    'server/session/savedLists': m75,
     'server/session/session': m76,
     'server/session/snapshot': m77,
     'server/state/DeterministicRng': m78,

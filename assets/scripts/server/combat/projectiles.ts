@@ -18,7 +18,7 @@ export function createProjectileSystem(definitions: GameplayDefinitions): GameSy
 
 export class ProjectileSystem implements GameSystem {
     readonly id = 'pvz:projectile'
-    /** Zombies, then plants, by row, collected once per run; positions and components are not replaced during it. */
+    /** Zombies, then plants, by row, collected once per run; their objects are not replaced during it. */
     private rows: ProjectileTarget[][] = []
     constructor(private readonly definitions: GameplayDefinitions) {}
     run(context: SystemContext): void {

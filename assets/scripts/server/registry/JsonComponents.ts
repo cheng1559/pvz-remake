@@ -1,42 +1,61 @@
-import type { Component, EntityId, World } from '@/server/state/World'
+import type { Entity, World } from '@/server/state/World'
 import { isQualifiedId, Registry } from '@/shared/mod'
 import { jsonRoundTrip, type JsonObject, type JsonValue } from '@/shared/protocol'
 
+/** What Mods keep on an entity, by their registered ids, as saved (Entity.extensions). */
 export type SavedComponents = Record<string, JsonObject>
-export class JsonComponents {
-    private readonly entries = new Registry<{ component: Component<JsonObject>, validate?: (value: any) => void }>('JSON component')
 
-    register<T extends JsonObject>(component: Component<T>, validate?: (value: T) => void): void {
-        if (!isQualifiedId(component.name) || component.name.startsWith('pvz:')) throw new Error(`Invalid Mod component: ${component.name}`)
-        this.entries.register(component.name, { component: component as Component<JsonObject>, validate })
+/**
+ * The Mods' data on the world's entities: each Mod registers its own by a qualified id of its namespace, with how to
+ * check it, and keeps it on an entity as `entity.extensions[id]`. It is saved, restored and sent (the snapshot's
+ * `extensions`) with the entity, checked and copied as JSON each time; what no Mod registered is neither.
+ */
+export class JsonComponents {
+    private readonly entries = new Registry<{ validate?: (value: JsonObject) => void }>('JSON component')
+
+    register(id: string, validate?: (value: JsonObject) => void): void {
+        if (!isQualifiedId(id) || id.startsWith('pvz:')) throw new Error(`Invalid Mod component: ${id}`)
+        this.entries.register(id, { validate })
     }
+
     freeze(): void { this.entries.freeze() }
+
     checkpoint(): () => void { return this.entries.checkpoint() }
-    capture(world: World, entity: EntityId): SavedComponents {
+
+    /** An entity's data of the registered ids, as its save keeps it; none when it has none. */
+    capture(entity: Entity): SavedComponents | undefined {
         const result: SavedComponents = {}
-        for (const [id, entry] of this.entries.entries()) {
-            const value = world.get(entity, entry.component)
-            if (value === undefined) continue
-            result[id] = this.copy(id, value)
+        for (const [id] of this.entries.entries()) {
+            const value = entity.extensions?.[id]
+            if (value !== undefined) result[id] = this.copy(id, value)
         }
-        return result
+        return Object.keys(result).length ? result : undefined
     }
-    restore(world: World, entity: EntityId, values: SavedComponents): void {
+
+    /** A saved entity's data back on it, each of an installed id. */
+    restore(entity: Entity, values: SavedComponents): void {
+        const extensions: Record<string, JsonObject> = {}
         for (const [id, value] of Object.entries(values)) {
-            const entry = this.entries.get(id)
-            if (!entry) throw new Error(`Saved Mod component is not installed: ${id}`)
-            world.add(entity, entry.component, this.copy(id, value))
+            if (!this.entries.get(id)) throw new Error(`Saved Mod component is not installed: ${id}`)
+            extensions[id] = this.copy(id, value)
         }
+        if (Object.keys(extensions).length) entity.extensions = extensions
     }
+
+    /** The snapshot's `extensions` of the Mods' data: by id, each entity's by its id. */
     snapshot(world: World): Record<string, JsonValue> {
         const result: Record<string, JsonValue> = {}
-        for (const [id, entry] of this.entries.entries()) {
+        for (const [id] of this.entries.entries()) {
             const values: JsonObject = {}
-            for (const entity of world.query(entry.component)) values[entity] = this.copy(id, world.get(entity, entry.component)!)
+            for (const list of world.lists()) for (const entity of list) {
+                const value = entity.extensions?.[id]
+                if (value !== undefined) values[entity.id] = this.copy(id, value)
+            }
             result[id] = values
         }
         return result
     }
+
     private copy(id: string, value: JsonObject): JsonObject {
         if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Mod component must be a JSON object: ${id}`)
         const copy = jsonRoundTrip(value)

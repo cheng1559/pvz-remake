@@ -84,7 +84,7 @@ export interface Zombie extends ZombieFields {
 }
 
 /**
- * A zombie on the lawn, the zombie component itself: its fields are all there is to it, which its save keeps as they
+ * A zombie on the lawn, an entity of the world's `zombies`: its fields are all there is to it, which its save keeps as they
  * are and its snapshot shows. Its class is its kind (the gameplay definition's `kind`, `zombie` when it names none),
  * as its view's is on the client (the presentation's `view`): what any zombie does, which a kind that does something of
  * its own overrides (PoleVaulter, Dancer, Newspaper), keeping what only it has in fields of its own. The game asks it

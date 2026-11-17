@@ -61,7 +61,7 @@ export interface Plant extends PlantFields {
 }
 
 /**
- * A plant on the lawn, the plant component itself: its fields are all there is to it, which its save keeps as they are
+ * A plant on the lawn, an entity of the world's `plants`: its fields are all there is to it, which its save keeps as they are
  * and its snapshot shows. Its class is its kind (the gameplay definition's `kind`, `plant` when it names none), as its
  * view's is on the client (the presentation's `view`, the same): what any plant does, which a kind that does something
  * of its own overrides (Shooter, Producer, FusePlant, PotatoMine, Chomper, GraveBuster, ...), keeping what only it has in

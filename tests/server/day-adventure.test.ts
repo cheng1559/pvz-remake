@@ -124,7 +124,7 @@ test('each day level runs both flag warnings, restores the planned waves and col
         let flags = 0
         for (let wave = 0; wave < plan.length; wave++) {
             const saved = game.save()
-            saved.entities = saved.entities.filter(entity => !entity.zombie)
+            saved.zombies = []
             saved.wave.zombieIds = []
             saved.wave.nextWaveAtTick = saved.gameplayTick + 1
             game.start({ ...options(index), save: saved as unknown as JsonValue })
@@ -144,7 +144,7 @@ test('each day level runs both flag warnings, restores the planned waves and col
         }
         assert.equal(flags, index === 6 || index === 8 ? 1 : 2)
         const saved = game.save()
-        for (const entity of saved.entities) if (entity.zombie) entity.zombie.health = 0
+        for (const zombie of saved.zombies) zombie.health = 0
         game.start({ ...options(index), save: saved as unknown as JsonValue })
         game.tick(); game.tick()
         const id = levels.levels[options(index).levelId].award.id

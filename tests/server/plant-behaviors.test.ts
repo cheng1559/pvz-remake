@@ -84,7 +84,7 @@ test('per-plant state is isolated, follows simulation ticks, survives saves and 
     ;(plants[0].behaviorState!.history as { heals: number }).heals = 999
     assert.equal((server.snapshot().plants[0].behaviorState!.history as { heals: number }).heals, 0)
     const saved = server.save()
-    const savedPlant = saved.entities.find(entity => entity.plant?.typeId === 'test:plant')!.plant!
+    const savedPlant = saved.plants.find(plant => plant.typeId === 'test:plant')!
     savedPlant.health = 100
     assert.equal(server.snapshot().plants[0].health, 300)
     ;(savedPlant.behaviorState!.history as { heals: number }).heals = 5
@@ -106,7 +106,7 @@ test('per-plant state is isolated, follows simulation ticks, survives saves and 
     assert.equal(server.snapshot().plants[0].health, 110)
     assert.deepEqual(server.snapshot().plants.map(plant => plant.behaviorState?.ticks), [0, 7, undefined])
     const invalid = server.save()
-    const invalidPlant = invalid.entities.find(entity => entity.plant?.typeId === 'test:plant')!.plant!
+    const invalidPlant = invalid.plants.find(plant => plant.typeId === 'test:plant')!
     invalidPlant.behaviorState!.ticks = -1
     assert.throws(() => startFromSave(restored, invalid), /Invalid test plant state/)
     delete invalidPlant.behaviorState

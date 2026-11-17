@@ -1,4 +1,4 @@
-import type { Entity, World } from '@/server/state/World'
+import type { Entity, EntityList, World } from '@/server/state/World'
 import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -7,33 +7,29 @@ import { EventQueueResource } from '../state/events'
 import { AchievementsResource } from '../achievements/achievements'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
-import { checkSavedEntity, SAVED_COMPONENTS } from './savedComponents'
+import { SAVED_LISTS, type SavedList } from './savedLists'
 import { savedSeedBank } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
 /**
  * Captures a session as a save; `save.ts` defines and validates the format. Each entity is saved only as it would be
- * restored (checkSavedEntity), and everything is copied as the JSON it is.
+ * restored (its list's check), and everything is copied as the JSON it is.
  */
 export function saveSession(session: Session): ServerSaveSnapshot {
     const { world, tick, gameplayTick, mods, gameplay } = session
     const level = world.resources.get(LevelStateResource)
-    const entities = world.queryableEntities().map(entityId => {
-        const extensions = gameplay.components.capture(world, entityId)
-        const entity: SavedEntity = { entityId, ...(Object.keys(extensions).length ? { extensions } : {}) }
-        for (const { key, list } of SAVED_COMPONENTS) {
-            const value = list?.(world).get(entityId)
-            if (value === undefined) continue
-            // An object of a typed list: its id is the entity's, its position the entity's own.
-            const { id: _, position, ...fields } = value as Entity & { position?: object }
-            Object.assign(entity, { [key]: asSaved(fields), ...(position ? { position: asSaved(position) } : {}) })
-        }
-        checkSavedEntity(session, world, entity)
-        return entity
-    })
+    const lists = Object.fromEntries(SAVED_LISTS.map(list => [list.key, [...world[list.key]].map(value => {
+        // An object of a typed list: its id, its position and its Mods' data beside its fields.
+        const { id, position, extensions: _, ...fields } = value as Entity & { position?: object }
+        const extensions = gameplay.components.capture(value)
+        const entity = { id, ...(position ? { position: asSaved(position) } : {}), ...(extensions ? { extensions } : {}) } as SavedEntity
+        const saved = asSaved(fields)
+        list.check?.(saved as never, { content: session, world, entity })
+        return { ...entity, ...saved }
+    })]))
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
-        schemaVersion: 3,
+        schemaVersion: 4,
         levelId: level.id,
         mods: mods.map(mod => ({ ...mod })),
         tick,
@@ -53,7 +49,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         // Its observer is the session's own (createSession), not the save's.
         eventQueue: asSaved({ nextEventId: eventQueue.nextEventId, events: eventQueue.events }),
         achievementProgress: jsonRoundTrip(world.resources.get(AchievementsResource).progress),
-        entities,
+        ...lists,
     })
 }
 
@@ -93,7 +89,7 @@ export function restoreSession(
         throw new Error('Saved wave row history does not match the level')
     }
     const board = definitions.boards[definition.board]
-    const cells = save.entities.flatMap(entity => entity.gridItem ? [entity.gridItem] : [])
+    const cells = save.gridItems
     if (new Set(cells.map(item => `${item.typeId}:${item.column}:${item.row}`)).size !== cells.length) throw new Error('Saved grid items share a cell')
     // The conveyor system runs on a level's belt with the save's.
     if (!!save.seedBank.conveyor !== !!definition.conveyor) throw new Error('Saved conveyor does not match the level')
@@ -126,7 +122,7 @@ export function restoreSession(
     world.resources.set(WaveResource, jsonRoundTrip(save.wave))
     world.resources.get(AchievementsResource).progress = jsonRoundTrip(save.achievementProgress)
     world.resources.set(EventQueueResource, jsonRoundTrip(save.eventQueue))
-    for (const saved of save.entities) restoreEntity(content, world, saved)
+    for (const list of SAVED_LISTS) for (const saved of save[list.key]) restoreEntity(content, world, list, saved)
     if (new Set(save.wave.zombieIds).size !== save.wave.zombieIds.length) {
         throw new Error('Saved wave zombie IDs must be unique')
     }
@@ -143,19 +139,15 @@ export function restoreSession(
     return createSession(content, world, { tick: save.tick, gameplayTick: save.gameplayTick }, save.mods)
 }
 
-function restoreEntity(content: ServerContent, world: World, saved: SavedEntity): void {
-    checkSavedEntity(content, world, saved)
-    world.activateEntity(saved.entityId)
-    content.gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
+function restoreEntity(content: ServerContent, world: World, list: SavedList, saved: SavedEntity): void {
+    const { id, position, extensions, ...fields } = saved
     const context = { content, world, entity: saved }
-    // An entity of a typed list is its object, which holds its position (saved beside it).
-    for (const { key, list, restore } of SAVED_COMPONENTS) {
-        const value = saved[key]
-        if (value === undefined || !list) continue
-        // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance).
-        const live = (restore ? restore(value as never, context) : jsonRoundTrip(value)) as object
-        world.insert(list(world), Object.assign(live, { id: saved.entityId, ...(saved.position ? { position: jsonRoundTrip(saved.position) } : {}) }))
-    }
+    list.check?.(fields as never, context)
+    // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance), with its id and position.
+    const live = Object.assign(list.restore ? list.restore(fields as never, context) : jsonRoundTrip(fields) as object,
+        { id, ...(position ? { position: jsonRoundTrip(position) } : {}) })
+    content.gameplay.components.restore(live, extensions ?? {})
+    world.insert(world[list.key] as EntityList<Entity>, live)
 }
 
 /**

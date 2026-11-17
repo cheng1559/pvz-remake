@@ -38,8 +38,8 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     assert.equal(server.snapshot().sun, 0)
     assert.equal(server.snapshot().tutorial.step, 'refresh-sunflower')
     const saved = server.save()
-    const producer = saved.entities.find(entity => entity.plant?.typeId === 'pvz:sunflower')!
-    const readyAtTick = Number(producer.plant!.readyAtTick)
+    const producer = saved.plants.find(plant => plant.typeId === 'pvz:sunflower')!
+    const readyAtTick = Number(producer.readyAtTick)
     assert.ok(readyAtTick >= 300 && readyAtTick <= 1250)
     const produceTicks = () => Number(server.snapshot().plants.find(plant => plant.typeId === 'pvz:sunflower')!.own?.produceTicks)
     assert.equal(produceTicks(), readyAtTick - server.snapshot().gameplayTick, 'the snapshot carries the launch counter')
@@ -57,8 +57,8 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     }
     assert.equal(produced, true)
     assert.equal(server.snapshot().projectiles.length, 0, 'a producer does not use shooter logic')
-    const sun = server.save().entities.find(entity => entity.item?.accelerationY === 0.09)!
-    assert.ok(sun.item!.scale > 0.4)
+    const sun = server.save().items.find(item => item.accelerationY === 0.09)!
+    assert.ok(sun.scale > 0.4)
     assert.equal(runCommand(server, { type: 'collectItemAt', x: sun.position!.x + 1, y: sun.position!.y + 1 }), undefined)
     assert.equal(getAvailableSun((server as unknown as { requireSession(): { world: World } }).requireSession().world, definitions), 25)
 })
@@ -131,7 +131,7 @@ test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb',
     const rows = new Set<number>()
     for (let index = 0; index < 6; index++) {
         const save = server.save()
-        save.entities = save.entities.filter(entity => !entity.zombie)
+        save.zombies = []
         save.wave.zombieIds = []
         save.wave.nextWaveAtTick = save.gameplayTick + 1
         server.start({ ...start, save: save as unknown as JsonValue })
@@ -154,7 +154,7 @@ test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb',
     }
     assert.deepEqual([...rows].sort(), [1, 2, 3])
     const save = server.save()
-    for (const entity of save.entities) if (entity.zombie) entity.zombie.health = 0
+    for (const zombie of save.zombies) zombie.health = 0
     server.start({ ...start, save: save as unknown as JsonValue })
     server.tick()
     server.tick()

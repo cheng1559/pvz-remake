@@ -9,7 +9,7 @@
 | 新植物、种子、子弹 | Rapid Pea 每 75 tick 射击，费用 75，子弹伤害 30 | `assets/gameplay/{plants,seeds,projectiles}.json` |
 | 新僵尸与自定义行为 | Regenerating Zombie 每 100 tick 回复 10 生命；植物有独立回血计时 | `src/server/index.ts` 的 `regeneration()` |
 | 自定义植物与视图 | Pulse Beacon 每 200 tick 增加 25 阳光，用自有动画循环发光 | `src/server/index.ts`、`src/client/beacon.ts` |
-| ECS 扩展、快照、存档 | `example:charge` 保存剩余时间，客户端通过 `world.extensions` 读取 | `registry.components.register()` |
+| 实体上的 Mod 数据、快照、存档 | `example:charge` 记在植物的 `extensions` 里保存剩余时间，客户端通过 `world.extensions` 读取 | `registry.components.register()` |
 | 自定义关卡 | `/level example:testing` 提供新增种子和僵尸 | `assets/gameplay/levels.json`、`assets/presentation/levels.json` |
 | 修改已有内容 | 1-1 的种子列表增加两种示例植物 | `assets/gameplay/level-patches.json` |
 | 新增资源 | 自有 PNG、WAV、Reanim、粒子、JSON、文本随 ZIP 分发 | `content.json` 的 `resources` |

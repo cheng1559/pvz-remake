@@ -74,7 +74,7 @@ test('CLI and wave zombies have isolated persisted state that stops during pause
     assert.equal((server.snapshot().zombies[0].behaviorState!.history as { heals: number }).heals, 0)
 
     const saved = server.save()
-    const savedZombie = saved.entities.find(entity => entity.entityId === zombies[0].entityId)!.zombie!
+    const savedZombie = saved.zombies.find(zombie => zombie.id === zombies[0].entityId)!
     savedZombie.health = 400
     const history = savedZombie.behaviorState!.history as { heals: number }
     history.heals = 5
@@ -95,7 +95,7 @@ test('CLI and wave zombies have isolated persisted state that stops during pause
     assert.equal(server.snapshot().zombies[0].health, 410)
     assert.deepEqual(server.snapshot().zombies.map(zombie => zombie.behaviorState?.ticks), [0, 7, undefined])
     const invalid = server.save()
-    const invalidZombie = invalid.entities.find(entity => entity.entityId === zombies[0].entityId)!.zombie!
+    const invalidZombie = invalid.zombies.find(zombie => zombie.id === zombies[0].entityId)!
     invalidZombie.behaviorState!.ticks = -1
     assert.throws(() => startFromSave(restored, invalid), /Invalid test zombie state/)
     delete invalidZombie.behaviorState

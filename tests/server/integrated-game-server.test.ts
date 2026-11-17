@@ -174,7 +174,7 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     server.drainEvents()
 
     let snapshot = server.snapshot()
-    const ready = Math.max(1, Number(server.save().entities.find(entity => entity.plant?.typeId === 'pvz:peashooter')!.plant!.readyAtTick))
+    const ready = Math.max(1, Number(server.save().plants.find(plant => plant.typeId === 'pvz:peashooter')!.readyAtTick))
     while (gameplayTick(server) < ready) snapshot = server.tick()
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
         'plantFiring', { plantId: 2 },
@@ -234,7 +234,7 @@ test('a plant blinks on the server, and a save keeps its animation', () => {
     // Plant::DoBlink: the first blink comes 400 to 799 ticks after planting, over the other layers.
     let snapshot = server.snapshot()
     while (!snapshot.plants[0].animations!.blink && gameplayTick(server) < 800) snapshot = server.tick()
-    const planted = server.save().entities.find(entity => entity.plant)!.plant!
+    const [planted] = server.save().plants
     assert.ok(gameplayTick(server) >= 400, `blinked at ${gameplayTick(server)}`)
     assert.deepEqual(snapshot.plants[0].animations!.blink, { clip: 'blink', time: 0, rate: 15 })
     assert.ok(planted.blinkTicks! >= 400 && planted.blinkTicks! <= 799, `the next blink in ${planted.blinkTicks}`)

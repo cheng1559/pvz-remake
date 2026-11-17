@@ -39,7 +39,6 @@ function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: a
 
 export function register({ host, assets }: GameplayApi): void {
     const registry = host.get('gameplay/registry')
-    const { defineComponent } = host.get('server/state/World')
     const { LevelStateResource: Level, EconomyStateResource: Economy } = host.get('server/state/components')
     const { plantsInPlay } = host.get('server/level/lawn')
     const settings = assets.json('assets/settings.json')
@@ -47,16 +46,16 @@ export function register({ host, assets }: GameplayApi): void {
         if (!Number.isSafeInteger(settings[key]) || settings[key] <= 0) throw new Error(`Invalid example setting: ${key}`)
     }
 
-    // Registered JSON components appear in snapshots/extensions and saves automatically.
-    const Charge = defineComponent('example:charge')
+    // A plant's charge, kept on it as `extensions[Charge]`: registered, it is saved and sent in snapshots' extensions.
+    const Charge = 'example:charge'
     registry.components.register(Charge, (value: any) => {
         if (Object.keys(value).length !== 1 || !Number.isSafeInteger(value.remainingTicks)
             || value.remainingTicks <= 0 || value.remainingTicks > settings.chargeTicks) throw new Error('Invalid example charge')
     })
-    const multiplier = ({ world, entity }: any) => {
-        const charge = world.get(entity, Charge)
+    const multiplier = ({ plant }: any) => {
+        const charge = plant.extensions?.[Charge]
         if (!charge) return 1
-        if (--charge.remainingTicks === 0) world.remove(entity, Charge)
+        if (--charge.remainingTicks === 0) delete plant.extensions[Charge]
         return settings.chargeMultiplier
     }
     registry.plantBehaviors.register(assets.id, 'example:rapid_pea', regeneration('plant', multiplier))
@@ -98,7 +97,7 @@ export function register({ host, assets }: GameplayApi): void {
         const plant = [...plantsInPlay(world)].find(plant => ['example:rapid_pea', 'example:beacon'].includes(plant.typeId)
             && plant.health > 0 && plant.column === column - 1 && plant.position.row === row - 1)
         if (plant === undefined) return cli.debugCondition('example:cli_need_plant')
-        world.add(plant.id, Charge, { remainingTicks: settings.chargeTicks })
+        plant.extensions = { ...plant.extensions, [Charge]: { remainingTicks: settings.chargeTicks } }
         return cli.debugSuccess(`Charged for ${settings.chargeTicks} ticks`)
     })
 }

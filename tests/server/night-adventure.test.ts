@@ -107,7 +107,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
     assert.deepEqual(emerged.save(), final.save())
     assert.ok(final.snapshot().zombies.every(zombie => zombie.riseTicks === undefined))
     // A final wave cleared before the graves open drops the award, and then no grave zombie rises.
-    pending.entities = pending.entities.filter(entity => !entity.zombie)
+    pending.zombies = []
     pending.wave.zombieIds = []
     const cleared = restore(pending)
     for (let tick = 0; tick < 250; tick++) cleared.tick()

@@ -43,7 +43,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
 
     const saved = original.save()
     assert.deepEqual(saved.mods, start.mods)
-    assert.equal(saved.entities.some(entity => entity.item !== undefined), true)
+    assert.equal(saved.items.length > 0, true)
     assert.deepEqual(parseServerSaveSnapshot(saved), saved)
     assert.throws(() => parseServerSaveSnapshot({ ...saved, tick: -1 }), /tick/)
     assert.throws(() => parseServerSaveSnapshot({ ...saved, gameplayTick: -1 }), /gameplayTick/)
@@ -116,7 +116,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
         /duplicate IDs/,
     )
 
-    const savedEntityId = saved.entities[0]?.entityId
+    const savedEntityId = saved.items[0]?.id
     if (savedEntityId !== undefined) {
         const duplicateWaveZombie = {
             ...saved,
@@ -127,7 +127,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             /must be unique/,
         )
     }
-    const plantId = saved.entities.find(entity => entity.plant)?.entityId
+    const plantId = saved.plants[0]?.id
     if (plantId !== undefined) {
         const nonZombieWaveEntity = {
             ...saved,
@@ -146,21 +146,18 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
         () => startFromSave(new IntegratedGameServer(definitions, levels), missingWaveEntity),
         /is invalid/,
     )
-    const sun = saved.entities.findIndex(entity => entity.item)
-    const twoKinds = {
+    // An entity is in one list: a plant of a sun's id is refused.
+    const [sun] = saved.items
+    const twoLists = {
         ...saved,
-        entities: saved.entities.map((entity, index) => index === sun
-            ? {
-                ...entity,
-                plant: {
-                    typeId: 'pvz:peashooter', state: 'idle', seedId: 'pvz:peashooter', column: 0,
-                    health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0, readyAtTick: 0,
-                },
-            }
-            : entity),
+        plants: [...saved.plants, {
+            id: sun.id, position: sun.position,
+            typeId: 'pvz:peashooter', state: 'idle', seedId: 'pvz:peashooter', column: 0,
+            health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0, readyAtTick: 0,
+        }],
     }
     assert.throws(
-        () => startFromSave(new IntegratedGameServer(definitions, levels), twoKinds),
-        /exactly one domain component/,
+        () => startFromSave(new IntegratedGameServer(definitions, levels), twoLists),
+        /duplicate entity IDs/,
     )
 })

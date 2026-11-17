@@ -62,7 +62,7 @@ export interface Projectile extends ProjectileFields {
 }
 
 /**
- * A projectile in flight, the projectile component itself: its fields are all there is to it, which its save keeps as
+ * A projectile in flight, an entity of the world's `projectiles`: its fields are all there is to it, which its save keeps as
  * they are. Its class is its kind (the gameplay definition's `kind`, `projectile` when it names none), as its view's is
  * on the client (the presentation's `view`, the same): how it flies is its motion's (motions.ts); what it does to what
  * it meets is its class's: this one takes its `damage` off what of the other side it hits, and a Mower crushes it.

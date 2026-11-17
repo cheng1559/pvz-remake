@@ -106,7 +106,7 @@ export function damageZombie(
     if (zombie.health === 0 && world.hasEntity(entity)) startZombieDeath(world, definitions, entity, zombie)
 }
 
-/** Instant kills still drop loot at the zombie's position, before removing its components (Zombie::DieWithLoot). */
+/** Instant kills still drop loot at the zombie's position, before it is taken out (Zombie::DieWithLoot). */
 export function destroyZombie(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
     dropZombieLoot(world, definitions, entity, remover)
     remover.destroyEntity(entity)

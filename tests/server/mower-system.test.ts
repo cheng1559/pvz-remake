@@ -201,7 +201,7 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
     const events = world.resources.get(EventQueueResource).events
     assert.deepEqual(events.filter(event => event.type === 'plantMowered').map(event => event.data),
         [{ mowerId: mower, plantId: enemy }, { mowerId: mower, plantId: explosive }], 'the client squashes them')
-    assert.equal(world.isQueryable(explosive), false)
+    assert.equal(world.hasEntity(explosive), false)
     assert.ok(!events.some(event => event.type === 'plantExploded'), 'an explode-o-nut is crushed, not set off')
     assert.equal(world.plants.get(friend)!.health, 4000)
     assert.equal(world.plants.get(otherRow)!.health, 4000)
@@ -260,9 +260,9 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     const squashed = new LocalIntegratedGame(firing, levels, undefined, true)
     squashed.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: planted.saveAtBoundary() })
     assert.deepEqual(squashed.render().plants, planted.render().plants, 'a save keeps it mid-squash')
-    const save = planted.saveAtBoundary() as unknown as { entities: Array<{ plant?: { state: string, mowered?: unknown } }> }
-    const mowed = save.entities.find(entity => entity.plant?.state === 'mowered')!
-    mowed.plant!.state = 'idle'
+    const save = planted.saveAtBoundary() as unknown as { plants: Array<{ state: string, mowered?: unknown }> }
+    const mowed = save.plants.find(plant => plant.state === 'mowered')!
+    mowed.state = 'idle'
     assert.throws(() => new IntegratedGameServer(firing, levels).start({ protocolVersion: 1, sequence: 1, type: 'startSession', levelId: 'pvz:adventure-1-1',
         randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: save as unknown as JsonValue }), /invalid squash/, 'only a plant mowed down is squashed')
     run(planted, () => !nut())
@@ -288,13 +288,12 @@ test("a row's mower waits from the level's start until it sets off as a projecti
     assert.deepEqual([running.entityId, running.typeId, running.row], [runningId, 'pvz:lawnmower', 2], 'it runs on as a projectile of its own')
     assert.ok(running.x > -21 + 30 * 3)
 
-    // Saved through their components: a waiting one as a mower, a running one as a projectile.
+    // Saved in their lists: a waiting one as a mower, a running one as a projectile.
     const saved = server.save()
-    assert.equal(saved.schemaVersion, 3)
+    assert.equal(saved.schemaVersion, 4)
     assert.deepEqual(Object.keys(saved.level), ['phase', 'result', 'paused'], 'no list of rows: the mowers are entities')
-    const entity = (id: number) => saved.entities.find(entity => entity.entityId === id)!
-    assert.deepEqual(entity(first.entityId), { entityId: first.entityId, position: { x: -21, y: first.y, row: 1 }, mower: { typeId: 'pvz:lawnmower' } })
-    assert.deepEqual([entity(runningId).mower, entity(runningId).projectile!.typeId], [undefined, 'pvz:lawnmower'])
+    assert.deepEqual(saved.mowers.find(mower => mower.id === first.entityId), { id: first.entityId, position: { x: -21, y: first.y, row: 1 }, typeId: 'pvz:lawnmower' })
+    assert.deepEqual([saved.mowers.some(mower => mower.id === runningId), saved.projectiles.find(projectile => projectile.id === runningId)!.typeId], [false, 'pvz:lawnmower'])
     const restored = new IntegratedGameServer(definitions, levels)
     const back = restored.start({ ...start, save: saved as unknown as JsonValue })
     assert.deepEqual([back.mowers, back.projectiles], [snapshot.mowers, snapshot.projectiles])
@@ -308,13 +307,13 @@ test("a row's mower waits from the level's start until it sets off as a projecti
         change(save)
         assert.throws(() => new IntegratedGameServer(definitions, levels).start({ ...start, save }), message, why)
     }
-    const saveOf = (save: any, id: number) => save.entities.find((entity: any) => entity.entityId === id)
-    refused(save => { save.schemaVersion = 2 }, /schemaVersion must be 3/, 'an older save is refused, not read as this one')
+    const saveOf = (save: any, list: string, id: number) => save[list].find((entity: any) => entity.id === id)
+    refused(save => { save.schemaVersion = 3 }, /schemaVersion must be 4/, 'an older save is refused, not read as this one')
     refused(save => { save.level.mowerRows = [1, 2, 3] }, /server save\.level/, "the old rows' list")
-    refused(save => { saveOf(save, first.entityId).mower.typeId = 'pvz:pea' }, /Saved mower .* is invalid/, 'it sets off as the level\'s mower')
-    refused(save => { saveOf(save, first.entityId).position.x = 0 }, /Saved mower .* is invalid/, 'it waits at MOWER_READY_X')
-    refused(save => { saveOf(save, first.entityId).projectile = saveOf(save, runningId).projectile }, /exactly one domain component/, 'a waiting one is no projectile')
-    refused(save => { delete saveOf(save, runningId).projectile.chompCounter }, /chompCounter/, 'a running one chews')
+    refused(save => { saveOf(save, 'mowers', first.entityId).typeId = 'pvz:pea' }, /Saved mower .* is invalid/, 'it sets off as the level\'s mower')
+    refused(save => { saveOf(save, 'mowers', first.entityId).position.x = 0 }, /Saved mower .* is invalid/, 'it waits at MOWER_READY_X')
+    refused(save => { save.projectiles.push({ ...saveOf(save, 'projectiles', runningId), id: first.entityId }) }, /duplicate entity IDs/, 'a waiting one is no projectile')
+    refused(save => { delete saveOf(save, 'projectiles', runningId).chompCounter }, /chompCounter/, 'a running one chews')
 })
 
 test("at the level's end each ready mower turns into gold where it waits, the lowest first, and is gone", () => {

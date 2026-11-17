@@ -14,7 +14,7 @@ import { loadScript } from '../loadScript'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import { ModHost } from '@/shared/mod/ModHost'
 import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
-import { defineComponent, World } from '@/server/state/World'
+import { World } from '@/server/state/World'
 import { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import { createServerModHost } from '@/server/session/createModHost'
 import * as modApi from '@/shared/mod'
@@ -198,7 +198,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         const behavior = { createState: () => ({}), tick() {} }
         registry.plantBehaviors.register(assets.id, 'broken:leaked', behavior)
         registry.zombieBehaviors.register(assets.id, 'broken:leaked', behavior)
-        registry.components.register(defineComponent('broken:leaked-state'))
+        registry.components.register('broken:leaked-state')
         host.around(target, 'value', (next: any) => next() + 100)
     }, async ({ host, assets }: any) => {
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
@@ -440,10 +440,10 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.equal(server.drainCommandResults()[0].debug?.ok, true)
         const summoned = server.snapshot().zombies.find(zombie => zombie.typeId === 'example:regenerating_zombie' && zombie.row === 1)!
         const saved = server.save()
-        const savedPlant = saved.entities.find(entity => entity.plant?.typeId === 'example:rapid_pea')!.plant!
+        const savedPlant = saved.plants.find(plant => plant.typeId === 'example:rapid_pea')!
         assert.deepEqual(savedPlant.behaviorState, server.snapshot().plants[0].behaviorState)
         savedPlant.health = 100
-        const savedZombie = saved.entities.find(entity => entity.entityId === summoned.entityId)!.zombie!
+        const savedZombie = saved.zombies.find(zombie => zombie.id === summoned.entityId)!
         assert.deepEqual(savedZombie.behaviorState, { ticks: 0 })
         savedZombie.health = 400
         startFromSave(server, saved, { levelId: 'example:testing', mods: mods })
@@ -466,7 +466,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.equal((server.snapshot().extensions['example:charge'] as any)[beacon.entityId].remainingTicks, 300)
         const chargeSave = server.save()
         const bad = structuredClone(chargeSave)
-        bad.entities.find(entity => entity.entityId === beacon.entityId)!.extensions!['example:charge'] = { remainingTicks: 0 }
+        bad.plants.find(plant => plant.id === beacon.entityId)!.extensions!['example:charge'] = { remainingTicks: 0 }
         assert.throws(() => startFromSave(restored, bad, { levelId: 'example:testing', mods: mods }), /Invalid example charge/)
         assert.equal(runCommand(server, { type: 'pause' }), undefined)
         for (let i = 0; i < 20; i++) server.tick()

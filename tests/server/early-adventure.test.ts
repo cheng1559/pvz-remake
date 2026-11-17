@@ -67,7 +67,7 @@ test('early adventure wave plans obey points, reserve conehead introductions and
         const rows = new Set<number>()
         for (let wave = 0; wave < plan.length; wave++) {
             const save = server.save()
-            save.entities = save.entities.filter(entity => !entity.zombie)
+            save.zombies = []
             save.wave.zombieIds = []
             save.wave.nextWaveAtTick = save.gameplayTick + 1
             server.start({ ...options(index), save: save as unknown as JsonValue })
@@ -88,7 +88,7 @@ test('early adventure wave plans obey points, reserve conehead introductions and
         }
         assert.deepEqual([...rows].sort(), level.activeRows)
         const save = server.save()
-        for (const entity of save.entities) if (entity.zombie) entity.zombie.health = 0
+        for (const zombie of save.zombies) zombie.health = 0
         server.start({ ...options(index), save: save as unknown as JsonValue })
         server.tick()
         server.tick()

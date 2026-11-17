@@ -104,7 +104,7 @@ test('integrated host processes FIFO commands, acknowledgements, pause, resume, 
     assert.deepEqual(saved.map(packet => packet.type), ['frame', 'saveReady', 'saveReady'])
     assert.equal(saved[0].type === 'frame' && saved[0].serverTick, 6)
     assert.equal(saved[1].type === 'saveReady' &&
-        (saved[1].save as { schemaVersion: number }).schemaVersion, 3)
+        (saved[1].save as { schemaVersion: number }).schemaVersion, 4)
     assert.deepEqual(saved.slice(1).map(packet =>
         packet.type === 'saveReady' ? packet.acknowledgedSequence : -1), [8, 9])
 

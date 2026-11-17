@@ -3,42 +3,34 @@ import test from 'node:test'
 import {
     CommandBuffer,
     Schedule,
-    SparseSet,
     World,
-    defineComponent,
     defineResource,
+    type EntityId,
 } from '@/server/state/World'
+import type { Item } from '@/server/state/levelState'
 
-test('SparseSet keeps values correct after swap-remove', () => {
-    const set = new SparseSet<string>()
-    set.set(2, 'two')
-    set.set(5, 'five')
-    set.set(9, 'nine')
+/** An item of the world's `items`, of nothing but its id: the lists hold any object by its id. */
+const item = (id: EntityId) => ({ id }) as Item
 
-    assert.equal(set.delete(5), true)
-    assert.equal(set.get(2), 'two')
-    assert.equal(set.get(5), undefined)
-    assert.equal(set.get(9), 'nine')
-    assert.equal(set.delete(5), false)
-})
-
-test('World caches queries and iterates matching entities by EntityId', () => {
-    const position = defineComponent<{ x: number }>('pvz:position')
-    const health = defineComponent<number>('pvz:health')
+test('EntityList iterates by EntityId over those there as the iteration starts', () => {
     const world = new World()
-    const first = world.createEntity()
-    const second = world.createEntity()
-    const third = world.createEntity()
+    const [first, second, third] = [world.createEntity(), world.createEntity(), world.createEntity()]
+    world.insert(world.items, item(third))
+    world.insert(world.items, item(first))
+    world.insert(world.items, item(second))
 
-    world.add(third, position, { x: 3 })
-    world.add(first, position, { x: 1 })
-    world.add(third, health, 30)
-    world.add(second, health, 20)
-
-    const query = world.query(position, health)
-    assert.equal(query, world.query(health, position))
-    assert.deepEqual([...query], [third])
-    assert.deepEqual(world.get(first, position), { x: 1 })
+    const seen: EntityId[] = []
+    for (const { id } of world.items) {
+        seen.push(id)
+        if (id === first) {
+            world.destroyEntity(second)
+            world.insert(world.items, item(world.createEntity()))
+        }
+    }
+    assert.deepEqual(seen, [first, third])
+    assert.deepEqual([...world.items].map(({ id }) => id), [first, third, third + 1])
+    assert.equal(world.hasEntity(second), false)
+    assert.equal(world.destroyEntity(second), false)
 })
 
 test('World restores its allocator without reusing a destroyed highest EntityId', () => {
@@ -56,6 +48,9 @@ test('World restores its allocator without reusing a destroyed highest EntityId'
         () => restored.restoreEntityAllocator({ nextEntity: 1 }),
         /before allocating entities/,
     )
+    const listed = new World()
+    listed.insert(listed.items, item(5))
+    assert.throws(() => listed.restoreEntityAllocator({ nextEntity: 5 }), /must exceed every active entity/)
 })
 
 test('World stores resources and rejects duplicate qualified names', () => {
@@ -66,39 +61,35 @@ test('World stores resources and rejects duplicate qualified names', () => {
     world.resources.set(clock, { tick: 12 })
     assert.deepEqual(world.resources.get(clock), { tick: 12 })
     assert.throws(() => world.resources.set(duplicateClock, { tick: 0 }), /Duplicate resource name/)
-    assert.throws(() => defineComponent('position'), /Invalid qualified name/)
-    assert.equal(defineComponent('pvz:plant_attack').name, 'pvz:plant_attack')
+    assert.throws(() => defineResource('clock'), /Invalid qualified name/)
 })
 
-test('CommandBuffer defers structural changes and hides marked entities', () => {
-    const health = defineComponent<number>('pvz:health')
+test('CommandBuffer defers inserts and destroys, hiding the entities marked', () => {
     const world = new World()
     const oldEntity = world.createEntity()
-    world.add(oldEntity, health, 10)
+    world.insert(world.items, item(oldEntity))
     const commands = new CommandBuffer(world)
     const newEntity = commands.createEntity()
-    commands.add(newEntity, health, 20)
+    const created = item(newEntity)
+    commands.insert(world.items, created)
     commands.destroyEntity(oldEntity)
 
     assert.equal(world.hasEntity(newEntity), false)
     assert.equal(world.hasEntity(oldEntity), false)
-    assert.equal(world.has(oldEntity, health), false)
-    assert.equal(world.get(oldEntity, health), undefined)
-    assert.throws(() => world.add(oldEntity, health, 11), /Unknown entity/)
-    assert.deepEqual([...world.query(health)], [])
+    assert.equal(world.items.get(oldEntity), undefined)
+    assert.deepEqual([...world.items], [])
 
     commands.flush()
     assert.equal(world.hasEntity(oldEntity), false)
-    assert.equal(world.get(newEntity, health), 20)
-    assert.deepEqual([...world.query(health)], [newEntity])
+    assert.equal(world.items.get(newEntity), created)
+    assert.deepEqual([...world.items], [created])
 })
 
-test('CommandBuffer preserves add-before-destroy record order', () => {
-    const marker = defineComponent<string>('test:marker')
+test('CommandBuffer preserves insert-before-destroy record order', () => {
     const world = new World()
     const entity = world.createEntity()
     const commands = new CommandBuffer(world)
-    commands.add(entity, marker, 'temporary')
+    commands.insert(world.items, item(entity))
     commands.destroyEntity(entity)
 
     assert.doesNotThrow(() => commands.flush())
@@ -106,7 +97,6 @@ test('CommandBuffer preserves add-before-destroy record order', () => {
 })
 
 test('Schedule preserves phase/system order and flushes after each phase', () => {
-    const marker = defineComponent<string>('test:marker')
     const world = new World()
     const schedule = new Schedule()
     const calls: string[] = []
@@ -116,15 +106,15 @@ test('Schedule preserves phase/system order and flushes after each phase', () =>
         id: 'test:read',
         run({ world: currentWorld, tick }) {
             calls.push(`read:${tick}`)
-            assert.deepEqual([...currentWorld.query(marker)], [created])
+            assert.deepEqual([...currentWorld.items].map(({ id }) => id), [created])
         },
     })
     schedule.add('spawn', {
         id: 'test:create',
-        run({ commands }) {
+        run({ commands, world: currentWorld }) {
             calls.push('create')
             created = commands.createEntity()
-            commands.add(created, marker, 'ready')
+            commands.insert(currentWorld.items, item(created))
         },
     })
 

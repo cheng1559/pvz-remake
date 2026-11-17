@@ -30,7 +30,7 @@ export function createZombieSystem(definitions: GameplayDefinitions): GameSystem
  */
 export class ZombieSystem implements GameSystem {
     readonly id = 'pvz:zombie-lifecycle'
-    /** Plants by row, collected once per run; positions and components are not replaced during it. */
+    /** Plants by row, collected once per run; their objects are not replaced during it. */
     private plantRows: PlantTarget[][] = []
     /** Both sides have zombies on the lawn this run; otherwise no zombie can bite another. */
     private bothSides = false

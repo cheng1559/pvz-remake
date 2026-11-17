@@ -105,8 +105,8 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     const opensAt = finalSave.gameplayTick + 1 + 200
     const rising = JSON.parse(JSON.stringify(finalSave))
     const late = graves.slice(0, 2).map(grave => grave.entityId)
-    rising.entities = rising.entities.flatMap((entity: any) => !entity.gridItem ? [entity] : !late.includes(entity.entityId) ? [] : [{ ...entity,
-        gridItem: { ...entity.gridItem, riseAtTick: opensAt - entity.gridItem.riseDelay - 99 - late.indexOf(entity.entityId) } }])
+    rising.gridItems = rising.gridItems.flatMap((grave: any) => !late.includes(grave.id) ? [] : [{ ...grave,
+        riseAtTick: opensAt - grave.riseDelay - 99 - late.indexOf(grave.id) }])
     const partial = new IntegratedGameServer(definitions, levels)
     startFromSave(partial, rising)
     for (let tick = 0; tick < 300; tick++) partial.tick()

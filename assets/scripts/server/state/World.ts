@@ -1,3 +1,4 @@
+import type { JsonObject } from '@/shared/protocol'
 import type { GridItem } from './components'
 import type { Item } from './levelState'
 import type { Projectile } from '../combat/Projectile'
@@ -9,11 +10,6 @@ export type EntityId = number
 
 export interface EntityAllocatorSnapshot {
     nextEntity: EntityId
-}
-
-export interface Component<T> {
-    readonly name: string
-    readonly __value?: T
 }
 
 export interface Resource<T> {
@@ -29,83 +25,24 @@ export function assertQualifiedName(name: string): void {
     }
 }
 
-function namedToken<T>(name: string): T {
-    assertQualifiedName(name)
-    return Object.freeze({ name }) as T
-}
-
-export function defineComponent<T>(
-    name: string,
-    _options?: Readonly<Record<string, unknown>>,
-): Component<T> {
-    return namedToken<Component<T>>(name)
-}
-
 export function defineResource<T>(name: string): Resource<T> {
-    return namedToken<Resource<T>>(name)
+    assertQualifiedName(name)
+    return Object.freeze({ name }) as Resource<T>
 }
-
-export class SparseSet<T> {
-    readonly denseEntities: EntityId[] = []
-    readonly denseValues: T[] = []
-    readonly sparseIndices: number[] = []
-    /** Changes whenever an entity joins or leaves this store, not when its value is replaced. */
-    membershipVersion = 0
-
-    get size(): number {
-        return this.denseEntities.length
-    }
-
-    has(entity: EntityId): boolean {
-        const index = this.sparseIndices[entity] ?? -1
-        return index >= 0 && this.denseEntities[index] === entity
-    }
-
-    get(entity: EntityId): T | undefined {
-        const index = this.sparseIndices[entity] ?? -1
-        return index >= 0 && this.denseEntities[index] === entity
-            ? this.denseValues[index]
-            : undefined
-    }
-
-    set(entity: EntityId, value: T): void {
-        const index = this.sparseIndices[entity] ?? -1
-        if (index >= 0 && this.denseEntities[index] === entity) {
-            this.denseValues[index] = value
-            return
-        }
-
-        this.sparseIndices[entity] = this.denseEntities.length
-        this.denseEntities.push(entity)
-        this.denseValues.push(value)
-        this.membershipVersion++
-    }
-
-    delete(entity: EntityId): boolean {
-        if (!this.has(entity)) return false
-
-        const index = this.sparseIndices[entity]
-        const last = this.denseEntities.length - 1
-        if (index !== last) {
-            const movedEntity = this.denseEntities[last]
-            this.denseEntities[index] = movedEntity
-            this.denseValues[index] = this.denseValues[last]
-            this.sparseIndices[movedEntity] = index
-        }
-        this.denseEntities.pop()
-        this.denseValues.pop()
-        this.sparseIndices[entity] = -1
-        this.membershipVersion++
-        return true
-    }
-}
-
-/** What a typed list holds: an object that is its entity, by its id. */
-export interface Entity { id: EntityId }
 
 /**
- * The world's entities of one type, each an object with its id: iterated in id order, as a query is. An iteration
- * keeps the ones there as it started: one removed meanwhile is passed over, one added meanwhile waits for the next.
+ * What a typed list holds: an object that is its entity, by its id, with what Mods keep on it (`extensions`, by
+ * their registered ids: JsonComponents), saved and sent with it.
+ */
+export interface Entity {
+    id: EntityId
+    extensions?: Record<string, JsonObject>
+}
+
+/**
+ * The world's entities of one type, each an object with its id: iterated in id order. An iteration keeps the ones
+ * there as it started: one removed meanwhile (or on its way out, World.markDestroy) is passed over, one added
+ * meanwhile waits for the next.
  */
 export class EntityList<T extends Entity> implements Iterable<T> {
     private readonly values = new Map<EntityId, T>()
@@ -113,9 +50,9 @@ export class EntityList<T extends Entity> implements Iterable<T> {
 
     constructor(private readonly world: World) {}
 
-    /** The one of `id`, unless it is gone (or on its way: World.markDestroy). */
+    /** The one of `id`, unless it is gone or on its way out. */
     get(id: EntityId): T | undefined {
-        return this.world.isQueryable(id) ? this.values.get(id) : undefined
+        return this.world.leaving(id) ? undefined : this.values.get(id)
     }
 
     has(id: EntityId): boolean {
@@ -124,7 +61,7 @@ export class EntityList<T extends Entity> implements Iterable<T> {
 
     *[Symbol.iterator](): Iterator<T> {
         const ordered = this.ordered ??= [...this.values.values()].sort((a, b) => a.id - b.id)
-        for (const value of ordered) if (this.values.get(value.id) === value && this.world.isQueryable(value.id)) yield value
+        for (const value of ordered) if (this.values.get(value.id) === value && !this.world.leaving(value.id)) yield value
     }
 
     /** World.insert and CommandBuffer.insert put one in; World.destroyEntity takes it out. */
@@ -138,45 +75,10 @@ export class EntityList<T extends Entity> implements Iterable<T> {
         this.ordered = undefined
         return true
     }
-}
 
-type AnyComponent = Component<unknown>
-const addBuffered = Symbol('addBuffered')
-
-export class Query implements Iterable<EntityId> {
-    private readonly stores: SparseSet<unknown>[]
-    private entities: EntityId[] = []
-    private version = -1
-
-    constructor(
-        private readonly world: World,
-        components: readonly AnyComponent[],
-    ) {
-        this.stores = components.map(component => world.store(component))
-    }
-
-    /** Systems query every tick; the matching IDs only change with entity or component membership. */
-    *[Symbol.iterator](): Iterator<EntityId> {
-        // Every counter only increases, so their sum changes whenever any of them does.
-        let version = this.world.membershipVersion
-        for (const store of this.stores) version += store.membershipVersion
-        if (version !== this.version) {
-            this.version = version
-            this.entities = this.match()
-        }
-        // An iteration in progress keeps the list it started with.
-        yield* this.entities
-    }
-
-    private match(): EntityId[] {
-        const stores = this.stores
-        if (stores.length === 0) return this.world.queryableEntities()
-        const candidate = stores.reduce((smallest, store) =>
-            store.size < smallest.size ? store : smallest,
-        )
-        return candidate.denseEntities
-            .filter(entity => this.world.isQueryable(entity) && stores.every(store => store.has(entity)))
-            .sort((a, b) => a - b)
+    /** Whether it holds `id`, even on its way out. */
+    holds(id: EntityId): boolean {
+        return this.values.has(id)
     }
 }
 
@@ -204,6 +106,10 @@ export class ResourceStore {
     }
 }
 
+/**
+ * A level's world: what is on the board, each of its type's list (an entity is the object in it, by its id), and the
+ * level's state (`resources`). Ids are never reused.
+ */
 export class World {
     readonly resources = new ResourceStore()
     /** The sun, coins and the level's award (Coin). */
@@ -220,17 +126,17 @@ export class World {
     readonly zombies = new EntityList<Zombie>(this)
 
     private nextEntity = 1
-    private readonly entities = new Set<EntityId>()
+    /** Those on their way out (markDestroy), which no list shows any more. */
     private readonly pendingDestroy = new Set<EntityId>()
-    private readonly stores = new Map<string, { token: AnyComponent, store: SparseSet<unknown> }>()
-    private readonly queries = new Map<string, Query>()
-    /** Changes whenever an entity becomes queryable or stops being queryable. */
-    membershipVersion = 0
 
+    /** Every list of the world. */
+    lists(): readonly EntityList<Entity>[] {
+        return [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
+    }
+
+    /** A new entity's id, for the object it will be in its list (insert). */
     createEntity(): EntityId {
-        const entity = this.allocateEntity()
-        this.activateEntity(entity)
-        return entity
+        return this.nextEntity++
     }
 
     snapshotEntityAllocator(): EntityAllocatorSnapshot {
@@ -245,134 +151,52 @@ export class World {
         if (this.nextEntity !== 1) {
             throw new Error('Entity allocator can only be restored before allocating entities')
         }
-        if ([...this.entities].some(entity => entity >= nextEntity)) {
+        if (this.lists().some(list => [...list].some(entity => entity.id >= nextEntity))) {
             throw new Error('Entity allocator nextEntity must exceed every active entity')
         }
         this.nextEntity = nextEntity
     }
 
-    destroyEntity(entity: EntityId): boolean {
-        if (!this.entities.delete(entity)) return false
-        this.membershipVersion++
-        this.pendingDestroy.delete(entity)
-        for (const { store } of this.stores.values()) store.delete(entity)
-        for (const list of this.lists()) list.delete(entity)
-        return true
-    }
-
-    /** `value` goes into `list`, as the entity it is (its id, World.createEntity's). */
+    /** `value` goes into `list`, as the entity it is (its id, createEntity's). */
     insert<T extends Entity>(list: EntityList<T>, value: T): void {
-        this.assertEntity(value.id)
         list.set(value)
     }
 
-    private lists(): EntityList<Entity>[] {
-        return [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
+    /** It is gone from its list. */
+    destroyEntity(entity: EntityId): boolean {
+        this.pendingDestroy.delete(entity)
+        let held = false
+        for (const list of this.lists()) held = list.delete(entity) || held
+        return held
     }
 
     hasEntity(entity: EntityId): boolean {
-        return this.isQueryable(entity)
+        return !this.leaving(entity) && this.lists().some(list => list.holds(entity))
     }
 
-    add<T>(entity: EntityId, component: Component<T>, value: T): void {
-        this.assertEntity(entity)
-        this.store(component).set(entity, value)
-    }
-
-    [addBuffered]<T>(entity: EntityId, component: Component<T>, value: T): void {
-        if (!this.entities.has(entity)) throw new Error(`Unknown entity: ${entity}`)
-        this.store(component).set(entity, value)
-    }
-
-    remove<T>(entity: EntityId, component: Component<T>): boolean {
-        return this.store(component).delete(entity)
-    }
-
-    has<T>(entity: EntityId, component: Component<T>): boolean {
-        return this.isQueryable(entity) && this.store(component).has(entity)
-    }
-
-    get<T>(entity: EntityId, component: Component<T>): T | undefined {
-        return this.isQueryable(entity)
-            ? this.store(component).get(entity) as T | undefined
-            : undefined
-    }
-
-    query(...components: readonly AnyComponent[]): Query {
-        const unique = [...new Set(components)].sort((a, b) =>
-            a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
-        )
-        for (const component of unique) this.store(component)
-        const key = unique.map(component => component.name).join('|')
-        let query = this.queries.get(key)
-        if (!query) {
-            query = new Query(this, unique)
-            this.queries.set(key, query)
-        }
-        return query
-    }
-
-    store<T>(component: Component<T>): SparseSet<T> {
-        const existing = this.stores.get(component.name)
-        if (existing) {
-            if (existing.token !== component) {
-                throw new Error(`Duplicate component name: ${component.name}`)
-            }
-            return existing.store as SparseSet<T>
-        }
-
-        const store = new SparseSet<T>()
-        this.stores.set(component.name, { token: component as AnyComponent, store })
-        return store
-    }
-
-    queryableEntities(): EntityId[] {
-        return [...this.entities]
-            .filter(entity => !this.pendingDestroy.has(entity))
-            .sort((a, b) => a - b)
-    }
-
-    isQueryable(entity: EntityId): boolean {
-        return this.entities.has(entity) && !this.pendingDestroy.has(entity)
-    }
-
-    allocateEntity(): EntityId {
-        return this.nextEntity++
-    }
-
-    activateEntity(entity: EntityId): void {
-        if (this.entities.has(entity)) return
-        this.entities.add(entity)
-        this.membershipVersion++
-    }
-
+    /** It is on its way out: no list shows it from now on, and the command buffer takes it out as it is flushed. */
     markDestroy(entity: EntityId): void {
-        if (!this.entities.has(entity) || this.pendingDestroy.has(entity)) return
-        this.pendingDestroy.add(entity)
-        this.membershipVersion++
+        if (this.hasEntity(entity)) this.pendingDestroy.add(entity)
     }
 
-    private assertEntity(entity: EntityId): void {
-        if (!this.isQueryable(entity)) throw new Error(`Unknown entity: ${entity}`)
+    /** Whether it is on its way out (markDestroy). */
+    leaving(entity: EntityId): boolean {
+        return this.pendingDestroy.has(entity)
     }
 }
 
 type Command =
-    | { type: 'create', entity: EntityId }
     | { type: 'destroy', entity: EntityId }
     | { type: 'insert', list: EntityList<Entity>, value: Entity }
-    | { type: 'add', entity: EntityId, component: AnyComponent, value: unknown }
-    | { type: 'remove', entity: EntityId, component: AnyComponent }
 
+/** What a system does to the world's lists that waits for the end of its phase: a new entity put in, one taken out. */
 export class CommandBuffer {
     private commands: Command[] = []
 
     constructor(private readonly world: World) {}
 
     createEntity(): EntityId {
-        const entity = this.world.allocateEntity()
-        this.commands.push({ type: 'create', entity })
-        return entity
+        return this.world.createEntity()
     }
 
     destroyEntity(entity: EntityId): void {
@@ -380,30 +204,17 @@ export class CommandBuffer {
         this.commands.push({ type: 'destroy', entity })
     }
 
-    add<T>(entity: EntityId, component: Component<T>, value: T): void {
-        this.commands.push({ type: 'add', entity, component, value })
-    }
-
     /** World.insert, once the buffer is flushed. */
     insert<T extends Entity>(list: EntityList<T>, value: T): void {
         this.commands.push({ type: 'insert', list: list as unknown as EntityList<Entity>, value })
-    }
-
-    remove<T>(entity: EntityId, component: Component<T>): void {
-        this.commands.push({ type: 'remove', entity, component })
     }
 
     flush(): void {
         const commands = this.commands
         this.commands = []
         for (const command of commands) {
-            switch (command.type) {
-                case 'create': this.world.activateEntity(command.entity); break
-                case 'destroy': this.world.destroyEntity(command.entity); break
-                case 'add': this.world[addBuffered](command.entity, command.component, command.value); break
-                case 'insert': if (this.world.isQueryable(command.value.id)) command.list.set(command.value); break
-                case 'remove': this.world.remove(command.entity, command.component); break
-            }
+            if (command.type === 'destroy') this.world.destroyEntity(command.entity)
+            else this.world.insert(command.list, command.value)
         }
     }
 }

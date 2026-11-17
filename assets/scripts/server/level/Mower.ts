@@ -23,7 +23,7 @@ export interface Mower extends MowerFields {
 }
 
 /**
- * A row's lawn mower (the original's LawnMower, MOWER_READY), the mower component itself: from the level's start it
+ * A row's lawn mower (the original's LawnMower, MOWER_READY), an entity of the world's `mowers`: from the level's start it
  * waits at its row's house end (MOWER_READY_X) until a zombie reaches it, or the level is won and it turns into gold
  * (updateMowerCoins). Set off, it is gone from its row, running on as a mowing projectile (MowingProjectile).
  */

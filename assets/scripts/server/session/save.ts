@@ -11,31 +11,38 @@ import type { SavedPlant } from '../plants/Plant'
 import type { SavedZombie } from '../zombies/Zombie'
 import { type Item, type SkySunState, TUTORIAL_STEPS, type TutorialState, type TutorialStep, type WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
-import { SAVED_COMPONENTS } from './savedComponents'
+import { SAVED_LISTS, type SavedList } from './savedLists'
 
-/** An object of one of the world's typed lists as a saved entity has it: its id is the entity's, its position beside it. */
-export type SavedOfList<T> = T extends unknown ? Omit<T, 'id' | 'position'> : never
+/** An object of one of the world's typed lists as its save has it beside what SavedEntity holds. */
+export type SavedOfList<T> = T extends unknown ? Omit<T, 'id' | 'position' | 'extensions'> : never
 
+/** What every saved entity of a list has beside its fields: its id, its position (none for a cell's) and its Mods' data. */
 export interface SavedEntity {
-    extensions?: SavedComponents
-    entityId: EntityId
+    id: EntityId
     position?: Position
-    /** A plant's fields as they are (Plant), restored as its kind. */
-    plant?: SavedPlant
-    /** A zombie's fields as they are (Zombie), restored as its kind. */
-    zombie?: SavedZombie
-    /** A projectile's fields as they are (Projectile), restored as its kind: a mower set off is one. */
-    projectile?: SavedProjectile
-    /** A row's mower waiting at its house end (Mower). */
-    mower?: MowerFields
-    item?: SavedOfList<Item>
-    /** What stands in a cell: it has no position. */
-    gridItem?: SavedOfList<GridItem>
+    extensions?: SavedComponents
 }
 
+/** The fields each typed list's entities are saved with, by the list's name. */
+export interface SavedFields {
+    /** A plant's fields as they are (Plant), restored as its kind. */
+    plants: SavedPlant
+    /** A zombie's fields as they are (Zombie), restored as its kind. */
+    zombies: SavedZombie
+    /** A projectile's fields as they are (Projectile), restored as its kind: a mower set off is one. */
+    projectiles: SavedProjectile
+    /** A row's mower waiting at its house end (Mower). */
+    mowers: MowerFields
+    /** What stands in a cell. */
+    gridItems: SavedOfList<GridItem>
+    items: SavedOfList<Item>
+}
 
-export interface ServerSaveSnapshot {
-    schemaVersion: 3
+/** Each typed list as it is saved, its entities in id order: an entity's id is unique across them all. */
+export type SavedLists = { [K in keyof SavedFields]: (SavedEntity & SavedFields[K])[] }
+
+export interface ServerSaveSnapshot extends SavedLists {
+    schemaVersion: 4
     levelId: string
     mods: EnabledMod[]
     tick: number
@@ -54,16 +61,15 @@ export interface ServerSaveSnapshot {
     eventQueue: EventQueue
     /** Each achievement's trigger state in the level (AchievementState.progress). */
     achievementProgress: Record<string, JsonObject>
-    entities: SavedEntity[]
 }
 
 export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
     const save = exact(value, [
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
-        'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', 'entities',
+        'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', ...SAVED_LISTS.map(list => list.key),
     ], 'server save', ['packetUpgradeOffer'])
-    if (save.schemaVersion !== 3) throw new TypeError('server save.schemaVersion must be 3')
+    if (save.schemaVersion !== 4) throw new TypeError('server save.schemaVersion must be 4')
 
     const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
     const allocator = { nextEntity: positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity') }
@@ -102,10 +108,10 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     const eventQueue = parseEventQueue(save.eventQueue)
     const achievementProgress = Object.fromEntries(Object.entries(record(save.achievementProgress, 'server save.achievementProgress'))
         .map(([id, state]) => [nonEmptyString(id, 'server save.achievementProgress key'), record(state, `server save.achievementProgress.${id}`) as JsonObject]))
-    const entities = array(save.entities, 'server save.entities').map((entity, index) =>
-        parseEntity(entity, index, allocator.nextEntity))
-    const entityIds = entities.map(entity => entity.entityId)
-    if (new Set(entityIds).size !== entityIds.length) throw new TypeError('server save.entities has duplicate IDs')
+    const lists = Object.fromEntries(SAVED_LISTS.map(list => [list.key, array(save[list.key], `server save.${list.key}`)
+        .map((entity, index) => parseSavedEntity(list, entity, `server save.${list.key}[${index}]`, allocator.nextEntity))])) as SavedLists
+    const entityIds = SAVED_LISTS.flatMap(list => lists[list.key].map(entity => entity.id))
+    if (new Set(entityIds).size !== entityIds.length) throw new TypeError('server save has duplicate entity IDs')
     const mods = array(save.mods, 'server save.mods').map((value, index) => {
         const name = `server save.mods[${index}]`
         const mod = exact(value, ['id', 'version', 'contentHash'], name)
@@ -123,7 +129,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     if (gameplayTick > tick) throw new TypeError('server save.gameplayTick must not exceed tick')
 
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         levelId: nonEmptyString(save.levelId, 'server save.levelId'),
         mods,
         tick,
@@ -141,7 +147,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         wave,
         eventQueue,
         achievementProgress,
-        entities,
+        ...lists,
     }
 }
 
@@ -282,22 +288,22 @@ function parseEventQueue(value: unknown): EventQueue {
     return { nextEventId, events }
 }
 
-function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
-    const name = `server save.entities[${index}]`
-    const source = exact(value, ['entityId'], name, [...SAVED_COMPONENTS.map(entry => entry.key), 'extensions'])
-    const entityId = positiveInteger(source.entityId, `${name}.entityId`)
-    if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
-    const entity: SavedEntity = { entityId }
-    for (const { key, parse } of SAVED_COMPONENTS) {
-        if (source[key] !== undefined) Object.assign(entity, { [key]: parse(source[key], `${name}.${key}`) })
+/** An entity of a list: its id, its position unless it is a cell's, its fields as the list has them, its Mods' data. */
+function parseSavedEntity(list: SavedList, value: unknown, name: string, nextEntity: number): SavedEntity {
+    const { id, extensions, ...fields } = record(value, name)
+    const entity: SavedEntity = { id: positiveInteger(id, `${name}.id`) }
+    if (entity.id >= nextEntity) throw new TypeError(`${name}.id must be below allocator.nextEntity`)
+    if (list.positioned) {
+        const position = exact(fields.position, ['x', 'y', 'row'], `${name}.position`)
+        entity.position = { x: finite(position.x, `${name}.position.x`), y: finite(position.y, `${name}.position.y`), row: integer(position.row, `${name}.position.row`) }
+        delete fields.position
     }
-    if (source.extensions !== undefined) {
-        const extensions = record(source.extensions, `${name}.extensions`)
-        entity.extensions = Object.fromEntries(Object.entries(extensions).map(([id, data]) => {
+    Object.assign(entity, list.parse(fields, name))
+    if (extensions !== undefined) {
+        entity.extensions = Object.fromEntries(Object.entries(record(extensions, `${name}.extensions`)).map(([id, data]) => {
             if (!isQualifiedId(id)) throw new TypeError(`Invalid component ID: ${id}`)
             return [id, jsonRoundTrip(record(data, `${name}.extensions.${id}`)) as JsonObject]
         }))
     }
-    if (Object.keys(entity).length === 1) throw new TypeError(`${name} must contain a component`)
     return entity
 }
