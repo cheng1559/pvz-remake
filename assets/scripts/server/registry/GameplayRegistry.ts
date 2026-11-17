@@ -8,8 +8,8 @@ import { installBuiltinLevelRules } from '../rules'
 import { PlantRegistry } from '../plants/PlantRegistry'
 import { AchievementTriggerRegistry } from '../achievements/achievements'
 import { installBuiltinAchievementTriggers } from '../achievements/triggers'
-import { installBuiltinProjectileMotions, ProjectileMotionRegistry } from '../combat/motions'
-import { ProjectileRegistry } from '../combat/ProjectileRegistry'
+import { installBuiltinProjectileMotions, ProjectileMotionRegistry } from '../projectiles/motions'
+import { ProjectileRegistry } from '../projectiles/ProjectileRegistry'
 import { installBuiltinTutorials, TutorialRegistry } from '../tutorials'
 
 export class GameplayRegistry {

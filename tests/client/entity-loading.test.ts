@@ -837,7 +837,7 @@ test('a Mod hears of an event after the base, at the time it asks, and a Mod tha
         ['plants/SunShroomView', 'SunShroomView'], ['plants/FusePlantView', 'FusePlantView'], ['plants/PotatoMineView', 'PotatoMineView'],
         ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'], ['plants/BowlingNutView', 'BowlingNutView'],
         ['zombies/ZombieView', 'ZombieView'], ['zombies/DancerView', 'DancerView'], ['zombies/NewspaperView', 'NewspaperView'], ['zombies/PoleVaulterView', 'PoleVaulterView'],
-        ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+        ['projectiles/ProjectileView', 'ProjectileView'], ['mowers/MowerView', 'MowerView'],
         ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
     const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
     const registry = new StageEventRegistry()
@@ -973,7 +973,7 @@ test('each flash event is heard once by its flash handler, before the frame is d
         ['plants/SunShroomView', 'SunShroomView'], ['plants/FusePlantView', 'FusePlantView'], ['plants/PotatoMineView', 'PotatoMineView'],
         ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'], ['plants/BowlingNutView', 'BowlingNutView'],
         ['zombies/ZombieView', 'ZombieView'], ['zombies/DancerView', 'DancerView'], ['zombies/NewspaperView', 'NewspaperView'], ['zombies/PoleVaulterView', 'PoleVaulterView'],
-        ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+        ['projectiles/ProjectileView', 'ProjectileView'], ['mowers/MowerView', 'MowerView'],
         ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
     const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
     const { EntityFlashes } = clientStubs['./EntityFlashes'] as any

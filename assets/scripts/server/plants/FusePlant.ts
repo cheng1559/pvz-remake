@@ -4,7 +4,7 @@ import { type AnimationRandom, playLayers } from '@/shared/content/animation'
 import { plantTeam } from '@/shared/content/teams'
 import { nonNegativeInteger } from '@/shared/validate'
 import { freezeFromPlant } from '../combat/freeze'
-import { placeCrater } from '../level/craters'
+import { placeCrater } from '../gridItems/craters'
 import { detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
 

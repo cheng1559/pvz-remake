@@ -7,7 +7,7 @@ import { getActiveTutorial, levelTutorial } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
 import { seedAffordable } from '../seeds/seedBank'
-import { createGraves } from './graves'
+import { createGraves } from '../gridItems/graves'
 
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition

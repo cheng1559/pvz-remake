@@ -6,7 +6,7 @@ import { nonNegativeInteger } from '@/shared/validate'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { EconomyStateResource, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { spawnItem } from '../level/itemSpawn'
+import { spawnItem } from '../items/itemSpawn'
 import { Plant, type PlantConfig } from './Plant'
 
 export interface Producer {

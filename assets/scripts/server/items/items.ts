@@ -3,7 +3,7 @@ import { collectTarget, type GameplayDefinitions, itemAt, LEVEL_AWARD } from '@/
 import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, type Position } from '../state/components'
 import type { Item } from '../state/levelState'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { canDropLoot, updateMowerCoins } from './loot'
+import { canDropLoot, updateMowerCoins } from '../level/loot'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'

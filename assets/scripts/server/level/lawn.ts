@@ -1,6 +1,5 @@
 import type { EntityId, World } from '@/server/state/World'
 import type { CellPlant } from '@/shared/content/planting'
-import type { GridItemSnapshot } from '@/shared/protocol'
 import { LevelStateResource } from '../state/components'
 import type { Plant } from '../plants/Plant'
 
@@ -23,11 +22,6 @@ export function plantInPlay(world: World, id: EntityId): Plant | undefined {
 /** The lawn's plants, each with its entity and row (plantsInPlay). */
 export function lawnPlants(world: World): Array<CellPlant & { entity: EntityId }> {
     return [...plantsInPlay(world)].map(plant => ({ ...plant, row: plant.position.row, entity: plant.id }))
-}
-
-/** The things of the lawn's cells (graves), each with its entity, as the snapshot lists them. */
-export function gridItems(world: World): GridItemSnapshot[] {
-    return [...world.gridItems].map(({ id, ...item }) => ({ entityId: id, ...item }))
 }
 
 /**

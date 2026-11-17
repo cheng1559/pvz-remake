@@ -4,10 +4,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { STRAIGHT } from '@/server/combat/motions'
-import { MowingProjectile } from '@/server/combat/MowingProjectile'
-import { Projectile } from '@/server/combat/Projectile'
-import { ProjectileRegistry } from '@/server/combat/ProjectileRegistry'
+import { STRAIGHT } from '@/server/projectiles/motions'
+import { MowingProjectile } from '@/server/projectiles/MowingProjectile'
+import { Projectile } from '@/server/projectiles/Projectile'
+import { ProjectileRegistry } from '@/server/projectiles/ProjectileRegistry'
 
 const source = readGameplaySource('definitions')
 const definitions = parseGameplayDefinitions(source)

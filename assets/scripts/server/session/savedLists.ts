@@ -13,8 +13,8 @@ import type { Item } from '../state/levelState'
 import type { SavedEntity, SavedFields, SavedOfList } from './save'
 import { PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
 import { type SavedZombie, ZOMBIE_FIELDS, ZombieFactoryResource } from '../zombies/Zombie'
-import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../combat/Projectile'
-import { Mower, type MowerFields } from '../level/Mower'
+import { PROJECTILE_FIELDS, ProjectileFactoryResource, type SavedProjectile } from '../projectiles/Projectile'
+import { Mower, type MowerFields } from '../mowers/Mower'
 import type { ServerContent } from './session'
 
 /** The world's typed lists a save keeps, by their name in both. */

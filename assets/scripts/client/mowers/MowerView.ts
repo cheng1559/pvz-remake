@@ -3,7 +3,7 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { easeInOutCurve, lerp } from '@/client/view/GameScreenMath'
 import { MOWER_INTRO_X } from '@/shared/content/gameplay'
 import type { MowerSnapshot } from '@/shared/protocol/index'
-import { ProjectileView } from './ProjectileView'
+import { ProjectileView } from '../projectiles/ProjectileView'
 
 /**
  * Where a waiting mower's animation is from its corner. LawnMower::Draw has the cached frame 14 left of it and 19 down,

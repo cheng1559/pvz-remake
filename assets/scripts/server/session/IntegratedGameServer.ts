@@ -6,7 +6,7 @@ import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../s
 import { savedSeedBank } from '../seeds/seedChooser'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, drainServerEvents } from '../state/events'
-import { items } from '../level/items'
+import { items } from '../items/items'
 import { restoreSession, saveSession } from './persistence'
 import type { ServerSaveSnapshot } from './save'
 import { startSession, type CommandResult, type ServerContent, type Session } from './session'

@@ -63,7 +63,7 @@ async function projectileView(path: string, name: string, mower: object) {
             return { node }
         } },
     })
-    const View = load(`projectiles/${path}`, { './ProjectileView': ProjectileViewModule })[name]
+    const View = load(path, { './ProjectileView': ProjectileViewModule, '../projectiles/ProjectileView': ProjectileViewModule })[name]
     const intro = { complete: false, arrival: 0, mowerArrival(row: number) { assert.equal(row, ROW); return this.arrival } }
     const stage = { layer: new Node(), content, intro }
     const node = new Node(), view = new View({ node, content, projectile: mower, stage })
@@ -73,7 +73,7 @@ async function projectileView(path: string, name: string, mower: object) {
 
 test("a row's mower waiting is rolled in by the intro's time and held where it waits, on the board's plant shadow", async () => {
     const ready = { entityId: 1, typeId: MOWER, x: MOWER_READY_X, y: Y, row: ROW }
-    const { view, node, stage, intro } = await projectileView('MowerView', 'MowerView', ready)
+    const { view, node, stage, intro } = await projectileView('mowers/MowerView', 'MowerView', ready)
     // One shadow, the board's plant shadow on the ground layer, as a running projectile's.
     assert.deepEqual(stage.layer.children.map(child => child.name), ['ProjectileShadow'])
     const shadow = stage.layer.children[0], animation = node.children.find(child => child.name === 'ProjectileAnimation')!
@@ -96,7 +96,7 @@ test("a row's mower waiting is rolled in by the intro's time and held where it w
 
 test("a mowing projectile is drawn by its own view, running from the start where it runs", async () => {
     const fired = { entityId: 5, typeId: MOWER, x: 120, y: Y - 40, row: ROW, height: 40 }
-    const { view, node, stage } = await projectileView('MowingProjectileView', 'MowingProjectileView', fired)
+    const { view, node, stage } = await projectileView('projectiles/MowingProjectileView', 'MowingProjectileView', fired)
     view.sync(fired)
     const animation = node.children.find(child => child.name === 'ProjectileAnimation')!
     assert.deepEqual([node.active, animation.position, animation.component!.playing, animation.component!.rate], [true, { x: 6, y: -19 }, true, 5.8])

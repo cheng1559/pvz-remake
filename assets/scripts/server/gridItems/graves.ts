@@ -7,8 +7,9 @@ import { type Grave, LevelStateResource, RandomResource } from '../state/compone
 import { WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { levelAwardDropped } from './levelAward'
-import { gridItems, lawnPlants } from './lawn'
+import { levelAwardDropped } from '../level/levelAward'
+import { lawnPlants } from '../level/lawn'
+import { gridItems } from './gridItems'
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {

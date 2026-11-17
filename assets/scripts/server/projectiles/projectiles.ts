@@ -1,4 +1,4 @@
-import { getBoardBounds } from './collision'
+import { getBoardBounds } from '../combat/collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'

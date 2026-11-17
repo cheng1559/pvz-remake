@@ -2,7 +2,7 @@ import type { CommandBuffer, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource } from '../state/components'
 import { SkySunResource } from '../state/levelState'
-import { spawnItem } from './itemSpawn'
+import { spawnItem } from '../items/itemSpawn'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { levelAwardDropped } from './levelAward'
 

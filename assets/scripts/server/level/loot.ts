@@ -6,7 +6,7 @@ import {
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped, tryDropLevelAward } from './levelAward'
-import { spawnItem } from './itemSpawn'
+import { spawnItem } from '../items/itemSpawn'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule, zombieValue } from '../rules/registry'

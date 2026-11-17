@@ -12,7 +12,7 @@ SeedBankResource,
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource,createEventQueue } from '@/server/state/events'
-import { createItemSystem } from '@/server/level/items'
+import { createItemSystem } from '@/server/items/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
 import { TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'

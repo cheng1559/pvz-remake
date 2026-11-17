@@ -4,7 +4,7 @@ import { CRATER } from '@/shared/content/craters'
 import { holdsCell } from '@/shared/content/planting'
 import type { Team } from '@/shared/content/teams'
 import { type Crater, LevelStateResource } from '../state/components'
-import { lawnPlants } from './lawn'
+import { lawnPlants } from '../level/lawn'
 
 /** The craters on the lawn. */
 export function craters(world: World): Array<{ entity: EntityId, crater: Crater }> {

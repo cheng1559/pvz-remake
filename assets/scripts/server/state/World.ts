@@ -1,8 +1,8 @@
 import type { JsonObject } from '@/shared/protocol'
 import type { GridItem } from './components'
 import type { Item } from './levelState'
-import type { Projectile } from '../combat/Projectile'
-import type { Mower } from '../level/Mower'
+import type { Projectile } from '../projectiles/Projectile'
+import type { Mower } from '../mowers/Mower'
 import type { Plant } from '../plants/Plant'
 import type { Zombie } from '../zombies/Zombie'
 

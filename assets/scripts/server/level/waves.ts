@@ -5,7 +5,7 @@ import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { WaveResource, type WaveState } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
-import { graves, updateGraveSpawns } from './graves'
+import { graves, updateGraveSpawns } from '../gridItems/graves'
 import { levelRule } from '../rules/registry'
 import { isEnemyZombie } from '@/shared/content/teams'
 

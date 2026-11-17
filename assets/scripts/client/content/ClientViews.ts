@@ -4,7 +4,8 @@ import { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
 import { ItemViewRegistry } from '@/client/items/ItemViewRegistry'
 import { StageEventRegistry } from '@/client/level/StageEventRegistry'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
-import { MowerViewRegistry, ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
+import { MowerViewRegistry } from '@/client/mowers/MowerViewRegistry'
+import { ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
 
 /**

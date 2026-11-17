@@ -3,7 +3,7 @@ import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } f
 import { type EntityRemover, LevelStateResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { WaveResource } from '../state/levelState'
-import { spawnItem } from './itemSpawn'
+import { spawnItem } from '../items/itemSpawn'
 import { levelRule } from '../rules/registry'
 import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
 

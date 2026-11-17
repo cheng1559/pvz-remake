@@ -1,5 +1,5 @@
 import type { World } from '@/server/state/World'
-import { getAvailableSun } from '@/server/level/items'
+import { getAvailableSun } from '@/server/items/items'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue,StartSessionPacket } from '@/shared/protocol'

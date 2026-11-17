@@ -4,8 +4,8 @@ import { LevelStateResource, RandomResource } from '../state/components'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'
-import { mowsZombie } from '../combat/MowingProjectile'
-import { readyMowers } from './lawn'
+import { mowsZombie } from '../projectiles/MowingProjectile'
+import { readyMowers } from '../level/lawn'
 import { Mower } from './Mower'
 
 /**
