@@ -6,7 +6,7 @@ import type { GameSystem, SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { zombiePartDropped } from './parts'
-import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource } from '../state/components'
 import { damagePlant } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
@@ -53,19 +53,17 @@ export class ZombieSystem implements GameSystem {
             ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + body.width, rolling: type.occupiesCell === false })
         }
 
-        const sides = new Set([...world.query(ZombieComponent)].map(entity => zombieTeam(world.get(entity, ZombieComponent)!)))
+        const sides = new Set([...world.zombies].map(zombie => zombieTeam(zombie)))
         this.bothSides = sides.size > 1
-        for (const entity of world.query(ZombieComponent)) world.get(entity, ZombieComponent)!.beforeTick(world, entity)
-        for (const entity of world.query(PositionComponent, ZombieComponent)) {
-            const position = world.get(entity, PositionComponent)
-            const zombie = world.get(entity, ZombieComponent)
+        for (const zombie of world.zombies) zombie.beforeTick(world, zombie.id)
+        // An earlier zombie's bite may have blown one up: the list passes it over.
+        for (const zombie of world.zombies) {
+            const { id: entity, position } = zombie
             // Zombie::CheckForBoardEdge: a zombie walking right leaves past x = 850, without loot (DieNoLoot).
-            if (position && zombie && teamDirection(zombieTeam(zombie)) > 0 && position.x > 850) {
+            if (teamDirection(zombieTeam(zombie)) > 0 && position.x > 850) {
                 commands.destroyEntity(entity)
                 continue
             }
-            // An earlier zombie's bite may have blown this one up.
-            if (!position || !zombie || !world.hasEntity(entity)) continue
             zombie.count()
             const definition = definitions.zombies[zombie.typeId], animation = definition.animation
             const random = world.resources.get(RandomResource)
@@ -128,8 +126,7 @@ export class ZombieSystem implements GameSystem {
     }
     updateActive(context: SystemContext, entity: number): void {
         const { world, commands } = context, definitions = this.definitions
-        const zombie = world.get(entity, ZombieComponent)!
-        const position = world.get(entity, PositionComponent)!
+        const zombie = world.zombies.get(entity)!, position = zombie.position
         const definition = definitions.zombies[zombie.typeId], animation = definition.animation
         const level = world.resources.get(LevelStateResource), random = world.resources.get(RandomResource)
         const team = zombieTeam(zombie)
@@ -175,7 +172,7 @@ export class ZombieSystem implements GameSystem {
                     if (prey !== undefined) {
                         if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey })
                         if (bites) {
-                            const victim = world.get(prey, ZombieComponent)!
+                            const victim = world.zombies.get(prey)!
                             damageZombie(world, definitions, prey, definition.bite.damage, { flash: false, bypassShield: true }, commands)
                             if (victim.health <= 0) emitServerEvent(events, 'zombieAteZombie', { zombieId: entity, targetId: prey })
                         }
@@ -224,9 +221,9 @@ function findZombieTarget(
     attack: { x: number, width: number },
 ): number | undefined {
     const left = position.x + attack.x, right = left + attack.width
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
+    for (const other of world.zombies) {
+        const { id: entity, position: at } = other
         if (entity === self) continue
-        const other = world.get(entity, ZombieComponent)!, at = world.get(entity, PositionComponent)!
         const otherTeam = zombieTeam(other)
         if (at.row !== position.row || !isHostile(team, otherTeam) || other.health <= 0 || !world.hasEntity(entity) || isDeadOrDying(other)) continue
         const body = zombieFacingRect(definitions.zombies[other.typeId].body, otherTeam)

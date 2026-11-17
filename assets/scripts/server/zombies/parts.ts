@@ -1,5 +1,4 @@
 import type { World } from '@/server/state/World'
-import { ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 
 /**
@@ -7,6 +6,6 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
  * body, as the zombie's type draws it. `more`: how it fell (`mowered`).
  */
 export function zombiePartDropped(world: World, entity: number, part: 'head' | 'arm' | 'flag', more: { mowered?: true } = {}): void {
-    const { typeId } = world.get(entity, ZombieComponent)!
+    const { typeId } = world.zombies.get(entity)!
     emitServerEvent(world.resources.get(EventQueueResource), 'zombiePartDropped', { entityId: entity, typeId, part, ...more })
 }

@@ -1,7 +1,7 @@
 import type { WorldSnapshot } from '@/shared/protocol/index'
 import {
     EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantComponent, PositionComponent,
-    SeedBankResource, ZombieComponent,
+    SeedBankResource,
 } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { TutorialResource, WaveResource } from '../state/levelState'
@@ -49,12 +49,8 @@ export const snapshot = {
             plants.push({ entityId: entity, ...plant.snapshot(false), x: position.x, y: position.y, row: position.row,
                 mowered: { time: squash.time, ...(left ? { left } : {}) } })
         }
-        const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
-            const position = world.get(entity, PositionComponent)!
-            const zombie = world.get(entity, ZombieComponent)!
-            // What any zombie shows, and what only its kind has (a pole vaulter's pole, a dancer's step, a newspaper zombie's rage).
-            return { entityId: entity, ...zombie.snapshot(), ...position }
-        })
+        // What any zombie shows, and what only its kind has (a pole vaulter's pole, a dancer's phase, a newspaper zombie's rage).
+        const zombies = [...world.zombies].map(zombie => ({ entityId: zombie.id, ...zombie.snapshot(), ...zombie.position }))
         // What any projectile shows, and what only its kind has; a mower set off runs among them.
         const projectiles = [...world.projectiles].map(projectile => projectile.snapshot(world))
         const mowers = [...world.mowers].map(mower => mower.snapshot())

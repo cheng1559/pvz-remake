@@ -4,7 +4,7 @@ import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/te
 import { plantCanBeChilled, plantCanBeFrozen, zombieCanBeChilled, zombieCanBeFrozen } from './cold'
 import { TEAMS } from '@/shared/protocol'
 import {
-    type EntityRemover, LevelStateResource, type Plant, PlantComponent, PositionComponent, RandomResource, type Zombie, ZombieComponent,
+    type EntityRemover, LevelStateResource, type Plant, PlantComponent, PositionComponent, RandomResource, type Zombie,
 } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { chillZombie, damageZombie } from '../zombies/damage'
@@ -31,9 +31,8 @@ export function freezeFromPlant(world: World, definitions: GameplayDefinitions, 
  * it is the side that is spared, and a zombies' ice freezes the plants too, which the original never has to.
  */
 export function freezeHostiles(world: World, definitions: GameplayDefinitions, team: Team, freeze: FreezeDefinition, remover: EntityRemover): void {
-    for (const entity of world.query(ZombieComponent)) {
-        const zombie = world.get(entity, ZombieComponent)!
-        if (isHostile(zombieTeam(zombie), team) && world.hasEntity(entity)) freezeZombie(world, definitions, entity, zombie, freeze, remover)
+    for (const zombie of world.zombies) {
+        if (isHostile(zombieTeam(zombie), team)) freezeZombie(world, definitions, zombie.id, zombie, freeze, remover)
     }
     for (const entity of world.query(PlantComponent)) {
         const plant = world.get(entity, PlantComponent)

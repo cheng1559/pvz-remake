@@ -7,7 +7,7 @@ import { ProjectileMotionsResource } from '../combat/motions'
 import { launchProjectile } from '../combat/Projectile'
 import { hostilePlants } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { type Position, PositionComponent, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
 import { firePlantAnimation, plantTrackPoint } from './animation'
@@ -161,9 +161,8 @@ function targets(
         if (far < least) { least = far; nearest = entity }
     }
     const zombies: number[] = []
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const position = world.get(entity, PositionComponent)!
-        const zombie = world.get(entity, ZombieComponent)!
+    for (const zombie of world.zombies) {
+        const { id: entity, position } = zombie
         if (!isTargetableZombie(zombie, team) || !anywhere && position.row !== plantPosition.row) continue
         const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
         const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }

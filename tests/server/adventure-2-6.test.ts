@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { ZombieComponent } from '@/server/state/components'
 import { damageZombie } from '@/server/zombies/damage'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { StartSessionPacket } from '@/shared/protocol'
@@ -52,7 +51,7 @@ test('the football zombie runs at 0.66-0.68 in a 1400 helmet that drops when the
     server.enqueueDebugCommand(1, '/zombie football 3 8')
     server.processBoundaryCommands()
     const [football] = server.snapshot().zombies
-    const zombie = world(server).get(football.entityId, ZombieComponent)!
+    const zombie = world(server).zombies.get(football.entityId)!
     assert.ok(zombie.speedPerTick >= 0.66 && zombie.speedPerTick <= 0.68, `speed ${zombie.speedPerTick}`)
     assert.equal(zombie.helmHealth, 1400)
     server.drainEvents()

@@ -1,6 +1,6 @@
 import { exact, positiveInteger } from '@/shared/validate'
 import { BASE_MOD_ID } from '@/shared/mod'
-import { LevelStateResource, ZombieComponent } from '../state/components'
+import { LevelStateResource } from '../state/components'
 import type { AchievementTrigger, AchievementTriggerRegistry } from './achievements'
 
 /**
@@ -78,7 +78,7 @@ const mindControlledTrigger: AchievementTrigger = {
         ids(settings.zombies, definitions.zombies, `${name}.zombies`)
     },
     observe({ world, event, settings, grant }) {
-        if (event.type === 'mindControlled' && event.data.team === 'plants' && world.has(Number(event.data.entityId), ZombieComponent) &&
+        if (event.type === 'mindControlled' && event.data.team === 'plants' && world.zombies.has(Number(event.data.entityId)) &&
             (settings.zombies as string[]).includes(String(event.data.typeId))) grant()
     },
 }

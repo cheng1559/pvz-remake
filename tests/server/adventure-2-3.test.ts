@@ -3,7 +3,7 @@ import test from 'node:test'
 import { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
-import { LevelStateResource, RandomResource, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, RandomResource } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
@@ -69,7 +69,7 @@ test('a screen door absorbs peas without chill, lets fume through, and falls whe
     world.resources.set(EventQueueResource, createEventQueue())
     const events = () => drainServerEvents(world.resources.get(EventQueueResource))
     const door = spawnZombie(world, definitions, 'pvz:screendoor', 0, 500, 50)
-    const zombie = world.get(door, ZombieComponent)!
+    const zombie = world.zombies.get(door)!
     assert.deepEqual([zombie.shieldHealth, zombie.health], [1100, 270])
     damageZombie(world, definitions, door, 20, { chillTicks: 1000 })
     assert.deepEqual([zombie.shieldHealth, zombie.health, zombie.chilledTicks], [1080, 270, 0], 'TakeShieldDamage applies no DAMAGE_FREEZE')
@@ -88,7 +88,7 @@ test('a screen door absorbs peas without chill, lets fume through, and falls whe
     damageZombie(world, definitions, broken, 1100)
     const dropped = events().filter(event => event.type === 'zombieShieldDropped')
     assert.deepEqual(dropped.map(event => [event.data.shield, event.data.bypassed]), [['door', undefined]])
-    assert.equal(world.get(broken, ZombieComponent)!.health, 270)
+    assert.equal(world.zombies.get(broken)!.health, 270)
 })
 
 test('Zombie::TakeDamage: a zombie with a helm and a shield loses the shield, then the helm, then its body', () => {
@@ -99,7 +99,7 @@ test('Zombie::TakeDamage: a zombie with a helm and a shield loses the shield, th
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     const entity = spawnZombie(world, armored, 'pvz:screendoor', 0, 500, 50)
-    const zombie = world.get(entity, ZombieComponent)!
+    const zombie = world.zombies.get(entity)!
     const armor = () => [zombie.shieldHealth, zombie.helmHealth, zombie.health]
     assert.deepEqual(armor(), [1100, 370, 270])
     damageZombie(world, armored, entity, 1200)

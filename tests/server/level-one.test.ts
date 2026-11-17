@@ -11,7 +11,6 @@ PlantComponent,
 PositionComponent,
 RandomResource,
 SeedBankResource,
-ZombieComponent,
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource,createEventQueue } from '@/server/state/events'
@@ -77,9 +76,9 @@ test('level one schedules tutorial sun and the first wave from planted Peashoote
     schedule.run(world, 402)
     assert.equal(world.resources.get(WaveResource).nextWaveAtTick, 501)
     schedule.run(world, 500)
-    assert.equal([...world.query(ZombieComponent)].length, 0)
+    assert.equal([...world.zombies].length, 0)
     schedule.run(world, 501)
-    assert.equal([...world.query(ZombieComponent)].length, 1)
+    assert.equal([...world.zombies].length, 1)
 })
 
 
@@ -88,11 +87,11 @@ test('level one drops its award from the last effective zombie before its corpse
     const { world } = setup()
     world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
     const zombieId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
-    world.get(zombieId, ZombieComponent)!.health = 0
+    world.zombies.get(zombieId)!.health = 0
     const headless = spawnZombie(world, definitions, 'pvz:normal', 2, 100, 250)
-    world.get(headless, ZombieComponent)!.hasHead = false
+    world.zombies.get(headless)!.hasHead = false
     const mowered = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 250)
-    flattenZombie(world, definitions, world.get(mowered, ZombieComponent)!)
+    flattenZombie(world, definitions, world.zombies.get(mowered)!)
     const schedule = new Schedule()
     schedule.add('spawn', createWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))
@@ -104,8 +103,8 @@ test('level one drops its award from the last effective zombie before its corpse
     const [award] = world.items, awardPosition = award.position
     assert.equal(world.hasEntity(zombieId), true)
     assert.equal(world.hasEntity(headless), false, 'award drop removes active headless zombies without starting a death animation')
-    assert.equal(world.get(zombieId, ZombieComponent)!.state, 'dying')
-    assert.equal(world.get(mowered, ZombieComponent)!.state, 'mowered', 'award drop preserves mowered animation')
+    assert.equal(world.zombies.get(zombieId)!.state, 'dying')
+    assert.equal(world.zombies.get(mowered)!.state, 'mowered', 'award drop preserves mowered animation')
     assert.equal(awardPosition.x, 750)
     assert.ok(awardPosition.y >= 302.5 && awardPosition.y < 304.5)
     assert.equal(award.width, 50)
@@ -123,11 +122,11 @@ test('the last zombie vanishes when losing its head drops the award, while burne
     world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
     const last = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     const burned = spawnZombie(world, definitions, 'pvz:normal', 1, 400, 250)
-    Object.assign(world.get(burned, ZombieComponent)!, { hasHead: false, state: 'burned', deathTicksRemaining: 100 })
+    Object.assign(world.zombies.get(burned)!, { hasHead: false, state: 'burned', deathTicksRemaining: 100 })
 
-    damageZombie(world, definitions, last, world.get(last, ZombieComponent)!.health - 1)
+    damageZombie(world, definitions, last, world.zombies.get(last)!.health - 1)
 
     assert.equal([...world.items].length, 1)
     assert.equal(world.hasEntity(last), false, 'Board::RemoveAllZombies also removes the zombie that dropped the award')
-    assert.equal(world.get(burned, ZombieComponent)!.state, 'burned', 'award drop preserves burned animation')
+    assert.equal(world.zombies.get(burned)!.state, 'burned', 'award drop preserves burned animation')
 })

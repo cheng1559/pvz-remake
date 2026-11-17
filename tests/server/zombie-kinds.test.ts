@@ -6,7 +6,6 @@ import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import { PoleVaulter } from '@/server/zombies/PoleVaulter'
 import { FlagZombie } from '@/server/zombies/FlagZombie'
 import { World } from '@/server/state/World'
-import { ZombieComponent } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
 import { Zombie } from '@/server/zombies/Zombie'
 import { ZombieRegistry } from '@/server/zombies/ZombieRegistry'
@@ -90,7 +89,7 @@ test('the flag zombie lets its flag go once, as it loses its head, falls or is m
     const world = new World()
     world.resources.set(EventQueueResource, createEventQueue())
     const entity = world.createEntity(), flag = factory.create('pvz:flag')
-    world.add(entity, ZombieComponent, flag)
+    world.insert(world.zombies, Object.assign(flag, { id: entity, position: { x: 0, y: 0, row: 0 } }))
     flag.animations = { body: { clip: 'walk', time: 0, rate: 12 }, flag: { clip: 'flag', time: 0, rate: 15 } }
     assert.ok(flag instanceof FlagZombie)
     flag.dropCarried(world, entity)

@@ -1,5 +1,5 @@
 import { TICKS_PER_SECOND, playZombie, zombiePace } from './animation'
-import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
+import { type EntityRemover, LevelStateResource, RandomResource, type Zombie } from '../state/components'
 import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageIndex, type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
@@ -39,7 +39,7 @@ export function damageZombie(
     hit: ZombieHit = {},
     remover: EntityRemover = world,
 ): void {
-    const zombie = world.get(entity, ZombieComponent)
+    const zombie = world.zombies.get(entity)
     if (!zombie || isDeadOrDying(zombie) || damage <= 0) return
     const definition = definitions.zombies[zombie.typeId]
     const shield = !hit.helmOnly && !hit.bypassShield && zombie.shieldHealth > 0
@@ -162,7 +162,7 @@ function canDoSuperLongDeath(world: World): boolean {
 /** Board::CountZombiesOnScreen: the zombies' side (not mind-controlled) with their heads, not dying, other than `except`. */
 export function countZombiesOnScreen(world: World, except?: number): number {
     let count = 0
-    for (const entity of world.query(ZombieComponent)) if (entity !== except && isZombieOnScreen(world.get(entity, ZombieComponent)!)) count++
+    for (const zombie of world.zombies) if (zombie.id !== except && isZombieOnScreen(zombie)) count++
     return count
 }
 

@@ -12,7 +12,7 @@ import { launchProjectile } from '@/server/combat/Projectile'
 import { ProjectileRegistry } from '@/server/combat/ProjectileRegistry'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { LevelStateResource, PositionComponent, RandomResource, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, PositionComponent, RandomResource } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { spawnZombie } from '@/server/zombies/spawn'
@@ -97,9 +97,9 @@ test('a homing projectile turns across the rows to its target and hits only that
     assert.ok(turned < -0.2 && turned > -Math.PI / 2, `it points the way it flies, up and to the right (${turned})`)
     for (let tick = 151; tick < 1000 && world.hasEntity(pea); tick++) schedule.run(world, tick)
     assert.equal(world.hasEntity(pea), false)
-    assert.equal(world.get(target, ZombieComponent)!.health, 250)
-    assert.equal(world.get(bystander, ZombieComponent)!.health, 270, 'it passes what is not its target')
-    assert.equal(world.get(target, PositionComponent)!.row, 0)
+    assert.equal(world.zombies.get(target)!.health, 250)
+    assert.equal(world.zombies.get(bystander)!.health, 270, 'it passes what is not its target')
+    assert.equal(world.zombies.get(target)!.position.row, 0)
 })
 
 test('a homing projectile whose target dies flies on as it was going, where it would circle what it cannot hit', () => {
@@ -108,7 +108,7 @@ test('a homing projectile whose target dies flies on as it was going, where it w
     const pea = launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: HOMING, target })
     for (let tick = 1; tick <= 60; tick++) schedule.run(world, tick)
     // Dying, it is still there to home on, but nothing can hit it.
-    Object.assign(world.get(target, ZombieComponent)!, { health: 0, state: 'dying' })
+    Object.assign(world.zombies.get(target)!, { health: 0, state: 'dying' })
     schedule.run(world, 61)
     const heading = facing(world, pea), { x, y } = world.projectiles.get(pea)!.position
     for (let tick = 62; tick <= 111; tick++) schedule.run(world, tick)
@@ -130,7 +130,7 @@ test('a lobbed projectile comes down past a shield onto the body, where a straig
         const schedule = new Schedule()
         schedule.add('projectile', createProjectileSystem(definitions))
         for (let tick = 1; tick < 1000 && world.hasEntity(pea); tick++) schedule.run(world, tick)
-        const zombie = world.get(target, ZombieComponent)!, impact = world.resources.get(EventQueueResource).events.find(event => event.type === 'projectileImpact')!
+        const zombie = world.zombies.get(target)!, impact = world.resources.get(EventQueueResource).events.find(event => event.type === 'projectileImpact')!
         const flash = world.resources.get(EventQueueResource).events.find(event => event.type === 'zombieHit')!
         return [zombie.maxHealth - zombie.health, definitions.zombies['pvz:screendoor'].shield!.health - zombie.shieldHealth, impact.data.shield, flash.data.past, impact.data.above]
     }
@@ -150,7 +150,7 @@ function flying(pierce: boolean) {
     world.resources.set(RandomResource, new DeterministicRng(1))
     const schedule = new Schedule()
     schedule.add('projectile', createProjectileSystem(definitions))
-    const health = (zombie: number) => world.get(zombie, ZombieComponent)?.health
+    const health = (zombie: number) => world.zombies.get(zombie)?.health
     return { definitions, world, schedule, health }
 }
 
@@ -222,14 +222,14 @@ test("coming down on the ground ends a projectile, a piercing one too: a lobbed 
     let ticks = 0
     while (world.hasEntity(mower) && ticks < 1000) schedule.run(world, ++ticks)
     assert.ok(ticks < 200 && position.y === ground && position.x > 500 && position.x < 700, `it comes down by its target, onto the ground (${ticks}: ${position.x}, ${position.y})`)
-    assert.deepEqual(zombies.map(zombie => world.get(zombie, ZombieComponent)!.state), ['mowered', 'walking'], 'and does not run on along the row')
+    assert.deepEqual(zombies.map(zombie => world.zombies.get(zombie)!.state), ['mowered', 'walking'], 'and does not run on along the row')
 
     // Fired straight from a mouth, it mows what stands right before the shooter and flies on flat at that height.
     const flat = flying(false)
     const close = spawnZombie(flat.world, definitions, 'pvz:normal', 2, 110, 250)
     const fired = launchProjectile(flat.world, definitions, flat.world, { typeId: 'pvz:lawnmower', position: { x: 96, y: 290, row: 2 }, motion: STRAIGHT })
     for (let tick = 1; tick <= 30; tick++) flat.schedule.run(flat.world, tick)
-    assert.equal(flat.world.get(close, ZombieComponent)!.state, 'mowered')
+    assert.equal(flat.world.zombies.get(close)!.state, 'mowered')
     assert.equal(flat.world.projectiles.get(fired)!.position.y, 290)
 })
 
@@ -259,8 +259,8 @@ test('a thrown projectile hits at its landing height over the ground, wherever i
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 600, 250)
         const melon = launchProjectile(world, definitions, world, { typeId: 'pvz:melon', position: { x: 100, y, row: 2 }, motion: LOB, target: zombie })
         const position = world.projectiles.get(melon)!.position
-        for (let tick = 1; tick < 1000 && world.hasEntity(melon) && world.get(zombie, ZombieComponent)!.health === 270; tick++) schedule.run(world, tick)
-        assert.equal(world.get(zombie, ZombieComponent)!.health, 190)
+        for (let tick = 1; tick < 1000 && world.hasEntity(melon) && world.zombies.get(zombie)!.health === 270; tick++) schedule.run(world, tick)
+        assert.equal(world.zombies.get(zombie)!.health, 190)
         return rowGroundY(board, 2) - (position.y + 40)
     })
     for (const height of heights) assert.ok(height < 144 && height > 144 - 9, `it hits within a tick's fall of 144 (${height})`)
@@ -316,7 +316,7 @@ test('a homing mower keeps homing: it crushes its target, then turns to the next
     for (let tick = 1; tick < 3000 && world.hasEntity(mower); tick++) {
         schedule.run(world, tick)
         assert.equal(world.projectiles.get(mower)?.motion ?? HOMING, HOMING)
-        for (const zombie of zombies) if (world.get(zombie, ZombieComponent)!.state === 'mowered' && !order.includes(zombie)) order.push(zombie)
+        for (const zombie of zombies) if (world.zombies.get(zombie)!.state === 'mowered' && !order.includes(zombie)) order.push(zombie)
     }
     assert.deepEqual(order, zombies)
 })

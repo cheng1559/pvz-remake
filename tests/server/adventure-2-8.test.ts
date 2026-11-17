@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { PositionComponent, ZombieComponent } from '@/server/state/components'
+import { PositionComponent } from '@/server/state/components'
 import { chillZombie } from '@/server/zombies/damage'
 import { beatPhase, type Dancer } from '@/server/zombies/Dancer'
 import { mindControl } from '@/server/zombies/mindControl'
@@ -121,7 +121,7 @@ test('a dancer moonwalks in drawn turned round, snaps its fingers and calls up i
     assert.equal(phaseOf(leader), 'moonwalk')
     ticks(server, 100)
     // PlayZombieReanim's 24, which UpdateAnimSpeed leaves: the moonwalk's ground runs backwards (its distance < 1e-6).
-    assert.equal(world(server).get(leader.entityId, ZombieComponent)!.animations[ZOMBIE_BODY_LAYER].rate, 24)
+    assert.equal(world(server).zombies.get(leader.entityId)!.animations[ZOMBIE_BODY_LAYER].rate, 24)
     assert.ok(zombie(server, leader.entityId).x < from - 40, 'it moonwalks toward the house')
     // Zombie::ZombieInitialize: mPhaseCounter = 300 + Rand(12).
     until(server, () => phaseOf(zombie(server, leader.entityId)) !== 'moonwalk', 220)
@@ -171,14 +171,14 @@ test('a troupe stands still while one of it is frozen, and goes slowed while one
     const { leader, backups } = troupe(server)
     ticks(server, lead.holdTicks)
     const lawn = world(server)
-    lawn.get(backups[0], ZombieComponent)!.frozenTicks = 1000
+    lawn.zombies.get(backups[0])!.frozenTicks = 1000
     const from = zombie(server, leader).x
     ticks(server, DANCE_BEAT.ticks * DANCE_BEAT.beats)
     assert.equal(zombie(server, leader).x, from, 'it never walks')
-    delete lawn.get(backups[0], ZombieComponent)!.frozenTicks
-    chillZombie(lawn, definitions, backups[1], lawn.get(backups[1], ZombieComponent)!, 1000)
+    delete lawn.zombies.get(backups[0])!.frozenTicks
+    chillZombie(lawn, definitions, backups[1], lawn.zombies.get(backups[1])!, 1000)
     ticks(server, 1)
-    const own = lawn.get(leader, ZombieComponent)!.animations[ZOMBIE_BODY_LAYER].rate
+    const own = lawn.zombies.get(leader)!.animations[ZOMBIE_BODY_LAYER].rate
     assert.equal(zombie(server, leader).animations[ZOMBIE_BODY_LAYER].rate, own / 2, 'its body at half its rate')
     assert.equal(zombie(server, leader).chilled, false, 'not tinted')
 })
@@ -189,7 +189,7 @@ test('a moonwalk is not slowed by a chill, and one frozen in it stands once thaw
     const leader = zombiesOf(server, 'pvz:dancer')[0].entityId, lawn = world(server)
     ticks(server, 20)
     // UpdateAnimSpeed sets its moonwalk no rate (its ground runs backwards), so ApplyAnimRate's chill never comes to it.
-    chillZombie(lawn, definitions, leader, lawn.get(leader, ZombieComponent)!, 1000)
+    chillZombie(lawn, definitions, leader, lawn.zombies.get(leader)!, 1000)
     ticks(server, 1)
     assert.deepEqual([zombie(server, leader).chilled, zombie(server, leader).animations[ZOMBIE_BODY_LAYER].rate], [true, 24], 'tinted, at its own pace')
     const frames = definitions.zombies['pvz:dancer'].animation.clips.moonwalk.frames, before = zombie(server, leader).animations[ZOMBIE_BODY_LAYER].time
@@ -199,7 +199,7 @@ test('a moonwalk is not slowed by a chill, and one frozen in it stands once thaw
     let from = zombie(server, leader).x
 
     // HitIceTrap stops its rate, and RemoveIceTrap's UpdateAnimSpeed sets it none again.
-    const dancer = lawn.get(leader, ZombieComponent) as Dancer
+    const dancer = lawn.zombies.get(leader) as Dancer
     dancer.frozenTicks = 50
     const left = dancer.phaseTicks
     ticks(server, 50)
@@ -242,11 +242,11 @@ test('a dancer on the plants\' side calls up its troupe on its side; a mind-cont
     debug(server, '/plant hypnoshroom 1 1')
     const lawn = world(server), shroom = server.snapshot().plants[0].entityId
     mindControl(lawn, definitions, leader, shroom, { destroyEntity: entity => lawn.destroyEntity(entity) })
-    assert.deepEqual((lawn.get(leader, ZombieComponent) as Dancer).troupe, [null, null, null, null])
+    assert.deepEqual((lawn.zombies.get(leader) as Dancer).troupe, [null, null, null, null])
     // Zombie::StartMindControlled leaves those it let go their mRelatedZombieID: they still stand while it eats.
     const letGo = zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId)
-    assert.ok(letGo.every(id => (lawn.get(id, ZombieComponent) as Dancer).leader === leader), 'those it let go keep it as their leader')
-    const hypnotized = lawn.get(leader, ZombieComponent)!, stander = lawn.get(letGo[0], ZombieComponent) as Dancer
+    assert.ok(letGo.every(id => (lawn.zombies.get(id) as Dancer).leader === leader), 'those it let go keep it as their leader')
+    const hypnotized = lawn.zombies.get(leader)!, stander = lawn.zombies.get(letGo[0]) as Dancer
     const [state, phase] = [hypnotized.state, stander.phase]
     stander.phase = 'walk'
     assert.equal(stander.walks(lawn, letGo[0]), true)
@@ -266,7 +266,7 @@ test('a dancer that reaches the house on a raised arm walks in on its walk', () 
     until(server, () => beatPhase(server.snapshot().gameplayTick + 1) === 'raise', DANCE_BEAT.ticks * DANCE_BEAT.beats)
     debug(server, '/zombie backup_dancer 3 1')
     const dancer = zombiesOf(server, 'pvz:backup_dancer')[0].entityId
-    world(server).get(dancer, PositionComponent)!.x = definitions.zombies['pvz:backup_dancer'].boardEdgeX
+    world(server).zombies.get(dancer)!.position.x = definitions.zombies['pvz:backup_dancer'].boardEdgeX
     const events = ticks(server, 1)
     assert.ok(events.some(event => event.type === 'levelLost' && event.data.zombieId === dancer))
     const body = zombie(server, dancer).animations[ZOMBIE_BODY_LAYER]

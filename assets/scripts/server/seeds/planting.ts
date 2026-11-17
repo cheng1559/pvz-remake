@@ -4,7 +4,7 @@ import { cellPosition, type SeedDefinition, zombieRowY } from '@/shared/content/
 import { spawnZombie } from '../zombies/spawn'
 import {
     EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
-    type SeedBankState, ZombieComponent,
+    type SeedBankState,
 } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -168,7 +168,7 @@ export const planting = {
         const board = world.resources.get(LevelStateResource).board
         const offsetX = team === 'plants' ? definitions.zombies[typeId].facingRightOffsetX ?? 0 : 0
         const entity = spawnZombie(world, definitions, typeId, row, cellPosition(board, row, column).x - 30 + offsetX, zombieRowY(board, row))
-        if (team === 'plants') world.get(entity, ZombieComponent)!.team = 'plants'
+        if (team === 'plants') world.zombies.get(entity)!.team = 'plants'
         return entity
     },
 

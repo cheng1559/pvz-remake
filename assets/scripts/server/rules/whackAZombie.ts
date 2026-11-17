@@ -1,7 +1,7 @@
 import { array, boolean, exact, integer, integerInRange, nonEmptyString, nonNegativeInteger, positiveFinite, positiveInteger } from '@/shared/validate'
 import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
-import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { startWalk } from '../zombies/animation'
@@ -204,7 +204,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
             typeId = random.integer(0, 1) === 0 ? zombies.cone : zombies.pail
             maxSpeed = 2
         }
-        const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, riseTicks), ZombieComponent)!
+        const zombie = world.zombies.get(raiseZombieFromGrave(world, definitions, grave, typeId, riseTicks))!
         zombie.speedPerTick = 0.5 + random.nextFloat() * (maxSpeed - 0.5)
         startWalk(zombie, definitions.zombies[typeId], zombie.walkClip, random)
     }
@@ -236,10 +236,9 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
         if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(position, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row, plant: true }
     }
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const zombie = world.get(entity, ZombieComponent)!
+    for (const zombie of world.zombies) {
         if (isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), HAMMER_TEAM)) continue
-        const position = world.get(entity, PositionComponent)!
+        const { id: entity, position } = zombie
         if (!reached(position, definitions.zombies[zombie.typeId].body)) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row }
     }
@@ -252,7 +251,7 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
         emitServerEvent(events, 'plantWhacked', { plantId: top.entity, x, y, ...(killed ? { killed } : {}) })
         return
     }
-    const zombie = world.get(top.entity, ZombieComponent)!
+    const zombie = world.zombies.get(top.entity)!
     if (zombie.helmHealth > 0) {
         emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm!.type })
         damageZombie(world, definitions, top.entity, hammerDamage, { helmOnly: true }, remover)

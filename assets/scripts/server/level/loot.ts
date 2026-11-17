@@ -1,7 +1,7 @@
 import type { CommandBuffer, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
-    EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
+    EconomyStateResource, type EntityRemover, LevelStateResource, RandomResource,
 } from '../state/components'
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
@@ -26,8 +26,7 @@ export function canDropLoot(world: World): boolean {
 
 /** Zombie::DropLoot: the award check comes first, then one roll per zombie. */
 export function dropZombieLoot(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
-    const zombie = world.get(entity, ZombieComponent)
-    const position = world.get(entity, PositionComponent)
+    const zombie = world.zombies.get(entity), position = zombie?.position
     if (!zombie || !position) return
     tryDropLevelAward(world, definitions, remover, entity)
     if (zombie.droppedLoot) return

@@ -1,6 +1,6 @@
 import type { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
-import { PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { RandomResource } from '../state/components'
 import type { World } from '@/server/state/World'
 import { pickWalkClip, startWalk, startZombie } from './animation'
 import { ZombieBehaviorsResource } from './behaviors'
@@ -34,9 +34,10 @@ export function spawnZombie(
     zombie.hasTongue = definition.tongueChance > 0 && random.nextFloat() < definition.tongueChance
     zombie.groanCounter = random.integer(300, 400)
     if (behaviorState !== undefined) zombie.behaviorState = behaviorState
-    const entity = world.createEntity()
-    world.add(entity, PositionComponent, { x, y, row })
-    world.add(entity, ZombieComponent, zombie)
+    zombie.id = world.createEntity()
+    zombie.position = { x, y, row }
+    world.insert(world.zombies, zombie)
+    const entity = zombie.id
     zombie.speedPerTick = zombie.pickSpeed(random)
     zombie.walkClip = pickWalkClip(definition, random)
     startZombie(zombie, definition.animation, random)

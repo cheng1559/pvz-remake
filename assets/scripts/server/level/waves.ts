@@ -1,6 +1,6 @@
 import type { GameSystem, World } from '@/server/state/World'
 import { type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
-import { LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
+import { LevelStateResource, RandomResource, type Zombie } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { WaveResource, type WaveState } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -56,7 +56,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             if (waves.nextWaveAtTick === undefined) return
             const nextIsFlag = waves.plan[waves.index].flagWave === true
             const waveHealth = waves.zombieIds.reduce((total, entity) => {
-                const zombie = world.get(entity, ZombieComponent)
+                const zombie = world.zombies.get(entity)
                 // Board::TotalZombiesHealthInWave leaves out mind-controlled zombies.
                 return (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'airborne') && isEnemyZombie(zombie)
                     ? addWaveHealth(total, zombie) : total
@@ -108,7 +108,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             // Board::SpawnZombieWave: after the last wave every grave on the lawn opens, not only the level's own.
             if (waves.index === waves.plan.length && graves(world).length && level.definition.graveZombies?.length) waves.graveRiseAtTick = tick + 200
             waves.zombieIds = zombieIds
-            const waveHealthStart = zombieIds.reduce((total, entity) => addWaveHealth(total, world.get(entity, ZombieComponent)!), 0)
+            const waveHealthStart = zombieIds.reduce((total, entity) => addWaveHealth(total, world.zombies.get(entity)!), 0)
             waves.healthToNextWave = (0.5 + world.resources.get(RandomResource).nextFloat() * 0.15) * waveHealthStart
             waves.nextWaveAtTick = tick + (waves.plan[waves.index]?.flagWave ? 4500
                 : NEXT_WAVE_DELAY_TICKS + world.resources.get(RandomResource).integer(0, NEXT_WAVE_DELAY_RANGE_TICKS - 1))

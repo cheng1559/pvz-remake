@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { LevelStateResource, PlantComponent, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, PlantComponent } from '@/server/state/components'
 import { freezeHostiles } from '@/server/combat/freeze'
 import { chillZombie, damageZombie } from '@/server/zombies/damage'
 import { damagePlant, destroyEatenPlant } from '@/server/plants/damage'
@@ -98,7 +98,7 @@ test('an awake ice-shroom goes off after 100 ticks: every hostile zombie is froz
     debug(server, '/zombie normal 5 3 plants')
     const normal = zombieAt(server, 3), door = zombieAt(server, 1), ally = zombieAt(server, 5, 'plants')
     const shroom = plantAt(server, 3, 2)!
-    const component = (entity: number) => world(server).get(entity, ZombieComponent)!
+    const component = (entity: number) => world(server).zombies.get(entity)!
     server.drainEvents()
     assert.ok(!ticks(server, 99).some(event => event.type === 'plantFroze'))
     assert.ok(server.snapshot().zombies.every(zombie => !zombie.frozen))
@@ -138,7 +138,7 @@ test('a cold zombie freezes for less, one in the air of its vault is only chille
     debug(server, '/zombie pole_vaulter 2 9')
     debug(server, '/zombie normal 3 9')
     debug(server, '/zombie normal 4 9')
-    const [cold, vaulting, rising, dying] = [1, 2, 3, 4].map(row => world(server).get(zombieAt(server, row), ZombieComponent)!)
+    const [cold, vaulting, rising, dying] = [1, 2, 3, 4].map(row => world(server).zombies.get(zombieAt(server, row))!)
     cold.chilledTicks = 500
     vaulting.state = 'airborne'
     rising.riseTicks = 50
@@ -171,8 +171,8 @@ test('a zombies\' ice-shroom freezes the plants\' side: its plants stop, its zom
     assert.ok(plant.frozenTicks! >= 400 && plant.frozenTicks! <= 600, `the plant is frozen for ${plant.frozenTicks}`)
     assert.equal(plant.chilledTicks, ice.chillTicks)
     assert.equal(plant.health, 280, 'and hurt as a zombie is')
-    assert.ok(world(server).get(ally, ZombieComponent)!.frozenTicks !== undefined, 'a zombie on the plants\' side is frozen')
-    assert.equal(world(server).get(enemy, ZombieComponent)!.frozenTicks, undefined)
+    assert.ok(world(server).zombies.get(ally)!.frozenTicks !== undefined, 'a zombie on the plants\' side is frozen')
+    assert.equal(world(server).zombies.get(enemy)!.frozenTicks, undefined)
     assert.deepEqual(server.snapshot().iceTrap, { plants: 300 })
     const snapshot = server.snapshot().plants.find(entry => entry.entityId === shooter)!
     assert.equal(snapshot.frozen, true)
@@ -275,7 +275,7 @@ test('a type kept from the cold takes neither a snow pea’s chill nor the ice',
     debug(server, '/plant peashooter 3 1')
     debug(server, '/zombie normal 3 9')
     const shooter = plantAt(server, 3, 1)!, walker = zombieAt(server, 3)
-    const plant = world(server).get(shooter, PlantComponent)!, zombie = world(server).get(walker, ZombieComponent)!
+    const plant = world(server).get(shooter, PlantComponent)!, zombie = world(server).zombies.get(walker)!
     damagePlant(world(server), cold, shooter, 20, world(server), 1000)
     chillZombie(world(server), cold, walker, zombie, 1000)
     freezeHostiles(world(server), cold, 'plants', ice, world(server))

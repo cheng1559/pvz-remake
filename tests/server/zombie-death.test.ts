@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { World } from '@/server/state/World'
-import { LevelStateResource, RandomResource, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, RandomResource } from '@/server/state/components'
 import { createEventQueue, EventQueueResource } from '@/server/state/events'
 import { TutorialResource } from '@/server/state/levelState'
 import { startZombieDeath } from '@/server/zombies/damage'
@@ -22,7 +22,7 @@ function dyingZombie(roll: number, { levelId = 'pvz:adventure-1-6', firstAdventu
     world.resources.set(EventQueueResource, createEventQueue())
     for (let index = 0; index < others; index++) spawnZombie(world, definitions, 'pvz:normal', 2, 600 + index, 0)
     const entity = spawnZombie(world, definitions, typeId, 2, 500, 0)
-    const zombie = world.get(entity, ZombieComponent)!
+    const zombie = world.zombies.get(entity)!
     if (chilled) zombie.chilledTicks = 100
     startZombieDeath(world, definitions, entity, zombie)
     return zombie

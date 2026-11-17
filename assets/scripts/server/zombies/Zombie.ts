@@ -77,7 +77,11 @@ export type ZombieConfig = 'vault' | 'dance' | 'enrage'
 /** Each zombie's type, which its save does not keep: it is its type's again as it is restored. */
 const TYPES = new WeakMap<Zombie, { definition: ZombieDefinition, definitions: GameplayDefinitions }>()
 
-export interface Zombie extends ZombieFields {}
+export interface Zombie extends ZombieFields {
+    /** Its entity, and where it is (World.zombies). */
+    id: EntityId
+    position: Position
+}
 
 /**
  * A zombie on the lawn, the zombie component itself: its fields are all there is to it, which its save keeps as they

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/server/state/World'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { PlantComponent, ZombieComponent } from '@/server/state/components'
+import { PlantComponent } from '@/server/state/components'
 import { WaveResource } from '@/server/state/levelState'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
@@ -73,7 +73,7 @@ test('zombies of the two sides bite each other through shields, and the side sur
 
     server.start({ ...options, save: server.save() as unknown as JsonValue })
     assert.deepEqual(zombies(server).map(zombie => zombie.team ?? 'zombies').sort(), ['plants', 'zombies'])
-    const allies = [...world(server).query(ZombieComponent)].filter(entity => world(server).get(entity, ZombieComponent)!.team === 'plants')
+    const allies = [...world(server).zombies].filter(zombie => zombie.team === 'plants')
     assert.equal(allies.length, 1)
     events = []
     // The screen door zombie loses its head first and stops biting; the bucket head bites on until it swallows.
@@ -507,7 +507,7 @@ test('a zombie that chews an awake hypno-shroom comes over to the plants\u2019 s
     assert.equal(zombie.mindControlled, true)
     assert.equal(zombie.state, 'walking')
     // Zombie::StopEating: StartWalkAnim picks its speed again, over StartMindControlled's 0.17.
-    const { min, max } = definitions.zombies['pvz:normal'].speedPerTick, speed = world(server).get(zombie.entityId, ZombieComponent)!.speedPerTick
+    const { min, max } = definitions.zombies['pvz:normal'].speedPerTick, speed = world(server).zombies.get(zombie.entityId)!.speedPerTick
     assert.ok(speed >= min && speed <= max, `speed ${speed}`)
     const x = zombie.x
     run(server, 100)

@@ -1,6 +1,6 @@
 import { withFixedBanks } from '../fixedBankLevels'
 import { type World } from '@/server/state/World'
-import { PlantComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
+import { PlantComponent, PositionComponent } from '@/server/state/components'
 import type { BowlingNut } from '@/server/plants/BowlingNut'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
@@ -148,9 +148,9 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
         if (explosive) {
             assert.equal(server.snapshot().plants.length, 0)
             assert.ok(events.some(event => event.type === 'plantExploded'))
-            assert.ok(!world.get(id, ZombieComponent) || world.get(id, ZombieComponent)!.health === 0)
+            assert.ok(!world.zombies.get(id) || world.zombies.get(id)!.health === 0)
         } else {
-            assert.equal(world.get(id, ZombieComponent)!.health, 0)
+            assert.equal(world.zombies.get(id)!.health, 0)
             assert.notEqual(server.snapshot().plants[0].row, 2)
             assert.deepEqual(events.find(event => event.type === 'bowlingImpact')!.data, {
                 entityId: id, typeId: 'pvz:normal', helm: false, shield: false, plantId: plant.entityId, plantTypeId: 'pvz:bowling-wallnut', hits: 1,
@@ -210,11 +210,11 @@ test('a pole vaulter vaults over a rolling nut from afar, where it stands', () =
     // Zombie::ZombieInitialize on Wall-nut Bowling: the vault rect starts 229 ahead, against the nut's GetPlantRect.
     const far = spawnZombie(world, definitions, 'pvz:pole_vaulter', 2, plant.x + 290, plant.y - 30)
     server.tick()
-    assert.equal(world.get(far, ZombieComponent)!.state, 'walking')
+    assert.equal(world.zombies.get(far)!.state, 'walking')
     const near = spawnZombie(world, definitions, 'pvz:pole_vaulter', 2, server.snapshot().plants[0].x + 270, plant.y - 30)
     const x = server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x
     server.tick()
-    const zombie = world.get(near, ZombieComponent)!
+    const zombie = world.zombies.get(near)!
     assert.equal(zombie.state, 'airborne')
     assert.equal(zombie.speedPerTick, 0)
     assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x, x)
@@ -227,7 +227,7 @@ test('no zombie bites a rolling nut', () => {
     ;(world.get(plant.entityId, PlantComponent) as BowlingNut).direction = -1
     const id = spawnZombie(world, definitions, 'pvz:normal', 2, plant.x + 24, plant.y - 30)
     server.tick()
-    const zombie = world.get(id, ZombieComponent)!
+    const zombie = world.zombies.get(id)!
     assert.equal(zombie.health, zombie.maxHealth)
     assert.equal(zombie.state, 'walking')
 })
@@ -241,7 +241,7 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
         const shield = definitions.zombies[typeId].shield!.health
         server.drainEvents()
         server.tick()
-        const zombie = world.get(id, ZombieComponent)!
+        const zombie = world.zombies.get(id)!
         const impact = server.drainEvents().find(event => event.type === 'bowlingImpact')!
         assert.equal(impact.data.shield, true, `${typeId} ${bounced}`)
         if (typeId === 'pvz:screendoor' && bounced) {
@@ -290,6 +290,6 @@ test("a bowled nut takes Plant::UpdateBowling's numbers unless it writes its own
     const { world, plant } = rollNut(server)
     const id = spawnZombie(world, changed, 'pvz:normal', 2, plant.x + 20, plant.y - 30)
     server.tick()
-    const zombie = world.get(id, ZombieComponent)!
+    const zombie = world.zombies.get(id)!
     assert.equal(zombie.health, zombie.maxHealth - 100)
 })

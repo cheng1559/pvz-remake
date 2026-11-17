@@ -4,7 +4,7 @@ import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
@@ -162,7 +162,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const entityId = grid.column !== undefined ? planting.placeZombie(session, typeId, grid.row, grid.column, team)
                 : spawnZombie(world, definitions, typeId, grid.row, pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource)),
                     zombieRowY(level.board, grid.row))
-            if (team === 'plants') world.get(entityId, ZombieComponent)!.team = 'plants'
+            if (team === 'plants') world.zombies.get(entityId)!.team = 'plants'
             emitServerEvent(events, 'zombieSpawned', { entityId, typeId, row: grid.row })
             return debugSuccess(`Summoned ${args[0]}`)
         }
@@ -170,7 +170,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         case 'kill': {
             const damage = name === 'kill' ? 0 : debugInteger(args[0])
             if (damage === null || name === 'damage' && damage <= 0) return debugSyntax('Damage must be a positive integer')
-            const zombies = [...world.query(ZombieComponent)]
+            const zombies = [...world.zombies].map(zombie => zombie.id)
             for (const entity of zombies) {
                 if (name === 'kill') world.destroyEntity(entity)
                 else damageZombie(world, definitions, entity, damage)

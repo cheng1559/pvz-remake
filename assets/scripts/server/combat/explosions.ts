@@ -2,10 +2,8 @@ import { getBoardBounds, circleRectOverlap } from './collision'
 import {
     type EntityRemover,
     type Position,
-    PositionComponent,
     RandomResource,
     type Zombie,
-    ZombieComponent,
 } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
@@ -45,10 +43,8 @@ export function explode(
 ): number {
     let kills = 0
     const { x, y } = explosionCenter(origin, explosion, team)
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const position = world.get(entity, PositionComponent)
-        const zombie = world.get(entity, ZombieComponent)
-        if (!position || !zombie || !world.hasEntity(entity)) continue
+    for (const zombie of world.zombies) {
+        const { id: entity, position } = zombie
         if (Math.abs(position.row - origin.row) > explosion.rowRange || zombie.state === 'burned' || !isHostile(zombieTeam(zombie), team)) continue
         if (!explosion.burn && !isTargetableZombie(zombie, team)) continue
         const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))

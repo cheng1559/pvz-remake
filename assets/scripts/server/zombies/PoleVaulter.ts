@@ -4,7 +4,7 @@ import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { boolean } from '@/shared/validate'
 import { PLANT_WIDTH, teamDirection, ZOMBIE_WIDTH, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
-import { type Position, PositionComponent, RandomResource } from '../state/components'
+import { type Position, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { TICKS_PER_SECOND, playZombie, stepZombie, zombieBody, zombiePace } from './animation'
 import { type PlantFinder, Zombie, type ZombieConfig } from './Zombie'
@@ -54,7 +54,7 @@ export class PoleVaulter extends Zombie {
      * over the first plant its vault reaches, a rolling nut from much further and where it stands.
      */
     act(context: SystemContext, entity: EntityId, plants: PlantFinder): boolean {
-        const { world } = context, random = world.resources.get(RandomResource), position = world.get(entity, PositionComponent)!
+        const { world } = context, random = world.resources.get(RandomResource), position = this.position
         if (this.state === 'airborne') {
             if (this.updateVault(context, entity, position)) this.walkAgain(random)
             return true

@@ -8,7 +8,6 @@ import { launchProjectile } from '@/server/combat/Projectile'
 import {
 PlantComponent,
 PositionComponent,
-ZombieComponent
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
@@ -376,14 +375,14 @@ test('collecting the award keeps existing entity updates running while spawning 
     const winTick = server.snapshot().tick
     const mowerX = mower(server.snapshot()).x
     const peaX = world.projectiles.get(peaId)!.position.x
-    const corpseTicks = world.get(corpseId, ZombieComponent)!.deathTicksRemaining
+    const corpseTicks = world.zombies.get(corpseId)!.deathTicksRemaining
     let snapshot = server.tick()
     assert.equal(snapshot.tick, winTick + 1)
     assert.equal(snapshot.result, 'won')
     assert.ok(mower(snapshot).x > mowerX, 'collecting the award must not stop an active mower')
     assert.equal(world.projectiles.get(peaId)!.position.x, peaX + 3.33)
     assert.equal(snapshot.projectiles.filter(projectile => projectile.typeId === 'pvz:pea').length, 2, 'a pending shot completes after victory')
-    assert.equal(world.get(corpseId, ZombieComponent)!.deathTicksRemaining, corpseTicks - 1)
+    assert.equal(world.zombies.get(corpseId)!.deathTicksRemaining, corpseTicks - 1)
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'game-not-playing')
     assert.ok(snapshot.items.find(item => item.entityId === sunId)!.x < 300)
     while (snapshot.items.some(item => item.entityId === sunId)) snapshot = server.tick()

@@ -9,7 +9,7 @@ import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import {
     LevelStateResource, MowedPlantComponent, PlantComponent, PositionComponent,
-    ZombieComponent, type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
+    type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
 } from '../state/components'
 import type { Item } from '../state/levelState'
 import type { SavedEntity, SavedMowedPlant, SavedOfList } from './save'
@@ -130,7 +130,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         restore: (mowed, context) => ({ ...mowed, plant: restorePlant(mowed.plant, context) }),
     }),
     savedComponent({
-        key: 'zombie', component: ZombieComponent,
+        key: 'zombie', list: world => world.zombies,
         parse: (value, name): SavedZombie => {
             // Every zombie's fields here; its kind takes its own as it is restored (Zombie.restore), kept as they are.
             const fields: readonly string[] = ZOMBIE_FIELDS, all = record(value, name)

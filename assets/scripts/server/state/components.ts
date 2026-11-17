@@ -111,7 +111,6 @@ export interface MowedPlant { plant: Plant, squash: LayerState, left?: true }
 export const MowedPlantComponent = defineComponent<MowedPlant>('pvz:mowed_plant')
 
 /** A zombie: the instance of its kind's class, all there is to it (zombies/Zombie.ts). */
-export const ZombieComponent = defineComponent<Zombie>('pvz:zombie')
 
 /**
  * What stands in a cell without being a plant or a zombie (GridItemSnapshot), by its type: its cell is its own, so it

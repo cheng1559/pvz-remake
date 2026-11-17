@@ -6,7 +6,7 @@ import { nonNegativeInteger } from '@/shared/validate'
 import { rectOverlap } from '../combat/collision'
 import { hostilePlants } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { type EntityRemover, LevelStateResource, PlantComponent, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { type EntityRemover, LevelStateResource, PlantComponent, type Position, PositionComponent, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { TutorialResource } from '../state/levelState'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
@@ -82,11 +82,10 @@ export class BowlingNut extends Plant {
         else if (direction > 0 && position.row === board.rows - 1) direction = -1
         const nutAttack = plantFacingRect(rules.attack, team)
         const nut = { x: position.x + nutAttack.x, width: nutAttack.width }
-        const target = [...world.query(ZombieComponent, PositionComponent)].find(id => {
-            const zombie = world.get(id, ZombieComponent)!, point = world.get(id, PositionComponent)!
-            const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
+        const target = [...world.zombies].find(zombie => {
+            const point = zombie.position, body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
             return point.row === position.row && isTargetableZombie(zombie, team) && rectOverlap(nut, { x: point.x + body.x, width: body.width }) > 0
-        })
+        })?.id
         // A hostile plant takes the body blow; it is no zombie impact, so `hits` does not count it.
         const plantTarget = target === undefined
             ? hostilePlants(world, definitions, team, position.row).find(candidate => rectOverlap(nut, candidate.rect) > 0)?.entity : undefined
@@ -112,7 +111,7 @@ export class BowlingNut extends Plant {
             return
         }
         const struck = target!
-        const zombie = world.get(struck, ZombieComponent)!
+        const zombie = world.zombies.get(struck)!
         // Plant::UpdateBowling: a shield takes the shield blow alone (TakeShieldDamage), except a screen door met by a
         // nut that has bounced (mState != STATE_NOTREADY), which takes the full blow and passes the rest on
         // (TakeDamage); a helm without a shield in front takes the helm blow alone (TakeHelmDamage).

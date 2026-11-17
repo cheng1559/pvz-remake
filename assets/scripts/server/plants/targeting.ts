@@ -3,7 +3,7 @@ import type { GameplayDefinitions, PlantTargeting } from '@/shared/content/gamep
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { getBoardBounds, rectOverlap } from '../combat/collision'
 import { hostilePlants } from '../combat/targets'
-import { type Position, PositionComponent, ZombieComponent } from '../state/components'
+import type { Position } from '../state/components'
 import { isTargetableZombie } from '../zombies/damage'
 import type { Plant } from './Plant'
 
@@ -35,9 +35,8 @@ export function findAbilityTarget(
             targetX = order
         }
     }
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const position = world.get(entity, PositionComponent)!
-        const zombie = world.get(entity, ZombieComponent)!
+    for (const zombie of world.zombies) {
+        const { id: entity, position } = zombie
         if (position.row !== plantPosition.row || !zombie.hasHead || !isTargetableZombie(zombie, team)) continue
         const definition = definitions.zombies[zombie.typeId]
         // Plant::FindTargetZombie passes over a zombie its kind keeps from this targeting (a potato mine's, a pole

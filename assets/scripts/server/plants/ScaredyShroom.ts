@@ -5,7 +5,7 @@ import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { circleRectOverlap } from '../combat/collision'
-import { type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { type Position, PositionComponent, RandomResource } from '../state/components'
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
 
@@ -88,8 +88,8 @@ export class ScaredyShroom extends Shooter {
 function zombieNear(world: World, definitions: GameplayDefinitions, position: Position, plant: Plant,
     fright: NonNullable<PlantDefinition['fright']>): boolean {
     const team = plantTeam(plant), x = position.x + plantFacingX(fright.center.x, team), y = position.y + fright.center.y
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const at = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+    for (const zombie of world.zombies) {
+        const at = zombie.position
         if (Math.abs(at.row - position.row) > fright.rowRange || isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), team)) continue
         const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
         if (circleRectOverlap(x, y, fright.radius, { x: at.x + body.x, y: at.y + body.y, width: body.width, height: body.height })) return true

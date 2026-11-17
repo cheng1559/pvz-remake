@@ -2,7 +2,7 @@ import type { EntityId, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
-import { PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { PlantComponent, PositionComponent, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { destroyZombie } from '../zombies/damage'
 import { mindControl } from '../zombies/mindControl'
@@ -71,7 +71,7 @@ export class Chomper extends Plant {
                 // A zombie that dodges the bite slips away, as in Plant::UpdateChomper (its kind says so: a pole vaulter
                 // holding its pole, not frozen). A hostile plant is swallowed whole, unless zombies could not hurt it
                 // either (a lit cherry bomb, a rising or armed potato mine): it slips away.
-                const zombie = target === undefined ? undefined : world.get(target, ZombieComponent)
+                const zombie = target === undefined ? undefined : world.zombies.get(target)
                 const prey = target === undefined || zombie ? undefined : world.get(target, PlantComponent)!
                 const bit = target !== undefined && (zombie ? !zombie.dodgesBite() : !prey!.inedible(world))
                 // An awake hypno-shroom bitten turns the plant to its side, as a zombie that chews one, and is gone; it

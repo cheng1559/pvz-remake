@@ -14,7 +14,6 @@ import {
     PlantComponent,
     PositionComponent,
     RandomResource,
-    ZombieComponent,
 } from '@/server/state/components'
 import { createPlantAttackSystem } from '@/server/plants/attacks'
 import { createPlantAbilitySystem } from '@/server/plants/abilities'
@@ -73,10 +72,10 @@ function game(config = definitions) {
 test('an explosion counts the zombies it takes out, not a tougher one that survives its burn', () => {
     const { world, zombie } = game()
     const tough = zombie('pvz:normal', 2, 360), weak = zombie('pvz:normal', 2, 380)
-    world.get(tough, ZombieComponent)!.health = 2000
+    world.zombies.get(tough)!.health = 2000
     const blast = definitions.plants['pvz:cherrybomb'].fuse!.explosion!
     assert.equal(explode(world, definitions, { x: board.origin.x + 4 * board.cell.width, y: board.origin.y + 2 * board.cell.height, row: 2 }, blast, world), 1)
-    assert.equal(world.get(tough, ZombieComponent)!.health, 200, 'it took the blast and lives')
+    assert.equal(world.zombies.get(tough)!.health, 200, 'it took the blast and lives')
     assert.equal(world.hasEntity(weak), false)
 })
 
@@ -88,7 +87,7 @@ test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring 
     const farRow = zombie('pvz:normal', 4, 360)
     const farColumn = zombie('pvz:normal', 2, 700)
     run(99)
-    assert.equal(world.get(eater, ZombieComponent)!.state, 'eating')
+    assert.equal(world.zombies.get(eater)!.state, 'eating')
     assert.equal(world.get(bomb, PlantComponent)!.health, 300, 'a lit cherry bomb is chewed without damage')
     run()
     assert.equal(world.hasEntity(bomb), false)
@@ -112,8 +111,8 @@ test('a potato mine arms after 15 seconds, rises, then blows up the first zombie
     assert.equal(ability().phase, 'armed')
 
     const vaulter = zombie('pvz:pole_vaulter', 2, 210)
-    world.get(vaulter, PositionComponent)!.x = 150
-    world.get(vaulter, ZombieComponent)!.speedPerTick = 0
+    world.zombies.get(vaulter)!.position.x = 150
+    world.zombies.get(vaulter)!.speedPerTick = 0
     run()
     assert.equal(world.hasEntity(mine), true, 'a running pole vaulter does not set the mine off')
     world.destroyEntity(vaulter)
@@ -146,7 +145,7 @@ test('a chomper swallows a zombie in reach, digests for 40 seconds and misses po
     assert.equal(ability().phase, 'ready')
 
     const vaulter = zombie('pvz:pole_vaulter', 2, 260)
-    world.get(vaulter, ZombieComponent)!.speedPerTick = 0
+    world.zombies.get(vaulter)!.speedPerTick = 0
     run()
     assert.equal(ability().phase, 'biting')
     run(70)
@@ -160,25 +159,25 @@ test('helms absorb damage first and drop once, and snow peas chill through them,
     const { world, run, zombie, events } = game()
     const cone = zombie('pvz:conehead', 0, 600)
     damageZombie(world, definitions, cone, 360)
-    assert.equal(world.get(cone, ZombieComponent)!.helmHealth, 10)
-    assert.equal(world.get(cone, ZombieComponent)!.health, 270)
+    assert.equal(world.zombies.get(cone)!.helmHealth, 10)
+    assert.equal(world.zombies.get(cone)!.health, 270)
     damageZombie(world, definitions, cone, 30, { chillTicks: 1000 })
-    assert.equal(world.get(cone, ZombieComponent)!.helmHealth, 0)
-    assert.equal(world.get(cone, ZombieComponent)!.health, 250, 'overflow reaches the body')
-    assert.equal(world.get(cone, ZombieComponent)!.chilledTicks, 1000)
+    assert.equal(world.zombies.get(cone)!.helmHealth, 0)
+    assert.equal(world.zombies.get(cone)!.health, 250, 'overflow reaches the body')
+    assert.equal(world.zombies.get(cone)!.chilledTicks, 1000)
     assert.deepEqual(events('zombieHelmDropped').map(event => event.data.helm), ['cone'])
     assert.equal(events('zombieChilled').length, 1)
 
     const warm = zombie('pvz:normal', 1, 600)
     const cold = zombie('pvz:normal', 3, 600)
-    world.get(cold, ZombieComponent)!.speedPerTick = world.get(warm, ZombieComponent)!.speedPerTick
+    world.zombies.get(cold)!.speedPerTick = world.zombies.get(warm)!.speedPerTick
     damageZombie(world, definitions, cold, 1, { chillTicks: 1000 })
     run(200)
     // Walking follows the `_ground` track, so the halved animation also halves the pace.
-    const warmFrames = world.get(warm, ZombieComponent)!.animations.body.time
-    const coldFrames = world.get(cold, ZombieComponent)!.animations.body.time
+    const warmFrames = world.zombies.get(warm)!.animations.body.time
+    const coldFrames = world.zombies.get(cold)!.animations.body.time
     assert.ok(Math.abs(coldFrames * 2 - warmFrames) < 1e-6, `${coldFrames} should be half of ${warmFrames}`)
-    assert.equal(world.get(cold, ZombieComponent)!.chilledTicks, 800)
+    assert.equal(world.zombies.get(cold)!.chilledTicks, 800)
 
     const plants = game()
     for (const row of [1, 3]) plants.plant('pvz:wallnut', row, 2)
@@ -188,7 +187,7 @@ test('helms absorb damage first and drop once, and snow peas chill through them,
     plants.run(400)
     const bitten = (row: number) => 4000 - plants.world.get([...plants.world.query(PlantComponent)]
         .find(entity => plants.world.get(entity, PositionComponent)!.row === row)!, PlantComponent)!.health
-    assert.ok(plants.world.get(biter, ZombieComponent)!.state === 'eating' && plants.world.get(slowBiter, ZombieComponent)!.state === 'eating')
+    assert.ok(plants.world.zombies.get(biter)!.state === 'eating' && plants.world.zombies.get(slowBiter)!.state === 'eating')
     assert.ok(Math.abs(bitten(3) * 2 - bitten(1)) <= 8, `chilled bites ${bitten(3)} should be half of ${bitten(1)}`)
 })
 
@@ -198,18 +197,18 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     const wall = plant('pvz:wallnut', 2, 5)
     const behind = plant('pvz:peashooter', 2, 1)
     const vaulter = zombie('pvz:pole_vaulter', 2, 700)
-    const state = () => world.get(vaulter, ZombieComponent)!
+    const state = () => world.zombies.get(vaulter)!
     assert.ok(state().speedPerTick >= 0.66 && state().speedPerTick <= 0.68)
     assert.equal(state().animations.body.clip, 'run')
     for (let tick = 0; tick < 2000 && state().state !== 'airborne'; tick++) run()
     assert.equal(state().state, 'airborne')
     assert.equal((state() as PoleVaulter).hasPole, false)
-    const takeoff = world.get(vaulter, PositionComponent)!.x
+    const takeoff = world.zombies.get(vaulter)!.position.x
     for (let tick = 0; tick < 400 && state().state === 'airborne'; tick++) run()
     assert.equal(state().animations.body.clip, 'walk')
-    assert.ok(world.get(vaulter, PositionComponent)!.x < world.get(wall, PositionComponent)!.x - 40, 'lands behind the wall-nut')
+    assert.ok(world.zombies.get(vaulter)!.position.x < world.get(wall, PositionComponent)!.x - 40, 'lands behind the wall-nut')
     // Takeoff is about 79px right of the plant, so the original formula adds almost nothing to the 150px landing.
-    assert.ok(takeoff - world.get(vaulter, PositionComponent)!.x > 140)
+    assert.ok(takeoff - world.zombies.get(vaulter)!.position.x > 140)
     assert.ok(state().speedPerTick >= 0.23 && state().speedPerTick <= 0.37)
     assert.deepEqual(events('zombieVaultSound').map(event => event.data.sound), ['grassstep', 'polevault'])
     assert.equal(world.get(wall, PlantComponent)!.health, 4000)
@@ -217,10 +216,10 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     assert.equal(state().state, 'eating', 'after landing it eats the next plant')
     assert.equal(world.hasEntity(behind), true)
     const behindX = world.get(behind, PositionComponent)!.x
-    world.get(vaulter, PositionComponent)!.x = behindX + 1
+    world.zombies.get(vaulter)!.position.x = behindX + 1
     run()
     assert.equal(state().state, 'walking', 'the narrow post-vault attack needs 20px overlap before eating')
-    world.get(vaulter, PositionComponent)!.x = behindX
+    world.zombies.get(vaulter)!.position.x = behindX
     run()
     assert.equal(state().state, 'eating', 'the post-vault attack reaches the plant at x + 50')
 })

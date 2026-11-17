@@ -9,7 +9,10 @@ export function withZombieTypes(world: World, definitions: GameplayDefinitions):
     return world
 }
 
-/** A zombie of `typeId` as its kind makes it, with `fields` of a test's own (a world given withZombieTypes). */
-export function newZombie(world: World, typeId: string, fields: Partial<ZombieFields> = {}): Zombie {
+/**
+ * A zombie of `typeId` as its kind makes it, with `fields` of a test's own (a world given withZombieTypes): its `id` and
+ * `position` too, for one a test puts in the world itself (World.insert).
+ */
+export function newZombie(world: World, typeId: string, fields: Partial<ZombieFields & Pick<Zombie, 'id' | 'position'>> = {}): Zombie {
     return Object.assign(world.resources.get(ZombieFactoryResource).create(typeId), fields)
 }

@@ -2,6 +2,7 @@ import type { GridItem } from './components'
 import type { Item } from './levelState'
 import type { Projectile } from '../combat/Projectile'
 import type { Mower } from '../level/Mower'
+import type { Zombie } from '../zombies/Zombie'
 
 export type EntityId = number
 
@@ -212,6 +213,8 @@ export class World {
     readonly projectiles = new EntityList<Projectile>(this)
     /** The rows' lawn mowers waiting at their house ends (Mower). */
     readonly mowers = new EntityList<Mower>(this)
+    /** The zombies, each of its kind (Zombie). */
+    readonly zombies = new EntityList<Zombie>(this)
 
     private nextEntity = 1
     private readonly entities = new Set<EntityId>()
@@ -261,7 +264,7 @@ export class World {
     }
 
     private lists(): EntityList<Entity>[] {
-        return [this.items, this.gridItems, this.projectiles, this.mowers]
+        return [this.items, this.gridItems, this.projectiles, this.mowers, this.zombies]
     }
 
     hasEntity(entity: EntityId): boolean {

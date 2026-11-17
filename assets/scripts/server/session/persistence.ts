@@ -2,7 +2,7 @@ import type { Entity, World } from '@/server/state/World'
 import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
 import { EventQueueResource } from '../state/events'
 import { AchievementsResource } from '../achievements/achievements'
 import { SkySunResource, TutorialResource, WaveResource } from '../state/levelState'
@@ -50,7 +50,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         tutorial: asSaved(world.resources.get(TutorialResource)),
         skySun: asSaved(world.resources.get(SkySunResource)),
         // The wave keeps the zombies of its own that are still about.
-        wave: asSaved({ ...wave, zombieIds: wave.zombieIds.filter(entity => world.get(entity, ZombieComponent) !== undefined) }),
+        wave: asSaved({ ...wave, zombieIds: wave.zombieIds.filter(entity => world.zombies.has(entity)) }),
         // Its observer is the session's own (createSession), not the save's.
         eventQueue: asSaved({ nextEventId: eventQueue.nextEventId, events: eventQueue.events }),
         achievementProgress: jsonRoundTrip(world.resources.get(AchievementsResource).progress),
@@ -132,7 +132,7 @@ export function restoreSession(
         throw new Error('Saved wave zombie IDs must be unique')
     }
     for (const entity of save.wave.zombieIds) {
-        if (!world.get(entity, ZombieComponent)) throw new Error(`Saved wave zombie ${entity} is invalid`)
+        if (!world.zombies.has(entity)) throw new Error(`Saved wave zombie ${entity} is invalid`)
     }
     const collectingSun = [...world.items].reduce((total, item) => {
         return total + (item.state === 'collecting' && definitions.items[item.typeId] ? item.value : 0)

@@ -5,7 +5,7 @@ import { plantFacingRect, plantTeam, zombieFacingRect, zombieTeam } from '@/shar
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { rectOverlap } from '../combat/collision'
-import { type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { type Position, PositionComponent, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { isTargetableZombie } from '../zombies/damage'
 import { detonatePlant } from './damage'
@@ -101,8 +101,8 @@ function flashMineLight(world: World, definitions: GameplayDefinitions, position
     if (!light || !body) return
     const team = plantTeam(plant), reach = plantFacingRect(definition.mine!.attack, team)
     let distance = Infinity
-    for (const entity of world.query(PositionComponent, ZombieComponent)) {
-        const at = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+    for (const zombie of world.zombies) {
+        const at = zombie.position
         if (at.row !== position.row || !isTargetableZombie(zombie, team)) continue
         const rect = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
         distance = Math.min(distance, Math.max(0, -rectOverlap({ x: position.x + reach.x, width: reach.width }, { x: at.x + rect.x, width: rect.width })))

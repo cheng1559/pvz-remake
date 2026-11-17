@@ -1,6 +1,6 @@
 import type { World } from '@/server/state/World'
 import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
-import { type EntityRemover, LevelStateResource, PositionComponent, ZombieComponent } from '../state/components'
+import { type EntityRemover, LevelStateResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { WaveResource } from '../state/levelState'
 import { spawnItem } from './itemSpawn'
@@ -28,13 +28,11 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     if (level.result !== 'playing' || level.paused || waves.index < waves.plan.length) return
     if (levelRule(world)?.holdsAward?.(world)) return
     if (levelAwardDropped(world)) return
-    const zombies = [...world.query(PositionComponent, ZombieComponent)]
+    const zombies = [...world.zombies]
     // Board::AreEnemyZombiesOnScreen: zombies on the plants' side do not hold the award back.
-    if (zombies.some(entity => entity !== defeated && isZombieOnScreen(world.get(entity, ZombieComponent)!))) return
-    const source = defeated ?? zombies.sort((left, right) =>
-        world.get(right, PositionComponent)!.x - world.get(left, PositionComponent)!.x)[0]
-    const position = source === undefined ? undefined : world.get(source, PositionComponent)
-    const zombie = source === undefined ? undefined : world.get(source, ZombieComponent)
+    if (zombies.some(zombie => zombie.id !== defeated && isZombieOnScreen(zombie))) return
+    const source = defeated ?? [...zombies].sort((left, right) => right.position.x - left.position.x)[0]?.id
+    const zombie = source === undefined ? undefined : world.zombies.get(source), position = zombie?.position
     const body = zombie ? definitions.zombies[zombie.typeId].body : undefined
     // With no zombie to drop it (the original then drops none), it comes down as Challenge::SpawnLevelAward puts one in
     // the middle of the lawn: 40 into cell (4, 2), as the slot machine does.
@@ -42,7 +40,7 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : middle.x + 40,
         position && body ? position.y + body.y + body.height / 2 : middle.y + 40)
     // Board::RemoveAllZombies: every zombie that is not dead or dying vanishes, the one that dropped the award included.
-    for (const zombieEntity of zombies) {
-        if (!isDeadOrDying(world.get(zombieEntity, ZombieComponent)!)) remover.destroyEntity(zombieEntity)
+    for (const zombie of zombies) {
+        if (!isDeadOrDying(zombie)) remover.destroyEntity(zombie.id)
     }
 }

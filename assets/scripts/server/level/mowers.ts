@@ -1,6 +1,6 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/server/state/World'
-import { LevelStateResource, MowedPlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { LevelStateResource, MowedPlantComponent, RandomResource } from '../state/components'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'
@@ -31,8 +31,8 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
             const ready = readyMowers(world)
-            if (ready.size) for (const entity of [...world.query(PositionComponent, ZombieComponent)]) {
-                const position = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+            if (ready.size) for (const zombie of [...world.zombies]) {
+                const { id: entity, position } = zombie
                 const mower = ready.get(position.row)
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
                 if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue

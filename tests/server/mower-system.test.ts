@@ -15,7 +15,6 @@ import {
     PlantComponent,
     PositionComponent,
     RandomResource,
-    ZombieComponent,
 } from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
 import { createMower, createMowerSystem } from '@/server/level/mowers'
@@ -66,8 +65,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.equal(mowers(world).length, 0)
 
     const zombie = world.createEntity()
-    world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
-    world.add(zombie, ZombieComponent, newZombie(world, 'pvz:normal', {
+    world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: zombie, position: { x: -10, y: 280, row: 2 },
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
@@ -76,8 +74,8 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     }))
     schedule.run(world, 2)
     assert.deepEqual(waiting(world), [2])
-    assert.equal(world.get(zombie, ZombieComponent)!.state, 'walking')
-    world.get(zombie, ZombieComponent)!.hasHead = true
+    assert.equal(world.zombies.get(zombie)!.state, 'walking')
+    world.zombies.get(zombie)!.hasHead = true
     schedule.run(world, 3)
     assert.deepEqual(waiting(world), [])
     const [mowerEntity] = mowers(world)
@@ -85,14 +83,13 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.deepEqual(world.projectiles.get(mowerEntity)!.typeId, 'pvz:lawnmower')
     assert.equal(world.projectiles.get(mowerEntity)!.position.y, 303)
     assert.equal(world.hasEntity(zombie), true)
-    assert.equal(world.get(zombie, ZombieComponent)!.state, 'mowered')
-    assert.deepEqual(world.get(zombie, ZombieComponent)!.animations.body, { clip: 'mowered', time: 0, rate: 16 })
+    assert.equal(world.zombies.get(zombie)!.state, 'mowered')
+    assert.deepEqual(world.zombies.get(zombie)!.animations.body, { clip: 'mowered', time: 0, rate: 16 })
     assert.equal(chomp(world, mowerEntity), 24)
     assert.equal(world.projectiles.get(mowerEntity)!.position.x, -19.996272)
 
     const secondZombie = world.createEntity()
-    world.add(secondZombie, PositionComponent, { x: -10, y: 280, row: 2 })
-    world.add(secondZombie, ZombieComponent, newZombie(world, 'pvz:normal', {
+    world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: secondZombie, position: { x: -10, y: 280, row: 2 },
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
@@ -101,7 +98,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     }))
     schedule.run(world, 4)
     assert.equal(world.hasEntity(secondZombie), true)
-    assert.equal(world.get(secondZombie, ZombieComponent)!.state, 'mowered')
+    assert.equal(world.zombies.get(secondZombie)!.state, 'mowered')
     assert.equal(
         world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombieMowered').length,
         2,
@@ -110,7 +107,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.equal(chomp(world, mowerEntity), 50)
     for (let tick = 5; tick <= 28; tick++) schedule.run(world, tick)
     // Half of the driver's 8 frames, 25 ticks into its 50.
-    assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animations.body.time - 4) < 1e-9)
+    assert.ok(Math.abs(world.zombies.get(zombie)!.animations.body.time - 4) < 1e-9)
     for (let tick = 29; tick <= 52; tick++) schedule.run(world, tick)
     assert.equal(world.hasEntity(zombie), true)
     schedule.run(world, 53)
@@ -136,8 +133,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
     const world = mowerWorld()
     const zombies = ['pvz:conehead', 'pvz:screendoor'].map(typeId => {
         const entity = world.createEntity()
-        world.add(entity, PositionComponent, { x: -10, y: 280, row: 2 })
-        world.add(entity, ZombieComponent, newZombie(world, typeId, {
+        world.insert(world.zombies, newZombie(world, typeId, { id: entity, position: { x: -10, y: 280, row: 2 },
             typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
             walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
@@ -152,8 +148,8 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
     // The first sets the mower off; it runs into the second on the next tick.
     for (const tick of [1, 2]) schedule.run(world, tick)
     for (const entity of zombies) {
-        assert.equal(world.get(entity, ZombieComponent)!.state, 'mowered')
-        assert.deepEqual([world.get(entity, ZombieComponent)!.helmHealth, world.get(entity, ZombieComponent)!.shieldHealth], [0, 0])
+        assert.equal(world.zombies.get(entity)!.state, 'mowered')
+        assert.deepEqual([world.zombies.get(entity)!.helmHealth, world.zombies.get(entity)!.shieldHealth], [0, 0])
     }
     assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombieHelmDropped' || event.type === 'zombieShieldDropped')
         .map(event => [event.type, event.data]),
@@ -164,8 +160,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
 test('a zombie that cannot be flattened (dying, in the air, rising) goes in a puff: its parts drop and it is gone at once', () => {
     const world = mowerWorld()
     const zombie = world.createEntity()
-    world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
-    world.add(zombie, ZombieComponent, newZombie(world, 'pvz:normal', {
+    world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: zombie, position: { x: -10, y: 280, row: 2 },
         typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 100,
         walkClip: 'walk', animations: { body: { clip: 'death', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,

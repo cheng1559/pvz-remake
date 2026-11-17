@@ -2,7 +2,7 @@ import { getBoardBounds } from './collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, PlantComponent, PositionComponent, ZombieComponent } from '../state/components'
+import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
@@ -30,9 +30,8 @@ export class ProjectileSystem implements GameSystem {
             const left = target.position.x + body.x
             ;(this.rows[target.position.row] ??= []).push({ ...target, left, right: left + body.width })
         }
-        for (const entity of world.query(PositionComponent, ZombieComponent)) {
-            const position = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
-            add({ entity, position, zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
+        for (const zombie of world.zombies) {
+            add({ entity: zombie.id, position: zombie.position, zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
         }
         for (const entity of world.query(PositionComponent, PlantComponent)) {
             const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!

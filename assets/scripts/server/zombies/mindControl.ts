@@ -1,7 +1,7 @@
 import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { plantTeam } from '@/shared/content/teams'
-import { type EntityRemover, PlantComponent, ZombieComponent } from '../state/components'
+import { type EntityRemover, PlantComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from '../level/levelAward'
 
@@ -18,7 +18,7 @@ export function mindControl(world: World, definitions: GameplayDefinitions, eate
     prey.health = 0
     remover.destroyEntity(plantEntity)
     // Each side is written only when it is not the eater's own default: a zombie's the zombies', a plant's the plants'.
-    const zombie = world.get(eater, ZombieComponent), turned = zombie ?? world.get(eater, PlantComponent)!
+    const zombie = world.zombies.get(eater), turned = zombie ?? world.get(eater, PlantComponent)!
     turned.mindControlled = true
     if (team === (zombie ? 'zombies' : 'plants')) delete turned.team
     else turned.team = team
