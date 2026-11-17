@@ -20,10 +20,14 @@ export function animateCurveFloat(start: number, end: number, age: number, from:
     return from + (to - from) * CURVES[curve](t)
 }
 
-/** PvzpAnimateCurve: animateCurveFloat in whole units, rounded half away from zero (FloatRoundToInt). */
-export function animateCurve(start: number, end: number, age: number, from: number, to: number, curve: AnimateCurve = 'linear'): number {
-    const value = animateCurveFloat(start, end, age, from, to, curve)
+/** FloatRoundToInt: rounded half away from zero, where Math.round takes -2.5 to -2. */
+export function floatRoundToInt(value: number): number {
     return value > 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5)
+}
+
+/** PvzpAnimateCurve: animateCurveFloat in whole units (floatRoundToInt). */
+export function animateCurve(start: number, end: number, age: number, from: number, to: number, curve: AnimateCurve = 'linear'): number {
+    return floatRoundToInt(animateCurveFloat(start, end, age, from, to, curve))
 }
 
 /**

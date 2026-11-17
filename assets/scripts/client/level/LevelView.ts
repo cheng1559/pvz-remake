@@ -1,5 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { floatRoundToInt } from '@/shared/content/animation'
 import { LevelHitboxes } from './LevelHitboxes'
 import { LevelCoinBank } from './LevelCoinBank'
 import { LevelProgressMeter } from './LevelProgressMeter'
@@ -617,7 +618,8 @@ export class LevelView {
         if (remaining <= 0) { target.node.setPosition(target.x, target.y); return }
         if (Math.random() < 1 / 3) this.shake.x = -this.shake.x
         const bounce = 1 - Math.abs(2 * remaining / this.shake.ticks - 1)
-        target.node.setPosition(target.x + Math.round(this.shake.x * bounce), target.y - Math.round(this.shake.y * bounce))
+        // PvzpAnimateCurve's FloatRoundToInt: a shake to the left rounds as far as one to the right.
+        target.node.setPosition(target.x + floatRoundToInt(this.shake.x * bounce), target.y - floatRoundToInt(this.shake.y * bounce))
     }
 
     async snapshot(flow: LevelFlowSnapshot): Promise<LevelPresentationSnapshot> {
