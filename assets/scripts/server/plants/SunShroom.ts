@@ -2,16 +2,15 @@ import type { EntityId, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { SUN_SHROOM_PHASES, type SunShroomPhase } from '@/shared/content/plantKinds'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Producer } from './Producer'
 
-const PHASES = ['small', 'growing', 'big'] as const
-type GrowthPhase = typeof PHASES[number]
 
 export interface SunShroom {
     /** Plant::mState of its growth. */
-    phase: GrowthPhase
+    phase: SunShroomPhase
     /** The ticks left of its phase. */
     phaseTicks: number
 }
@@ -38,7 +37,7 @@ export class SunShroom extends Producer {
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
         const { phase, phaseTicks, ...rest } = fields
-        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phase = oneOf(phase, SUN_SHROOM_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }

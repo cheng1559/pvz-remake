@@ -1,6 +1,7 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
-import { nonEmptyString, nonNegativeInteger } from '@/shared/validate'
+import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { GRAVE_BUSTER_PHASES } from '@/shared/content/plantKinds'
 import type { StageEvent } from '@/client/level/LevelStage'
 import { PlantView } from './PlantView'
 
@@ -11,7 +12,7 @@ import { PlantView } from './PlantView'
 export class GraveBusterView extends PlantView {
     /** The ticks it has left to eat its grave, while it eats; none before. */
     eating(plant: PlantSnapshot): number | undefined {
-        return this.own(plant, 'phase', nonEmptyString) === 'eating' ? this.own(plant, 'ticks', nonNegativeInteger) : undefined
+        return this.own(plant, 'phase', (value, name) => oneOf(value, GRAVE_BUSTER_PHASES, name)) === 'eating' ? this.own(plant, 'ticks', nonNegativeInteger) : undefined
     }
 
     protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {

@@ -6,6 +6,7 @@ import { presentationFixture } from './presentationFixture'
 import * as animationModule from '@/shared/content/animation'
 import * as gameplayModule from '@/shared/content/gameplay'
 import * as plantAnimationModule from '@/shared/content/plantAnimation'
+import * as plantKindsModule from '@/shared/content/plantKinds'
 import * as protocolModule from '@/shared/protocol'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as teamsModule from '@/shared/content/teams'
@@ -44,7 +45,8 @@ class LayerPlayers {
 function load(path: string, modules: Record<string, unknown> = {}): Record<string, any> {
     const shared: Record<string, unknown> = {
         '@/shared/content/animation': animationModule, '@/shared/content/gameplay': gameplayModule,
-        '@/shared/content/plantAnimation': plantAnimationModule, '@/shared/content/zombieAnimation': zombieAnimationModule,
+        '@/shared/content/plantAnimation': plantAnimationModule, '@/shared/content/plantKinds': plantKindsModule,
+        '@/shared/content/zombieAnimation': zombieAnimationModule,
         '@/shared/protocol': protocolModule, '@/shared/protocol/index': protocolModule, '@/shared/content/renderOrder': renderOrderModule,
         '@/shared/content/teams': teamsModule, cc: { Sprite: { SizeMode: { RAW: 0 } } },
         '@/client/level/LevelStage': { plantShadow: async () => ({ originalSize: { width: 80, height: 30 } }), boardToLayer: (x: number, y: number) => ({ x, y }) },

@@ -4,6 +4,7 @@ import { graveAt } from '@/shared/content/graves'
 import { plantTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { GRAVE_BUSTER_PHASES, type GraveBusterPhase } from '@/shared/content/plantKinds'
 import { gridItems } from '../gridItems/gridItems'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
@@ -11,12 +12,10 @@ import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Plant, type PlantConfig } from './Plant'
 
-const PHASES = ['landing', 'eating'] as const
-type BusterPhase = typeof PHASES[number]
 
 export interface GraveBuster {
     /** Plant::mState of the buster. */
-    phase: BusterPhase
+    phase: GraveBusterPhase
     /** The ticks left of its phase. */
     phaseTicks: number
 }
@@ -41,7 +40,7 @@ export class GraveBuster extends Plant {
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
         const { phase, phaseTicks, ...rest } = fields
-        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phase = oneOf(phase, GRAVE_BUSTER_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }

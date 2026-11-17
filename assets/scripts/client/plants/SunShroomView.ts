@@ -1,6 +1,7 @@
 import type { StageEvent } from '@/client/level/LevelStage'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { nonEmptyString } from '@/shared/validate'
+import { oneOf } from '@/shared/validate'
+import { SUN_SHROOM_PHASES } from '@/shared/content/plantKinds'
 import { ProducerView } from './ProducerView'
 import type { ShownPlant } from './PlantView'
 
@@ -14,7 +15,7 @@ export class SunShroomView extends ProducerView {
      * one to the other as its first layer's clip plays (growing: 0.5 + 0.5 * its body's anim_grow time).
      */
     protected shadowScale(plant: ShownPlant): number {
-        const phase = this.own(plant, 'phase', nonEmptyString), sized = phase === undefined ? undefined : this.presentation.shadow?.phases?.[phase]
+        const phase = this.own(plant, 'phase', (value, name) => oneOf(value, SUN_SHROOM_PHASES, name)), sized = phase === undefined ? undefined : this.presentation.shadow?.phases?.[phase]
         if (typeof sized === 'number') return sized
         if (!sized) return super.shadowScale(plant)
         const layer = plant.animations?.[Object.keys(this.animation.layers)[0]], frames = layer && this.animation.clips[layer.clip]?.frames

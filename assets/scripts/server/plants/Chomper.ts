@@ -2,6 +2,7 @@ import type { EntityId, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { CHOMPER_PHASES, type ChomperPhase } from '@/shared/content/plantKinds'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { destroyZombie } from '../zombies/damage'
@@ -11,8 +12,6 @@ import { Plant, type PlantConfig } from './Plant'
 import { findAbilityTarget } from './targeting'
 import { plantInPlay } from '../level/lawn'
 
-const PHASES = ['ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing'] as const
-type ChomperPhase = typeof PHASES[number]
 
 export interface Chomper {
     /** Plant::mState of the chomper. */
@@ -42,7 +41,7 @@ export class Chomper extends Plant {
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
         const { phase, phaseTicks, prey, ...rest } = fields
-        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phase = oneOf(phase, CHOMPER_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         if (prey !== undefined) this.prey = oneOf(prey, ['plant'] as const, `${name}.prey`)
         super.restoreOwn(rest, name)

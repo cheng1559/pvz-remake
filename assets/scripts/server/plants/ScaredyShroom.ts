@@ -4,17 +4,16 @@ import { isHostile, plantFacingX, plantTeam, zombieFacingRect, zombieTeam } from
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { SCAREDY_SHROOM_PHASES, type ScaredyShroomPhase } from '@/shared/content/plantKinds'
 import { circleRectOverlap } from '../combat/collision'
 import { RandomResource } from '../state/resources'
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
 
-const PHASES = ['calm', 'lowering', 'scared', 'raising'] as const
-type FrightPhase = typeof PHASES[number]
 
 export interface ScaredyShroom {
     /** Plant::mState of its fright. */
-    phase: FrightPhase
+    phase: ScaredyShroomPhase
     /** The ticks left of its phase. */
     phaseTicks: number
 }
@@ -39,7 +38,7 @@ export class ScaredyShroom extends Shooter {
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
         const { phase, phaseTicks, ...rest } = fields
-        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phase = oneOf(phase, SCAREDY_SHROOM_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
@@ -54,7 +53,7 @@ export class ScaredyShroom extends Shooter {
         const firing = Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
         if (this.burst || firing) return
         const near = zombieNear(world, this.definitions, this.position, this, fright)
-        const next = (phase: FrightPhase, ticks: number) => {
+        const next = (phase: ScaredyShroomPhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks
             this.playPhase(phase, random)

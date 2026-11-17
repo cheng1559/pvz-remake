@@ -4,6 +4,7 @@ import { animateCurve } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
+import { POTATO_MINE_PHASES, type PotatoMinePhase } from '@/shared/content/plantKinds'
 import { rectOverlap } from '../combat/collision'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -12,12 +13,10 @@ import { detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
 import { findAbilityTarget } from './targeting'
 
-const PHASES = ['arming', 'rising', 'armed'] as const
-type MinePhase = typeof PHASES[number]
 
 export interface PotatoMine {
     /** Plant::mState of the mine. */
-    phase: MinePhase
+    phase: PotatoMinePhase
     /** The ticks left of its phase. */
     phaseTicks: number
 }
@@ -41,7 +40,7 @@ export class PotatoMine extends Plant {
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
         const { phase, phaseTicks, ...rest } = fields
-        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phase = oneOf(phase, POTATO_MINE_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
@@ -62,7 +61,7 @@ export class PotatoMine extends Plant {
     act({ world, commands }: SystemContext, entity: EntityId): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), position = this.position
-        const next = (phase: MinePhase, ticks: number) => {
+        const next = (phase: PotatoMinePhase, ticks: number) => {
             this.phase = phase
             this.phaseTicks = ticks
             this.playPhase(phase, random)
