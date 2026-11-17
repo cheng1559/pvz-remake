@@ -1,6 +1,6 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/server/state/World'
-import { LevelStateResource, MowedPlantComponent, MowerComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { LevelStateResource, MowedPlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'
@@ -15,8 +15,7 @@ import { Mower } from './Mower'
  */
 export function createMower(world: World, row: number): number {
     const entity = world.createEntity(), level = world.resources.get(LevelStateResource)
-    world.add(entity, PositionComponent, { x: MOWER_READY_X, y: mowerY(level.board, row), row })
-    world.add(entity, MowerComponent, new Mower(level.definition.lawnMower))
+    world.insert(world.mowers, Object.assign(new Mower(level.definition.lawnMower), { id: entity, position: { x: MOWER_READY_X, y: mowerY(level.board, row), row } }))
     return entity
 }
 
@@ -37,12 +36,12 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                 const mower = ready.get(position.row)
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
                 if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
-                const waiting = world.get(mower, MowerComponent)!, hitbox = definitions.projectiles[waiting.typeId].hitbox
+                const waiting = world.mowers.get(mower)!, hitbox = definitions.projectiles[waiting.typeId].hitbox
                 const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-                const left = world.get(mower, PositionComponent)!.x + hitbox.x
+                const left = waiting.position.x + hitbox.x
                 if (Math.min(left + hitbox.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
                     ready.delete(position.row)
-                    waiting.setOff(world, definitions, mower, { entity, position, zombie })
+                    waiting.setOff(world, definitions, { entity, position, zombie })
                 }
             }
             // A mowed plant is squashed as a mowed zombie is, by the driver it plays, then gone.

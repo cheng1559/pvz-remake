@@ -2,11 +2,11 @@ import { getBoardBounds } from './collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, ZombieComponent } from '../state/components'
+import { LevelStateResource, PlantComponent, PositionComponent, ZombieComponent } from '../state/components'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
-import type { ProjectileBody, ProjectileHit, ProjectileTarget } from './Projectile'
+import type { Projectile, ProjectileBody, ProjectileHit, ProjectileTarget } from './Projectile'
 
 /** How far above or below the screen a projectile is gone, as one that lost what it homed on. */
 const OFF_BOARD_Y = 200
@@ -40,18 +40,16 @@ export class ProjectileSystem implements GameSystem {
             add({ entity, position, plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
-        const mowers: number[] = []
-        for (const entity of world.query(PositionComponent, ProjectileComponent)) {
-            if (world.get(entity, ProjectileComponent) instanceof MowingProjectile) mowers.push(entity)
-            else this.update(context, entity)
+        const mowers: Projectile[] = []
+        for (const projectile of world.projectiles) {
+            if (projectile instanceof MowingProjectile) mowers.push(projectile)
+            else this.update(context, projectile)
         }
-        for (const entity of mowers) this.update(context, entity)
+        for (const projectile of mowers) this.update(context, projectile)
     }
-    update({ world, commands }: SystemContext, entity: number): void {
+    update({ world, commands }: SystemContext, projectile: Projectile): void {
         const definitions = this.definitions
-
-        const position = world.get(entity, PositionComponent)!
-        const projectile = world.get(entity, ProjectileComponent)!
+        const { id: entity, position } = projectile
         // Projectile::Update counts its age first.
         projectile.age++
         const definition = projectile.definition

@@ -8,7 +8,7 @@ import { CRATER } from '@/shared/content/craters'
 import { jsonRoundTrip, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
 import {
-    LevelStateResource, MowedPlantComponent, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent,
+    LevelStateResource, MowedPlantComponent, PlantComponent, PositionComponent,
     ZombieComponent, type GridItem, type MowedPlant, type Plant, type Position, type Projectile, type Zombie,
 } from '../state/components'
 import type { Item } from '../state/levelState'
@@ -192,7 +192,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         restore: (saved, context) => restoreZombie(saved, context),
     }),
     savedComponent({
-        key: 'projectile', component: ProjectileComponent,
+        key: 'projectile', list: world => world.projectiles,
         parse: parseSavedProjectile,
         check: (projectile, context) => {
             const { content: { definitions, gameplay }, world, entity } = context
@@ -207,7 +207,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         restore: (saved, context) => restoreProjectile(saved, context),
     }),
     savedComponent({
-        key: 'mower', component: MowerComponent,
+        key: 'mower', list: world => world.mowers,
         parse: (value, name): MowerFields => ({ typeId: nonEmptyString(exact(value, ['typeId'], name).typeId, `${name}.typeId`) }),
         // It waits where every row's does, to set off as the level's mowing projectile.
         check: (mower, context) => {

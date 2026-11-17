@@ -6,10 +6,8 @@ import type { World } from '@/server/state/World'
 import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
 import {
-MowerComponent,
 PlantComponent,
 PositionComponent,
-ProjectileComponent,
 ZombieComponent
 } from '@/server/state/components'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
@@ -352,7 +350,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     startGameplay(server)
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
     const waiting = readyMowers(world).get(2)!
-    world.get(waiting, MowerComponent)!.setOff(world, definitions, waiting)
+    world.mowers.get(waiting)!.setOff(world, definitions)
     const mower = (snapshot: WorldSnapshot) => snapshot.projectiles.find(projectile => projectile.typeId === 'pvz:lawnmower')!
     const peaId = launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
     const plantId = world.createEntity()
@@ -377,13 +375,13 @@ test('collecting the award keeps existing entity updates running while spawning 
     assert.equal(server.snapshot().items.find(item => item.entityId === sunId)?.state, 'collecting')
     const winTick = server.snapshot().tick
     const mowerX = mower(server.snapshot()).x
-    const peaX = world.get(peaId, PositionComponent)!.x
+    const peaX = world.projectiles.get(peaId)!.position.x
     const corpseTicks = world.get(corpseId, ZombieComponent)!.deathTicksRemaining
     let snapshot = server.tick()
     assert.equal(snapshot.tick, winTick + 1)
     assert.equal(snapshot.result, 'won')
     assert.ok(mower(snapshot).x > mowerX, 'collecting the award must not stop an active mower')
-    assert.equal(world.get(peaId, PositionComponent)!.x, peaX + 3.33)
+    assert.equal(world.projectiles.get(peaId)!.position.x, peaX + 3.33)
     assert.equal(snapshot.projectiles.filter(projectile => projectile.typeId === 'pvz:pea').length, 2, 'a pending shot completes after victory')
     assert.equal(world.get(corpseId, ZombieComponent)!.deathTicksRemaining, corpseTicks - 1)
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'game-not-playing')

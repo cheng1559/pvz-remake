@@ -4,7 +4,7 @@ import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import { EconomyStateResource, LevelStateResource, MowerComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
@@ -217,7 +217,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const rows = level.definition.activeRows.filter(active => (row === undefined || active === row) && ready.has(active) === trigger)
             for (const changed of rows) {
                 const mower = ready.get(changed)
-                if (mower !== undefined) world.get(mower, MowerComponent)!.setOff(world, definitions, mower)
+                if (mower !== undefined) world.mowers.get(mower)!.setOff(world, definitions)
                 else createMower(world, changed)
             }
             return rows.length ? debugSuccess(`Changed ${rows.length} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')

@@ -98,7 +98,7 @@ export function updateMowerCoins(world: World, definitions: GameplayDefinitions,
     const ready = readyMowers(world)
     if (!ready.size) { delete economy.mowerCoinTicks; return }
     economy.mowerCoinTicks = 40
-    const row = Math.max(...ready.keys()), mower = ready.get(row)!, { x, y } = world.get(mower, PositionComponent)!
+    const row = Math.max(...ready.keys()), mower = ready.get(row)!, { x, y } = world.mowers.get(mower)!.position
     spawnLoot(world, definitions, commands, GOLD, x + 40, y + 40, false, true)
     // CountUntriggerLawnMowers, as the coin's note is pitched by it, still counts this one.
     emitServerEvent(world.resources.get(EventQueueResource), 'mowerScored', { row, remaining: ready.size })

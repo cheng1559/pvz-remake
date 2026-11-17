@@ -157,7 +157,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         // As the JSON it was saved as, or what it is made of (a zombie, its kind's instance).
         const live = (restore ? restore(value as never, context) : jsonRoundTrip(value)) as never
         if (component) world.add(saved.entityId, component, live)
-        else world.insert(list!(world), { ...live as object, id: saved.entityId, ...(saved.position ? { position: jsonRoundTrip(saved.position) } : {}) })
+        else world.insert(list!(world), Object.assign(live as object, { id: saved.entityId, ...(saved.position ? { position: jsonRoundTrip(saved.position) } : {}) }))
     }
 }
 

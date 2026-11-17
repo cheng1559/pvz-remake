@@ -1,8 +1,8 @@
-import { type CommandBuffer, defineResource, type SystemContext, type World } from '@/server/state/World'
+import { type CommandBuffer, defineResource, type EntityId, type SystemContext, type World } from '@/server/state/World'
 import type { GameplayDefinitions, ProjectileDefinition, ProjectileOverrides } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, type Team } from '@/shared/content/teams'
 import { jsonRoundTrip, type JsonObject, type ProjectileSnapshot } from '@/shared/protocol'
-import { type Plant, PlantComponent, type Position, PositionComponent, ProjectileComponent, type Zombie } from '../state/components'
+import { type Plant, PlantComponent, type Position, type Zombie } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damagePlant } from '../plants/damage'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
@@ -54,7 +54,11 @@ export type ProjectileConfig = 'damage'
 /** Projectile::FindCollisionTargetPlant: a projectile hits a plant it overlaps by more than 8. */
 const PLANT_HIT_OVERLAP = 8
 
-export interface Projectile extends ProjectileFields {}
+export interface Projectile extends ProjectileFields {
+    /** Its entity, and where it is (World.projectiles). */
+    id: EntityId
+    position: Position
+}
 
 /**
  * A projectile in flight, the projectile component itself: its fields are all there is to it, which its save keeps as
@@ -160,9 +164,9 @@ export class Projectile {
         for (const other of splashed) damageTarget(hit, other, each)
     }
 
-    /** What the client is shown of it, `entity`: where it is, and how high, how far thrown and which way it points, by its motion; with what only its kind shows (snapshotOwn). */
-    snapshot(world: World, entity: number): ProjectileSnapshot {
-        const position = world.get(entity, PositionComponent)!
+    /** What the client is shown of it: where it is, and how high, how far thrown and which way it points, by its motion; with what only its kind shows (snapshotOwn). */
+    snapshot(world: World): ProjectileSnapshot {
+        const { id: entity, position } = this
         const motion = world.resources.get(ProjectileMotionsResource).of(this)
         const height = motion.height?.(this.motionState) ?? heightOverRow(world, this.definition, position), facing = motion.facing?.(this.motionState)
         const lift = motion.lift?.(this.motionState) ?? 0, own = this.snapshotOwn()
@@ -214,14 +218,14 @@ export interface ProjectileLaunch { typeId: string, position: Position, motion: 
  * A new projectile sets off at `position`, flying by its launcher's `motion` (a registered kind): of its type's kind,
  * its type's definition with the launcher's `overrides`, with the state its motion starts with (Projectile.launch).
  */
-export function launchProjectile(world: World, definitions: GameplayDefinitions, creator: Pick<CommandBuffer, 'createEntity' | 'add'>,
+export function launchProjectile(world: World, definitions: GameplayDefinitions, creator: Pick<CommandBuffer, 'createEntity' | 'insert'>,
     launch: ProjectileLaunch): number {
     const entity = creator.createEntity()
     const definition = launch.overrides ? { ...definitions.projectiles[launch.typeId], ...launch.overrides } : definitions.projectiles[launch.typeId]
-    const position = { ...launch.position }
     const projectile = world.resources.get(ProjectileFactoryResource).create(launch.typeId, definition, launch.motion)
-    projectile.launch(world, definitions, position, launch.team, launch.target)
-    creator.add(entity, PositionComponent, position)
-    creator.add(entity, ProjectileComponent, projectile)
+    projectile.id = entity
+    projectile.position = { ...launch.position }
+    projectile.launch(world, definitions, projectile.position, launch.team, launch.target)
+    creator.insert(world.projectiles, projectile)
     return entity
 }

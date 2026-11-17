@@ -13,7 +13,6 @@ import {
     LevelStateResource,
     PlantComponent,
     PositionComponent,
-    ProjectileComponent,
     RandomResource,
     ZombieComponent,
 } from '@/server/state/components'
@@ -251,5 +250,5 @@ test('plant abilities and new zombie state survive a server save', () => {
     assert.deepEqual(snapshot.plants.map(plant => plant.own?.phase).sort(), ['arming', 'ready', undefined])
     assert.deepEqual(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:pole_vaulter')?.own, { hasPole: true })
     assert.equal(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:buckethead')?.helmHealth, 1100)
-    assert.equal([...(restored as unknown as { session: { world: World } }).session.world.query(ProjectileComponent)].length, 0)
+    assert.equal([...(restored as unknown as { session: { world: World } }).session.world.projectiles].map(projectile => projectile.id).length, 0)
 })

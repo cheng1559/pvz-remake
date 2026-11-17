@@ -121,11 +121,6 @@ export type Grave = Omit<GraveSnapshot, 'entityId'> & { id: EntityId }
 export type Crater = Omit<CraterSnapshot, 'entityId'> & { id: EntityId }
 export type GridItem = Grave | Crater
 
-/** A projectile in flight, of its kind (combat/Projectile.ts): a mower set off runs as one (MowingProjectile). */
-export const ProjectileComponent = defineComponent<Projectile>('pvz:projectile')
-
-/** A row's lawn mower waiting at its house end (level/Mower.ts). */
-export const MowerComponent = defineComponent<Mower>('pvz:mower')
 
 export const LevelStateResource = defineResource<LevelState>('pvz:level-state')
 

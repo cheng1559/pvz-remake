@@ -6,7 +6,7 @@ import { STRAIGHT } from '@/server/combat/motions'
 import { launchProjectile } from '@/server/combat/Projectile'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
-import { LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
+import { LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
 import { createPlantAttackSystem } from '@/server/plants/attacks'
 import { createPlantAbilitySystem } from '@/server/plants/abilities'
@@ -136,7 +136,7 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
         assert.equal((world.get(plant, PlantComponent) as Shooter).burst, undefined)
         world.get(zombie, PositionComponent)!.x = 240
         for (let tick = 2; tick <= 200; tick++) schedule.run(world, tick)
-        assert.equal([...world.query(ProjectileComponent)].length > 0, night)
+        assert.equal([...world.projectiles].map(projectile => projectile.id).length > 0, night)
     }
     const world = worldFor(true), schedule = new Schedule()
     schedule.add('projectile', createProjectileSystem(definitions))
@@ -145,13 +145,13 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
     const spore = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 0 }, motion: STRAIGHT,
         overrides: definitions.plants['pvz:puffshroom'].shooter!.overrides })
     const far = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 1 }, motion: STRAIGHT })
-    assert.equal(world.get(far, ProjectileComponent)!.motionState, undefined)
-    assert.deepEqual(world.get(spore, ProjectileComponent)!.motionState, { ticksLeft: 75 })
-    world.get(spore, ProjectileComponent)!.motionState = { ticksLeft: 1 }
+    assert.equal(world.projectiles.get(far)!.motionState, undefined)
+    assert.deepEqual(world.projectiles.get(spore)!.motionState, { ticksLeft: 75 })
+    world.projectiles.get(spore)!.motionState = { ticksLeft: 1 }
     schedule.run(world, 1)
     assert.equal(world.hasEntity(spore), false)
     assert.equal(world.get(zombie, ZombieComponent)!.health, 270)
-    assert.equal(world.get(far, ProjectileComponent)!.age, 1, 'Projectile::Update counts its age first')
+    assert.equal(world.projectiles.get(far)!.age, 1, 'Projectile::Update counts its age first')
 })
 
 test('a newspaper blocks chill until damage reaches the body, while cones and buckets do not', () => {
@@ -317,7 +317,7 @@ test('fume-shrooms hit every zombie in reach at once, through the newspaper and 
     assert.deepEqual(paperHit(), { entityId: paper }, 'a pea hit recoils the paper again')
     assert.deepEqual(health(near), [0, before[1][1] - 20])
     assert.deepEqual(health(far), before[2], 'beyond the 340px reach')
-    assert.equal([...world.query(ProjectileComponent)].length, 0)
+    assert.equal([...world.projectiles].map(projectile => projectile.id).length, 0)
 })
 
 test('grave busters only go on graves, cannot be dug up, then eat the grave and disappear', () => {

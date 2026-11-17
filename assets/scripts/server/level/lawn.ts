@@ -1,7 +1,7 @@
 import type { EntityId, World } from '@/server/state/World'
 import type { CellPlant } from '@/shared/content/planting'
 import type { GridItemSnapshot } from '@/shared/protocol'
-import { LevelStateResource, MowerComponent, PlantComponent, PositionComponent, ProjectileComponent } from '../state/components'
+import { LevelStateResource, PlantComponent, PositionComponent } from '../state/components'
 
 /** What stands on the lawn, as the shared cell rules (shared/content/planting, graveAt) and the level read it. */
 
@@ -22,7 +22,7 @@ export function gridItems(world: World): GridItemSnapshot[] {
  */
 export function readyMowers(world: World): Map<number, EntityId> {
     const mowers = new Map<number, EntityId>()
-    for (const entity of world.query(PositionComponent, MowerComponent)) mowers.set(world.get(entity, PositionComponent)!.row, entity)
+    for (const mower of world.mowers) mowers.set(mower.position.row, mower.id)
     return mowers
 }
 
@@ -32,5 +32,5 @@ export function readyMowers(world: World): Map<number, EntityId> {
  */
 export function lawnMowerCount(world: World): number {
     const running = world.resources.get(LevelStateResource).definition.lawnMower
-    return [...world.query(MowerComponent)].length + [...world.query(ProjectileComponent)].filter(entity => world.get(entity, ProjectileComponent)!.typeId === running).length
+    return [...world.mowers].length + [...world.projectiles].filter(projectile => projectile.typeId === running).length
 }
