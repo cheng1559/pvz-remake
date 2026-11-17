@@ -8,6 +8,9 @@ import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'
 import { seedSunCost } from '../seeds/seedBank'
 
+/** Coin::StartFade: an item left too long fades out over 15 ticks. */
+const FADE_TICKS = 15
+
 /** The sun, a coin or the level's award (the original's Coin), on its own above the board (row -1). */
 export interface Item {
     id: EntityId
@@ -91,7 +94,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     continue
                 }
                 if (item.state === 'fading') {
-                    item.alpha = Math.max(0, Math.round(255 * (--item.fadeTicks / 50)))
+                    item.alpha = Math.max(0, Math.round(255 * (--item.fadeTicks / FADE_TICKS)))
                     if (item.fadeTicks <= 0) {
                         // Coin::UpdateFade: it faded away uncollected.
                         emitServerEvent(world.resources.get(EventQueueResource), 'itemExpired', { entityId: entity, typeId: item.typeId })
@@ -115,7 +118,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 // Coin::GetDisappearTime: a bouncy arrow doubles the usual 750 ticks.
                 if (++item.disappearTicks >= (item.arrow ? 1500 : definitions.items[item.typeId]?.lifetimeTicks ?? 750)) {
                     item.state = 'fading'
-                    item.fadeTicks = 50
+                    item.fadeTicks = FADE_TICKS
                 }
             }
         },
