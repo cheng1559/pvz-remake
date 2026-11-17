@@ -10,7 +10,7 @@ import { parsePresentationDefinitions } from '@/shared/content/presentation'
 test('presentation definitions validate independently and never share global configuration state', () => {
     const current = new ClientAnimationRegistry(presentationFixture)
     for (const change of [
-        (data: any) => { data.plants['pvz:sunshroom'].shadow.states = { small: [0.5] } },
+        (data: any) => { data.plants['pvz:sunshroom'].shadow.phases = { small: [0.5] } },
         (data: any) => { data.plants['pvz:explodenut'].clips = { from: 'pvz:missing' } },
         (data: any) => { delete data.zombies['pvz:conehead'].clips },
         (data: any) => { delete data.zombies['pvz:normal'] },

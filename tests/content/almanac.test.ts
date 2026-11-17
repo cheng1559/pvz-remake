@@ -17,7 +17,7 @@ const random = (...values: number[]): AnimationRandom => {
 }
 const shown = (id: string, picture: 'offBoard' | 'packet' = 'offBoard') => {
     const packet = picture === 'packet' ? presentationFixture.plants[id].packet : undefined
-    return startOffBoardPlant(gameplay.plants[id].animation!, random(0), { state: packet?.state, at: packet?.time })
+    return startOffBoardPlant(gameplay.plants[id].animation!, random(0), { phase: packet?.phase, at: packet?.time })
 }
 
 test('every almanac card and window is a plant or a zombie its view can draw off the board, on its ground', () => {
@@ -49,16 +49,16 @@ test('a plant off the board starts as on it, in the state and with the clips it 
     const pea = shown('pvz:peashooter')
     assert.deepEqual(pea.animations, { body: { clip: 'body', time: 0, rate: 15 }, head: { clip: 'idleHead', time: 0, rate: 15 } })
     assert.equal(pea.blinkTicks, 400)
-    assert.equal(pea.state, undefined, 'a plant without an ability is in no state')
+    assert.equal(pea.phase, undefined, 'a plant without an ability is in no state')
     // An armed mine at the 12 it is buried at, its light lit only in a packet's picture (its armed state's clips there);
     // a cherry bomb that is not going off; a grown sun-shroom at the small one's pace, small in its packet.
     const mine = shown('pvz:potatomine'), minePacket = shown('pvz:potatomine', 'packet')
-    assert.deepEqual([mine.state, mine.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 } }])
-    assert.deepEqual([minePacket.state, minePacket.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 }, light: { clip: 'glow', time: 0, rate: 12 } }])
+    assert.deepEqual([mine.phase, mine.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 } }])
+    assert.deepEqual([minePacket.phase, minePacket.animations], ['armed', { body: { clip: 'armed', time: 0, rate: 12 }, light: { clip: 'glow', time: 0, rate: 12 } }])
     assert.deepEqual(shown('pvz:cherrybomb').animations, { body: { clip: 'idle', time: 0, rate: 10 } })
     const shroom = shown('pvz:sunshroom'), shroomPacket = shown('pvz:sunshroom', 'packet')
-    assert.deepEqual([shroom.state, shroom.animations], ['big', { body: { clip: 'body', time: 0, rate: 10 } }])
-    assert.deepEqual([shroomPacket.state, shroomPacket.animations], ['small', { body: { clip: 'small', time: 0, rate: 10 } }])
+    assert.deepEqual([shroom.phase, shroom.animations], ['big', { body: { clip: 'body', time: 0, rate: 10 } }])
+    assert.deepEqual([shroomPacket.phase, shroomPacket.animations], ['small', { body: { clip: 'small', time: 0, rate: 10 } }])
     // The grave buster stands at the 10 to 15 its landing goes at on the board, where that fits the ticks it lands in.
     const buster = gameplay.plants['pvz:gravebuster'].animation!
     assert.deepEqual(startOffBoardPlant(buster, random(1)).animations, { body: { clip: 'body', time: 0, rate: 15 } })
@@ -73,11 +73,11 @@ test("a plant off the board is in a state of its own kind, on its animation's la
         change(source.plants)
         parseGameplayDefinitions(source)
     }
-    assert.throws(broken(plants => { plants['pvz:sunshroom'].animation.offBoard = { state: 'armed' } }), /sunshroom\.animation names a state its kind does not have: armed/)
-    assert.throws(broken(plants => { plants['pvz:peashooter'].animation.offBoard = { state: 'big' } }), /peashooter\.animation names a state its kind does not have: big/)
+    assert.throws(broken(plants => { plants['pvz:sunshroom'].animation.offBoard = { phase: 'armed' } }), /sunshroom\.animation names a phase its kind does not have: armed/)
+    assert.throws(broken(plants => { plants['pvz:peashooter'].animation.offBoard = { phase: 'big' } }), /peashooter\.animation names a phase its kind does not have: big/)
     assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { head: 'idle' } } }), /must be one of the animation's layers/)
     assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = { layers: { body: 'missing' } } }), /must be one of the animation's clips/)
-    assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = {} }), /must have a state or layers/)
+    assert.throws(broken(plants => { plants['pvz:cherrybomb'].animation.offBoard = {} }), /must have a phase or layers/)
 })
 
 test('a plant off the board goes on by the rules of the board: its clip there loops, and a nut blinks one of its three ways', () => {

@@ -11,14 +11,14 @@ import { PositionComponent, RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Plant, type PlantConfig } from './Plant'
 
-const STATES = ['landing', 'eating'] as const
-type BusterState = typeof STATES[number]
+const PHASES = ['landing', 'eating'] as const
+type BusterPhase = typeof PHASES[number]
 
 export interface GraveBuster {
     /** Plant::mState of the buster. */
-    state: BusterState
-    /** The ticks left of its state. */
-    stateTicks: number
+    phase: BusterPhase
+    /** The ticks left of its phase. */
+    phaseTicks: number
 }
 
 /**
@@ -33,16 +33,16 @@ export class GraveBuster extends Plant {
     /** One comes landing. */
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.state = 'landing'
-        this.stateTicks = 0
+        this.phase = 'landing'
+        this.phaseTicks = 0
     }
 
     private get buster(): NonNullable<PlantDefinition['graveBuster']> { return this.definition.graveBuster! }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { state, stateTicks, ...rest } = fields
-        this.state = oneOf(state, STATES, `${name}.state`)
-        this.stateTicks = nonNegativeInteger(stateTicks, `${name}.stateTicks`)
+        const { phase, phaseTicks, ...rest } = fields
+        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
 
@@ -50,29 +50,29 @@ export class GraveBuster extends Plant {
     start(random: DeterministicRng, tick: number): void {
         super.start(random, tick)
         const land = this.buster.landTicks
-        this.stateTicks = random.integer(land.min, land.max)
+        this.phaseTicks = random.integer(land.min, land.max)
     }
 
-    animationState(): string {
-        return this.state
+    animationPhase(): string {
+        return this.phase
     }
 
     /** Its landing clip lasts as long as it lands. */
     fitTicks(): number {
-        return this.stateTicks
+        return this.phaseTicks
     }
 
     act({ world, commands }: SystemContext, entity: EntityId): void {
-        if (this.stateTicks > 0) this.stateTicks--
-        if (this.state === 'landing') {
-            if (this.stateTicks > 0) return
-            this.state = 'eating'
-            this.stateTicks = this.buster.eatTicks
-            this.playState(this.state, world.resources.get(RandomResource))
+        if (this.phaseTicks > 0) this.phaseTicks--
+        if (this.phase === 'landing') {
+            if (this.phaseTicks > 0) return
+            this.phase = 'eating'
+            this.phaseTicks = this.buster.eatTicks
+            this.playPhase(this.phase, world.resources.get(RandomResource))
             return
         }
         // Plant::UpdateGraveBuster: the grave and the buster disappear together.
-        if (this.stateTicks > 0) return
+        if (this.phaseTicks > 0) return
         const position = world.get(entity, PositionComponent)!
         const grave = graveAt(gridItems(world), position.row, this.column), ate = grave !== undefined
         if (grave) world.destroyEntity(grave.entityId)
@@ -89,6 +89,6 @@ export class GraveBuster extends Plant {
     }
 
     protected snapshotOwn(): JsonObject {
-        return { state: this.state, ticks: this.stateTicks }
+        return { phase: this.phase, ticks: this.phaseTicks }
     }
 }

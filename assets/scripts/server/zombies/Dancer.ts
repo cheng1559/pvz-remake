@@ -2,7 +2,7 @@ import type { EntityId, SystemContext, World } from '@/ecs/index'
 import { type AnimationClip, DANCE_BEAT, type DanceLead, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { zombieRowY } from '@/shared/content/levelHelpers'
 import { teamDirection, zombieTeam } from '@/shared/content/teams'
-import { DANCE_STEPS, type DanceStep, isSummoning } from '@/shared/content/zombieStates'
+import { DANCE_PHASES, type DancePhase, isSummoning } from '@/shared/content/zombieStates'
 import type { AnimationRandom } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { array, nonNegativeInteger, oneOf, positiveInteger } from '@/shared/validate'
@@ -16,20 +16,20 @@ import { type PlantFinder, Zombie, type ZombieConfig } from './Zombie'
 /** Board::CountZombiesOnScreen: the leader's first snap starts the disco music only with no more zombies about. */
 const MUSIC_MAX_ZOMBIES = 15
 
-/** Zombie::GetDancerPhase: the step of the lawn's beat at `tick`. */
-export function beatStep(tick: number): DanceStep {
+/** Zombie::GetDancerPhase: the phase of the lawn's beat at `tick`. */
+export function beatPhase(tick: number): DancePhase {
     const beat = Math.floor(tick % (DANCE_BEAT.ticks * DANCE_BEAT.beats) / DANCE_BEAT.ticks)
     return beat < DANCE_BEAT.walk ? 'walk' : beat === DANCE_BEAT.walk ? 'armUp' : beat < DANCE_BEAT.raiseAgain ? 'raise' : 'raise2'
 }
 
-/** The steps a dancer walks on (moonwalking or dancing forward); on the others it stands (Zombie::ZombieNotWalking). */
-export function danceWalks(step: DanceStep): boolean {
-    return step === 'moonwalk' || step === 'walk'
+/** The phases a dancer walks on (moonwalking or dancing forward); on the others it stands (Zombie::ZombieNotWalking). */
+export function danceWalks(phase: DancePhase): boolean {
+    return phase === 'moonwalk' || phase === 'walk'
 }
 
 export interface Dancer {
-    /** Its step of the dance. */
-    step: DanceStep
+    /** Its phase of the dance. */
+    phase: DancePhase
     /** Zombie::mPhaseCounter: the ticks left of a leader's moonwalk or of its hold after calling up its troupe; 0 otherwise. */
     phaseTicks: number
     /** Zombie::mZombieAge: the ticks it has been on the lawn, which a leader's spotlight changes color by. */
@@ -54,7 +54,7 @@ export class Dancer extends Zombie {
 
     constructor(typeId: string, definition: ZombieDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.step = 'walk'
+        this.phase = 'walk'
         this.phaseTicks = 0
         this.age = 0
     }
@@ -65,8 +65,8 @@ export class Dancer extends Zombie {
     }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { step, phaseTicks, age, troupe, summonTicks, leader, ...rest } = fields
-        this.step = oneOf(step, DANCE_STEPS, `${name}.step`)
+        const { phase, phaseTicks, age, troupe, summonTicks, leader, ...rest } = fields
+        this.phase = oneOf(phase, DANCE_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         this.age = nonNegativeInteger(age, `${name}.age`)
         if (troupe !== undefined) this.troupe = array(troupe, `${name}.troupe`).map((id, index) => id === null ? null : positiveInteger(id, `${name}.troupe[${index}]`))
@@ -85,7 +85,7 @@ export class Dancer extends Zombie {
         if (!lead) return
         this.phaseTicks = random.integer(lead.moonwalkTicks.min, lead.moonwalkTicks.max)
         this.troupe = lead.troupe.map(() => null)
-        this.playStep('moonwalk', random)
+        this.playPhase('moonwalk', random)
     }
 
     /** Zombie::IsMovingAtChilledSpeed, as the zombies' tick starts: one of its troupe is chilled. */
@@ -99,17 +99,17 @@ export class Dancer extends Zombie {
      * backwards): moonwalking, it goes on at its own pace, chilled or not (only tinted).
      */
     chillSlows(): boolean {
-        return this.step !== 'moonwalk' && super.chillSlows()
+        return this.phase !== 'moonwalk' && super.chillSlows()
     }
 
     /**
-     * Zombie::Update: its age, and the ticks of its step counting down unless it is frozen (IsImmobilizied). Frozen as it
+     * Zombie::Update: its age, and the ticks of its phase counting down unless it is frozen (IsImmobilizied). Frozen as it
      * moonwalks, its rate is stopped (HitIceTrap's ApplyAnimRate(0)) and RemoveIceTrap's UpdateAnimSpeed sets it none
      * again: thawed, it stands in its moonwalk, its body still, until the moonwalk is through and it snaps its fingers.
      */
     count(): void {
         this.age++
-        if (this.frozenTicks !== undefined && this.step === 'moonwalk') zombieBody(this).rate = 0
+        if (this.frozenTicks !== undefined && this.phase === 'moonwalk') zombieBody(this).rate = 0
         if (this.phaseTicks > 0 && this.frozenTicks === undefined) this.phaseTicks--
     }
 
@@ -121,33 +121,33 @@ export class Dancer extends Zombie {
 
     /** CheckIfPreyCaught: a leader snapping its fingers does not eat. */
     eats(): boolean {
-        return !isSummoning(this.step) && super.eats()
+        return !isSummoning(this.phase) && super.eats()
     }
 
     /** Zombie::EatPlant: a plant in its way ends a leader's moonwalk, unbitten; it snaps its fingers next. */
     passesPlant(): boolean {
-        if (this.step !== 'moonwalk') return false
+        if (this.phase !== 'moonwalk') return false
         this.phaseTicks = 1
         return true
     }
 
-    /** A dancer that stops eating takes up its step again where the dance is, at a speed picked anew (Zombie::StopEating). */
+    /** A dancer that stops eating takes up its phase again where the dance is, at a speed picked anew (Zombie::StopEating). */
     stopEating(random: AnimationRandom): void {
         this.speedPerTick = this.pickSpeed(random)
-        this.playStep(this.step, random)
+        this.playPhase(this.phase, random)
     }
 
-    /** Zombie::ZombieNotWalking: it walks on its walking steps alone, while none of its troupe stands still. */
+    /** Zombie::ZombieNotWalking: it walks on its walking phases alone, while none of its troupe stands still. */
     walks(world: World, _entity: EntityId): boolean {
-        return danceWalks(this.step) && !this.troupeOf(world).some(member => member.state === 'eating' || member.frozenTicks !== undefined)
+        return danceWalks(this.phase) && !this.troupeOf(world).some(member => member.state === 'eating' || member.frozenTicks !== undefined)
     }
 
     /**
-     * Zombie::WalkIntoHouse for a dancer: it walks in on its walk, whatever step of the dance it was on (one called up past
+     * Zombie::WalkIntoHouse for a dancer: it walks in on its walk, whatever phase of the dance it was on (one called up past
      * the house's edge may come to it standing with its arm up, and the original's would stand at the door).
      */
     intoHouse(random: AnimationRandom): void {
-        if (this.step !== 'walk') this.playStep('walk', random)
+        if (this.phase !== 'walk') this.playPhase('walk', random)
     }
 
     /**
@@ -166,19 +166,19 @@ export class Dancer extends Zombie {
         }
     }
 
-    /** Its step and age: DancerView draws a moonwalking one turned round, a leader past its first snap under its spotlight. */
+    /** Its phase and age: DancerView draws a moonwalking one turned round, a leader past its first snap under its spotlight. */
     protected snapshotOwn(): JsonObject {
-        return { step: this.step, age: this.age }
+        return { phase: this.phase, age: this.age }
     }
 
     /**
-     * Its dance as it was saved: a leader has its troupe's places and its own steps, one without a lead a leader of its
-     * own and the step of coming up out of the ground. Its steps stand on clips of their own, with no ground.
+     * Its dance as it was saved: a leader has its troupe's places and its own phases, one without a lead a leader of its
+     * own and the phase of coming up out of the ground. Its phases stand on clips of their own, with no ground.
      */
     validSaved(_body: AnimationClip): boolean {
-        const leads = ['moonwalk', 'summon', 'resummon', 'hold'].includes(this.step), lead = this.lead
+        const leads = ['moonwalk', 'summon', 'resummon', 'hold'].includes(this.phase), lead = this.lead
         if (this.state === 'airborne') return false
-        return lead ? this.troupe?.length === lead.troupe.length && this.leader === undefined && this.step !== 'rise'
+        return lead ? this.troupe?.length === lead.troupe.length && this.leader === undefined && this.phase !== 'rise'
             : this.troupe === undefined && this.summonTicks === undefined && !leads
     }
 
@@ -203,54 +203,54 @@ export class Dancer extends Zombie {
         const random = world.resources.get(RandomResource)
         if (lead && this.summonTicks !== undefined && --this.summonTicks <= 0) {
             // Zombie::GetDancerFrame's beat 12, on which its arm goes up.
-            if (beatStep(tick) === 'armUp' && this.hasHead && farEnoughIn(world, entity, lead.summonBeforeX)) {
+            if (beatPhase(tick) === 'armUp' && this.hasHead && farEnoughIn(world, entity, lead.summonBeforeX)) {
                 delete this.summonTicks
-                this.step = 'resummon'
+                this.phase = 'resummon'
                 playZombie(this, definition.animation, ZOMBIE_CLIPS.point, random)
             } else this.summonTicks = 1
         }
-        if (this.step === 'moonwalk') {
+        if (this.phase === 'moonwalk') {
             if (!this.hasHead || this.phaseTicks > 0) return
-            this.step = 'summon'
+            this.phase = 'summon'
             playZombie(this, definition.animation, ZOMBIE_CLIPS.point, random)
             this.speedPerTick = this.pickSpeed(random)
             return
         }
-        if (this.step === 'summon' || this.step === 'resummon') {
+        if (this.phase === 'summon' || this.phase === 'resummon') {
             const point = zombieBody(this)
             if (point.time < definition.animation.clips[point.clip].frames) return
-            if (this.step === 'summon') {
+            if (this.phase === 'summon') {
                 emitServerEvent(world.resources.get(EventQueueResource), 'dancerSnapped', {
                     entityId: entity, typeId: this.typeId, music: countZombiesOnScreen(world) <= MUSIC_MAX_ZOMBIES,
                 })
             }
             this.summonTroupe(world, entity)
-            this.step = 'hold'
+            this.phase = 'hold'
             this.phaseTicks = lead!.holdTicks
             return
         }
-        if (this.step === 'hold') {
+        if (this.phase === 'hold') {
             if (this.phaseTicks > 0) return
-            this.playStep('walk', random)
+            this.playPhase('walk', random)
         }
-        const step = beatStep(tick)
-        if (step !== this.step) this.playStep(step, random)
+        const phase = beatPhase(tick)
+        if (phase !== this.phase) this.playPhase(phase, random)
         if (lead && this.hasHead && this.summonTicks === undefined && this.missingTroupe(world, entity)) this.summonTicks = lead.summonTicks
     }
 
     /**
-     * It comes to a step and its clip: walking on its walk at its speed's rate, its arm going up on its `raise` from
+     * It comes to a phase and its clip: walking on its walk at its speed's rate, its arm going up on its `raise` from
      * DANCE_BEAT.armUpFrom of the way, standing with it up on its `raise` from the start; moonwalking and snapping on
      * their own. Holding the pose keeps the snap's last frame; one coming up out of the ground stands as it came.
      */
-    private playStep(step: DanceStep, random: AnimationRandom): void {
-        this.step = step
+    private playPhase(phase: DancePhase, random: AnimationRandom): void {
+        this.phase = phase
         const animation = this.definition.animation
-        if (step === 'walk') startWalk(this, this.definition, ZOMBIE_CLIPS.walk, random)
-        else if (step === 'moonwalk') playZombie(this, animation, ZOMBIE_CLIPS.moonwalk, random)
-        else if (step === 'summon' || step === 'resummon') playZombie(this, animation, ZOMBIE_CLIPS.point, random)
-        else if (step === 'armUp') playZombie(this, animation, ZOMBIE_CLIPS.raise, random).time = animation.clips[ZOMBIE_CLIPS.raise].frames * DANCE_BEAT.armUpFrom
-        else if (step === 'raise' || step === 'raise2') playZombie(this, animation, ZOMBIE_CLIPS.raise, random)
+        if (phase === 'walk') startWalk(this, this.definition, ZOMBIE_CLIPS.walk, random)
+        else if (phase === 'moonwalk') playZombie(this, animation, ZOMBIE_CLIPS.moonwalk, random)
+        else if (phase === 'summon' || phase === 'resummon') playZombie(this, animation, ZOMBIE_CLIPS.point, random)
+        else if (phase === 'armUp') playZombie(this, animation, ZOMBIE_CLIPS.raise, random).time = animation.clips[ZOMBIE_CLIPS.raise].frames * DANCE_BEAT.armUpFrom
+        else if (phase === 'raise' || phase === 'raise2') playZombie(this, animation, ZOMBIE_CLIPS.raise, random)
     }
 
     /** Where a place of its troupe is (DanceLead.troupe): its row, and its x, turned round on the plants' side. */
@@ -289,7 +289,7 @@ export class Dancer extends Zombie {
             if (this.team) backup.team = this.team
             if (this.mindControlled) backup.mindControlled = true
             backup.riseTicks = lead.riseTicks
-            backup.step = 'rise'
+            backup.phase = 'rise'
             backup.leader = entity
             zombieBody(backup).rate = 0
             places[index] = backupId

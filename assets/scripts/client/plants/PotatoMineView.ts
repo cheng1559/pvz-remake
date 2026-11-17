@@ -4,7 +4,7 @@ import { PlantView } from './PlantView'
 
 /**
  * The potato mine (PotatoMine): it arms, rises and is armed, which its animation plays on the server
- * (PlantAnimationDefinition.states); rising is its event. Its own (PotatoMine.snapshotOwn): `state`.
+ * (PlantAnimationDefinition.phases); rising is its event. Its own (PotatoMine.snapshotOwn): `phase`.
  */
 export class PotatoMineView extends PlantView {
     /** Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own draw order, so it draws after it, with the dirt's sound. */

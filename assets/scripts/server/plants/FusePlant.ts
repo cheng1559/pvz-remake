@@ -16,7 +16,7 @@ export interface FusePlant {
 
 /**
  * A plant with a fuse (the definition's `fuse`: the cherry bomb, the ice-shroom, the doom-shroom; Plant::DoSpecial):
- * awake, its fuse is lit as it is put down (its animation's `fuse` state, Plant::UpdateDoomShroom's anim_explode) and
+ * awake, its fuse is lit as it is put down (its animation's `fuse` phase, Plant::UpdateDoomShroom's anim_explode) and
  * burns `ticks`, while zombies chew it without hurting it; then it blows up (`explosion`) or freezes the board (`freeze`)
  * and is gone, leaving a crater in its cell if it says so (`crater`, the doom-shroom's Board::AddACrater).
  */
@@ -37,14 +37,14 @@ export class FusePlant extends Plant {
         super.restoreOwn(rest, name)
     }
 
-    animationState(): string {
+    animationPhase(): string {
         return 'fuse'
     }
 
-    /** An awake plant's fuse is lit as it goes down: its layers play its `fuse` state's clips. */
+    /** An awake plant's fuse is lit as it goes down: its layers play its `fuse` phase's clips. */
     animationStarted(asleep: boolean, random: AnimationRandom): void {
         const animation = this.definition.animation
-        if (!asleep && animation) playLayers(animation, this, animation.states?.fuse, random)
+        if (!asleep && animation) playLayers(animation, this, animation.phases?.fuse, random)
     }
 
     /** Its fuse lit, zombies chew it without hurting it; asleep (an ice-shroom by day), they eat it as any plant. */

@@ -1,5 +1,5 @@
 import type { JsonObject, Team } from '@/shared/protocol'
-import type { PlantState } from './plantKinds'
+import type { PlantPhase } from './plantKinds'
 import type { ZombieState } from './zombieStates'
 
 /** The gameplay definitions' types (GameplayDefinitions, GameplayLevels), and the fixed names and places they share. */
@@ -416,26 +416,26 @@ export interface AnimationDefinition {
 }
 
 export interface PlantAnimationDefinition extends AnimationDefinition {
-    /** The clips its layers play from the start as it comes to a state of its kind (Plant::PlayBodyReanim as mState changes). */
-    states?: Partial<Record<PlantState, Record<string, string>>>
+    /** The clips its layers play from the start as it comes to a phase of its kind (Plant::PlayBodyReanim as mState changes). */
+    phases?: Partial<Record<PlantPhase, Record<string, string>>>
     /** Plant::SetSleeping: the clips its layers play in place of their own while it is asleep (a mushroom by day). */
     asleep?: Record<string, string>
     /**
-     * Plant::PlantInitialize for a plant that is not in play (the almanac, a packet's picture): the state of its kind it
-     * is in there, whose clips (`states`) its layers show (the grown sun-shroom, the armed potato mine), and then
+     * Plant::PlantInitialize for a plant that is not in play (the almanac, a packet's picture): the phase of its kind it
+     * is in there, whose clips (`phases`) its layers show (the grown sun-shroom, the armed potato mine), and then
      * `layers`, `{layer: clip}`, what some layers show in place of those, `null` for none (the cherry bomb not going
      * off, the armed potato mine without the light it lights in play). Without it, a plant there is as it starts on the board.
      */
-    offBoard?: { state?: PlantState; layers?: Record<string, string | null> }
+    offBoard?: { phase?: PlantPhase; layers?: Record<string, string | null> }
     /** Plant::FindTargetAndFire: the clip a layer plays from its start as the plant starts a shot. */
     fire?: Record<string, string>
     /**
      * Plant::DoBlink: every `ticks` (400 to 799 by default) the `blink` layer, over the others, plays one of these
      * clips, drawn by their weights (written `clip` for one, `{clip: weight}` for several: a nut's three); not while
-     * the plant is about to shoot or asleep. With `states`, only while it is in one of them, the first blink
+     * the plant is about to shoot or asleep. With `phases`, only while it is in one of them, the first blink
      * `first` ticks after it comes to one (an armed potato mine's, 400 to 4399).
      */
-    blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; states?: PlantState[]; first?: { min: number; max: number } }
+    blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; phases?: PlantPhase[]; first?: { min: number; max: number } }
 }
 
 /** The layer a plant blinks on. */

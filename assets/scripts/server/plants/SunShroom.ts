@@ -6,14 +6,14 @@ import { RandomResource } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { Producer } from './Producer'
 
-const STATES = ['small', 'growing', 'big'] as const
-type GrowthState = typeof STATES[number]
+const PHASES = ['small', 'growing', 'big'] as const
+type GrowthPhase = typeof PHASES[number]
 
 export interface SunShroom {
     /** Plant::mState of its growth. */
-    state: GrowthState
-    /** The ticks left of its state. */
-    stateTicks: number
+    phase: GrowthPhase
+    /** The ticks left of its phase. */
+    phaseTicks: number
 }
 
 /**
@@ -30,48 +30,48 @@ export class SunShroom extends Producer {
     /** One comes small, its growth `ticks` away. */
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.state = 'small'
-        this.stateTicks = this.growth.ticks
+        this.phase = 'small'
+        this.phaseTicks = this.growth.ticks
     }
 
     private get growth(): NonNullable<NonNullable<PlantDefinition['producer']>['growth']> { return this.producer.growth! }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { state, stateTicks, ...rest } = fields
-        this.state = oneOf(state, STATES, `${name}.state`)
-        this.stateTicks = nonNegativeInteger(stateTicks, `${name}.stateTicks`)
+        const { phase, phaseTicks, ...rest } = fields
+        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
 
-    animationState(): string {
-        return this.state
+    animationPhase(): string {
+        return this.phase
     }
 
     protected holdsProduction(): boolean {
-        return this.state === 'growing'
+        return this.phase === 'growing'
     }
 
     protected producedItem(): string {
-        return this.state === 'small' ? this.growth.smallItem : super.producedItem()
+        return this.phase === 'small' ? this.growth.smallItem : super.producedItem()
     }
 
     act({ world }: SystemContext, entity: EntityId): void {
-        if (this.stateTicks > 0) this.stateTicks--
+        if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource)
-        if (this.state === 'small') {
+        if (this.phase === 'small') {
             // Plant::UpdateSunShroom: anim_grow, then the big sun-shroom.
-            if (this.stateTicks > 0) return
-            this.state = 'growing'
-            this.stateTicks = this.growth.growingTicks
-            this.playState(this.state, random)
+            if (this.phaseTicks > 0) return
+            this.phase = 'growing'
+            this.phaseTicks = this.growth.growingTicks
+            this.playPhase(this.phase, random)
             emitServerEvent(world.resources.get(EventQueueResource), 'plantGrew', { entityId: entity, typeId: this.typeId })
-        } else if (this.state === 'growing' && this.stateTicks === 0) {
-            this.state = 'big'
-            this.playState(this.state, random)
+        } else if (this.phase === 'growing' && this.phaseTicks === 0) {
+            this.phase = 'big'
+            this.playPhase(this.phase, random)
         }
     }
 
     protected snapshotOwn(tick?: number): JsonObject {
-        return { ...super.snapshotOwn(tick), state: this.state }
+        return { ...super.snapshotOwn(tick), phase: this.phase }
     }
 }

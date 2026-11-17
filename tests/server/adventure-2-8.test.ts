@@ -4,7 +4,7 @@ import type { World } from '@/ecs'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { GridItemComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
 import { chillZombie } from '@/server/zombies/damage'
-import { beatStep, type Dancer } from '@/server/zombies/Dancer'
+import { beatPhase, type Dancer } from '@/server/zombies/Dancer'
 import { mindControl } from '@/server/zombies/mindControl'
 import { startOffBoardPlant } from '@/shared/content/plantAnimation'
 import { DANCE_BEAT, parseGameplayDefinitions, parseGameplayLevels, ZOMBIE_BODY_LAYER } from '@/shared/content/gameplay'
@@ -20,8 +20,8 @@ const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
     levelId: 'pvz:adventure-2-8', randomSeed: 8, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-2-8'), mods: [] }
 const lead = definitions.zombies['pvz:dancer'].dance!.lead!
-/** A dancer's step as its snapshot shows it (Dancer.snapshotOwn). */
-const stepOf = (zombie: ZombieSnapshot | undefined) => zombie?.own?.step
+/** A dancer's phase as its snapshot shows it (Dancer.snapshotOwn). */
+const phaseOf = (zombie: ZombieSnapshot | undefined) => zombie?.own?.phase
 
 function start(packet: Partial<StartSessionPacket> = {}) {
     const server = new IntegratedGameServer(definitions, levels)
@@ -78,7 +78,7 @@ const zombiesOf = (server: IntegratedGameServer, typeId: string) => server.snaps
 function troupe(server: IntegratedGameServer, team = '') {
     debug(server, `/zombie dancer 3 9 ${team}`.trim())
     const leader = zombiesOf(server, 'pvz:dancer')[0].entityId
-    const events = until(server, () => stepOf(zombie(server, leader)) === 'hold', 400)
+    const events = until(server, () => phaseOf(zombie(server, leader)) === 'hold', 400)
     return { leader, events, backups: zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId) }
 }
 
@@ -118,31 +118,31 @@ test('a dancer moonwalks in drawn turned round, snaps its fingers and calls up i
     const server = playing()
     debug(server, '/zombie dancer 3 9')
     const leader = zombiesOf(server, 'pvz:dancer')[0], from = leader.x
-    assert.equal(stepOf(leader), 'moonwalk')
+    assert.equal(phaseOf(leader), 'moonwalk')
     ticks(server, 100)
     // PlayZombieReanim's 24, which UpdateAnimSpeed leaves: the moonwalk's ground runs backwards (its distance < 1e-6).
     assert.equal(world(server).get(leader.entityId, ZombieComponent)!.animations[ZOMBIE_BODY_LAYER].rate, 24)
     assert.ok(zombie(server, leader.entityId).x < from - 40, 'it moonwalks toward the house')
     // Zombie::ZombieInitialize: mPhaseCounter = 300 + Rand(12).
-    until(server, () => stepOf(zombie(server, leader.entityId)) !== 'moonwalk', 220)
-    assert.equal(stepOf(zombie(server, leader.entityId)), 'summon')
+    until(server, () => phaseOf(zombie(server, leader.entityId)) !== 'moonwalk', 220)
+    assert.equal(phaseOf(zombie(server, leader.entityId)), 'summon')
     // Its ground at 24 a second and its size: about 0.49 a tick, some 150 in all.
     const moved = from - zombie(server, leader.entityId).x
     assert.ok(moved > 130 && moved < 170, `it moonwalked ${moved}`)
     const x = Math.trunc(zombie(server, leader.entityId).x)
     // The snap plays out (9 frames at 24 a second) before they come.
-    const events = until(server, () => stepOf(zombie(server, leader.entityId)) === 'hold', 40)
+    const events = until(server, () => phaseOf(zombie(server, leader.entityId)) === 'hold', 40)
     assert.ok(events.some(event => event.type === 'dancerSnapped' && event.data.music === true), 'with the disco music, few zombies about')
     const called = events.filter(event => event.type === 'dancerCalledUp')
     const backups = zombiesOf(server, 'pvz:backup_dancer')
     assert.deepEqual(called.map(event => event.data.entityId), backups.map(backup => backup.entityId))
     assert.deepEqual(backups.map(backup => [backup.row, backup.x]), [[1, x], [3, x], [2, x - 100], [2, x + 100]])
-    assert.ok(backups.every(backup => backup.riseTicks === lead.riseTicks && stepOf(backup) === 'rise'))
+    assert.ok(backups.every(backup => backup.riseTicks === lead.riseTicks && phaseOf(backup) === 'rise'))
     assert.ok(backups.every(backup => backup.animations[ZOMBIE_BODY_LAYER].rate === 0), 'they come up standing still')
     // They are risen once their leader has held its pose, which goes by the beat after.
     ticks(server, lead.holdTicks)
     const tick = server.snapshot().gameplayTick
-    assert.ok(server.snapshot().zombies.every(dancer => stepOf(dancer) === beatStep(tick) && !dancer.riseTicks))
+    assert.ok(server.snapshot().zombies.every(dancer => phaseOf(dancer) === beatPhase(tick) && !dancer.riseTicks))
 })
 
 test('every dancer keeps the lawn\'s beat: walking on its first twelve beats and standing with its arm up on the rest', () => {
@@ -153,11 +153,11 @@ test('every dancer keeps the lawn\'s beat: walking on its first twelve beats and
     const steps = new Set<string>()
     for (let tick = 0; tick < DANCE_BEAT.ticks * DANCE_BEAT.beats; tick++) {
         ticks(server, 1)
-        const now = zombie(server, dancer), step = beatStep(server.snapshot().gameplayTick)
-        assert.equal(stepOf(now), step)
+        const now = zombie(server, dancer), step = beatPhase(server.snapshot().gameplayTick)
+        assert.equal(phaseOf(now), step)
         steps.add(step)
         if (step !== 'walk') assert.equal(now.x, last.x, `it stands still on ${step}`)
-        if (step === 'armUp' && stepOf(last) === 'walk') {
+        if (step === 'armUp' && phaseOf(last) === 'walk') {
             assert.equal(now.animations[ZOMBIE_BODY_LAYER].clip, 'raise')
             assert.ok(now.animations[ZOMBIE_BODY_LAYER].time >= 22 * DANCE_BEAT.armUpFrom, 'its arm goes up from part of the way')
         }
@@ -208,10 +208,10 @@ test('a moonwalk is not slowed by a chill, and one frozen in it stands once thaw
     from = zombie(server, leader).x
     const time = zombie(server, leader).animations[ZOMBIE_BODY_LAYER].time
     ticks(server, left - 1)
-    assert.deepEqual([stepOf(zombie(server, leader)), zombie(server, leader).x, zombie(server, leader).animations[ZOMBIE_BODY_LAYER].time],
+    assert.deepEqual([phaseOf(zombie(server, leader)), zombie(server, leader).x, zombie(server, leader).animations[ZOMBIE_BODY_LAYER].time],
         ['moonwalk', from, time], 'thawed, it stands in its moonwalk')
-    until(server, () => stepOf(zombie(server, leader)) !== 'moonwalk', 3)
-    assert.equal(stepOf(zombie(server, leader)), 'summon', 'its moonwalk through, it snaps its fingers')
+    until(server, () => phaseOf(zombie(server, leader)) !== 'moonwalk', 3)
+    assert.equal(phaseOf(zombie(server, leader)), 'summon', 'its moonwalk through, it snaps its fingers')
     assert.ok(zombie(server, leader).animations[ZOMBIE_BODY_LAYER].rate > 0)
 })
 
@@ -220,9 +220,9 @@ test('a leader missing some of its troupe calls them up again on the beat its ar
     const { leader, backups } = troupe(server)
     ticks(server, lead.holdTicks)
     world(server).destroyEntity(backups[2])
-    const events = until(server, () => stepOf(zombie(server, leader)) === 'resummon', lead.summonTicks + DANCE_BEAT.ticks * DANCE_BEAT.beats + 2)
-    assert.equal(beatStep(server.snapshot().gameplayTick), 'armUp')
-    until(server, () => stepOf(zombie(server, leader)) === 'hold', 40)
+    const events = until(server, () => phaseOf(zombie(server, leader)) === 'resummon', lead.summonTicks + DANCE_BEAT.ticks * DANCE_BEAT.beats + 2)
+    assert.equal(beatPhase(server.snapshot().gameplayTick), 'armUp')
+    until(server, () => phaseOf(zombie(server, leader)) === 'hold', 40)
     const again = zombiesOf(server, 'pvz:backup_dancer').filter(backup => !backups.includes(backup.entityId))
     assert.equal(again.length, 1)
     assert.equal(again[0].row, 2)
@@ -247,14 +247,14 @@ test('a dancer on the plants\' side calls up its troupe on its side; a mind-cont
     const letGo = zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId)
     assert.ok(letGo.every(id => (lawn.get(id, ZombieComponent) as Dancer).leader === leader), 'those it let go keep it as their leader')
     const hypnotized = lawn.get(leader, ZombieComponent)!, stander = lawn.get(letGo[0], ZombieComponent) as Dancer
-    const [state, step] = [hypnotized.state, stander.step]
-    stander.step = 'walk'
+    const [state, phase] = [hypnotized.state, stander.phase]
+    stander.phase = 'walk'
     assert.equal(stander.walks(lawn, letGo[0]), true)
     hypnotized.state = 'eating'
     assert.equal(stander.walks(lawn, letGo[0]), false, 'one it let go stands while it eats')
     hypnotized.state = state
-    stander.step = step
-    until(server, () => stepOf(zombie(server, leader)) === 'hold', lead.summonTicks + 2 * DANCE_BEAT.ticks * DANCE_BEAT.beats)
+    stander.phase = phase
+    until(server, () => phaseOf(zombie(server, leader)) === 'hold', lead.summonTicks + 2 * DANCE_BEAT.ticks * DANCE_BEAT.beats)
     const called = zombiesOf(server, 'pvz:backup_dancer').filter(backup => backup.mindControlled)
     assert.equal(called.length, 4, 'four of its own side, mind-controlled as it is')
     assert.ok(called.every(backup => backup.team === 'plants'))
@@ -263,14 +263,14 @@ test('a dancer on the plants\' side calls up its troupe on its side; a mind-cont
 test('a dancer that reaches the house on a raised arm walks in on its walk', () => {
     const server = playing()
     // Put down at the house's edge while the beat has every dancer standing with its arm up.
-    until(server, () => beatStep(server.snapshot().gameplayTick + 1) === 'raise', DANCE_BEAT.ticks * DANCE_BEAT.beats)
+    until(server, () => beatPhase(server.snapshot().gameplayTick + 1) === 'raise', DANCE_BEAT.ticks * DANCE_BEAT.beats)
     debug(server, '/zombie backup_dancer 3 1')
     const dancer = zombiesOf(server, 'pvz:backup_dancer')[0].entityId
     world(server).get(dancer, PositionComponent)!.x = definitions.zombies['pvz:backup_dancer'].boardEdgeX
     const events = ticks(server, 1)
     assert.ok(events.some(event => event.type === 'levelLost' && event.data.zombieId === dancer))
     const body = zombie(server, dancer).animations[ZOMBIE_BODY_LAYER]
-    assert.deepEqual([stepOf(zombie(server, dancer)), body.clip, body.rate > 0], ['walk', 'walk', true])
+    assert.deepEqual([phaseOf(zombie(server, dancer)), body.clip, body.rate > 0], ['walk', 'walk', true])
 })
 
 test('a hypnotized Dancing Zombie earns Disco is Undead, a backup dancer does not', () => {

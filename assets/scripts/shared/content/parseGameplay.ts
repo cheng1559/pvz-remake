@@ -3,7 +3,7 @@ import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
 import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
-import { plantKindStates } from './plantKinds'
+import { plantKindPhases } from './plantKinds'
 import { ZOMBIE_STATES } from './zombieStates'
 import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
@@ -332,12 +332,12 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
     for (const key of ['unchillable', 'unfreezable'] as const) {
         if (source[key] !== undefined) result[key] = trueFlag(source[key], `${name}.${key}`)
     }
-    // What its animation names a state of is a state of its kind (PLANT_KIND_STATES); a Mod's kind names its own.
-    const states = plantKindStates(result.kind), animation = result.animation
-    const named = [...Object.keys(animation?.states ?? {}), ...animation?.blink?.states ?? [],
-        ...animation?.offBoard?.state === undefined ? [] : [animation.offBoard.state]]
-    for (const state of named) {
-        if (states && !states.includes(state)) throw new Error(`${name}.animation names a state its kind does not have: ${state}`)
+    // What its animation names a phase of is a phase of its kind (PLANT_KIND_PHASES); a Mod's kind names its own.
+    const phases = plantKindPhases(result.kind), animation = result.animation
+    const named = [...Object.keys(animation?.phases ?? {}), ...animation?.blink?.phases ?? [],
+        ...animation?.offBoard?.phase === undefined ? [] : [animation.offBoard.phase]]
+    for (const phase of named) {
+        if (phases && !phases.includes(phase)) throw new Error(`${name}.animation names a phase its kind does not have: ${phase}`)
     }
     return result
 }
@@ -561,7 +561,7 @@ function parseAnimation(source: Record<string, unknown>, name: string): Animatio
 }
 
 function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefinition {
-    const source = exact(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep', 'offBoard'])
+    const source = exact(value, ['clips', 'layers'], name, ['fire', 'blink', 'phases', 'asleep', 'offBoard'])
     const result: PlantAnimationDefinition = parseAnimation(source, name), { clips, layers } = result
     const clipOf = (entry: unknown, entryName: string): string => {
         if (typeof entry !== 'string' || !clips[entry]) throw new Error(`${entryName} must be one of the animation's clips`)
@@ -575,21 +575,21 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
     }
     if (source.fire !== undefined) result.fire = playing(source.fire, `${name}.fire`)
     if (source.asleep !== undefined) result.asleep = playing(source.asleep, `${name}.asleep`)
-    // Its states are its kind's (parsePlant checks them).
-    if (source.states !== undefined) result.states = named(source.states, `${name}.states`, playing)
+    // Its phases are its kind's (parsePlant checks them).
+    if (source.phases !== undefined) result.phases = named(source.phases, `${name}.phases`, playing)
     if (source.offBoard !== undefined) {
-        const offBoard = exact(source.offBoard, [], `${name}.offBoard`, ['state', 'layers'])
-        if (offBoard.state === undefined && offBoard.layers === undefined) throw new Error(`${name}.offBoard must have a state or layers`)
+        const offBoard = exact(source.offBoard, [], `${name}.offBoard`, ['phase', 'layers'])
+        if (offBoard.phase === undefined && offBoard.layers === undefined) throw new Error(`${name}.offBoard must have a phase or layers`)
         const shown = offBoard.layers === undefined ? undefined
             : named(offBoard.layers, `${name}.offBoard.layers`, (entry, entryName) => entry === null ? null : clipOf(entry, entryName))
         for (const layer of Object.keys(shown ?? {})) if (!Object.hasOwn(layers, layer)) throw new Error(`${name}.offBoard.layers.${layer} must be one of the animation's layers`)
         result.offBoard = {
-            ...(offBoard.state === undefined ? {} : { state: nonEmptyString(offBoard.state, `${name}.offBoard.state`) }),
+            ...(offBoard.phase === undefined ? {} : { phase: nonEmptyString(offBoard.phase, `${name}.offBoard.phase`) }),
             ...(shown ? { layers: shown } : {}),
         }
     }
     if (source.blink !== undefined) {
-        const blink = exact(source.blink, ['clip'], `${name}.blink`, ['ticks', 'states', 'first'])
+        const blink = exact(source.blink, ['clip'], `${name}.blink`, ['ticks', 'phases', 'first'])
         const blinks = typeof blink.clip === 'string' ? { [blink.clip]: 1 }
             : named(blink.clip, `${name}.blink.clip`, (weight, entryName) => positiveInteger(weight, entryName))
         if (!Object.keys(blinks).length) throw new Error(`${name}.blink.clip must not be empty`)
@@ -597,7 +597,7 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
         if (Object.hasOwn(layers, PLANT_BLINK_LAYER)) throw new Error(`${name}.layers must leave ${PLANT_BLINK_LAYER} to the blink`)
         result.blink = {
             clips: blinks, ticks: blink.ticks === undefined ? PLANT_BLINK_TICKS : tickRange(blink.ticks, `${name}.blink.ticks`, 1),
-            ...(blink.states === undefined ? {} : { states: array(blink.states, `${name}.blink.states`).map((state, index) => nonEmptyString(state, `${name}.blink.states[${index}]`)) }),
+            ...(blink.phases === undefined ? {} : { phases: array(blink.phases, `${name}.blink.phases`).map((phase, index) => nonEmptyString(phase, `${name}.blink.phases[${index}]`)) }),
             ...(blink.first === undefined ? {} : { first: tickRange(blink.first, `${name}.blink.first`, 1) }),
         }
     }

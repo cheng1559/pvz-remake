@@ -105,12 +105,12 @@ test('a potato mine arms after 15 seconds, rises, then blows up the first zombie
     const mine = plant('pvz:potatomine', 2, 2)
     const ability = () => world.get(mine, PlantComponent) as PotatoMine
     run(1499)
-    assert.equal(ability().state, 'arming')
+    assert.equal(ability().phase, 'arming')
     run()
-    assert.equal(ability().state, 'rising')
+    assert.equal(ability().phase, 'rising')
     assert.equal(events('mineRising').length, 1)
     run(106)
-    assert.equal(ability().state, 'armed')
+    assert.equal(ability().phase, 'armed')
 
     const vaulter = zombie('pvz:pole_vaulter', 2, 210)
     world.get(vaulter, PositionComponent)!.x = 150
@@ -133,28 +133,28 @@ test('a chomper swallows a zombie in reach, digests for 40 seconds and misses po
     const chomper = plant('pvz:chomper', 2, 2)
     const ability = () => world.get(chomper, PlantComponent) as Chomper
     const meal = zombie('pvz:conehead', 2, 250)
-    for (let tick = 0; tick < 300 && ability().state === 'ready'; tick++) run()
-    assert.equal(ability().state, 'biting')
+    for (let tick = 0; tick < 300 && ability().phase === 'ready'; tick++) run()
+    assert.equal(ability().phase, 'biting')
     run(70)
     assert.equal(world.hasEntity(meal), false)
-    assert.equal(ability().state, 'got-one')
+    assert.equal(ability().phase, 'got-one')
     assert.equal(events('chomperBit')[0].data.ate, true)
     run(35)
-    assert.equal(ability().state, 'digesting')
+    assert.equal(ability().phase, 'digesting')
     run(4000)
-    assert.equal(ability().state, 'swallowing')
+    assert.equal(ability().phase, 'swallowing')
     run(234)
-    assert.equal(ability().state, 'ready')
+    assert.equal(ability().phase, 'ready')
 
     const vaulter = zombie('pvz:pole_vaulter', 2, 260)
     world.get(vaulter, ZombieComponent)!.speedPerTick = 0
     run()
-    assert.equal(ability().state, 'biting')
+    assert.equal(ability().phase, 'biting')
     run(70)
     assert.equal(world.hasEntity(vaulter), true)
-    assert.equal(ability().state, 'missed')
+    assert.equal(ability().phase, 'missed')
     run(35)
-    assert.equal(ability().state, 'ready')
+    assert.equal(ability().phase, 'ready')
 })
 
 test('helms absorb damage first and drop once, and snow peas chill through them, halving walking and biting', () => {
@@ -248,7 +248,7 @@ test('plant abilities and new zombie state survive a server save', () => {
         randomSeed: 3, initialMoney: 0, firstAdventure: false, mods: [], save: saved as unknown as JsonValue,
     })
     assert.deepEqual(restored.save(), saved)
-    assert.deepEqual(snapshot.plants.map(plant => plant.own?.state).sort(), ['arming', 'ready', undefined])
+    assert.deepEqual(snapshot.plants.map(plant => plant.own?.phase).sort(), ['arming', 'ready', undefined])
     assert.deepEqual(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:pole_vaulter')?.own, { hasPole: true })
     assert.equal(snapshot.zombies.find(zombie => zombie.typeId === 'pvz:buckethead')?.helmHealth, 1100)
     assert.equal([...(restored as unknown as { session: { world: World } }).session.world.query(ProjectileComponent)].length, 0)

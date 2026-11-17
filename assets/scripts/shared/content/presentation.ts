@@ -6,7 +6,7 @@ import { withFrom } from './from'
 import type { MusicTuneId } from './music'
 import { isQualifiedId } from '@/shared/mod'
 import { isRenderLayer, type RenderLayer } from './renderOrder'
-import type { PlantState } from './plantKinds'
+import type { PlantPhase } from './plantKinds'
 import { type JsonObject, jsonRoundTrip } from '@/shared/protocol'
 
 export interface ClientAnimationClip {
@@ -71,12 +71,12 @@ export interface PlantPresentationDefinition {
     readonly layer?: RenderLayer
     /**
      * Plant::DrawShadow: where its shadow lies, about its middle at `scale`; a plant without one (the grave buster) has
-     * none. `states`, for a `sunshroom` view: its scale while it is in one of its kind's states, `[from, to]` going from
+     * none. `phases`, for a `sunshroom` view: its scale while it is in one of its kind's phases, `[from, to]` going from
      * one to the other as its first layer's clip plays (small, then growing with its anim_grow).
      */
     readonly shadow?: {
         readonly x: number; readonly y: number; readonly scale?: number
-        readonly states?: Readonly<Partial<Record<PlantState, number | readonly [number, number]>>>
+        readonly phases?: Readonly<Partial<Record<PlantPhase, number | readonly [number, number]>>>
     }
     readonly scale: number
     /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
@@ -98,14 +98,14 @@ export interface PlantPresentationDefinition {
      * A packet's picture of the plant, as it is off the board (PlantAnimationDefinition.offBoard). `placement`:
      * SeedPacket::DrawSeedPacket's place and size of the picture in the packet (seedPackets.defaultPlacement without).
      * The rest is Plant::DrawSeedType: where the plant goes from that place and at what size (the potato mine's), how
-     * far towards its clips' last frame it is posed (`time`, the sunflower's), and the state of its ability it is
-     * pictured in, in place of all it is off the board (`state`: the potato mine armed with its light lit, the
+     * far towards its clips' last frame it is posed (`time`, the sunflower's), and the phase of its kind it is
+     * pictured in, in place of all it is off the board (`phase`: the potato mine armed with its light lit, the
      * sun-shroom small).
      */
     readonly packet?: {
         readonly placement?: SeedPacketPlacement
         readonly x?: number; readonly y?: number; readonly scale?: number; readonly time?: number
-        readonly state?: PlantState
+        readonly phase?: PlantPhase
     }
     /** AlmanacDialog: how far from a plant's usual place the almanac shows it, in original Y-down pixels (the grave buster's 55 down). */
     readonly almanacOffset?: readonly [number, number]
@@ -1048,8 +1048,8 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         layer,
         shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], {
             x: finite, y: finite, scale: positiveFinite,
-            // States of its kind (PLANT_KIND_STATES), as assertPresented checks against its gameplay definition.
-            states: (value, name) => table((value, name) => Array.isArray(value)
+            // Phases of its kind (PLANT_KIND_PHASES), as assertPresented checks against its gameplay definition.
+            phases: (value, name) => table((value, name) => Array.isArray(value)
                 ? pair(value, name).map((scale, index) => positiveFinite(scale, `${name}[${index}]`)) as [number, number]
                 : positiveFinite(value, name))(value, name),
         }),
@@ -1065,7 +1065,7 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         clips,
         packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
             placement, x: finite, y: finite, scale: positiveFinite, time: finite,
-            state: nonEmptyString,
+            phase: nonEmptyString,
         }),
         almanacOffset: pair,
         chewParticle: nonEmptyString,

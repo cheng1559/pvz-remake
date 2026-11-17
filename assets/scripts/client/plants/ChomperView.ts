@@ -4,8 +4,8 @@ import { nonEmptyString } from '@/shared/validate'
 import { PlantView, type ShownPlant } from './PlantView'
 
 /**
- * The chomper (Chomper): it bites, chews and swallows by its state, which its animation plays on the server
- * (PlantAnimationDefinition.states). Its own (Chomper.snapshotOwn): `state`, and `prey: 'plant'` when what it chews is
+ * The chomper (Chomper): it bites, chews and swallows by its phase, which its animation plays on the server
+ * (PlantAnimationDefinition.phases). Its own (Chomper.snapshotOwn): `phase`, and `prey: 'plant'` when what it chews is
  * a hostile plant.
  */
 export class ChomperView extends PlantView {

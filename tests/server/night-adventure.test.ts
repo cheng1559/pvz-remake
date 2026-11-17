@@ -224,7 +224,7 @@ test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, 
     const plant = plantAt(world, 'pvz:scaredyshroom', 40)
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 700, 50)
     const at = world.get(zombie, PositionComponent)!
-    const state = () => (world.get(plant, PlantComponent) as ScaredyShroom).state
+    const state = () => (world.get(plant, PlantComponent) as ScaredyShroom).phase
     let tick = 0
     const run = (ticks: number, until?: () => boolean) => {
         const types: string[] = []
@@ -280,15 +280,15 @@ test('sun-shrooms drop small sun until they grow, produce nothing while growing,
         const run = (ticks: number) => { for (let index = 0; index < ticks; index++) schedule.run(world, ++tick) }
         run(growth.ticks)
         if (!night) {
-            assert.deepEqual([sun(), plant.state, plant.stateTicks], [[], 'small', growth.ticks], 'a sleeping sun-shroom neither grows nor produces')
+            assert.deepEqual([sun(), plant.phase, plant.phaseTicks], [[], 'small', growth.ticks], 'a sleeping sun-shroom neither grows nor produces')
             continue
         }
         assert.deepEqual(sun()[0], ['pvz:smallsun', 15])
-        assert.equal(plant.state, 'growing')
+        assert.equal(plant.phase, 'growing')
         const produced = sun().length
         plant.readyAtTick = tick + 1
         run(growth.growingTicks)
-        assert.equal(plant.state, 'big')
+        assert.equal(plant.phase, 'big')
         assert.equal(sun().length, produced, 'production waits for anim_grow')
         run(1)
         assert.deepEqual(sun().at(-1), ['pvz:sun', 25])
@@ -343,7 +343,7 @@ test('grave busters only go on graves, cannot be dug up, then eat the grave and 
     assert.ok(game.drainEvents().some(event => event.type === 'advice' && event.data.key === 'ADVICE_GRAVEBUSTERS_ON_GRAVES'))
     plant(grave.row, grave.column)
     const buster = game.render().plants.find(value => value.typeId === 'pvz:gravebuster')!
-    assert.equal(buster.own?.state, 'landing')
+    assert.equal(buster.own?.phase, 'landing')
     game.command({ type: 'selectTool', toolId: 'pvz:shovel' })
     game.command({ type: 'useToolAt', row: grave.row, column: grave.column })
     game.update(0)

@@ -4,7 +4,7 @@ import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/con
 import { jsonRoundTrip, type JsonObject, type PlantSnapshot, type Team } from '@/shared/protocol'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { LevelStateResource } from '../state/components'
-import { plantAbilityAnimation } from './animation'
+import { plantPhaseAnimation } from './animation'
 import { plantPace } from './chill'
 import { isPlantAsleep } from './sleep'
 
@@ -124,23 +124,23 @@ export class Plant {
     /** Plant::UpdateBowling (plants/rolls.ts): it rolls, also once the level is won. */
     roll(_context: SystemContext, _entity: EntityId): void {}
 
-    /** The state its animation goes by (its definition's `animation.states`, `blink.states`; PLANT_KIND_STATES), if any. */
-    animationState(): string | undefined {
+    /** The phase of its kind its animation goes by (its definition's `animation.phases`, `blink.phases`; PLANT_KIND_PHASES), if any. */
+    animationPhase(): string | undefined {
         return undefined
     }
 
-    /** Plant::DoBlink: it misses a blink now, in a state it does not blink in (a potato mine not armed). */
+    /** Plant::DoBlink: it misses a blink now, in a phase it does not blink in (a potato mine not armed). */
     blinkMisses(): boolean {
-        const states = this.definition.animation?.blink?.states, state = this.animationState()
-        return !!states && (state === undefined || !states.includes(state))
+        const phases = this.definition.animation?.blink?.phases, phase = this.animationPhase()
+        return !!phases && (phase === undefined || !phases.includes(phase))
     }
 
     /** Plant::PlantInitialize, once its layers have started (startPlantAnimations), `asleep` or not. */
     animationStarted(_asleep: boolean, _random: AnimationRandom): void {}
 
-    /** It came to a state of its kind: its layers play that state's clips (Plant::PlayBodyReanim as mState changes). */
-    protected playState(state: string, random: AnimationRandom): void {
-        plantAbilityAnimation(this, this.definition, state, random)
+    /** It came to a phase of its kind: its layers play that phase's clips (Plant::PlayBodyReanim as mState changes). */
+    protected playPhase(phase: string, random: AnimationRandom): void {
+        plantPhaseAnimation(this, this.definition, phase, random)
     }
 
     /** Zombie::EatPlant: zombies chew it without hurting it now (a lit cherry bomb, a risen potato mine). */

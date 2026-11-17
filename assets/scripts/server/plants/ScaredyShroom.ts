@@ -9,14 +9,14 @@ import { type Position, PositionComponent, RandomResource, ZombieComponent } fro
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
 
-const STATES = ['calm', 'lowering', 'scared', 'raising'] as const
-type FrightState = typeof STATES[number]
+const PHASES = ['calm', 'lowering', 'scared', 'raising'] as const
+type FrightPhase = typeof PHASES[number]
 
 export interface ScaredyShroom {
     /** Plant::mState of its fright. */
-    state: FrightState
-    /** The ticks left of its state. */
-    stateTicks: number
+    phase: FrightPhase
+    /** The ticks left of its phase. */
+    phaseTicks: number
 }
 
 /**
@@ -31,53 +31,53 @@ export class ScaredyShroom extends Shooter {
     /** One comes calm. */
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.state = 'calm'
-        this.stateTicks = 0
+        this.phase = 'calm'
+        this.phaseTicks = 0
     }
 
     private get fright(): NonNullable<PlantDefinition['fright']> { return this.definition.fright! }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { state, stateTicks, ...rest } = fields
-        this.state = oneOf(state, STATES, `${name}.state`)
-        this.stateTicks = nonNegativeInteger(stateTicks, `${name}.stateTicks`)
+        const { phase, phaseTicks, ...rest } = fields
+        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
 
-    animationState(): string {
-        return this.state
+    animationPhase(): string {
+        return this.phase
     }
 
     act({ world, tick }: SystemContext, entity: EntityId): void {
-        if (this.stateTicks > 0) this.stateTicks--
+        if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), fright = this.fright, shooter = this.definition.shooter!
         const firing = Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
         if (this.burst || firing) return
         const near = zombieNear(world, this.definitions, world.get(entity, PositionComponent)!, this, fright)
-        const next = (state: FrightState, ticks: number) => {
-            this.state = state
-            this.stateTicks = ticks
-            this.playState(state, random)
+        const next = (phase: FrightPhase, ticks: number) => {
+            this.phase = phase
+            this.phaseTicks = ticks
+            this.playPhase(phase, random)
         }
-        switch (this.state) {
+        switch (this.phase) {
             case 'calm':
                 if (near) next('lowering', fright.lowerTicks)
                 break
             case 'lowering':
-                if (this.stateTicks === 0) next('scared', 0)
+                if (this.phaseTicks === 0) next('scared', 0)
                 break
             case 'scared':
                 if (!near) next('raising', random.integer(fright.raiseTicks.min, fright.raiseTicks.max))
                 break
             case 'raising':
-                if (this.stateTicks === 0) next('calm', 0)
+                if (this.phaseTicks === 0) next('calm', 0)
                 break
         }
-        if (this.state !== 'calm') this.readyAtTick = tick + shooter.cadenceTicks.max - 1
+        if (this.phase !== 'calm') this.readyAtTick = tick + shooter.cadenceTicks.max - 1
     }
 
     protected snapshotOwn(tick?: number): JsonObject {
-        return { ...super.snapshotOwn(tick), state: this.state }
+        return { ...super.snapshotOwn(tick), phase: this.phase }
     }
 }
 

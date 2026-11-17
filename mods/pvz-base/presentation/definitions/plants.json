@@ -110,7 +110,7 @@
       "blink": {"reanimId": "pvz:potatomine_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
       "glow": {"reanimId": "pvz:potatomine_glow", "x": 0, "y": 0, "attachmentTrackId": "anim_light", "onlyTracks": ["anim_glow"]}
     },
-    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}, "x": 12, "y": 12, "scale": 0.85, "state": "armed"},
+    "packet": {"placement": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0}, "x": 12, "y": 12, "scale": 0.85, "phase": "armed"},
     "shadow": {"x": -3, "y": -51},
     "scale": 0.8,
     "explosionSounds": [{"audio": "pvz:potato_mine", "foley": false}],
@@ -169,8 +169,8 @@
       "grow": {"reanimId": "pvz:sunshroom_grow", "x": 0, "y": 0, "blend": 0.1},
       "blink": {"reanimId": "pvz:sunshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
     },
-    "packet": {"state": "small"},
-    "shadow": {"x": -3, "y": -42, "scale": 1, "states": {"small": 0.5, "growing": [0.5, 1]}},
+    "packet": {"phase": "small"},
+    "shadow": {"x": -3, "y": -42, "scale": 1, "phases": {"small": 0.5, "growing": [0.5, 1]}},
     "scale": 1
   },
   "pvz:fumeshroom": {

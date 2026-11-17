@@ -10,14 +10,14 @@ import { destroyEatenPlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
 import { findAbilityTarget } from './targeting'
 
-const STATES = ['ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing'] as const
-type ChomperState = typeof STATES[number]
+const PHASES = ['ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing'] as const
+type ChomperPhase = typeof PHASES[number]
 
 export interface Chomper {
     /** Plant::mState of the chomper. */
-    state: ChomperState
-    /** The ticks left of its state. */
-    stateTicks: number
+    phase: ChomperPhase
+    /** The ticks left of its phase. */
+    phaseTicks: number
     /** Chewing a plant rather than a zombie, until it is ready again: its view hides the eaten zombie's arm. */
     prey?: 'plant'
 }
@@ -33,40 +33,40 @@ export class Chomper extends Plant {
     /** One comes ready. */
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.state = 'ready'
-        this.stateTicks = 0
+        this.phase = 'ready'
+        this.phaseTicks = 0
     }
 
     private get chomper(): NonNullable<PlantDefinition['chomper']> { return this.definition.chomper! }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { state, stateTicks, prey, ...rest } = fields
-        this.state = oneOf(state, STATES, `${name}.state`)
-        this.stateTicks = nonNegativeInteger(stateTicks, `${name}.stateTicks`)
+        const { phase, phaseTicks, prey, ...rest } = fields
+        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         if (prey !== undefined) this.prey = oneOf(prey, ['plant'] as const, `${name}.prey`)
         super.restoreOwn(rest, name)
     }
 
-    animationState(): string {
-        return this.state
+    animationPhase(): string {
+        return this.phase
     }
 
     act({ world, commands }: SystemContext, entity: EntityId): void {
-        if (this.stateTicks > 0) this.stateTicks--
+        if (this.phaseTicks > 0) this.phaseTicks--
         const definitions = this.definitions, chomper = this.chomper
         const random = world.resources.get(RandomResource), position = world.get(entity, PositionComponent)!
-        const next = (state: ChomperState, ticks: number) => {
-            this.state = state
-            this.stateTicks = ticks
-            if (state === 'ready') delete this.prey
-            this.playState(state, random)
+        const next = (phase: ChomperPhase, ticks: number) => {
+            this.phase = phase
+            this.phaseTicks = ticks
+            if (phase === 'ready') delete this.prey
+            this.playPhase(phase, random)
         }
-        switch (this.state) {
+        switch (this.phase) {
             case 'ready':
                 if (findAbilityTarget(world, definitions, position, this, chomper) !== undefined) next('biting', chomper.biteDelayTicks)
                 break
             case 'biting': {
-                if (this.stateTicks > 0) break
+                if (this.phaseTicks > 0) break
                 const target = findAbilityTarget(world, definitions, position, this, chomper, true)
                 // A zombie that dodges the bite slips away, as in Plant::UpdateChomper (its kind says so: a pole vaulter
                 // holding its pole, not frozen). A hostile plant is swallowed whole, unless zombies could not hurt it
@@ -89,19 +89,19 @@ export class Chomper extends Plant {
                 break
             }
             case 'got-one':
-                if (this.stateTicks === 0) next('digesting', chomper.digestTicks)
+                if (this.phaseTicks === 0) next('digesting', chomper.digestTicks)
                 break
             case 'digesting':
-                if (this.stateTicks === 0) next('swallowing', chomper.swallowTicks)
+                if (this.phaseTicks === 0) next('swallowing', chomper.swallowTicks)
                 break
             case 'missed':
             case 'swallowing':
-                if (this.stateTicks === 0) next('ready', 0)
+                if (this.phaseTicks === 0) next('ready', 0)
                 break
         }
     }
 
     protected snapshotOwn(): JsonObject {
-        return { state: this.state, ...this.prey ? { prey: this.prey } : {} }
+        return { phase: this.phase, ...this.prey ? { prey: this.prey } : {} }
     }
 }

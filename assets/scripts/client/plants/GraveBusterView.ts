@@ -6,12 +6,12 @@ import { PlantView } from './PlantView'
 
 /**
  * Plant::UpdateGraveBuster (GraveBuster): it lands, then chews and sinks while the grave disappears (GraveView asks it
- * how far, `eating`). Its own (GraveBuster.snapshotOwn): `state` (landing, eating) and `ticks`, what is left of it.
+ * how far, `eating`). Its own (GraveBuster.snapshotOwn): `phase` (landing, eating) and `ticks`, what is left of it.
  */
 export class GraveBusterView extends PlantView {
     /** The ticks it has left to eat its grave, while it eats; none before. */
     eating(plant: PlantSnapshot): number | undefined {
-        return this.own(plant, 'state', nonEmptyString) === 'eating' ? this.own(plant, 'ticks', nonNegativeInteger) : undefined
+        return this.own(plant, 'phase', nonEmptyString) === 'eating' ? this.own(plant, 'ticks', nonNegativeInteger) : undefined
     }
 
     protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {

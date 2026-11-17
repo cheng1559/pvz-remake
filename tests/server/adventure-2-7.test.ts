@@ -249,8 +249,8 @@ test('the plants kept from the ice and a pole vaulter in the air are only chille
     for (const plant of planted) debug(server, `/plant ${plant}`)
     const plant = (row: number, column: number) => world(server).get(plantAt(server, row, column)!, PlantComponent)!
     const mine = (row: number, column: number) => plant(row, column) as PotatoMine
-    mine(3, 1).state = 'rising'
-    mine(3, 3).state = 'armed'
+    mine(3, 1).phase = 'rising'
+    mine(3, 3).phase = 'armed'
     freezeHostiles(world(server), definitions, 'zombies', ice, world(server))
     for (const [row, column] of [[1, 1], [1, 3], [1, 5], [2, 1], [2, 3], [3, 1]]) {
         const kept = plant(row, column)

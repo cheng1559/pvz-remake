@@ -24,7 +24,7 @@ import { plantDefinition } from './definitions'
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
  * almanac, a packet's picture) there is nothing else to it but the countdown to its blink, which its view keeps on
- * with the rest (advance), and the state of its kind it is in there (`own.state`, PlantAnimationDefinition.offBoard).
+ * with the rest (advance), and the phase of its kind it is in there (`own.phase`, PlantAnimationDefinition.offBoard).
  */
 export type ShownPlant = Partial<PlantSnapshot> & Pick<PlantSnapshot, 'typeId'> & Pick<AnimatedPlant, 'blinkTicks'>
 /** How a view draws its plant, where that is not the board's way. */
@@ -203,7 +203,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /**
-     * A field of what only its kind shows (PlantSnapshot.own, its server class's snapshotOwn; off the board, the state
+     * A field of what only its kind shows (PlantSnapshot.own, its server class's snapshotOwn; off the board, the phase
      * it is shown in), read by `read` (a check of shared/validate); none where its kind shows none.
      */
     protected own<T>(plant: ShownPlant, field: string, read: (value: unknown, name: string) => T): T | undefined {

@@ -35,17 +35,17 @@ test("each plant is an instance of the kind its definition names, as its present
 
     // Made whole, before it is put down: a mine arming its whole time.
     const mine = factory.create('pvz:potatomine') as PotatoMine
-    assert.deepEqual([mine.state, mine.stateTicks], ['arming', definitions.plants['pvz:potatomine'].mine!.armingTicks])
+    assert.deepEqual([mine.phase, mine.phaseTicks], ['arming', definitions.plants['pvz:potatomine'].mine!.armingTicks])
 
     // Its fields are all there is to it: saved as they are, and restored as its kind with its own.
     const chomper = factory.create('pvz:chomper') as Chomper
-    Object.assign(chomper, { state: 'digesting', stateTicks: 123, prey: 'plant', health: 50 })
+    Object.assign(chomper, { phase: 'digesting', phaseTicks: 123, prey: 'plant', health: 50 })
     const saved = JSON.parse(JSON.stringify(chomper))
-    assert.deepEqual([saved.state, saved.prey, saved.health, 'definition' in saved], ['digesting', 'plant', 50, false])
+    assert.deepEqual([saved.phase, saved.prey, saved.health, 'definition' in saved], ['digesting', 'plant', 50, false])
     const restored = factory.restore(saved, 'saved') as Chomper
     assert.ok(restored instanceof Chomper)
-    assert.deepEqual([restored.state, restored.stateTicks, restored.prey, restored.health], ['digesting', 123, 'plant', 50])
-    assert.throws(() => factory.restore({ ...saved, state: 'armed' }, 'saved'), /saved\.state must be ready, biting/, 'another kind\'s state')
+    assert.deepEqual([restored.phase, restored.phaseTicks, restored.prey, restored.health], ['digesting', 123, 'plant', 50])
+    assert.throws(() => factory.restore({ ...saved, phase: 'armed' }, 'saved'), /saved\.phase must be ready, biting/, 'another kind\'s phase')
     assert.throws(() => factory.restore({ ...saved, fuseTicks: 3 }, 'saved'), /saved\.fuseTicks is not supported/, 'another kind\'s field')
 
     // A type's own fields go with the kind that takes them.
@@ -71,9 +71,9 @@ test("a plant's kind keeps it from the cold: its type always, a potato mine whil
     const mine = factory.create('pvz:potatomine') as PotatoMine
     const kept = () => [mine.keptFromCold(), mine.keptFromIce()]
     assert.deepEqual(kept(), [false, false], 'arming')
-    mine.state = 'rising'
+    mine.phase = 'rising'
     assert.deepEqual(kept(), [false, true], 'rising, it is only chilled')
-    mine.state = 'armed'
+    mine.phase = 'armed'
     assert.deepEqual(kept(), [false, false])
     assert.equal(factory.create('pvz:cherrybomb').keptFromIce(), true, 'its type is unfreezable')
 

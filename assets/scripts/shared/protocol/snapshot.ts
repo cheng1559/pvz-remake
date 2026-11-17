@@ -194,7 +194,7 @@ export interface PlantSnapshot extends EntityBehaviorState {
     asleep?: true
     /**
      * What only its kind shows, which its view reads as its kind has it: the server's class of it writes it
-     * (Plant.snapshotOwn) and the client's class of it reads it: the `state` its animation goes by (PLANT_KIND_STATES),
+     * (Plant.snapshotOwn) and the client's class of it reads it: the `phase` its animation goes by (PLANT_KIND_PHASES),
      * a producer's `produceTicks` to its next sun (Plant::mLaunchCounter, held while its production is), a chomper's
      * `prey` (`plant`), a grave buster's `ticks` left eating. None for a plant whose kind shows nothing of its own.
      */

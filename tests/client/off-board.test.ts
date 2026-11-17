@@ -130,11 +130,11 @@ test("a sun-shroom's shadow is the size of the state it is in: small, growing wi
         const { scale, position } = node.getChildByName('PlantShadow')!
         return [scale, position.x, position.y]
     }
-    const at = (state: string, clip: string, time: number) => ({ own: { state }, animations: { body: { clip, time, rate: 12 } } })
+    const at = (state: string, clip: string, time: number) => ({ own: { phase: state }, animations: { body: { clip, time, rate: 12 } } })
     assert.deepEqual(await shadow(at('small', 'small', 3)), [0.5, -3 + 20, -42 - 7.5])
     assert.deepEqual(await shadow(at('growing', 'grow', 6)), [0.75, -3 + 10, -42 - 3.75])
     assert.deepEqual(await shadow(at('big', 'body', 3)), [1, -3, -42])
     // The almanac's is grown (its animation's offBoard), and so is its shadow.
     const almanac = plantAnimationModule.startOffBoardPlant(definitions.plants['pvz:sunshroom'].animation!, random)
-    assert.deepEqual(await shadow({ animations: almanac.animations, own: { state: almanac.state } }), [1, -3, -42])
+    assert.deepEqual(await shadow({ animations: almanac.animations, own: { phase: almanac.phase } }), [1, -3, -42])
 })

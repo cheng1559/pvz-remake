@@ -7,7 +7,7 @@ import type { DanceSpotlight, GraveZombiePresentation } from '@/shared/content/p
 import type { WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import type { StageEvent } from '@/client/level/LevelStage'
 import { SoundSystem } from '@/client/sound/SoundSystem'
-import { DANCE_STEPS, type DanceStep } from '@/shared/content/zombieStates'
+import { DANCE_PHASES, type DancePhase } from '@/shared/content/zombieStates'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { type ShownZombie, ZombieView } from './ZombieView'
 import { MIRRORED_SHIFT, ZOMBIE_PIVOT } from './zombieParts'
@@ -15,7 +15,7 @@ import { MIRRORED_SHIFT, ZOMBIE_PIVOT } from './zombieParts'
 /**
  * A dancer (ZombieDefinition.dance, the presentation's `dance`): it moonwalks in turned round, a leader stands in its
  * spotlight once it has first snapped its fingers, and one called up into a troupe comes up out of the ground. Its
- * events start and stop the disco music and raise the dirt under one called up. Its own (Dancer.snapshotOwn): `step`
+ * events start and stop the disco music and raise the dirt under one called up. Its own (Dancer.snapshotOwn): `phase`
  * and `age`.
  */
 export class DancerView extends ZombieView {
@@ -57,15 +57,15 @@ export class DancerView extends ZombieView {
         return !this.won && beat(this.bodyClip) && beat(zombie.animations[ZOMBIE_BODY_LAYER].clip) ? BEAT_BLEND_SECONDS : super.bodyBlend(zombie)
     }
 
-    /** Its step of the dance (Dancer.snapshotOwn's `step`); none off the board. */
-    private danceStep(zombie: ShownZombie): DanceStep | undefined {
-        return this.own(zombie, 'step', (value, name) => oneOf(value, DANCE_STEPS, name))
+    /** Its phase of the dance (Dancer.snapshotOwn's `phase`); none off the board. */
+    private dancePhase(zombie: ShownZombie): DancePhase | undefined {
+        return this.own(zombie, 'phase', (value, name) => oneOf(value, DANCE_PHASES, name))
     }
 
     /**
      * Its spotlight shines once it has first snapped its fingers, not while it moonwalks in, snaps for the first time or
      * falls, nor once the zombies have won; mowed, or burned where it stands (one burned with its head is gone, its
-     * charred remains on their own), it shines whatever step it was on, those being phases of their own that
+     * charred remains on their own), it shines whatever phase it was on, those being phases of their own that
      * DrawDancerReanim does not leave out. Its color goes by its age (Dancer.snapshotOwn's `age`). With its body drawn
      * turned round (on the plants' side) it turns round with it, about where the body turns (place), so the body stands
      * in its middle as one facing left does (the original draws it unturned, off a mind-controlled dancer's middle).
@@ -73,9 +73,9 @@ export class DancerView extends ZombieView {
     private syncSpotlight(zombie: ZombieSnapshot, world: WorldSnapshot): void {
         const spotlight = this.spotlight
         if (!spotlight || !spotlight.floor.isValid || !spotlight.beam.isValid) return
-        const { floor, beam, look } = spotlight, step = this.danceStep(zombie)
-        const shines = step !== undefined && world.result !== 'lost' && (zombie.state === 'mowered' || zombie.state === 'burned' ||
-            step !== 'moonwalk' && step !== 'summon' && (zombie.state === 'walking' || zombie.state === 'eating'))
+        const { floor, beam, look } = spotlight, phase = this.dancePhase(zombie)
+        const shines = phase !== undefined && world.result !== 'lost' && (zombie.state === 'mowered' || zombie.state === 'burned' ||
+            phase !== 'moonwalk' && phase !== 'summon' && (zombie.state === 'walking' || zombie.state === 'eating'))
         floor.active = beam.active = shines
         if (!shines) return
         const age = this.own(zombie, 'age', nonNegativeInteger) ?? 0, { colors, colorsFrom, colorTicks, colorStep } = look
@@ -98,12 +98,12 @@ export class DancerView extends ZombieView {
      * not while it eats, nor mowed, falling or burned, which are phases of their own.
      */
     protected turnedRound(zombie: ShownZombie): boolean {
-        return super.turnedRound(zombie) !== (this.danceStep(zombie) === 'moonwalk' && zombie.state === 'walking')
+        return super.turnedRound(zombie) !== (this.dancePhase(zombie) === 'moonwalk' && zombie.state === 'walking')
     }
 
     /** One called up into a troupe comes up out of the ground (DancePresentation.rise, PHASE_DANCER_RISING). */
     protected rise(zombie: ShownZombie): GraveZombiePresentation {
-        return this.danceStep(zombie) === 'rise' && this.presentation.dance?.rise || super.rise(zombie)
+        return this.dancePhase(zombie) === 'rise' && this.presentation.dance?.rise || super.rise(zombie)
     }
 
     /**

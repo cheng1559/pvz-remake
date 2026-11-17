@@ -33,13 +33,13 @@ export function firePlantAnimation(plant: Plant, definition: PlantDefinition, ra
     playLayers(animation, plant, animation.fire, random)
 }
 
-/** The plant came to a state of its kind: its layers play that state's clips, and a plant that blinks from then on counts down to its first. */
-export function plantAbilityAnimation(plant: Plant, definition: PlantDefinition, state: string, random: AnimationRandom): void {
+/** The plant came to a phase of its kind: its layers play that phase's clips, and a plant that blinks from then on counts down to its first. */
+export function plantPhaseAnimation(plant: Plant, definition: PlantDefinition, phase: string, random: AnimationRandom): void {
     const animation = definition.animation
     if (!animation || !plant.animations) return
-    playLayers(animation, plant, animation.states?.[state], random)
+    playLayers(animation, plant, animation.phases?.[phase], random)
     const blink = animation.blink
-    if (blink?.first && blink.states?.includes(state)) plant.blinkTicks = random.integer(blink.first.min, blink.first.max)
+    if (blink?.first && blink.phases?.includes(phase)) plant.blinkTicks = random.integer(blink.first.min, blink.first.max)
 }
 
 /**

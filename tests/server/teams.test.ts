@@ -251,8 +251,8 @@ test('an armed potato mine reaches half a cell further for hostile plants', () =
     const server = begin()
     debug(server, '/plant potatomine 3 3 zombies')
     const mine = plants(server).find(plant => plant.typeId === 'pvz:potatomine')!
-    for (let tick = 0; tick < 2000 && plants(server)[0].own?.state !== 'armed'; tick++) server.tick()
-    assert.equal(plants(server)[0].own?.state, 'armed', 'the mine arms')
+    for (let tick = 0; tick < 2000 && plants(server)[0].own?.phase !== 'armed'; tick++) server.tick()
+    assert.equal(plants(server)[0].own?.phase, 'armed', 'the mine arms')
     // Two cells ahead is out of reach.
     debug(server, '/plant wallnut 3 1')
     server.drainEvents()
@@ -274,12 +274,12 @@ test('a chomper chewing a plant remembers it until it is ready again', () => {
     debug(server, '/plant chomper 3 1')
     debug(server, '/plant sunflower 3 2 zombies')
     const chomper = () => plants(server).find(plant => plant.typeId === 'pvz:chomper')!
-    for (let tick = 0; tick < 500 && chomper().own?.state !== 'digesting'; tick++) server.tick()
-    assert.deepEqual(chomper().own, { state: 'digesting', prey: 'plant' })
+    for (let tick = 0; tick < 500 && chomper().own?.phase !== 'digesting'; tick++) server.tick()
+    assert.deepEqual(chomper().own, { phase: 'digesting', prey: 'plant' })
     server.start({ ...options, save: server.save() as unknown as JsonValue })
     assert.equal(chomper().own?.prey, 'plant', 'it survives a save')
-    for (let tick = 0; tick < 6000 && chomper().own?.state !== 'ready'; tick++) server.tick()
-    assert.deepEqual(chomper().own, { state: 'ready' })
+    for (let tick = 0; tick < 6000 && chomper().own?.phase !== 'ready'; tick++) server.tick()
+    assert.deepEqual(chomper().own, { phase: 'ready' })
 })
 
 test('a plant chilled by a hostile snow pea reports the chill once', () => {
@@ -551,7 +551,7 @@ test('a chomper that bites an awake hostile hypno-shroom comes over to its side,
     const changed = events.filter(event => event.type === 'mindControlled')
     assert.deepEqual(changed.map(event => event.data), [{ entityId: chomper.entityId, plantId: changed[0]?.data.plantId, typeId: 'pvz:chomper', team: 'zombies' }])
     const turned = server.snapshot().plants.find(plant => plant.entityId === chomper.entityId)!
-    assert.deepEqual([turned.team, turned.mindControlled, turned.own?.state], ['zombies', true, 'ready'], 'its bite went as one that missed, and it is ready again')
+    assert.deepEqual([turned.team, turned.mindControlled, turned.own?.phase], ['zombies', true, 'ready'], 'its bite went as one that missed, and it is ready again')
     assert.ok(!server.snapshot().plants.some(plant => plant.typeId === 'pvz:hypnoshroom'))
     // Now on the zombies' side, a zombie of that side walks past it without a bite.
     debug(server, '/zombie normal 3 3')

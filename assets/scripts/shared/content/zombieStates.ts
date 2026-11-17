@@ -31,11 +31,11 @@ export function isZombieOnScreen(zombie: { readonly state: ZombieState, readonly
  * PHASE_DANCER_WALK_TO_RAISE), and standing with it raised (`raise`, `raise2`: PHASE_DANCER_RAISE_LEFT_1 and _2).
  * One called up into a troupe comes up out of the ground first (`rise`, PHASE_DANCER_RISING; its zombie's `riseTicks`).
  */
-export type DanceStep = 'moonwalk' | 'summon' | 'resummon' | 'hold' | 'rise' | 'walk' | 'armUp' | 'raise' | 'raise2'
+export type DancePhase = 'moonwalk' | 'summon' | 'resummon' | 'hold' | 'rise' | 'walk' | 'armUp' | 'raise' | 'raise2'
 
-export const DANCE_STEPS: readonly DanceStep[] = ['moonwalk', 'summon', 'resummon', 'hold', 'rise', 'walk', 'armUp', 'raise', 'raise2']
+export const DANCE_PHASES: readonly DancePhase[] = ['moonwalk', 'summon', 'resummon', 'hold', 'rise', 'walk', 'armUp', 'raise', 'raise2']
 
 /** Zombie::CheckIfPreyCaught: a leader snapping its fingers, or holding the pose after, does not start to eat. */
-export function isSummoning(step: DanceStep): boolean {
-    return step === 'summon' || step === 'resummon' || step === 'hold'
+export function isSummoning(phase: DancePhase): boolean {
+    return phase === 'summon' || phase === 'resummon' || phase === 'hold'
 }

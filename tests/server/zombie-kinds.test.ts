@@ -41,7 +41,7 @@ test("each zombie is an instance of the kind its definition names, as its presen
     assert.ok(restored instanceof PoleVaulter)
     assert.deepEqual([restored.hasPole, restored.health, restored.attackRect()], [false, 123, definitions.zombies['pvz:pole_vaulter'].vault!.landedAttack])
     assert.throws(() => factory.restore({ ...saved, hasPole: 1 }, 'saved'), /saved\.hasPole must be a boolean/)
-    assert.throws(() => factory.restore({ ...saved, step: 'walk' }, 'saved'), /saved\.step is not supported/, 'another kind\'s field')
+    assert.throws(() => factory.restore({ ...saved, phase: 'walk' }, 'saved'), /saved\.phase is not supported/, 'another kind\'s field')
 
     // A type's own fields go with the kind that takes them.
     assert.throws(() => registry.validate(changed(zombies => { delete zombies['pvz:pole_vaulter'].kind })), /pvz:pole_vaulter\.vault needs a kind that takes it/)

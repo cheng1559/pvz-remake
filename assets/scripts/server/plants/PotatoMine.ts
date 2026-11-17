@@ -12,14 +12,14 @@ import { detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
 import { findAbilityTarget } from './targeting'
 
-const STATES = ['arming', 'rising', 'armed'] as const
-type MineState = typeof STATES[number]
+const PHASES = ['arming', 'rising', 'armed'] as const
+type MinePhase = typeof PHASES[number]
 
 export interface PotatoMine {
     /** Plant::mState of the mine. */
-    state: MineState
-    /** The ticks left of its state. */
-    stateTicks: number
+    phase: MinePhase
+    /** The ticks left of its phase. */
+    phaseTicks: number
 }
 
 /**
@@ -33,48 +33,48 @@ export class PotatoMine extends Plant {
     /** One comes arming, its `armingTicks` from rising. */
     constructor(typeId: string, definition: PlantDefinition, definitions: GameplayDefinitions) {
         super(typeId, definition, definitions)
-        this.state = 'arming'
-        this.stateTicks = this.mine.armingTicks
+        this.phase = 'arming'
+        this.phaseTicks = this.mine.armingTicks
     }
 
     private get mine(): NonNullable<PlantDefinition['mine']> { return this.definition.mine! }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { state, stateTicks, ...rest } = fields
-        this.state = oneOf(state, STATES, `${name}.state`)
-        this.stateTicks = nonNegativeInteger(stateTicks, `${name}.stateTicks`)
+        const { phase, phaseTicks, ...rest } = fields
+        this.phase = oneOf(phase, PHASES, `${name}.phase`)
+        this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
         super.restoreOwn(rest, name)
     }
 
-    animationState(): string {
-        return this.state
+    animationPhase(): string {
+        return this.phase
     }
 
     inedible(_world: World): boolean {
-        return this.state === 'rising' || this.state === 'armed'
+        return this.phase === 'rising' || this.phase === 'armed'
     }
 
     /** Rising out of the ground, no ice holds it. */
     keptFromIce(): boolean {
-        return super.keptFromIce() || this.state === 'rising'
+        return super.keptFromIce() || this.phase === 'rising'
     }
 
     act({ world, commands }: SystemContext, entity: EntityId): void {
-        if (this.stateTicks > 0) this.stateTicks--
+        if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), position = world.get(entity, PositionComponent)!
-        const next = (state: MineState, ticks: number) => {
-            this.state = state
-            this.stateTicks = ticks
-            this.playState(state, random)
+        const next = (phase: MinePhase, ticks: number) => {
+            this.phase = phase
+            this.phaseTicks = ticks
+            this.playPhase(phase, random)
         }
-        switch (this.state) {
+        switch (this.phase) {
             case 'arming':
-                if (this.stateTicks > 0) break
+                if (this.phaseTicks > 0) break
                 next('rising', this.mine.riseTicks)
                 emitServerEvent(world.resources.get(EventQueueResource), 'mineRising', { entityId: entity })
                 break
             case 'rising':
-                if (this.stateTicks === 0) next('armed', 0)
+                if (this.phaseTicks === 0) next('armed', 0)
                 break
             case 'armed':
                 if (findAbilityTarget(world, this.definitions, position, this, this.mine) !== undefined) {
@@ -85,7 +85,7 @@ export class PotatoMine extends Plant {
     }
 
     protected snapshotOwn(): JsonObject {
-        return { state: this.state }
+        return { phase: this.phase }
     }
 }
 

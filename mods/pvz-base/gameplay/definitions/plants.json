@@ -136,9 +136,9 @@
         "blink": {"frames": 3, "fps": 15, "once": true}
       },
       "layers": {"body": "buried", "light": null},
-      "states": {"rising": {"body": "rise"}, "armed": {"body": "armed", "light": "glow"}},
-      "offBoard": {"state": "armed", "layers": {"light": null}},
-      "blink": {"clip": "blink", "states": ["armed"], "first": {"min": 400, "max": 4399}}
+      "phases": {"rising": {"body": "rise"}, "armed": {"body": "armed", "light": "glow"}},
+      "offBoard": {"phase": "armed", "layers": {"light": null}},
+      "blink": {"clip": "blink", "phases": ["armed"], "first": {"min": 400, "max": 4399}}
     }
   },
   "pvz:snowpea": {
@@ -188,7 +188,7 @@
         "swallow": {"frames": 28, "fps": 12, "hold": true}
       },
       "layers": {"body": "idle"},
-      "states": {"biting": {"body": "bite"}, "digesting": {"body": "chew"}, "swallowing": {"body": "swallow"}, "ready": {"body": "ready"}}
+      "phases": {"biting": {"body": "bite"}, "digesting": {"body": "chew"}, "swallowing": {"body": "swallow"}, "ready": {"body": "ready"}}
     }
   },
   "pvz:explodenut": {
@@ -236,9 +236,9 @@
         "blink": {"frames": 3, "fps": 15, "once": true}
       },
       "layers": {"body": "small", "sleeping": null},
-      "states": {"growing": {"body": "grow"}, "big": {"body": "body"}},
+      "phases": {"growing": {"body": "grow"}, "big": {"body": "body"}},
       "asleep": {"body": "sleep", "sleeping": "sleeping"},
-      "offBoard": {"state": "big"},
+      "offBoard": {"phase": "big"},
       "blink": {"clip": "blink"}
     }
   },
@@ -272,7 +272,7 @@
         "body": {"frames": 28, "fps": 12}
       },
       "layers": {"body": "land"},
-      "states": {"eating": {"body": "body"}},
+      "phases": {"eating": {"body": "body"}},
       "offBoard": {"layers": {"body": "body"}}
     }
   },
@@ -310,7 +310,7 @@
       },
       "layers": {"body": "body", "sleeping": null},
       "fire": {"body": "shoot"},
-      "states": {"calm": {"body": "body"}, "lowering": {"body": "scared"}, "scared": {"body": "scaredIdle"}, "raising": {"body": "grow"}},
+      "phases": {"calm": {"body": "body"}, "lowering": {"body": "scared"}, "scared": {"body": "scaredIdle"}, "raising": {"body": "grow"}},
       "asleep": {"body": "sleep", "sleeping": "sleeping"},
       "blink": {"clip": "blink"}
     }
@@ -351,7 +351,7 @@
         "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]}
       },
       "layers": {"body": "idle", "sleeping": null},
-      "states": {"fuse": {"body": "explode"}},
+      "phases": {"fuse": {"body": "explode"}},
       "asleep": {"body": "sleep", "sleeping": "sleeping"}
     }
   }
