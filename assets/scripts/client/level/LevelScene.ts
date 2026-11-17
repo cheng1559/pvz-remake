@@ -146,6 +146,7 @@ export class LevelScene extends Component {
         this.game.update(0)
         this.view.sync(this.game.render(), this.game.drainChanges(), this.game.drainEvents())
         this.view.setPaused(paused)
+        this.audio?.pauseSounds(paused)
         if (paused) {
             this.input?.suspend()
             if (!keepMusic) this.audio?.pause()

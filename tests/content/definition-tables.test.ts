@@ -21,11 +21,11 @@ test('the store and the almanac are definition tables: a Mod adds its own entrie
     const built = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
         storePages: { 'test:page': { level: 5 } },
         store: { 'test:hat': { page: 'test:page', place: 0, cost: 10, message: 2000, purchase: { kind: 'set', value: 1 } } },
-        overrides: { store: { 'pvz:rake': { ...store['pvz:rake'], cost: 30 } }, almanac: { 'pvz:screendoor': { place: 9, startingLevel: 13 } } },
+        overrides: { store: { 'pvz:rake': { ...store['pvz:rake'], cost: 30 } }, almanac: { 'pvz:screendoor': { place: 10, startingLevel: 13 } } },
     } }]).definitions
     assert.deepEqual(Object.keys(built.storePages), ['pvz:slot-upgrades', 'pvz:plant-upgrades', 'pvz:zen-garden-1', 'pvz:zen-garden-2', 'test:page'],
         "a Mod's pages come after the base's")
-    assert.deepEqual([built.store['test:hat'].page, built.store['pvz:rake'].cost, built.almanac['pvz:screendoor'].place], ['test:page', 30, 9])
+    assert.deepEqual([built.store['test:hat'].page, built.store['pvz:rake'].cost, built.almanac['pvz:screendoor'].place], ['test:page', 30, 10])
     for (const kind of ['store', 'storePages', 'almanac', 'tools']) {
         assert.throws(() => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: { [kind]: { 'pvz:extra': {} } } }]), /cannot register pvz:extra/)
     }

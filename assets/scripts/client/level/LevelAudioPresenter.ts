@@ -49,6 +49,11 @@ export class LevelAudioPresenter {
         if (this.ownsMusic) MusicSystem.pause()
     }
 
+    /** The game pauses or goes on: the sounds that pause with it (SoundSystem.pausesWithGame) do, whatever the music does. */
+    pauseSounds(paused: boolean): void {
+        SoundSystem.pauseGameSounds(paused)
+    }
+
     resume(): void {
         if (this.ownsMusic && !this.musicHeld) MusicSystem.resume()
     }
@@ -70,6 +75,8 @@ export class LevelAudioPresenter {
     }
 
     stop(): void {
+        // Board::StopAllZombieSounds as the level ends.
+        SoundSystem.stopGameSounds()
         if (!this.ownsMusic) return
         MusicSystem.stop()
         this.ownsMusic = false

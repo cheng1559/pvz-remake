@@ -371,7 +371,12 @@
         "anim_idle",
         "anim_sleep",
         "anim_explode"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:doomshroom",
+        "anim_sleep": "pvz:doomshroom_sleep",
+        "anim_explode": "pvz:doomshroom_explode"
+      }
     }
   },
   "lilypad": {
@@ -1253,6 +1258,42 @@
         "anim_walk": "pvz:football_walk",
         "anim_eat": "pvz:football_eat",
         "anim_death": "pvz:football_death"
+      }
+    }
+  },
+  "zombie_disco": {
+    "body": {
+      "animations": [
+        "anim_moonwalk",
+        "anim_point",
+        "anim_walk",
+        "anim_armraise",
+        "anim_eat",
+        "anim_death"
+      ],
+      "exports": {
+        "anim_moonwalk": "pvz:dancer_moonwalk",
+        "anim_point": "pvz:dancer_point",
+        "anim_walk": "pvz:dancer_walk",
+        "anim_armraise": "pvz:dancer_armraise",
+        "anim_eat": "pvz:dancer_eat",
+        "anim_death": "pvz:dancer_death"
+      }
+    }
+  },
+  "zombie_backup": {
+    "body": {
+      "animations": [
+        "anim_walk",
+        "anim_armraise",
+        "anim_eat",
+        "anim_death"
+      ],
+      "exports": {
+        "anim_walk": "pvz:backup_dancer_walk",
+        "anim_armraise": "pvz:backup_dancer_armraise",
+        "anim_eat": "pvz:backup_dancer_eat",
+        "anim_death": "pvz:backup_dancer_death"
       }
     }
   },

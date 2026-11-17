@@ -2,12 +2,13 @@ import { Color, Graphics, type Node } from 'cc'
 import type { PlantPreview } from '@/client/hud/PlantPreview'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { ZombiePreview } from '@/client/hud/ZombiePreview'
-import { plantDefinition } from '@/client/plants/definitions'
+import { packetSubject, plantDefinition } from '@/client/plants/definitions'
+import { gridItemCell } from '@/shared/content/presentation'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { cellPosition, type LevelDefinition } from '@/shared/content/gameplay'
 import { seedTeam } from '@/shared/content/teams'
-import type { WorldSnapshot } from '@/shared/protocol/index'
+import type { GridItemSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { cellOutOfPlay, type LevelPlantingRule, plantingRefusal, snapshotLawn } from '@/shared/content/planting'
 import { boardCell, plantingCell } from './LevelGeometry'
 import type { Content } from './LevelStage'
@@ -34,7 +35,8 @@ export interface LevelPlantingPreviewNodes {
  */
 export class LevelPlantingPreview {
     private mobileGuideCell = -1
-    private gravePreviews?: { cursor: Node, grid: Node }
+    /** A grave or crater seed's previews, by what it puts down (gridItemPreview). */
+    private readonly gridItemPreviews = new Map<GridItemSnapshot['typeId'], { cursor: Node, grid: Node }>()
     private zombiePreviews?: { cursor: ZombiePreview, grid: ZombiePreview }
 
     constructor(
@@ -73,22 +75,28 @@ export class LevelPlantingPreview {
         // A held packet of the other side from its seed's own puts down what faces the other way.
         const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team !== undefined
         const zombieId = seedDefinition?.kind === 'zombie' ? seedDefinition.id : undefined
-        const graveSeed = seedDefinition?.kind === 'grave'
-        cursorPlant.node.active = gridPlant.node.active = zombieId === undefined && !graveSeed
-        if (graveSeed || this.gravePreviews) {
-            const { cursor, grid } = this.gravePreview
-            cursor.active = grid.active = graveSeed
-            // A packet of the plants' side turns the grave round, as its packet does.
-            for (const node of [cursor, grid]) {
+        // A grave or crater seed puts down that thing of a cell.
+        const gridItem = seedDefinition ? packetSubject(this.content.presentation, seedDefinition).gridItem : undefined
+        cursorPlant.node.active = gridPlant.node.active = zombieId === undefined && gridItem === undefined
+        for (const [typeId, previews] of this.gridItemPreviews) previews.cursor.active = previews.grid.active = typeId === gridItem
+        if (gridItem !== undefined) {
+            const [cornerX] = gridItemCell(this.content.presentation, gridItem)
+            // A packet of the other side turns it round, as its packet does: a grave's and a crater's right edges both
+            // come to 82 (86 wide from 4 left of the cell, 90 from 8 left).
+            for (const node of Object.values(this.gridItemPreview(gridItem))) {
                 node.setScale(mirrored ? -1 : 1, 1, 1)
-                node.setPosition(mirrored ? 82 : -4, node.position.y)
+                node.setPosition(mirrored ? 82 : cornerX, node.position.y)
             }
         }
         if (zombieId !== undefined || this.zombiePreviews) {
             // Put down facing right, the zombie stands its own `facingRightOffsetX` further (see ZombieDefinition).
             const facingRightOffsetX = zombieId === undefined ? undefined : this.content.definitions.zombies[zombieId].facingRightOffsetX
+            // Plant::DrawSeedType draws some smaller and further off in hand (the dancers): the cached frame's Reanim origin
+            // is 40 into it at its size.
+            const held = zombieId === undefined ? undefined : this.content.presentation.zombies[zombieId]?.held
+            const inHand = held ? { ...CURSOR_ZOMBIE, x: CURSOR_ZOMBIE.x + held.x - 40 * (1 - held.scale), y: CURSOR_ZOMBIE.y - held.y + 40 * (1 - held.scale), scale: held.scale } : CURSOR_ZOMBIE
             const { cursor, grid } = this.zombiePreview
-            for (const [preview, placement] of [[cursor, CURSOR_ZOMBIE], [grid, GRID_ZOMBIE]] as const) {
+            for (const [preview, placement] of [[cursor, inHand], [grid, GRID_ZOMBIE]] as const) {
                 preview.setZombie(zombieId)
                 preview.setMirrored(mirrored)
                 preview.setPlacement({ ...placement, facingRightOffsetX })
@@ -110,7 +118,7 @@ export class LevelPlantingPreview {
         const valid = cell !== undefined && (seedDefinition && snapshot.cursor.mode === 'seed'
             ? !plantingRefusal(lawn, seedDefinition, snapshot.cursor.team ?? seedTeam(seedDefinition), row, column)
             : !cellOutOfPlay(lawn, row, column))
-        if (plantId || zombieId !== undefined || graveSeed) {
+        if (plantId || zombieId !== undefined || gridItem !== undefined) {
             cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             gridPreview.active = valid && !mobile
             const cell = cellPosition(board, row, column)
@@ -132,18 +140,20 @@ export class LevelPlantingPreview {
     }
 
     /**
-     * A grave seed's grave in hand and translucent over its cell, as it will stand once risen: its corner 4 left of and
-     * 9 above the cell (GridItem::DrawGraveStone), from the cell the pointer is over.
+     * A grave or crater seed's grave or crater in hand and translucent over its cell, as it will stand (a grave once
+     * risen): its corner its presentation's `cell` from the cell's (GridItem::DrawGraveStone, DrawCrater), from the cell
+     * the pointer is over.
      */
-    private get gravePreview(): { cursor: Node, grid: Node } {
-        if (!this.gravePreviews) {
-            const { cursorPreview, gridPreview } = this.nodes
-            const cursor = SeedPacketRenderer.drawGrave(cursorPreview, cursorPreview.layer, -4, -9, 1)
-            const grid = SeedPacketRenderer.drawGrave(gridPreview, gridPreview.layer, -4, -9, 1)
+    private gridItemPreview(typeId: GridItemSnapshot['typeId']): { cursor: Node, grid: Node } {
+        let previews = this.gridItemPreviews.get(typeId)
+        if (!previews) {
+            const { cursorPreview, gridPreview } = this.nodes, [cornerX, cornerY] = gridItemCell(this.content.presentation, typeId)
+            const cursor = SeedPacketRenderer.drawGridItem(cursorPreview, cursorPreview.layer, typeId, cornerX, cornerY, 1)
+            const grid = SeedPacketRenderer.drawGridItem(gridPreview, gridPreview.layer, typeId, cornerX, cornerY, 1)
             uiNode({ node: grid, opacity: 100 })
-            this.gravePreviews = { cursor, grid }
+            this.gridItemPreviews.set(typeId, previews = { cursor, grid })
         }
-        return this.gravePreviews
+        return previews
     }
 
     /**

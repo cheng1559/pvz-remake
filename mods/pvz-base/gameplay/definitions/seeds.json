@@ -17,6 +17,7 @@
   "pvz:hypnoshroom": {"kind": "plant", "position": 12, "sunCost": 75, "cooldownTicks": 3000, "initialCooldownTicks": 2000, "placement": "ground"},
   "pvz:scaredyshroom": {"kind": "plant", "position": 13, "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
   "pvz:iceshroom": {"kind": "plant", "position": 14, "sunCost": 75, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
+  "pvz:doomshroom": {"kind": "plant", "position": 15, "sunCost": 125, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
   "pvz:normal": {"kind": "zombie", "position": 8, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:flag": {"kind": "zombie", "position": 9, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:conehead": {"kind": "zombie", "position": 10, "hidden": true, "sunCost": 75, "cooldownTicks": 0},
@@ -25,5 +26,8 @@
   "pvz:newspaper": {"kind": "zombie", "position": 13, "hidden": true, "sunCost": 75, "cooldownTicks": 0},
   "pvz:screendoor": {"kind": "zombie", "position": 14, "hidden": true, "sunCost": 100, "cooldownTicks": 0},
   "pvz:football": {"kind": "zombie", "position": 15, "hidden": true, "sunCost": 175, "cooldownTicks": 0},
-  "pvz:grave": {"kind": "grave", "position": 16, "hidden": true, "sunCost": 0, "cooldownTicks": 0}
+  "pvz:dancer": {"kind": "zombie", "position": 16, "hidden": true, "sunCost": 350, "cooldownTicks": 0},
+  "pvz:backup_dancer": {"kind": "zombie", "position": 17, "hidden": true, "sunCost": 100, "cooldownTicks": 0},
+  "pvz:grave": {"kind": "grave", "position": 18, "hidden": true, "sunCost": 0, "cooldownTicks": 0},
+  "pvz:crater": {"kind": "crater", "position": 19, "hidden": true, "sunCost": 0, "cooldownTicks": 0, "craterTicks": 18000}
 }

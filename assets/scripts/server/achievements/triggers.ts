@@ -1,6 +1,6 @@
 import { exact, positiveInteger } from '@/shared/validate'
 import { BASE_MOD_ID } from '@/shared/mod'
-import { LevelStateResource } from '../state/components'
+import { LevelStateResource, ZombieComponent } from '../state/components'
 import type { AchievementTrigger, AchievementTriggerRegistry } from './achievements'
 
 /**
@@ -10,7 +10,7 @@ import type { AchievementTrigger, AchievementTriggerRegistry } from './achieveme
 export function installBuiltinAchievementTriggers(registry: AchievementTriggerRegistry): void {
     for (const [kind, trigger] of Object.entries({
         'pvz:blast': blastTrigger, 'pvz:bowling': bowlingTrigger, 'pvz:coin-streak': coinStreakTrigger,
-        'pvz:sun-held': sunHeldTrigger, 'pvz:win-planting': winPlantingTrigger,
+        'pvz:sun-held': sunHeldTrigger, 'pvz:win-planting': winPlantingTrigger, 'pvz:mind-controlled': mindControlledTrigger,
     })) if (!registry.has(kind)) registry.register(BASE_MOD_ID, kind, trigger)
 }
 
@@ -65,6 +65,21 @@ const sunHeldTrigger: AchievementTrigger = {
     },
     observe({ event, settings, grant }) {
         if (event.type === 'sunAdded' && Number(event.data.sun) >= (settings.sun as number)) grant()
+    },
+}
+
+/**
+ * Zombie::StartMindControlled (Disco is Undead): a zombie of `zombies` comes over to the plants' side by a plant that
+ * mind-controls (`mindControlled`); not a plant that swallowed one, nor one brought over to the zombies' side.
+ */
+const mindControlledTrigger: AchievementTrigger = {
+    validate(settings, definitions, name) {
+        exact(settings, ['zombies'], name)
+        ids(settings.zombies, definitions.zombies, `${name}.zombies`)
+    },
+    observe({ world, event, settings, grant }) {
+        if (event.type === 'mindControlled' && event.data.team === 'plants' && world.has(Number(event.data.entityId), ZombieComponent) &&
+            (settings.zombies as string[]).includes(String(event.data.typeId))) grant()
     },
 }
 

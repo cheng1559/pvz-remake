@@ -14,6 +14,7 @@
   "pvz:hypnoshroom": {"ground": "night"},
   "pvz:scaredyshroom": {"ground": "night"},
   "pvz:iceshroom": {"ground": "night"},
+  "pvz:doomshroom": {"ground": "night"},
   "pvz:normal": {"ground": "day"},
   "pvz:flag": {"ground": "day"},
   "pvz:conehead": {"ground": "day"},
@@ -21,5 +22,7 @@
   "pvz:buckethead": {"ground": "day"},
   "pvz:newspaper": {"ground": "day"},
   "pvz:screendoor": {"ground": "day"},
-  "pvz:football": {"ground": "day"}
+  "pvz:football": {"ground": "day"},
+  "pvz:dancer": {"ground": "day"},
+  "pvz:backup_dancer": {"ground": "day"}
 }

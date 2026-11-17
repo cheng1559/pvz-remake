@@ -1,3 +1,4 @@
+import type { GridItemSnapshot } from '@/shared/protocol/index'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, Mask, Node, Sprite } from 'cc'
@@ -13,7 +14,7 @@ import {
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
-import { PacketGrave } from './PacketGrave'
+import { PacketGridItem } from './PacketGridItem'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface SeedPacketViewArgs {
@@ -29,8 +30,8 @@ export interface SeedPacketViewArgs {
     upgrade?: boolean
     /** A zombie seed's zombie type, drawn instead of a plant. */
     zombie?: string
-    /** A grave seed's packet, which draws a grave. */
-    grave?: boolean
+    /** A grave or crater seed's packet: the type of the thing of a cell it draws. */
+    gridItem?: GridItemSnapshot['typeId']
     costFont: BitmapFontAssets | null
     drawCost?: boolean
     cost?: number
@@ -76,7 +77,7 @@ class SeedPacketIconFollower extends Component {
 }
 
 /** Parts of a packet that draw over the packets: its picture and cost; the background stays. */
-const ICON_PARTS = new Set(['PacketPlant', 'PacketZombie', 'PacketGrave', 'Cost'])
+const ICON_PARTS = new Set(['PacketPlant', 'PacketZombie', 'PacketGridItem', 'Cost'])
 /**
  * How far a tilted picture may stand out of its packet, sideways and above, which the cooldown's shade over the
  * picture covers. With the picture in its own layer the shade holds only the dark copy, so it can reach this far.
@@ -106,11 +107,11 @@ export class SeedPacketView {
             size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT } }).node
         if (args.iconLayer) this.top = this.followingNode(args.iconLayer, `${args.name}Icon`)
         this.labels = args.labelLayer ? this.followingNode(args.labelLayer, `${args.name}Labels`) : this.node
-        if (args.plant !== undefined || args.zombie !== undefined || args.grave) this.setSeed(args.plant, args.cost ?? 0, args.zombie, args.grave)
+        if (args.plant !== undefined || args.zombie !== undefined || args.gridItem !== undefined) this.setSeed(args.plant, args.cost ?? 0, args.zombie, args.gridItem)
     }
 
-    setSeed(plant: string | undefined, cost: number, zombie?: string, grave?: boolean): void {
-        const args = { ...this.args, plant, cost, zombie, grave,
+    setSeed(plant: string | undefined, cost: number, zombie?: string, gridItem?: GridItemSnapshot['typeId']): void {
+        const args = { ...this.args, plant, cost, zombie, gridItem,
             parent: this.node.parent!, x: this.node.position.x, y: this.node.position.y }
         this.args = args
         this.plant = plant
@@ -140,7 +141,7 @@ export class SeedPacketView {
         for (const parent of this.parts) {
             for (const plant of parent.getComponentsInChildren(PlantPreview)) plant.setMirrored(mirrored)
             for (const zombie of parent.getComponentsInChildren(ZombiePreview)) zombie.setMirrored(mirrored)
-            for (const grave of parent.getComponentsInChildren(PacketGrave)) grave.setMirrored(mirrored)
+            for (const grave of parent.getComponentsInChildren(PacketGridItem)) grave.setMirrored(mirrored)
         }
     }
 
@@ -297,7 +298,7 @@ export class SeedPacketView {
         if (plant) { plant.setColor(color); return }
         const zombie = node.getComponent(ZombiePreview)
         if (zombie) { zombie.setColor(color); return }
-        const grave = node.getComponent(PacketGrave)
+        const grave = node.getComponent(PacketGridItem)
         if (grave) { grave.setColor(color); return }
 
         const sprite = node.getComponent(Sprite)

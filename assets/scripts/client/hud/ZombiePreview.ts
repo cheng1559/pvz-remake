@@ -157,7 +157,7 @@ export class ZombiePreview extends Component {
         const pose = packet?.clip ?? 'idle'
         const view = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId, {
             pose, mirrored: this.mirrored && this.placement.packetScale === undefined,
-            draw: { shadow: false, ...(this.placement.from === 'reanim' ? { position: { x: 0, y: 0 } } : {}) },
+            draw: { shadow: false, ...(this.placement.from === 'reanim' ? { position: { x: 0, y: 0 }, ownSize: true as const } : {}) },
         })
         if (!view || !isValid(root, true) || root !== this.root) { view?.destroy(); return }
         this.view = view

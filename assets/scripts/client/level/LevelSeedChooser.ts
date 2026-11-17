@@ -150,7 +150,7 @@ export class LevelSeedChooser {
             let tooltipOptions: Parameters<UI['tooltip']>[1]
             let warning: string | undefined
             const subject = packetSubject(content.presentation, seed)
-            for (const view of views) view.setSeed(subject.plant, seed.sunCost, subject.zombie, subject.grave)
+            for (const view of views) view.setSeed(subject.plant, seed.sunCost, subject.zombie, subject.gridItem)
             if (subject.tooltipKey === undefined) tooltipOptions = { text: ui.text(subject.nameKey), gap: 0 }
             else {
                 warning = card.team === undefined ? notRecommended(card.seedId) : undefined

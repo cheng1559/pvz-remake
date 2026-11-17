@@ -6,5 +6,7 @@
   "pvz:buckethead": {"place": 4, "startingLevel": 8},
   "pvz:newspaper": {"place": 5, "startingLevel": 11},
   "pvz:screendoor": {"place": 6, "startingLevel": 13},
-  "pvz:football": {"place": 7, "startingLevel": 16}
+  "pvz:football": {"place": 7, "startingLevel": 16},
+  "pvz:dancer": {"place": 8, "startingLevel": 18},
+  "pvz:backup_dancer": {"place": 9, "startingLevel": 18, "spawnedOnly": true}
 }

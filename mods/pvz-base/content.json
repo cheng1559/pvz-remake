@@ -50442,7 +50442,20 @@
       "pvz:football_death": "assets/reanim/football_death.json",
       "pvz:iceshroom": "assets/reanim/iceshroom.json",
       "pvz:iceshroom_sleep": "assets/reanim/iceshroom_sleep.json",
-      "pvz:iceshroom_blink": "assets/reanim/iceshroom_blink.json"
+      "pvz:iceshroom_blink": "assets/reanim/iceshroom_blink.json",
+      "pvz:doomshroom": "assets/reanim/doomshroom.json",
+      "pvz:doomshroom_sleep": "assets/reanim/doomshroom_sleep.json",
+      "pvz:doomshroom_explode": "assets/reanim/doomshroom_explode.json",
+      "pvz:dancer_moonwalk": "assets/reanim/dancer_moonwalk.json",
+      "pvz:dancer_point": "assets/reanim/dancer_point.json",
+      "pvz:dancer_walk": "assets/reanim/dancer_walk.json",
+      "pvz:dancer_armraise": "assets/reanim/dancer_armraise.json",
+      "pvz:dancer_eat": "assets/reanim/dancer_eat.json",
+      "pvz:dancer_death": "assets/reanim/dancer_death.json",
+      "pvz:backup_dancer_walk": "assets/reanim/backup_dancer_walk.json",
+      "pvz:backup_dancer_armraise": "assets/reanim/backup_dancer_armraise.json",
+      "pvz:backup_dancer_eat": "assets/reanim/backup_dancer_eat.json",
+      "pvz:backup_dancer_death": "assets/reanim/backup_dancer_death.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

@@ -56,7 +56,8 @@ export function createGraves(world: World): void {
         }
     }
     // Board::PickSpecialGraveStone, right after placing them: one stone looks different.
-    if (made.length) world.get(made[random.integer(0, made.length - 1)], GridItemComponent)!.special = true
+    const special = made.length ? world.get(made[random.integer(0, made.length - 1)], GridItemComponent) : undefined
+    if (special?.typeId === GRAVE) special.special = true
 }
 
 /**

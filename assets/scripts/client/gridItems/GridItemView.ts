@@ -17,8 +17,8 @@ export interface GridItemViewContext {
 }
 
 /**
- * What draws a thing of a cell (the original's GridItem): a grave; a crater to come. Off the board (offBoard.ts) it
- * draws the thing as it stands once there (a grave risen), and goes with `destroy` as any off the board.
+ * What draws a thing of a cell (the original's GridItem): a grave or a crater. Off the board (offBoard.ts) it draws the
+ * thing as it stands once there (a grave risen, a fresh crater), and goes with `destroy` as any off the board.
  */
 export interface GridItemView extends EntityView<GridItemSnapshot> {
     destroy(): void

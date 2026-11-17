@@ -11,10 +11,11 @@ export const zombieTeam = (zombie: { readonly team?: Team }): Team => zombie.tea
 export const projectileTeam = (projectile: { readonly team?: Team }): Team => projectile.team ?? 'plants'
 
 /**
- * A seed's own side: a plant seed's plants are the plants', a zombie seed's zombies the zombies' (SEED_ZOMBIE_*), and a
- * grave seed's grave the zombies', as every grave of the original is.
+ * A seed's own side: a plant seed's plants are the plants', a zombie seed's zombies the zombies' (SEED_ZOMBIE_*), a
+ * grave seed's grave the zombies', as every grave of the original is, and a crater seed's crater the plants', as a
+ * doom-shroom's is.
  */
-export const seedTeam = (seed: { readonly kind: SeedKind }): Team => seed.kind === 'plant' ? 'plants' : 'zombies'
+export const seedTeam = (seed: { readonly kind: SeedKind }): Team => seed.kind === 'plant' || seed.kind === 'crater' ? 'plants' : 'zombies'
 
 /**
  * The side a packet keeps for its seed: `team` only when it is not the seed's own, so a packet on its seed's own side

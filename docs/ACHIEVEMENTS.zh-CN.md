@@ -18,9 +18,10 @@
   | `pvz:bowling` | `bowlingImpact` 的 `plantTypeId`、`hits`（坚果自己的撞击计数，首次冒险第 10 关及以前不计） | `plants`、`hits` | Roll Some Heads（普通坚果 5） |
   | `pvz:coin-streak` | `itemScored`（入账，`Coin::ScoreCoin`）计数，`itemExpired`（淡出消失）清零，恰好达到时发放 | `items`、`coins` | Penny Pincher（银币、金币，30） |
   | `pvz:sun-held` | `sunAdded`（`Board::AddSun` 后的持有量） | `sun` | Sunny Days（8000） |
+  | `pvz:mind-controlled` | `mindControlled`（`Zombie::StartMindControlled`）：转到 `plants` 一方的僵尸；吞下魅惑菇的植物、转到 `zombies` 一方的僵尸不算 | `zombies` | Disco is Undead（舞王，不含伴舞） |
   | `pvz:win-planting` | `plantPlaced`（不含 `/plant` 的 `debug`）记下是否种过不符合的植物；`levelWon` 时在指定场地发放，不在关卡里提示 | `boards`、`skipRules`（保龄球、打僵尸）、`only` / `never`（`{ nocturnal, plants }`：夜间植物即原版的蘑菇，加上列出的植物） | Good Morning（白天，`only` 夜间植物）、No Fungus Among Us（夜间，`never` 夜间植物） |
 
-- 等内容实现后再接：Don't Pea in the Pool（`pvz:win-planting`，泳池场地，`never` 豌豆类）、Grounded（屋顶场地，`never` 投手类，还要排除传送带关）、Cryptozombologist（雪人）、Popcorn Party（巨人、玉米加农炮）、Disco is Undead（舞王、魅惑菇的能力）、Home Lawn Security（5-10）、Beyond the Grave、Nobel Peas Prize、Better Off Dead、China Shop、Immortal（小游戏、解谜、生存）、Towering Wisdom（智慧树）、Morticulturalist（商店植物）、Mustache Mode（胡子模式）。
+- 等内容实现后再接：Don't Pea in the Pool（`pvz:win-planting`，泳池场地，`never` 豌豆类）、Grounded（屋顶场地，`never` 投手类，还要排除传送带关）、Cryptozombologist（雪人）、Popcorn Party（巨人、玉米加农炮）、Home Lawn Security（5-10）、Beyond the Grave、Nobel Peas Prize、Better Off Dead、China Shop、Immortal（小游戏、解谜、生存）、Towering Wisdom（智慧树）、Morticulturalist（商店植物）、Mustache Mode（胡子模式）。
 
 与原版的差别：
 

@@ -225,6 +225,12 @@
     "icon": {
       "sprite": "pvz:acheesements_icons",
       "index": 20
+    },
+    "trigger": {
+      "kind": "pvz:mind-controlled",
+      "zombies": [
+        "pvz:dancer"
+      ]
     }
   }
 }

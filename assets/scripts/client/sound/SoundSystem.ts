@@ -9,6 +9,8 @@ type NativeAudioEngine = {
     setFinishCallback?: (audioId: number, callback: () => void) => void
     getState?: (audioId: number) => number
     preload?: (url: string, callback: (success: boolean) => void) => void
+    pause?: (audioId: number) => void
+    resume?: (audioId: number) => void
     stop?: (audioId: number) => void
 }
 
@@ -132,6 +134,9 @@ export class SoundSystem {
     private static _exclusiveBaseVolumes: Map<string, number> = new Map()
     private static _exclusiveTokens: Map<string, number> = new Map()
     private static _exclusiveNativeAudioIds: Map<string, number> = new Map()
+    /** Exclusive channels the game's pause pauses (pausesWithGame), and those it has paused. */
+    private static _gameChannels: Set<string> = new Set()
+    private static _pausedChannels: Set<string> = new Set()
     private static _audioContext: AudioContext | null = null
     private static _source: AudioSource | null = null
     private static _musicVolume = DEFAULT_MUSIC_VOLUME
@@ -278,7 +283,40 @@ export class SoundSystem {
             : (globalThis as NativeBindings).jsb?.AudioEngine?.getState?.(id) === 1
     }
 
+    /**
+     * FOLEYFLAGS_MUTE_ON_PAUSE: what plays on `channel` pauses while the game does and goes on after (pauseGameSounds),
+     * and stops with the level (stopGameSounds): the disco music.
+     */
+    public static pausesWithGame(channel: string) {
+        this._gameChannels.add(channel)
+    }
+
+    /** The game pauses or goes on: what plays on the channels that pause with it does too. */
+    public static pauseGameSounds(paused: boolean) {
+        const engine = (globalThis as NativeBindings).jsb?.AudioEngine
+        for (const channel of this._gameChannels) {
+            const audioId = this._exclusiveNativeAudioIds.get(channel), source = this._exclusiveSources.get(channel)
+            if (paused) {
+                if (!this.isExclusivePlaying(channel)) continue
+                this._pausedChannels.add(channel)
+                if (audioId !== undefined) engine?.pause?.(audioId)
+                else source?.pause()
+            } else if (this._pausedChannels.delete(channel)) {
+                if (audioId !== undefined) engine?.resume?.(audioId)
+                else source?.play()
+            }
+        }
+    }
+
+    /** The level is over: what plays or is paused on the channels that pause with the game stops. */
+    public static stopGameSounds() {
+        for (const channel of this._gameChannels) {
+            if (this._pausedChannels.has(channel) || this.isExclusivePlaying(channel)) this.stopExclusive(channel)
+        }
+    }
+
     public static stopExclusive(channel: string) {
+        this._pausedChannels.delete(channel)
         this._exclusiveTokens.set(channel, (this._exclusiveTokens.get(channel) ?? 0) + 1)
         this._stopNativeExclusive(channel)
         this._exclusiveSources.get(channel)?.stop()

@@ -15,13 +15,13 @@ test('a level scene runs an injected intro and level through clock scaling, paus
     }[id] ?? {}))
     const scene = new LevelScene()
     let destroyed = false, complete = 0, introTicks = 0, choosing = 0, gameplay = 0
-    let presentationPaused = false, musicPaused = false, coinBanks = 0
+    let presentationPaused = false, musicPaused = false, soundsPaused = false, coinBanks = 0
     const commands: string[] = [], deltas: number[] = []
     const world = { levelId: 'example:second-level', phase: 'intro', result: 'playing', paused: false }
     const start = { levelId: world.levelId, randomSeed: 5, mods: [], initialMoney: 0 }
     const audio = {
         startChoosing() { choosing++ }, startGameplay() { gameplay++ }, syncResult() {}, stop() {},
-        pause() { musicPaused = true }, resume() { musicPaused = false },
+        pause() { musicPaused = true }, resume() { musicPaused = false }, pauseSounds(paused: boolean) { soundsPaused = paused },
     }
     scene.node = { isValid: true, destroy() { destroyed = true } }
     scene.configure({
@@ -52,9 +52,11 @@ test('a level scene runs an injected intro and level through clock scaling, paus
         scene.update(1)
         assert.equal(presentationPaused, true)
         assert.equal(musicPaused, true)
+        assert.equal(soundsPaused, true, 'the sounds muted on pause (the disco music) pause with it')
         assert.equal(suspended, true)
         assert.equal(deltas.length, 2, 'paused frames cannot advance the world')
         scene.resume()
+        assert.equal(soundsPaused, false)
         scene.pause(true)
         scene.resume()
         assert.equal(coinBanks, 1, 'a debug pause does not')

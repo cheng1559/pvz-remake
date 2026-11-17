@@ -112,6 +112,7 @@ export function installBuiltinTutorials(registry: TutorialRegistry): void {
         'pvz:adventure-2-5': whackTutorial,
         'pvz:adventure-2-6': packetUpgradeOffers(2),
         'pvz:adventure-2-7': packetUpgradeOffers(2),
+        'pvz:adventure-2-8': packetUpgradeOffers(2),
     }
     for (const [id, script] of Object.entries(scripts)) if (!registry.has(id)) registry.register(BASE_MOD_ID, id, script)
 }

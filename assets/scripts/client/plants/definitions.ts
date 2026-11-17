@@ -1,4 +1,7 @@
 import type { PlantPresentationDefinition, PlantVisual, PresentationDefinitions } from '@/shared/content/presentation'
+import { GRAVE } from '@/shared/content/graves'
+import type { GridItemSnapshot } from '@/shared/protocol/index'
+import { CRATER } from '@/shared/content/craters'
 import type { SeedDefinition } from '@/shared/content/gameplay'
 import { zombieDefinition } from '@/client/zombies/definitions'
 
@@ -17,7 +20,8 @@ export interface PacketSubject {
     /** The plant a plant seed's packet shows; a zombie or grave seed's packet has none. */
     readonly plant?: string
     readonly zombie?: string
-    readonly grave?: boolean
+    /** The thing of a cell a grave or crater seed's packet shows (its grid item type). */
+    readonly gridItem?: GridItemSnapshot['typeId']
     readonly nameKey: string
     /** A plant's chooser text; the zombies and the grave show their names only. */
     readonly tooltipKey?: string
@@ -26,7 +30,8 @@ export interface PacketSubject {
 export function packetSubject(presentation: PresentationDefinitions, seed: SeedDefinition): PacketSubject {
     // A zombie seed's packet draws its zombie (SEED_ZOMBIE_*), named as the almanac names it.
     if (seed.kind === 'zombie') return { zombie: seed.id, nameKey: zombieDefinition(presentation, seed.id).nameKey }
-    if (seed.kind === 'grave') return { grave: true, nameKey: 'GRAVE_SEED' }
+    if (seed.kind === 'grave') return { gridItem: GRAVE, nameKey: 'GRAVE_SEED' }
+    if (seed.kind === 'crater') return { gridItem: CRATER, nameKey: 'CRATER_SEED' }
     return plantPacket(presentation, seed.id)
 }
 

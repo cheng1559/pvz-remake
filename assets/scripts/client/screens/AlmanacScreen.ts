@@ -13,7 +13,7 @@ import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { packetSubject, plantPacket } from '@/client/plants/definitions'
 import { zombieDefinition } from '@/client/zombies/definitions'
 import type { AlmanacCard, AlmanacZombieView } from '@/shared/menu'
-import { ALMANAC_GROUNDS, almanacGround } from '@/shared/content/presentation'
+import { ALMANAC_GROUNDS, almanacGround, gridItemCell } from '@/shared/content/presentation'
 import { drawAlmanacText, drawMiddleAlmanacText } from './AlmanacText'
 import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
@@ -85,14 +85,17 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             } else {
                 // A group's card shows what it puts down where a plant stands, as it would stand in that cell: its
                 // plant, its zombie (put down 30 left of and above the cell, Challenge::IZombiePlaceZombie, here 10
-                // lower) or the grave (its corner 4 left of and 9 above the cell). The card's frame hides what stands
-                // out.
+                // lower) or the thing of a cell (a grave, a crater, its corner its presentation's `cell` from the
+                // cell's, where it lies from a plant in the level). The card's frame hides what stands out.
                 const seed = seeds![card.seed], subject = packetSubject(ui.assets.presentation, seed)
-                const { x, y } = ALMANAC_PLANT, ground = seed.kind === 'grave' ? 'day' : almanacGround(ui.assets.presentation, seed.id)
+                const { x, y } = ALMANAC_PLANT, ground = seed.kind === 'grave' || seed.kind === 'crater' ? 'day' : almanacGround(ui.assets.presentation, seed.id)
                 ui.image(node, sprites[`almanac_ground${ground}`], { x: 521, y: 107 })
                 if (seed.kind === 'plant') AlmanacEntityView.create(node, 'plants', seed.id, x, y)
                 else if (seed.kind === 'zombie') AlmanacEntityView.create(node, 'zombies', seed.id, x - 30, y - 30 + ALMANAC_ZOMBIE_DROP)
-                else SeedPacketRenderer.drawGrave(node, undefined, x - 4, y - 9, 1)
+                else {
+                    const [cellX, cellY] = gridItemCell(ui.assets.presentation, subject.gridItem!)
+                    SeedPacketRenderer.drawGridItem(node, undefined, subject.gridItem!, x + cellX, y + cellY, 1)
+                }
                 ui.image(node, sprites.almanac_plantcard, { x: 459, y: 86 })
                 ui.label(node, { text: ui.text(subject.nameKey), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
                 // The hidden cards share a placeholder, in the middle of the description's box as the zombies' page
@@ -165,7 +168,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.node.name = card.seed
                     const subject = card.grid ? undefined : packetSubject(ui.assets.presentation, seeds![card.seed])
                     const look = card.grid ? { plant: plantPacket(ui.assets.presentation, card.seed).plant, upgrade: ui.assets.presentation.almanac[card.seed]?.upgrade }
-                        : { plant: subject!.plant, zombie: subject!.zombie, grave: subject!.grave }
+                        : { plant: subject!.plant, zombie: subject!.zombie, gridItem: subject!.gridItem }
                     new SeedPacketView({ definitions: ui.assets.presentation, name: `Card-${button.node.name}`, parent: cards, layer: parent.layer,
                         x: button.node.position.x, y: button.node.position.y, ...look, cost: card.cost, costFont: ui.assets.fonts.packetCost,
                         iconLayer: cardIcons, shade: false })

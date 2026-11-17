@@ -1,6 +1,7 @@
 import type { GameplayDefinitions } from './gameplay'
 import type { Team } from '@/shared/protocol'
 import { seedGroupPages } from './seedGroups'
+import { seedTeam } from './teams'
 
 /** A card on a chooser page: a seed, on `team` when not its seed's own, at a grid place (8 columns in reading order from 0). */
 export interface ChooserPageCard { seedId: string, team?: Team, place: number }
@@ -10,9 +11,6 @@ export interface ChooserPageCard { seedId: string, team?: Team, place: number }
  * a seed not unlocked yet and keeps its silhouette, rather than drawing only up to its last card.
  */
 export interface ChooserPage { cards: ChooserPageCard[], catalog: boolean }
-
-/** A seed's own side (seedTeam): a plant seed's the plants', any other seed's the zombies'. */
-const ownTeam = (seed: { kind: string }): Team => seed.kind === 'plant' ? 'plants' : 'zombies'
 
 /** A page whose cards come one after another: its places, from the first to its last card's. */
 export const pagePlaces = (cards: readonly ChooserPageCard[]): number => Math.max(-1, ...cards.map(card => card.place)) + 1
@@ -28,7 +26,7 @@ export const pagePlaces = (cards: readonly ChooserPageCard[]): number => Math.ma
  * lay them out alike.
  */
 export function chooserPages(definitions: Pick<GameplayDefinitions, 'seeds'>, available: readonly string[]): ChooserPage[] {
-    const side = (seedId: string, team: Team) => team === ownTeam(definitions.seeds[seedId]) ? { seedId } : { seedId, team }
+    const side = (seedId: string, team: Team) => team === seedTeam(definitions.seeds[seedId]) ? { seedId } : { seedId, team }
     const groups = seedGroupPages(definitions)
     const catalog = (team: Team): ChooserPage => ({
         cards: available.map(seedId => ({ ...side(seedId, team), place: definitions.seeds[seedId].position })), catalog: true,

@@ -1,6 +1,7 @@
 import type { WorldSnapshot } from '@/shared/protocol'
 import type { BoardDefinition, GameplayDefinitions, LevelDefinition, PlantSeedDefinition, SeedDefinition } from './gameplay'
 import { graveAt } from './graves'
+import { craterAt } from './craters'
 import { graveTeam, isHostile, plantTeam, type Team } from './teams'
 
 /**
@@ -46,6 +47,8 @@ export interface PlantingLawn {
     plantAt(row: number, column: number): { readonly typeId: string, readonly team?: Team } | undefined
     /** The grave in a cell (graveAt), if any. */
     graveAt(row: number, column: number): { readonly team?: Team } | undefined
+    /** The crater in a cell (craterAt), if any. */
+    craterAt(row: number, column: number): object | undefined
 }
 
 /**
@@ -75,8 +78,12 @@ export type PlantingRefusal =
     | 'past-line'
     /** A plant holds the cell. */
     | 'cell-occupied'
-    /** A grave seed's cell has a grave already. */
+    /** A grave seed's or a crater seed's cell has a grave already (CanAddGraveStoneAt keeps a grave off a crater too). */
     | 'cell-has-grave'
+    /** A grave seed's or a crater seed's cell has a crater already. */
+    | 'cell-has-crater'
+    /** A plant's cell has a crater (PLANTING_NOT_ON_CRATER). */
+    | 'not-on-crater'
     /** A plant's cell has a grave (PLANTING_NOT_ON_GRAVE). */
     | 'not-on-grave'
     /** A grave buster's cell has no grave (PLANTING_ONLY_ON_GRAVES). */
@@ -97,13 +104,18 @@ export function plantingRefusal(lawn: PlantingLawn, seed: SeedDefinition, team: 
     if (outOfPlay) return outOfPlay
     // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
     if (seed.kind === 'zombie') return undefined
-    // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave (the plants there die).
-    if (seed.kind === 'grave') return lawn.graveAt(row, column) ? 'cell-has-grave' : undefined
+    // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave or a crater (the plants there
+    // die); a crater seed's crater likewise (placeCrater).
+    if (seed.kind === 'grave' || seed.kind === 'crater') {
+        return lawn.graveAt(row, column) ? 'cell-has-grave' : lawn.craterAt(row, column) ? 'cell-has-crater' : undefined
+    }
     if (lawn.rule?.canPlantAt?.(lawn, seed, row, column) === false) return 'rule-closed'
     // The level's red line (Wall-nut Bowling's): nothing right of its column.
     const line = lawn.level.plantingLine
     if (line && column > line.column) return 'past-line'
     if (lawn.plantAt(row, column)) return 'cell-occupied'
+    // Board::CanPlantAt: a crater keeps out every plant, of either side.
+    if (lawn.craterAt(row, column)) return 'not-on-crater'
     // Graves block planting, except that a plant placed on graves (the Grave Buster) needs one, of the other side, to eat.
     const grave = lawn.graveAt(row, column)
     if (seed.placement === 'grave') return !grave ? 'cell-needs-grave' : isHostile(graveTeam(grave), team) ? undefined : 'cell-has-own-grave'
@@ -117,5 +129,6 @@ export function snapshotLawn(definitions: Pick<GameplayDefinitions, 'plants' | '
         level, board: definitions.boards[level.board], rule,
         plantAt: (row, column) => cellPlant(definitions.plants, snapshot.plants, row, column),
         graveAt: (row, column) => graveAt(snapshot.gridItems, row, column),
+        craterAt: (row, column) => craterAt(snapshot.gridItems, row, column),
     }
 }

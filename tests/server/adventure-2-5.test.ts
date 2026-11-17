@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import type { JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol'
+import type { GraveSnapshot, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
 import { startFromSave } from './start-from-save'
@@ -46,7 +46,7 @@ test('2-5 opens on nine graves from column 4 with three ready packets, no sun an
     const server = play()
     const snapshot = server.snapshot()
     assert.equal(snapshot.gridItems!.length, 9)
-    assert.ok(snapshot.gridItems!.every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
+    assert.ok((snapshot.gridItems as GraveSnapshot[]).every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
     assert.deepEqual(snapshot.seedPackets.map(packet => [packet!.seedId, packet!.ready]),
         [['pvz:potatomine', true], ['pvz:gravebuster', true], ['pvz:cherrybomb', true]])
     assert.equal(snapshot.sun, 0)

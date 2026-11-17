@@ -1,6 +1,6 @@
+import type { GridItemSnapshot } from '@/shared/protocol/index'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { createOffBoardGridItem } from '@/client/view/offBoard'
-import { GRAVE } from '@/shared/content/graves'
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { SEED_PACKET_SIZE } from '@/shared/content/gameplay'
@@ -11,7 +11,7 @@ import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
-import { PacketGrave } from './PacketGrave'
+import { PacketGridItem } from './PacketGridItem'
 import { SEED_PACKET_WIDTH } from './packetPicture'
 import { supersampleSprites } from '@/client/render/KernelBatch'
 /** Mods take the atlas cells from here as they always have. */
@@ -54,8 +54,8 @@ export interface SeedPacketRenderArgs {
     plant?: string
     /** A zombie seed's zombie type, drawn instead of a plant (SEED_ZOMBIE_*). */
     zombie?: string
-    /** A grave seed's packet, which draws a grave instead of a plant. */
-    grave?: boolean
+    /** A grave or crater seed's packet: the type of the thing of a cell it draws instead of a plant. */
+    gridItem?: GridItemSnapshot['typeId']
     cost?: number
     drawCost?: boolean
     upgrade?: boolean
@@ -118,7 +118,7 @@ export class SeedPacketRenderer {
 
         this._drawBackground(root, args, scale)
         if (args.zombie) this._drawZombieIcon(root, args, scale)
-        else if (args.grave) this._drawGraveIcon(root, args, scale)
+        else if (args.gridItem !== undefined) this._drawGridItemIcon(root, args, args.gridItem, scale)
         else this._drawPlantIcon(root, args, scale)
         if (args.drawCost !== false && args.cost != null) {
             this._drawCost(root, args.cost, args.costFont ?? null, args.layer, scale)
@@ -170,30 +170,30 @@ export class SeedPacketRenderer {
     }
 
     /**
-     * A grave as it stands once risen, drawn by its view (the plain stone), from (x, y) at `scale`. On the lawn its
-     * corner is 4 left of and 9 above its cell.
+     * A thing of a cell off the board (a grave as it stands once risen, a fresh crater), drawn by its view, its picture's
+     * corner at (x, y) at `scale`. On the lawn that corner is its presentation's `cell` from its cell's.
      */
-    static drawGrave(parent: Node, layer: number | undefined, x: number, y: number, scale: number, drawn?: () => void): Node {
-        const node = uiNode({ name: 'Grave', parent, layer, anchor: { x: 0, y: 1 }, position: { x, y: -y } }).node
+    static drawGridItem(parent: Node, layer: number | undefined, typeId: GridItemSnapshot['typeId'], x: number, y: number, scale: number, drawn?: () => void): Node {
+        const node = uiNode({ name: 'GridItem', parent, layer, anchor: { x: 0, y: 1 }, position: { x, y: -y } }).node
         node.setScale(scale, scale, 1)
         // `drawn`: its pictures are there, for what colors them.
-        void createOffBoardGridItem(node, GRAVE).then(() => { if (isValid(node, true)) drawn?.() })
-            .catch(error => console.error('[SeedPacket] Failed to draw the grave', error))
+        void createOffBoardGridItem(node, typeId).then(() => { if (isValid(node, true)) drawn?.() })
+            .catch(error => console.error(`[SeedPacket] Failed to draw ${typeId}`, error))
         return node
     }
 
     /**
-     * A grave seed's packet: the grave in the picture's place (`seedPackets.grave`), drawn by its view in a holder the
-     * packet's width, which a packet of the other side turns round. Much smaller than its art, it is supersampled as a
-     * plant's picture is.
+     * A grave or crater seed's packet: what it puts down in the picture's place (its grid item presentation's `packet`),
+     * drawn by its view in a holder the packet's width, which a packet of the other side turns round. Much smaller than
+     * its art, it is supersampled as a plant's picture is.
      */
-    private static _drawGraveIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
+    private static _drawGridItemIcon(root: Node, args: SeedPacketRenderArgs, typeId: GridItemSnapshot['typeId'], scale: number) {
         const size = scale > 1 ? scale : 1
-        const holder = uiNode({ name: 'PacketGrave', parent: root, layer: args.layer, anchor: { x: 0, y: 1 },
+        const holder = uiNode({ name: 'PacketGridItem', parent: root, layer: args.layer, anchor: { x: 0, y: 1 },
             size: { width: SEED_PACKET_WIDTH * size, height: SEED_PACKET_HEIGHT * size } }).node
-        const { offsetX, offsetY, scale: graveScale } = args.definitions.seedPackets.grave
-        holder.addComponent(PacketGrave).initialize(size, drawn =>
-            this.drawGrave(holder, args.layer, offsetX * size, offsetY * size, graveScale * size, () => { supersampleSprites(holder); drawn() }))
+        const { offsetX, offsetY, scale: pictureScale } = args.definitions.gridItems[typeId]?.packet ?? args.definitions.seedPackets.defaultPlacement
+        holder.addComponent(PacketGridItem).initialize(size, drawn =>
+            this.drawGridItem(holder, args.layer, typeId, offsetX * size, offsetY * size, pictureScale * size, () => { supersampleSprites(holder); drawn() }))
     }
 
     private static _drawCost(

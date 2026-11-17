@@ -113,16 +113,16 @@ test('a scaled packet cost reads HD font glyphs at their texture scale and skips
     assert.deepEqual(nodes.filter(node => node.sprite).map(node => [node.size.width, node.size.height]), [[8, 18], [8, 18]], 'drawn at logical size x packet scale')
 })
 
-test('a grave packet of the other side turns its picture round within the packet', () => {
+test('a grave or crater packet of the other side turns its picture round within the packet', () => {
     const { classes, load } = setup()
-    load('PacketGrave')
+    load('PacketGridItem')
     const node = {
         scale: { x: 1, y: 1 }, position: { x: 0, y: -3 },
         setScale(x: number, y: number) { this.scale = { x, y } },
         setPosition(x: number, y: number) { this.position = { x, y } },
     }
     for (const scale of [1, 2]) {
-        const grave = new classes.PacketGrave().initialize(scale, () => ({}))
+        const grave = new classes.PacketGridItem().initialize(scale, () => ({}))
         grave.node = node
         grave.setMirrored(true)
         assert.deepEqual([node.scale, node.position], [{ x: -1, y: 1 }, { x: 50 * scale, y: -3 }], `about the middle of a packet at ${scale}x`)
