@@ -2,10 +2,11 @@ import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { parseGameplayDefinitions } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
+import { nonNegativeInteger } from '@/shared/validate'
 import { Chomper } from '@/server/plants/Chomper'
 import type { PotatoMine } from '@/server/plants/PotatoMine'
-import { Plant } from '@/server/plants/Plant'
+import { Plant, type PlantConfig } from '@/server/plants/Plant'
 import { PlantRegistry } from '@/server/plants/PlantRegistry'
 import { WallNut } from '@/server/plants/WallNut'
 
@@ -53,6 +54,46 @@ test("each plant is an instance of the kind its definition names, as its present
         /pvz:wallnut\.chomper needs a kind that takes it/)
     assert.throws(() => registry.validate(changed(plants => { plants['pvz:wallnut'].kind = 'chomper' })), /pvz:wallnut of kind chomper needs chomper/)
     assert.throws(() => registry.validate(changed(plants => { plants['pvz:wallnut'].kind = 'example:missing' })), /Plant kind is not installed: pvz:wallnut/)
+})
+
+test("a Mod's kind takes fields named by its namespace, which a mixin adds over any kind", () => {
+    const Tag = 'example:tag'
+    /** A mixin: its type's `example:tag` field, and a field of its own of the same name. */
+    const tagged = <B extends (new (...args: any[]) => Plant) & { readonly config: readonly PlantConfig[], validate(definition: PlantDefinition, id: string): void }>(Base: B) =>
+        class extends Base {
+            static readonly config: readonly PlantConfig[] = [...Base.config, Tag]
+            static validate(definition: PlantDefinition, id: string): void {
+                super.validate(definition, id)
+                nonNegativeInteger(definition[Tag]?.ticks, `${id}.${Tag}.ticks`)
+            }
+            [Tag] = { ticks: 0 }
+            protected restoreOwn(fields: Record<string, unknown>, name: string): void {
+                const { [Tag]: tag, ...rest } = fields
+                this[Tag] = { ticks: nonNegativeInteger((tag as { ticks?: unknown } | undefined)?.ticks, `${name}.${Tag}.ticks`) }
+                super.restoreOwn(rest, name)
+            }
+        }
+    const registry = new PlantRegistry()
+    registry.register('example', 'example:tagged-chomper', tagged(Chomper))
+    const tagging = (plants: Record<string, Record<string, unknown>>, tag: unknown) => Object.assign(plants['pvz:chomper'], { kind: 'example:tagged-chomper', [Tag]: tag })
+    const content = changed(plants => tagging(plants, { ticks: 3 }))
+    registry.validate(content)
+    const factory = registry.factory(content)
+    const chomper = factory.create('pvz:chomper') as Chomper & { [Tag]: { ticks: number } }
+    assert.ok(chomper instanceof Chomper)
+    chomper[Tag].ticks = 5
+    const saved = JSON.parse(JSON.stringify(chomper))
+    assert.deepEqual([saved[Tag], saved.phase], [{ ticks: 5 }, 'ready'])
+    assert.deepEqual((factory.restore(saved, 'saved') as typeof chomper)[Tag], { ticks: 5 })
+    assert.throws(() => factory.restore({ ...saved, [Tag]: { ticks: -1 } }, 'saved'), /saved\.example:tag\.ticks/)
+    assert.throws(() => factory.restore({ ...saved, phase: 'armed' }, 'saved'), /saved\.phase/, 'the kind it extends takes its own')
+
+    // A Mod's field goes with a kind that takes it, as the base's do.
+    assert.throws(() => registry.validate(changed(plants => { plants['pvz:wallnut'][Tag] = { ticks: 1 } })), /pvz:wallnut\.example:tag needs a kind that takes it/)
+    assert.throws(() => registry.validate(changed(plants => { plants['pvz:chomper'].kind = 'example:tagged-chomper' })),
+        /pvz:chomper of kind example:tagged-chomper needs example:tag/)
+    assert.throws(() => registry.validate(changed(plants => tagging(plants, { ticks: 0.5 }))), /pvz:chomper\.example:tag\.ticks/)
+    assert.throws(() => changed(plants => tagging(plants, 3)), /plants\.pvz:chomper\.example:tag must be an object/)
 })
 
 test("a plant's kind keeps it from the cold: its type always, a potato mine while it rises, and a Mod's kind as it says", () => {

@@ -195,9 +195,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
             command.name === 'broken:leaked' ? debugSuccess('Leaked command') : next(session, command))
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
         const registry = host.get('gameplay/registry')
-        const behavior = { createState: () => ({}), tick() {} }
-        registry.plantBehaviors.register(assets.id, 'broken:leaked', behavior)
-        registry.zombieBehaviors.register(assets.id, 'broken:leaked', behavior)
+        registry.plants.register(assets.id, 'broken:leaked', host.get('server/plants/Plant').Plant)
+        registry.zombies.register(assets.id, 'broken:leaked', host.get('server/zombies/Zombie').Zombie)
         registry.extensions.register('broken:leaked-state')
         host.around(target, 'value', (next: any) => next() + 100)
     }, async ({ host, assets }: any) => {
@@ -229,6 +228,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.equal(result.gameplayDefinitions.length, 1)
         assert.equal(result.presentationDefinitions.length, 0)
         assert.deepEqual(result.gameplay.extensions.snapshot(new World()), {})
+        for (const kinds of [result.gameplay.plants, result.gameplay.zombies]) assert.equal(kinds.has('broken:leaked'), false)
         for (const views of [result.views.plants, result.views.zombies]) {
             assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))
@@ -441,11 +441,15 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const summoned = server.snapshot().zombies.find(zombie => zombie.typeId === 'example:regenerating_zombie' && zombie.row === 1)!
         const saved = server.save()
         const savedPlant = saved.plants.find(plant => plant.typeId === 'example:rapid_pea')!
-        assert.deepEqual(savedPlant.behaviorState, server.snapshot().plants[0].behaviorState)
+        assert.deepEqual(Object.keys(savedPlant['example:regeneration'] as object), ['ticks'], 'its kind keeps its count as its own field')
         savedPlant.health = 100
         const savedZombie = saved.zombies.find(zombie => zombie.id === summoned.entityId)!
-        assert.deepEqual(savedZombie.behaviorState, { ticks: 0 })
+        assert.deepEqual(savedZombie['example:regeneration'], { ticks: 0 })
         savedZombie.health = 400
+        const badCount = structuredClone(saved)
+        Object.assign(badCount.zombies.find(zombie => zombie.id === summoned.entityId)!, { 'example:regeneration': { ticks: -1 } })
+        assert.throws(() => startFromSave(new IntegratedGameServer(definitions, levels, systems), badCount, { levelId: 'example:testing', mods: mods }),
+            /Invalid Saved zombie \d+\.example:regeneration/)
         startFromSave(server, saved, { levelId: 'example:testing', mods: mods })
         const restored = new IntegratedGameServer(definitions, levels, systems)
         startFromSave(restored, server.save(), { levelId: 'example:testing', mods: mods })

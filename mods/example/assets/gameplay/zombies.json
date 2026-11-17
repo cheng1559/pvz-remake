@@ -1,7 +1,8 @@
 {
   "example:regenerating_zombie": {
     "maxHealth": 540,
-    "behavior": { "intervalTicks": 100, "amount": 10 },
+    "kind": "example:regenerating_zombie",
+    "example:regeneration": { "intervalTicks": 100, "amount": 10 },
     "boardEdgeX": -100,
     "spawn": { "minX": 780, "maxX": 819, "flagWaveOffset": 40 },
     "speedPerTick": { "min": 0.23, "max": 0.37 },

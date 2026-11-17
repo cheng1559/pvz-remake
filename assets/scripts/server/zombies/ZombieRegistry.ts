@@ -1,5 +1,6 @@
 import { BASE_MOD_ID, baseQualified, Registry } from '@/shared/mod'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
+import { checkKindFields } from '../registry/kindFields'
 import { Zombie, type ZombieConfig, ZombieFactory } from './Zombie'
 import { Dancer } from './Dancer'
 import { FlagZombie } from './FlagZombie'
@@ -42,16 +43,13 @@ export class ZombieRegistry {
 
     /**
      * Every type's kind is installed and takes its type's own fields: a type has those its kind takes (`config`: a pole
-     * vaulter's `vault`), and none another kind takes.
+     * vaulter's `vault`, a Mod kind's of its namespace), and none another kind takes (checkKindFields).
      */
     validate(definitions: GameplayDefinitions): void {
         const taken = new Set([...this.kinds.entries()].flatMap(([, kind]) => kind.config))
         for (const [id, definition] of Object.entries(definitions.zombies)) {
             const kind = this.kindOf(id, definition)
-            for (const field of taken) {
-                const has = definition[field] !== undefined, takes = kind.config.includes(field)
-                if (has !== takes) throw new Error(takes ? `${id} of kind ${definition.kind} needs ${field}` : `${id}.${field} needs a kind that takes it`)
-            }
+            checkKindFields(id, definition, definition.kind ?? 'zombie', kind.config, taken)
             kind.validate(definition, id)
         }
     }

@@ -1,5 +1,6 @@
 import { BASE_MOD_ID, baseQualified, Registry } from '@/shared/mod'
 import type { GameplayDefinitions, GameplayLevels, ProjectileDefinition } from '@/shared/content/gameplay'
+import { checkKindFields } from '../registry/kindFields'
 import { MowingProjectile } from './MowingProjectile'
 import { Projectile, type ProjectileConfig, ProjectileFactory } from './Projectile'
 
@@ -50,10 +51,7 @@ export class ProjectileRegistry {
         const taken = new Set([...this.kinds.entries()].flatMap(([, kind]) => kind.config))
         for (const [id, definition] of Object.entries(definitions.projectiles)) {
             const kind = this.kindOf(id, definition)
-            for (const field of taken) {
-                const has = definition[field] !== undefined, takes = kind.config.includes(field)
-                if (has !== takes) throw new Error(takes ? `${id} of kind ${definition.kind ?? 'projectile'} needs ${field}` : `${id}.${field} needs a kind that takes it`)
-            }
+            checkKindFields(id, definition, definition.kind ?? 'projectile', kind.config, taken)
             kind.validate(definition, id)
         }
         for (const [id, plant] of Object.entries(definitions.plants)) {

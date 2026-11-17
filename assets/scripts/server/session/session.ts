@@ -29,7 +29,6 @@ import { ProjectileFactoryResource } from '../projectiles/Projectile'
 import { createWaveSystem } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
-import { ZombieBehaviorsResource } from '../zombies/behaviors'
 import { ZombieFactoryResource } from '../zombies/Zombie'
 import { AchievementsResource, observeAchievements } from '../achievements/achievements'
 import { createZombieSystem } from '../zombies/system'
@@ -88,7 +87,6 @@ export interface Session extends ServerContent {
 
 export function createWorld(content: ServerContent): World {
     const world = new World()
-    world.resources.set(ZombieBehaviorsResource, content.gameplay.zombieBehaviors)
     world.resources.set(ZombieFactoryResource, content.gameplay.zombies.factory(content.definitions))
     world.resources.set(PlantFactoryResource, content.gameplay.plants.factory(content.definitions))
     world.resources.set(ProjectileMotionsResource, content.gameplay.projectileMotions)
@@ -134,11 +132,9 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
         { phase: 'plant', system: createConveyorSystem() },
         { phase: 'plant', system: createPlantRollSystem() },
-        { phase: 'plant', system: gameplay.plantBehaviors.system(definitions) },
         { phase: 'plant', system: plantAnimation },
         { phase: 'zombie', system: createZombieGroanSystem() },
         { phase: 'zombie', system: createZombieSystem(definitions) },
-        { phase: 'zombie', system: gameplay.zombieBehaviors.system(definitions) },
         { phase: 'projectile', system: createProjectileSystem(definitions) },
         { phase: 'mower', system: createMowerSystem(definitions) },
         { phase: 'item', system: createItemSystem(definitions) },

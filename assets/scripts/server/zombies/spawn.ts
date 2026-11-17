@@ -3,7 +3,6 @@ import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gam
 import { RandomResource } from '../state/resources'
 import type { World } from '@/server/state/World'
 import { pickWalkClip, startWalk, startZombie } from './animation'
-import { ZombieBehaviorsResource } from './behaviors'
 import { ZombieFactoryResource } from './Zombie'
 
 /** Wave spawning and CLI summons share the configured range and flag-wave offset. */
@@ -27,13 +26,9 @@ export function spawnZombie(
 ): number {
     const definition = definitions.zombies[typeId]
     if (!definition) throw new Error(`Unknown zombie: ${typeId}`)
-    const behaviorState = world.resources.has(ZombieBehaviorsResource)
-        ? world.resources.get(ZombieBehaviorsResource).createState(typeId, definition) : undefined
-    if (definition.behavior !== undefined && behaviorState === undefined) throw new Error(`Zombie behavior is not installed: ${typeId}`)
     const random = world.resources.get(RandomResource), zombie = world.resources.get(ZombieFactoryResource).create(typeId)
     zombie.hasTongue = definition.tongueChance > 0 && random.nextFloat() < definition.tongueChance
     zombie.groanCounter = random.integer(300, 400)
-    if (behaviorState !== undefined) zombie.behaviorState = behaviorState
     zombie.id = world.createEntity()
     zombie.position = { x, y, row }
     world.insert(world.zombies, zombie)

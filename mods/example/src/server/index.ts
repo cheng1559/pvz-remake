@@ -1,46 +1,28 @@
-interface RegenerationState { ticks: number }
-interface Definition { behavior?: { [key: string]: unknown } }
-interface Behavior<Kind extends string> {
-    createState(): RegenerationState
-    validateState(state: RegenerationState, definition: Definition): void
-    tick(context: { state: RegenerationState, definition: Definition } & Record<Kind, { health: number, maxHealth: number }>): void
-}
 interface GameplayApi {
     host: { get(id: string): any, around(target: object, key: string, wrapper: (this: any, next: (...args: any[]) => any, ...args: any[]) => any): () => void }
     assets: { id: string, json(path: string): any }
 }
 
-function config(definition: Definition): { intervalTicks: number, amount: number } {
-    const { intervalTicks, amount } = definition.behavior ?? {}
-    if (!Number.isSafeInteger(intervalTicks) || (intervalTicks as number) <= 0 ||
-        !Number.isSafeInteger(amount) || (amount as number) <= 0) throw new Error('Invalid regeneration config')
-    return { intervalTicks: intervalTicks as number, amount: amount as number }
+/** A field of this Mod's on a definition: an object of positive whole numbers by `keys`, and nothing else. */
+function wholeNumbers(value: any, keys: string[], name: string): void {
+    if (!value || typeof value !== 'object' || Object.keys(value).length !== keys.length ||
+        keys.some(key => !Number.isSafeInteger(value[key]) || value[key] <= 0)) throw new Error(`Invalid ${name}`)
 }
 
-function regeneration<Kind extends string>(kind: Kind, multiplier = (_context: any) => 1): Behavior<Kind> {
-    return {
-        createState: () => ({ ticks: 0 }),
-        validateState(state, definition) {
-            const { intervalTicks } = config(definition)
-            if (Object.keys(state).length !== 1 || !Number.isSafeInteger(state.ticks) ||
-                state.ticks < 0 || state.ticks >= intervalTicks) throw new Error('Invalid regeneration state')
-        },
-        tick(context) {
-            const factor = multiplier(context)
-            const { state, definition } = context
-            const entity = context[kind]
-            const { intervalTicks, amount } = config(definition)
-            if (++state.ticks < intervalTicks) return
-            state.ticks = 0
-            entity.health = Math.min(entity.maxHealth, entity.health + amount * factor)
-        },
-    }
+/** A count this Mod keeps on an entity (`{ ticks }`), below `intervalTicks`, as it is restored. */
+function count(value: any, intervalTicks: number, name: string): { ticks: number } {
+    if (!value || typeof value !== 'object' || Object.keys(value).length !== 1 || !Number.isSafeInteger(value.ticks) ||
+        value.ticks < 0 || value.ticks >= intervalTicks) throw new Error(`Invalid ${name}`)
+    return { ticks: value.ticks }
 }
 
 export function register({ host, assets }: GameplayApi): void {
     const registry = host.get('gameplay/registry')
     const { LevelStateResource: Level, EconomyStateResource: Economy } = host.get('server/state/resources')
     const { plantsInPlay } = host.get('server/level/lawn')
+    const { Plant } = host.get('server/plants/Plant')
+    const { Shooter } = host.get('server/plants/Shooter')
+    const { Zombie } = host.get('server/zombies/Zombie')
     const settings = assets.json('assets/settings.json')
     for (const key of ['chargeTicks', 'chargeMultiplier', 'particlePeriodTicks']) {
         if (!Number.isSafeInteger(settings[key]) || settings[key] <= 0) throw new Error(`Invalid example setting: ${key}`)
@@ -52,30 +34,70 @@ export function register({ host, assets }: GameplayApi): void {
         if (Object.keys(value).length !== 1 || !Number.isSafeInteger(value.remainingTicks)
             || value.remainingTicks <= 0 || value.remainingTicks > settings.chargeTicks) throw new Error('Invalid example charge')
     })
-    const multiplier = ({ plant }: any) => {
+    /** What a plant's charge multiplies this tick by, counting the charge down. */
+    const charged = (plant: any): number => {
         const charge = plant.extensions?.[Charge]
         if (!charge) return 1
         if (--charge.remainingTicks === 0) delete plant.extensions[Charge]
         return settings.chargeMultiplier
     }
-    registry.plantBehaviors.register(assets.id, 'example:rapid_pea', regeneration('plant', multiplier))
-    registry.zombieBehaviors.register(assets.id, 'example:regenerating_zombie', regeneration('zombie'))
-    registry.plantBehaviors.register(assets.id, 'example:beacon', {
-        createState: () => ({ ticks: 0 }),
-        validateState(state: RegenerationState, definition: Definition) {
-            const { intervalTicks, sun } = definition.behavior ?? {}
-            if (!Number.isSafeInteger(intervalTicks) || Number(intervalTicks) <= 0 || !Number.isSafeInteger(sun) || Number(sun) <= 0
-                || Object.keys(state).length !== 1 || !Number.isSafeInteger(state.ticks)
-                || state.ticks < 0 || state.ticks >= Number(intervalTicks)) throw new Error('Invalid beacon state or config')
-        },
-        tick(context: any) {
-            const factor = multiplier(context)
-            if (++context.state.ticks < context.definition.behavior.intervalTicks) return
-            context.state.ticks = 0
+
+    /**
+     * A mixin over a plant's kind or a zombie's: it regains `amount` health every `intervalTicks` ticks it acts, by its
+     * type's `example:regeneration` field, times `factor`. What it keeps is its own field of the same name: a Mod names
+     * its fields by IDs of its namespace, so a kind may take on any number of mixins.
+     */
+    const Regeneration = 'example:regeneration'
+    const regenerating = (Base: any, factor: (entity: any) => number = () => 1) => class extends Base {
+        static config = [...Base.config, Regeneration]
+        static validate(definition: any, id: string): void {
+            super.validate(definition, id)
+            wholeNumbers(definition[Regeneration], ['intervalTicks', 'amount'], `${id}.${Regeneration}`)
+        }
+        [Regeneration] = { ticks: 0 }
+        act(...args: any[]): unknown {
+            const { intervalTicks, amount } = this.definition[Regeneration], state = this[Regeneration], gain = factor(this)
+            if (++state.ticks >= intervalTicks) {
+                state.ticks = 0
+                this.health = Math.min(this.maxHealth, this.health + amount * gain)
+            }
+            return super.act(...args)
+        }
+        restoreOwn(fields: any, name: string): void {
+            const { [Regeneration]: state, ...rest } = fields
+            this[Regeneration] = count(state, this.definition[Regeneration].intervalTicks, `${name}.${Regeneration}`)
+            super.restoreOwn(rest, name)
+        }
+    }
+
+    /** The beacon (its type's `example:beacon` field): `sun` sun every `intervalTicks` ticks it produces, more while charged. */
+    const Beacon = 'example:beacon'
+    class BeaconPlant extends Plant {
+        static config = [...Plant.config, Beacon]
+        static validate(definition: any, id: string): void {
+            super.validate(definition, id)
+            wholeNumbers(definition[Beacon], ['intervalTicks', 'sun'], `${id}.${Beacon}`)
+        }
+        [Beacon] = { ticks: 0 }
+        produce(context: any, stopped: boolean): void {
+            super.produce(context, stopped)
+            if (stopped) return
+            const { intervalTicks, sun } = this.definition[Beacon], state = this[Beacon], gain = charged(this)
+            if (++state.ticks < intervalTicks) return
+            state.ticks = 0
             const economy = context.world.resources.get(Economy)
-            economy.sun = Math.min(context.definitions.economy.maxSun, economy.sun + context.definition.behavior.sun * factor)
-        },
-    })
+            economy.sun = Math.min(this.definitions.economy.maxSun, economy.sun + sun * gain)
+        }
+        restoreOwn(fields: any, name: string): void {
+            const { [Beacon]: state, ...rest } = fields
+            this[Beacon] = count(state, this.definition[Beacon].intervalTicks, `${name}.${Beacon}`)
+            super.restoreOwn(rest, name)
+        }
+    }
+
+    registry.plants.register(assets.id, 'example:rapid_pea', regenerating(Shooter, charged))
+    registry.plants.register(assets.id, 'example:beacon', BeaconPlant)
+    registry.zombies.register(assets.id, 'example:regenerating_zombie', regenerating(Zombie))
 
     // Declare server syntax too: a standalone server must not depend on client initialization.
     const cli = host.get('shared/debug/DebugCli')

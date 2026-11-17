@@ -240,8 +240,16 @@ export interface PlantTargeting {
     plantReach?: number
 }
 
+/**
+ * A Mod kind's definition field, named by a qualified ID of the Mod's namespace (`example:regeneration`): a JSON object
+ * that the kinds taking it (their `config`) check (their `validate`), as the base's kinds do their own fields.
+ */
+export type ModField = `${string}:${string}`
+
 /** At most one ability; a plant without one only blocks, like the wall-nut. */
 export interface PlantDefinition {
+    /** A Mod kind's own fields (ModField). */
+    [field: ModField]: JsonObject | undefined
     /**
      * Its kind, the server's class of it and the client's view of it (`plant` when omitted; PLANT_KIND_STATES): the
      * base's `shooter`, `scaredyshroom`, `producer`, `sunshroom`, `fuse`, `potatomine`, `chomper`, `gravebuster`,
@@ -267,8 +275,6 @@ export interface PlantDefinition {
     low?: boolean
     maxHealth: number
     body: Rect
-    /** JSON configuration consumed by a registered plant behavior. */
-    behavior?: JsonObject
     /**
      * Wall-nut Bowling's nut (the `bowlingnut` kind, Plant::UpdateBowling): `attack`, Plant::GetPlantAttackRect on the
      * minigame, the rect its blows land with (its body is GetPlantRect); `bounceSpeed`, how far it goes up or down a
@@ -448,6 +454,8 @@ export const PLANT_BLINK_TICKS = { min: 400, max: 799 }
 export interface ZombieArmor { type: string; health: number }
 
 export interface ZombieDefinition {
+    /** A Mod kind's own fields (ModField). */
+    [field: ModField]: JsonObject | undefined
     /**
      * Its kind, the server's class of it (`zombie` when omitted; server/zombies/ZombieRegistry.ts): `polevaulter`,
      * `dancer`, `newspaper`, or a Mod's. Its own fields (`vault`, `dance`, `enrage`) go with the kind that takes them.
@@ -473,8 +481,6 @@ export interface ZombieDefinition {
      */
     unfreezable?: true | ZombieState[]
     maxHealth: number
-    /** JSON configuration consumed by a registered entity behavior. */
-    behavior?: JsonObject
     /** X at which a headed zombie reaches the house. */
     boardEdgeX: number
     spawn: { minX: number; maxX: number; flagWaveOffset: number }

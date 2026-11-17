@@ -172,12 +172,11 @@ export const planting = {
 
     /** Creates the plant of `seedId` in a cell without any planting checks, on the plants' side unless `team` says otherwise. */
     createPlant(session: Session, seedId: string, row: number, column: number, team?: Team): number {
-        const { world, gameplayTick, definitions, gameplay } = session
+        const { world, gameplayTick, definitions } = session
         const level = world.resources.get(LevelStateResource)
         const plantedSeed = definitions.seeds[seedId]
         if (plantedSeed.kind !== 'plant') throw new Error(`${seedId} is a ${plantedSeed.kind} seed, not a plant seed`)
         const definition = definitions.plants[plantedSeed.id]
-        const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.id, definition)
         const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
         const entity = world.createEntity(), cell = cellPosition(level.board, row, column)
         const position = {
@@ -191,7 +190,6 @@ export const planting = {
         plant.position = position
         plant.seedId = seedId
         plant.column = column
-        if (behaviorState !== undefined) plant.behaviorState = behaviorState
         if (team === 'zombies') plant.team = team
         world.insert(world.plants, plant)
         plant.start(random, gameplayTick)

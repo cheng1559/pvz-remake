@@ -1,5 +1,5 @@
 import { defineResource, type EntityId, type Position, type SystemContext, type World } from '@/server/state/World'
-import { type AnimationClip, type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
+import { type AnimationClip, type GameplayDefinitions, type ModField, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import type { ZombieState } from '@/shared/content/zombieStates'
 import { jsonRoundTrip, type JsonObject, type Team, type ZombieSnapshot } from '@/shared/protocol'
@@ -53,15 +53,13 @@ export interface ZombieFields {
      * tints it; one put down on the plants' side is not.
      */
     mindControlled?: true
-    /** A Mod's behavior's state (ZombieBehavior). */
-    behaviorState?: JsonObject
 }
 
 /** Every zombie's fields by name, those a zombie may be without last: what else its save has is its kind's own. */
 export const ZOMBIE_FIELDS = [
     'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining', 'walkClip', 'animations', 'hasHead',
     'hasTongue', 'hasArm', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'riseTicks',
-    'droppedLoot', 'frozenTicks', 'slowed', 'team', 'mindControlled', 'behaviorState',
+    'droppedLoot', 'frozenTicks', 'slowed', 'team', 'mindControlled',
 ] as const satisfies readonly (keyof ZombieFields)[]
 
 /** A zombie as its save has it: every zombie's fields, and its kind's own beside them (Zombie.restore). */
@@ -71,8 +69,11 @@ export type SavedZombie = ZombieFields & { readonly [own: string]: unknown }
 export type PlantFinder = (attack: { x: number, width: number }, rollingAttack?: { x: number, width: number }) =>
     { plant: Plant, rolling: boolean } | undefined
 
-/** A type's own definition fields, each taken by the kinds that say so (`config`): a pole vaulter's `vault`, ... */
-export type ZombieConfig = 'vault' | 'dance' | 'enrage'
+/**
+ * A type's own definition fields, each taken by the kinds that say so (`config`): a pole vaulter's `vault`, ..., and a
+ * Mod kind's, named by a qualified ID of its namespace (ModField).
+ */
+export type ZombieConfig = 'vault' | 'dance' | 'enrage' | ModField
 
 /** Each zombie's type, which its save does not keep: it is its type's again as it is restored. */
 const TYPES = new WeakMap<Zombie, { definition: ZombieDefinition, definitions: GameplayDefinitions }>()
@@ -275,7 +276,6 @@ export class Zombie {
             ...(this.team === 'plants' ? { team: 'plants' as const } : {}),
             ...(this.mindControlled ? { mindControlled: true as const } : {}),
             ...(this.riseTicks ? { riseTicks: this.riseTicks } : {}),
-            ...(this.behaviorState ? { behaviorState: jsonRoundTrip(this.behaviorState) } : {}),
             ...(own ? { own } : {}),
         }
     }

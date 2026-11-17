@@ -5,7 +5,7 @@ import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 import { plantKindPhases } from './plantKinds'
 import { ZOMBIE_STATES } from './zombieStates'
-import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
+import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type ModField, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
 
@@ -175,14 +175,29 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
     }
 }
 
+/**
+ * A definition's fields apart from a Mod kind's, which are named by qualified IDs (ModField): each of those a JSON
+ * object, which the kinds taking it check as the content is installed (PlantRegistry, ZombieRegistry).
+ */
+function modFields(value: unknown, name: string): [Record<string, unknown>, Record<ModField, JsonObject>] {
+    const fields: Record<string, unknown> = {}, mods: Record<ModField, JsonObject> = {}
+    for (const [key, field] of Object.entries(record(value, name))) {
+        if (isQualifiedId(key)) mods[key as ModField] = jsonRoundTrip(record(field, `${name}.${key}`)) as JsonObject
+        else fields[key] = field
+    }
+    return [fields, mods]
+}
+
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
     const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exact(value, ['maxHealth', 'body'], name, ['kind', ...abilities, 'fright', 'mindControl', 'deathExplosion', 'behavior', 'bowling', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation', 'unchillable', 'unfreezable'])
+    const [fields, mods] = modFields(value, name)
+    const source = exact(fields, ['maxHealth', 'body'], name, ['kind', ...abilities, 'fright', 'mindControl', 'deathExplosion', 'bowling', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation', 'unchillable', 'unfreezable'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
     const result: PlantDefinition = {
+        ...mods,
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         body: rect(source.body, `${name}.body`),
     }
@@ -207,7 +222,6 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         result.plantingOffset = { min, max }
     }
     if (source.kind !== undefined) result.kind = nonEmptyString(source.kind, `${name}.kind`)
-    if (source.behavior !== undefined) result.behavior = jsonRoundTrip(record(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.bowling !== undefined) result.bowling = parseBowling(source.bowling, `${name}.bowling`)
     if (source.animation !== undefined) result.animation = parsePlantAnimation(source.animation, `${name}.animation`)
     const type = attacks.find(key => source[key] !== undefined)
@@ -389,7 +403,8 @@ function freeze(value: unknown, name: string): FreezeDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['kind', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable', 'scale', 'dance'])
+    const [fields, mods] = modFields(value, name)
+    const source = exact(fields, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['kind', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable', 'scale', 'dance'])
     const spawn = exact(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -400,6 +415,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     // Every zombie has its value (mZombieValue): the points a wave spends on it and its loot's odds when it dies.
     const wave = exact(source.wave, ['points', 'weight'], `${name}.wave`, ['firstWave'])
     const result: ZombieDefinition = {
+        ...mods,
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         boardEdgeX: finite(source.boardEdgeX, `${name}.boardEdgeX`),
         spawn: { minX, maxX, flagWaveOffset: finite(spawn.flagWaveOffset, `${name}.spawn.flagWaveOffset`) },
@@ -421,7 +437,6 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     for (const key of ['unchillable', 'unfreezable'] as const) {
         if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, ZOMBIE_STATES)
     }
-    if (source.behavior !== undefined) result.behavior = jsonRoundTrip(record(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.graveRise !== undefined) {
         if (typeof source.graveRise !== 'boolean') throw new Error(`${name}.graveRise must be boolean`)
         if (source.graveRise && !result.wave.weight) throw new Error(`${name}.graveRise needs a weighted wave`)

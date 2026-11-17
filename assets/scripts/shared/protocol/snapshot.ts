@@ -8,8 +8,6 @@ import type { ServerTick } from '@/shared/protocol/packets'
 
 /** What the server shows the client each frame (WorldSnapshot) and the events with it, and how a client checks them. */
 
-export interface EntityBehaviorState { behaviorState?: JsonObject }
-
 export type EntityId = number
 
 export type EventId = number
@@ -206,7 +204,7 @@ export interface SeedPacketSnapshot {
     availability: SeedAvailability
 }
 
-export interface PlantSnapshot extends EntityBehaviorState {
+export interface PlantSnapshot {
     entityId: EntityId
     typeId: string
     /** What it is in, whatever its kind (PLANT_STATES): in play, or crushed by a mower (`mowered`). */
@@ -261,7 +259,7 @@ export type Team = 'plants' | 'zombies'
 
 export const TEAMS: readonly Team[] = ['plants', 'zombies']
 
-export interface ZombieSnapshot extends EntityBehaviorState {
+export interface ZombieSnapshot {
     entityId: EntityId
     typeId: string
     state: ZombieState
@@ -494,7 +492,6 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         }
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
         if (plant.frozen !== undefined && plant.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
-        if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
         // Its view reads its own as its kind has it.
         if (plant.own !== undefined) record(plant.own, `${name}.own`)
         if (plant.animations !== undefined) validateLayers(plant.animations, `${name}.animations`)
@@ -507,7 +504,6 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     array(snapshot.zombies, 'snapshot.zombies').forEach((entry, index) => {
         const name = `snapshot.zombies[${index}]`
         const zombie = validateLivingEntity(entry, name)
-        if (zombie.behaviorState !== undefined) record(zombie.behaviorState, `${name}.behaviorState`)
         if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
         validateLayers(zombie.animations, `${name}.animations`)
         nonNegativeInteger(zombie.alpha, `${name}.alpha`)

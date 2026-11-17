@@ -1,5 +1,6 @@
 import { BASE_MOD_ID, baseQualified, Registry } from '@/shared/mod'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
+import { checkKindFields } from '../registry/kindFields'
 import { Plant, type PlantConfig, PlantFactory } from './Plant'
 import { BowlingNut } from './BowlingNut'
 import { Chomper } from './Chomper'
@@ -53,16 +54,14 @@ export class PlantRegistry {
 
     /**
      * Every type's kind is installed and takes its type's own fields: a type has those its kind takes (`config`: a
-     * shooter's `shooter`), and none another kind takes; and what else its kind checks (validate).
+     * shooter's `shooter`, a Mod kind's of its namespace), and none another kind takes (checkKindFields); and what else
+     * its kind checks (validate).
      */
     validate(definitions: GameplayDefinitions): void {
         const taken = new Set([...this.kinds.entries()].flatMap(([, kind]) => kind.config))
         for (const [id, definition] of Object.entries(definitions.plants)) {
             const kind = this.kindOf(id, definition)
-            for (const field of taken) {
-                const has = definition[field] !== undefined, takes = kind.config.includes(field)
-                if (has !== takes) throw new Error(takes ? `${id} of kind ${definition.kind} needs ${field}` : `${id}.${field} needs a kind that takes it`)
-            }
+            checkKindFields(id, definition, definition.kind ?? 'plant', kind.config, taken)
             kind.validate(definition, id)
         }
     }

@@ -283,7 +283,7 @@ test('removing an entity while its custom view loads disposes the completed plan
         let context: any
         const factory = { create(value: unknown) { context = value; return new Promise(resolve => { finish = resolve }) } }
         const board = renderer(LevelEntityRenderer, { plants: factory, zombies: factory })
-        const entity = { entityId: 1, typeId: 'test:entity', behaviorState: { ticks: 3 } }
+        const entity = { entityId: 1, typeId: 'test:entity' }
         const pending = board.create(kind, entity)
         assert.equal(context[kind], entity)
         board.remove(1)

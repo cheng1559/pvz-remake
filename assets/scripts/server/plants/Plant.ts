@@ -1,6 +1,6 @@
 import { defineResource, type EntityId, type Position, type SystemContext, type World } from '@/server/state/World'
 import type { PlantState } from '@/shared/content/plantKinds'
-import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, ModField, PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import { jsonRoundTrip, type JsonObject, type PlantSnapshot, type Team } from '@/shared/protocol'
 import type { DeterministicRng } from '../state/DeterministicRng'
@@ -35,21 +35,22 @@ export interface PlantFields {
     animations?: Record<string, LayerState>
     /** Ticks to its next blink (Plant::mBlinkCountdown). */
     blinkTicks?: number
-    /** A Mod's behavior's state (PlantBehavior). */
-    behaviorState?: JsonObject
 }
 
 /** Every plant's fields by name, those a plant may be without last: what else its save has is its kind's own. */
 export const PLANT_FIELDS = [
     'typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks',
-    'mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks', 'behaviorState',
+    'mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks',
 ] as const satisfies readonly (keyof PlantFields)[]
 
 /** A plant as its save has it: every plant's fields, and its kind's own beside them (Plant.restore). */
 export type SavedPlant = PlantFields & { readonly [own: string]: unknown }
 
-/** A type's own definition fields, each taken by the kinds that say so (`config`): a shooter's `shooter`, ... */
-export type PlantConfig = 'shooter' | 'fright' | 'producer' | 'fuse' | 'mine' | 'chomper' | 'graveBuster' | 'mindControl' | 'bowling'
+/**
+ * A type's own definition fields, each taken by the kinds that say so (`config`): a shooter's `shooter`, ..., and a Mod
+ * kind's, named by a qualified ID of its namespace (ModField).
+ */
+export type PlantConfig = 'shooter' | 'fright' | 'producer' | 'fuse' | 'mine' | 'chomper' | 'graveBuster' | 'mindControl' | 'bowling' | ModField
 
 /** Each plant's type, which its save does not keep: it is its type's again as it is restored. */
 const TYPES = new WeakMap<Plant, { definition: PlantDefinition, definitions: GameplayDefinitions }>()
@@ -198,7 +199,6 @@ export class Plant {
             ...(this.chilledTicks ? { chilledTicks: this.chilledTicks } : {}),
             ...(this.frozenTicks !== undefined ? { frozen: true as const } : {}),
             ...(this.animations ? { animations: pacedLayers(this.animations, () => plantPace(this)) } : {}),
-            ...(this.behaviorState ? { behaviorState: jsonRoundTrip(this.behaviorState) } : {}),
             ...(own ? { own } : {}),
             ...(mowered ? { mowered: { time: mowered.squash.time, ...(mowered.left ? { left: true as const } : {}) } } : {}),
         }

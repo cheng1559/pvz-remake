@@ -58,11 +58,10 @@ export const SAVED_LISTS: readonly SavedList[] = [
     savedList({
         key: 'plants', positioned: true, parse: parseSavedPlant,
         check: (saved, context) => {
-            const { content: { definitions, gameplay }, world, entity } = context
+            const { content: { definitions }, world, entity } = context
             const plant = definitions.plants[saved.typeId]
             const seed = definitions.seeds[saved.seedId]
             if (!plant || seed?.kind !== 'plant' || seed.id !== saved.typeId) throw new Error(`Unknown saved plant: ${saved.typeId}`)
-            gameplay.plantBehaviors.validateState(saved, plant)
             if (!onBoardRow(context) || saved.column >= world.resources.get(LevelStateResource).board.columns) {
                 throw new Error(`Saved plant ${entity.id} is invalid for the level`)
             }
@@ -93,7 +92,7 @@ export const SAVED_LISTS: readonly SavedList[] = [
                 'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
                 'walkClip', 'animations', 'hasHead', 'hasArm',
                 'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'riseTicks',
-            ], name, ['behaviorState', 'droppedLoot', 'team', 'mindControlled', 'frozenTicks', 'slowed'])
+            ], name, ['droppedLoot', 'team', 'mindControlled', 'frozenTicks', 'slowed'])
             const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
             const health = nonNegativeInteger(source.health, `${name}.health`)
             if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -121,14 +120,12 @@ export const SAVED_LISTS: readonly SavedList[] = [
                 ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
                 ...(source.team === undefined ? {} : { team: oneOf(source.team, TEAMS, `${name}.team`) }),
                 ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
-                ...parseBehaviorState(source, name),
             }
         },
         check: (saved, context) => {
-            const { content: { definitions, gameplay }, entity } = context
+            const { content: { definitions }, entity } = context
             const zombie = definitions.zombies[saved.typeId]
             if (!zombie) throw new Error(`Unknown saved zombie: ${saved.typeId}`)
-            gameplay.zombieBehaviors.validateState(saved, zombie)
             if (!onBoardRow(context) || saved.helmHealth > (zombie.helm?.health ?? 0) || saved.shieldHealth > (zombie.shield?.health ?? 0)) {
                 throw new Error(`Saved zombie ${entity.id} is invalid for the level`)
             }
@@ -229,7 +226,7 @@ function parseSavedPlant(value: unknown, name: string): SavedPlant {
     const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
     const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))),
         ['typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['mowered', 'behaviorState', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
+        ['mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
     const mowered = source.mowered === undefined ? undefined : exact(source.mowered, ['squash'], `${name}.mowered`, ['left'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -251,7 +248,6 @@ function parseSavedPlant(value: unknown, name: string): SavedPlant {
         ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
         ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
-        ...parseBehaviorState(source, name),
     }
 }
 
@@ -302,12 +298,5 @@ function parseLayer(value: unknown, name: string): LayerState {
         clip: nonEmptyString(state.clip, `${name}.clip`),
         time: nonNegativeFinite(state.time, `${name}.time`),
         rate: nonNegativeFinite(state.rate, `${name}.rate`),
-    }
-}
-
-/** A behaviour's own state, which the behaviour checks (EntityBehaviorRegistry.validateState). */
-function parseBehaviorState(source: Record<string, unknown>, name: string) {
-    return source.behaviorState === undefined ? {} : {
-        behaviorState: jsonRoundTrip(record(source.behaviorState, `${name}.behaviorState`)) as JsonObject,
     }
 }

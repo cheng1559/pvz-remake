@@ -92,7 +92,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 | --- | --- |
 | `session/` | 一局游戏的生命周期：`IntegratedGameServer`、`IntegratedGameHost`、`session`、`commands`、`snapshot`、`persistence`、`save`、`savedLists`、`createModHost`，以及生成的 `hostModules` |
 | `state/` | 世界 `World`（含 `Entity`、`Position`、`EntityRemover`）、关卡资源 `resources`、事件队列 `events`、随机数 `DeterministicRng` |
-| `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityBehaviorRegistry`、`EntityExtensions` |
+| `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityExtensions`，以及检查类别定义字段的 `kindFields` |
 | `level/` | 关卡流程：`level`、`levelAward`、`waves`、`conveyor`、`loot`、`sun`，场上实体的查询 `lawn` |
 | `rules/` | 关卡规则：注册表与扩展点 `registry`，内置的 `adventure`、`bowling`、`whackAZombie` |
 | `seeds/` | 种子栏与手持物：`seedBank`、`seedChooser`、`planting`、`cursor`、`tools` |
@@ -102,7 +102,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 | `items/` | 掉落物：`items`、`itemSpawn` |
 | `gridItems/` | 格子物件：`gridItems`、`graves`、`craters` |
 | `achievements/` | 成就 `achievements` 和触发类型 `triggers` |
-| `plants/`、`zombies/` | 植物、僵尸各自的行为 |
+| `plants/`、`zombies/` | 植物、僵尸的各个类别（类）和它们的注册表 |
 | `tutorials/`、`debug/`、`menu/` | 教程、调试指令、菜单后端 |
 
 客户端每类实体的视图放在同名目录里（`plants/`、`zombies/`、`projectiles/`、`mowers/`、`items/`、`gridItems/`）。

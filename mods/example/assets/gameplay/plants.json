@@ -1,8 +1,8 @@
 {
   "example:rapid_pea": {
-    "kind": "shooter",
+    "kind": "example:rapid_pea",
     "maxHealth": 300,
-    "behavior": {
+    "example:regeneration": {
       "intervalTicks": 100,
       "amount": 10
     },
@@ -67,6 +67,7 @@
     }
   },
   "example:beacon": {
+    "kind": "example:beacon",
     "maxHealth": 400,
     "body": {
       "x": 16,
@@ -74,7 +75,7 @@
       "width": 48,
       "height": 64
     },
-    "behavior": {
+    "example:beacon": {
       "intervalTicks": 200,
       "sun": 25
     },

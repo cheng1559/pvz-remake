@@ -7,7 +7,7 @@
 | 能力 | 可观察的效果 | 入口 |
 | --- | --- | --- |
 | 新植物、种子、子弹 | Rapid Pea 每 75 tick 射击，费用 75，子弹伤害 30 | `assets/gameplay/{plants,seeds,projectiles}.json` |
-| 新僵尸与自定义行为 | Regenerating Zombie 每 100 tick 回复 10 生命；植物有独立回血计时 | `src/server/index.ts` 的 `regeneration()` |
+| 新僵尸与 mixin | Regenerating Zombie 每 100 tick 回复 10 生命；Rapid Pea 也回血，两者共用同一个 mixin | `src/server/index.ts` 的 `regenerating()` |
 | 自定义植物与视图 | Pulse Beacon 每 200 tick 增加 25 阳光，用自有动画循环发光 | `src/server/index.ts`、`src/client/beacon.ts` |
 | 实体上的 Mod 数据、快照、存档 | `example:charge` 记在植物的 `extensions` 里保存剩余时间，客户端通过 `world.extensions` 读取 | `registry.extensions.register()` |
 | 自定义关卡 | `/level example:testing` 提供新增种子和僵尸 | `assets/gameplay/levels.json`、`assets/presentation/levels.json` |
@@ -42,7 +42,7 @@ npm run mod:test -- dist/mods/example
 1. 点击主菜单的 Mod Lab 按钮，或执行 `/example:hello`，检查提示音与帮助文字。
 2. 执行 `/level example:testing`，完成开场后种植 Rapid Pea 和 Pulse Beacon。也可以用 `/plant example:beacon 3 2` 放置信标，用 `/zombie example:regenerating_zombie 3 9` 生成示例僵尸。
 3. 执行 `/example:charge 3 2`。行、列均从 1 开始，只对 Rapid Pea 和 Pulse Beacon 生效。充能维持 300 个逻辑 tick，回血或信标产阳光变为 3 倍，信标改变颜色。
-4. 在充能中暂停、保存并重新进入关卡：剩余时间、行为计时和后续结果继续保持一致；暂停不消耗充能，也不继续发射粒子。
+4. 在充能中暂停、保存并重新进入关卡：剩余时间、回血和信标的计时以及后续结果继续保持一致；暂停不消耗充能，也不继续发射粒子。
 5. 在普通关卡观察基础豌豆的外观覆盖。新增能量球资源是 `example:orb`，`pvz:projectilepea` 的映射演示覆盖已有 ID；删除后一个映射即可取消这项覆盖。
 
 原版资源仍由基础包提供。Rapid Pea 的身体和示例僵尸复用原版动画，信标则完全使用示例自己的 PNG 和 Reanim。标准种子包的 `visual.preview` 使用原版图像；渲染种子包模式按植物表现定义的 `clips`（`from` 可借用另一种植物的）和 `packet` 姿态绘制实际植物。
@@ -50,7 +50,7 @@ npm run mod:test -- dist/mods/example
 ## 状态与生命周期
 
 - 玩法变化在服务端发生。客户端的充能命令只声明语法，仍通过正常命令队列转发，并接受游戏现有的调试权限校验；客户端不会直接改世界。
-- `behaviorState` 保存实体自己的周期计时。`example:charge` 是额外的 JSON ECS 组件，经过校验进入快照及存档，耗尽后移除。两个行为系统都遵守游戏阶段、暂停、死亡和结算规则。
+- Rapid Pea、Pulse Beacon 和示例僵尸各是一个类别（`registry.plants`／`registry.zombies` 注册，定义里写 `kind`）：配置是定义里的 `example:regeneration`、`example:beacon` 字段，周期计时是实体上的同名字段，随存档保存、读档时校验。回血写成 mixin `regenerating(基类)`，同时用在 `Shooter` 和 `Zombie` 上；信标重写 `produce`，和本体的生产一样在暂停、结算或奖励掉落后停下。`example:charge` 是挂在植物上的 `extensions` 数据，经过校验进入快照及存档，耗尽后移除。
 - 客户端根据权威 tick 和扩展快照计算粒子与着色，不使用 `setInterval` 或另建模拟时钟。信标继承宿主的 `PlantView`：动画由玩法定义的 `animation` 驱动，视图只在 `onBoard` 里加关卡内的着色和粒子；种子包图片等关卡外的显示只走 `pose`。
 - 命令语法通过包装 `specs.list()` 声明，不直接修改全局数组。两端会检查同名语法，避免集成运行时重复注册。
 - `host.dispose()` 撤销方法包装；本示例也包装该方法，销毁自己创建的按钮和对话框。实体视图随宿主实体节点销毁；注册失败时，加载器负责回滚注册表。正常启停通过重启加载完整 Mod 集合。

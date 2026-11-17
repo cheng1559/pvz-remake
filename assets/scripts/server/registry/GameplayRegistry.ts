@@ -1,6 +1,4 @@
 import { EntityExtensions } from './EntityExtensions'
-import { PlantBehaviorRegistry } from '../plants/behaviors'
-import { ZombieBehaviorRegistry } from '../zombies/behaviors'
 import { ZombieRegistry } from '../zombies/ZombieRegistry'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 import { LevelRuleRegistry } from '../rules/registry'
@@ -13,10 +11,8 @@ import { ProjectileRegistry } from '../projectiles/ProjectileRegistry'
 import { installBuiltinTutorials, TutorialRegistry } from '../tutorials'
 
 export class GameplayRegistry {
-    readonly plantBehaviors = new PlantBehaviorRegistry()
     /** The kinds of plants (PlantDefinition.kind): the base's, and a Mod's, which extends one. */
     readonly plants = new PlantRegistry()
-    readonly zombieBehaviors = new ZombieBehaviorRegistry()
     /** The kinds of zombies (ZombieDefinition.kind): the base's, and a Mod's, which extends one. */
     readonly zombies = new ZombieRegistry()
     readonly extensions = new EntityExtensions()
@@ -33,15 +29,13 @@ export class GameplayRegistry {
         installBuiltinProjectileMotions(this.projectileMotions)
     }
     checkpoint(): () => void {
-        const rollback = [this.plantBehaviors.checkpoint(), this.plants.checkpoint(), this.zombieBehaviors.checkpoint(), this.zombies.checkpoint(), this.extensions.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint(), this.projectiles.checkpoint(), this.tutorials.checkpoint()]
+        const rollback = [this.plants.checkpoint(), this.zombies.checkpoint(), this.extensions.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint(), this.projectiles.checkpoint(), this.tutorials.checkpoint()]
         return () => { for (const undo of rollback.reverse()) undo() }
     }
-    /** Everything the content names is installed and takes its settings: behaviors, plant, zombie and projectile kinds, level rules, tutorials, achievement triggers. */
+    /** Everything the content names is installed and takes its settings: plant, zombie and projectile kinds, level rules, tutorials, achievement triggers. */
     validate(definitions: GameplayDefinitions, levels: GameplayLevels): void {
         this.installBuiltins(definitions)
-        this.plantBehaviors.validate(definitions)
         this.plants.validate(definitions)
-        this.zombieBehaviors.validate(definitions)
         this.zombies.validate(definitions)
         this.projectiles.validate(definitions, levels)
         this.levelRules.validate(levels, definitions)
@@ -50,9 +44,7 @@ export class GameplayRegistry {
     }
     freeze(definitions: GameplayDefinitions, levels: GameplayLevels): void {
         this.validate(definitions, levels)
-        this.plantBehaviors.freeze()
         this.plants.freeze()
-        this.zombieBehaviors.freeze()
         this.zombies.freeze()
         this.extensions.freeze()
         this.levelRules.freeze()

@@ -83,7 +83,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。Mod ID 是不带冒号的名字（如 `widescreen`），它同时就是这个 Mod 的命名空间：自己新增的资源和定义都写作 `名字:…`，例如 `widescreen:background1`。两个 Mod 的 ID 不会相同，所以命名空间也不会重叠；以其他命名空间写的资源都算替换，不算自己的。内置本体的 ID 为 `pvz`。表现配置里的音效（`{ "audio", "foley", "pitchRange"? }`）的 `audio` 同样写完整的音频资源 ID，例如 `pvz:splat`、`corn:shoop`；不带命名空间的 ID 会在校验时报错。
 
-要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：按 ID 登记的代码行为（`plantBehaviors.register`）不会随定义转移，旧存档中实体状态与新定义不符时按不兼容存档处理。
+要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：实体按覆盖后定义的 `kind` 取类别，旧存档中实体的字段与新定义不符时按不兼容存档处理。
 
 表现定义里 Mod 可以新增或覆盖的表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`levels`、`rules`、`challenges`、`store`、`almanac`，规则和其他定义表相同：新 ID 只能用自己的命名空间，改已有的走 `overrides`。`items` 按掉落物 ID、`awards` 按关卡奖励的 ID、`rules` 按关卡规则的 `kind`、`store` 按商店物品 ID、`almanac` 按图鉴里显示的植物或僵尸 ID 索引。内容组装时检查玩法里的每个植物、僵尸、弹丸和掉落物都有表现且视图已安装，每个工具都有外观，每关的奖励都有图（种子奖励用它的植物表现，`note` 还要有 `pageImages`）；缺了就是这个 Mod 加载失败，而不是等到它出现在关卡里才报错。
 
@@ -101,20 +101,21 @@ npm run mod:test -- dist/mods/example
 
 仓库只跟踪 `mods/example/` 示例；其余 `mods/` 子目录用于本地开发并由 Git 忽略。
 
-[Mod 实验场](../mods/example/README.md) 展示玩法行为、实体上的 Mod 数据与存档、关卡补丁、资源新增与覆盖、自定义视图、两端命令、菜单扩展和生命周期清理。可按其中的能力表查找实际实现。
+[Mod 实验场](../mods/example/README.md) 展示玩法类别与 mixin、实体上的 Mod 数据与存档、关卡补丁、资源新增与覆盖、自定义视图、两端命令、菜单扩展和生命周期清理。可按其中的能力表查找实际实现。
 
 只有 `mod:pack` 编译。它合并分类定义、收集资源和字体图集、生成内容哈希，输出 `dist/mods/<name>/` 与旁边的 ZIP；源码目录不产生编译文件。ZIP 的 `content.json` 保留资源映射，`gameplay`、`presentation` 则指向生成的合并 JSON。安装器验证清单、模块、文件路径、PNG 尺寸及字体图集。
 
-加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义植物/僵尸行为、视图或包装方法。`host.get(id)` 能取到该端的每一个模块，ID 就是模块在 `assets/scripts` 下的路径（不带扩展名，目录的 `index` 用目录名），如 `client/plants/PlantView`、`server/seeds/planting`、`shared/protocol`；客户端另有 `cc`（引擎）、`content/definitions`（定义来源）、`client/views`（视图注册表），服务端另有 `content/definitions` 和 `gameplay/registry`（玩法注册表）。自定义植物或僵尸视图继承 `PlantView` 或 `ZombieView`，用 `host.get('client/views').plants.registerView(类别, 类)`（僵尸用 `zombies`）注册，再在表现定义的 `view` 写这个类别、`viewConfig` 写它的参数。本体的僵尸视图类别有 `zombie`（缺省）、`flag`、`polevaulter`、`newspaper`、`dancer`（`FlagZombieView`、`PoleVaulterView`、`NewspaperView`、`DancerView`，都继承 `ZombieView`）；Mod 用 `overrides` 整条替换这些僵尸的表现定义时要保留 `view`，否则只按普通僵尸画。两者给子类开出同样的成员：`onBoard(实体, world)` 在场上每帧画实体本身（先调 `super.onBoard`），`pose` 摆出各层（场外也走它），`shown(层, 实体)` 决定一层显示哪个剪辑，`playable()` 列出要先载入的 Reanim；可用的有 `presentation`、`animation`（玩法里的动画定义）、`body`（主体的播放器）、`root`（各层所在的节点，移动它就移动整个画面）、`clip(名字)`、`ownFrames(reanimId)`、`particle(…)` 和 `flash`。模块挪了位置，ID 也随之改变。模块清单由 `npm run mod:hosts` 生成（`client/content/hostModules.ts`、`server/session/hostModules.ts`），新增、移动或删除模块后需重新生成，测试会检查。
+加载器自动注册静态游戏定义、表现定义和新增资源；入口无需再次注册这些文件。入口统一为 `register({ host, assets })`，通过真实宿主注册自定义的植物、僵尸、子弹类别、视图或包装方法。`host.get(id)` 能取到该端的每一个模块，ID 就是模块在 `assets/scripts` 下的路径（不带扩展名，目录的 `index` 用目录名），如 `client/plants/PlantView`、`server/seeds/planting`、`shared/protocol`；客户端另有 `cc`（引擎）、`content/definitions`（定义来源）、`client/views`（视图注册表），服务端另有 `content/definitions` 和 `gameplay/registry`（玩法注册表）。自定义植物或僵尸视图继承 `PlantView` 或 `ZombieView`，用 `host.get('client/views').plants.registerView(类别, 类)`（僵尸用 `zombies`）注册，再在表现定义的 `view` 写这个类别、`viewConfig` 写它的参数。本体的僵尸视图类别有 `zombie`（缺省）、`flag`、`polevaulter`、`newspaper`、`dancer`（`FlagZombieView`、`PoleVaulterView`、`NewspaperView`、`DancerView`，都继承 `ZombieView`）；Mod 用 `overrides` 整条替换这些僵尸的表现定义时要保留 `view`，否则只按普通僵尸画。两者给子类开出同样的成员：`onBoard(实体, world)` 在场上每帧画实体本身（先调 `super.onBoard`），`pose` 摆出各层（场外也走它），`shown(层, 实体)` 决定一层显示哪个剪辑，`playable()` 列出要先载入的 Reanim；可用的有 `presentation`、`animation`（玩法里的动画定义）、`body`（主体的播放器）、`root`（各层所在的节点，移动它就移动整个画面）、`clip(名字)`、`ownFrames(reanimId)`、`particle(…)` 和 `flash`。模块挪了位置，ID 也随之改变。模块清单由 `npm run mod:hosts` 生成（`client/content/hostModules.ts`、`server/session/hostModules.ts`），新增、移动或删除模块后需重新生成，测试会检查。
 
 ```ts
 export function register({ host, assets }) {
     const registry = host.get('gameplay/registry')
-    registry.plantBehaviors.register(assets.id, 'example:rapid_pea', behavior)
+    const { Shooter } = host.get('server/plants/Shooter')
+    registry.plants.register(assets.id, 'example:rapid_pea', regenerating(Shooter))
 }
 ```
 
-行为对象有 `createState`、`tick`，可选 `validateState(state, definition)` 检查种下和读档时的状态，以及 `validateConfig(definition, definitions, name)` 检查定义里的 `behavior` 配置：后者在内容加载时（`GameplayRegistry.validate`）对行为注册的每个类型各运行一次，早于任何实体，配置错误或含未知键就让加载失败。保龄球坚果不是行为，是植物的类 `bowlingnut`：它的 `bowling` 配置的数值缺省取原版 `Plant::UpdateBowling`，植物只写要改的项。
+Mod 给植物、僵尸、子弹加玩法只有一种做法：写一个类别（继承本体的类），注册后在定义里用 `kind` 选它，下面三段分别说明。Mod 类别自己的定义字段和实体字段都用自己命名空间下的限定 ID 命名（如 `example:regeneration`）：定义里的这种字段必须是 JSON 对象，只能和静态 `config` 列出它的类别一起写（和本体的 `shooter` 等字段同一条规则），内容由类别的静态 `validate(definition, id)` 在内容加载时（`GameplayRegistry.validate`）检查；实体上的同名字段随存档保存，由 `restoreOwn` 读回并校验。要把同一份玩法加到不同的类别上，写成 mixin：接收一个基类、返回它的子类的函数，子类在静态 `config` 里追加自己的字段，`validate`、`restoreOwn` 和覆盖的方法都调用 `super`；一个类可以叠多个 mixin，字段带命名空间就不会互相覆盖。示例 Mod 的 `regenerating` 同时用在射手和僵尸上。保龄球坚果是植物的类 `bowlingnut`：它的 `bowling` 配置的数值缺省取原版 `Plant::UpdateBowling`，植物只写要改的项。
 
 僵尸的做法按玩法定义的 `kind` 分类（缺省 `zombie`，本体还有 `flag`、`polevaulter`、`newspaper`、`dancer`），和表现定义的 `view` 一一对应：服务端一个类对应客户端一个视图类（`Zombie` 和 `ZombieView`、`PoleVaulter` 和 `PoleVaulterView` ……）。自定义的类继承 `server/zombies/Zombie` 的 `Zombie` 或某个本体的类（如 `host.get('server/zombies/PoleVaulter').PoleVaulter`），重写要改的方法，例如 `dodgesBite()` 返回 `true` 时大嘴花这一口咬空，`evades(key)` 返回 `true` 时键为 `key` 的植物索敌（植物 `targeting.insetKey`，如土豆雷的 `pvz:mine`）不选它；用 `registry.zombies.register(assets.id, 类别, 类)` 注册，再在僵尸定义里写 `kind`。要给客户端看自己的东西，重写 `snapshotOwn()` 返回一个 JSON 对象，它出现在快照的 `own` 里，客户端对应的视图类用 `this.own(zombie, 字段, 校验函数)` 读取。每只僵尸是它的类的一个实例，在世界的 `zombies` 列表里：实例的字段原样存档，所以字段只能是纯数据（引用别的僵尸用实体 id）；子类自己的字段在构造函数里给初值，并重写 `restoreOwn(fields, name)` 从存档读回（取走自己的、校验，再把其余的交给 `super.restoreOwn`）。类自己的定义字段（`vault`、`dance`、`enrage`）只能和取它的类一起写，类的静态 `config` 列出它取哪些；撑杆的 `vault.evades` 列出它拿着杆时排除它的索敌键。
 
@@ -122,7 +123,7 @@ export function register({ host, assets }) {
 
 子弹也按玩法定义的 `kind` 分类（缺省 `projectile`，本体还有 `mowing`，即出发后的小推车），和表现定义的 `view` 一一对应（`Projectile` 和 `ProjectileView`、`MowingProjectile` 和 `MowingProjectileView`）。每颗子弹是它的类的一个实例，在世界的 `projectiles` 列表里，带 `id` 和 `position`，字段原样存档。自定义的类继承 `server/projectiles/Projectile` 的 `Projectile` 或 `server/projectiles/MowingProjectile` 的 `MowingProjectile`，重写 `canHit`（打不打得到这个目标）、`strike`（打中后做什么）、`speedScale`（这个 tick 的速度倍数），用 `registry.projectiles.register(assets.id, 类别, 类)` 注册，再在子弹定义里写 `kind`。`projectile` 类别必须写 `damage`，`mowing` 不能写；射手的 `shooter.projectile` 覆盖也不能写它的子弹类别不取的字段；关卡的 `lawnMower` 必须是会碾压的类别（`MowingProjectile` 或它的子类）。行尾等待的小推车是另一个类 `Mower`（`server/mowers/Mower.ts`），出发时发射一颗关卡 `lawnMower` 类型的子弹，自己从这一行消失。
 
-世界（`server/state/World`）是按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems`、`items`，每个按 id 存放对象本身、按 id 顺序遍历，没有 ECS 组件。要在某个实体上记自己的数据，放在它的 `extensions[id]`（JSON 对象），`id` 是自己命名空间下的限定 ID，先用 `registry.extensions.register(id, validate?)` 登记：登记过的数据随实体存档、读档，出现在快照的 `extensions[id][实体 id]` 里，每次都经 `validate` 校验并复制；没登记的既不存档也不发送。行为的 `tick` 收到的 `context.plant`／`context.zombie` 就是实体对象本身，示例 Mod 的 `example:charge` 就这样记在植物上。
+世界（`server/state/World`）是按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems`、`items`，每个按 id 存放对象本身、按 id 顺序遍历，没有 ECS 组件。要在某个实体上记自己的数据，放在它的 `extensions[id]`（JSON 对象），`id` 是自己命名空间下的限定 ID，先用 `registry.extensions.register(id, validate?)` 登记：登记过的数据随实体存档、读档，出现在快照的 `extensions[id][实体 id]` 里，每次都经 `validate` 校验并复制；没登记的既不存档也不发送。类别自己的数据写成它的字段即可，`extensions` 用于挂在别的类别的实体上；示例 Mod 的 `example:charge` 就这样记在植物上。
 
 `ModAssets.json()` 读取归档配置；客户端 `assets.sprite(path)` 按路径直接读取本 Mod 的图片，复用统一资源解码与缓存，其他包无法替换；`assets.spriteResource(id)` 按资源 ID 读取，Mod 在自己的 `content.json` 登记 ID 后，优先级更高的包（如高清包）可用同一 ID 替换。纯资源、数据和脚本 Mod 使用同一个加载入口；注册失败会撤销该 Mod 的注册和方法包装，并跳过依赖它的 Mod。
 
