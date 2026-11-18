@@ -16,7 +16,20 @@ test('empty converted particles preload and expire without hiding image loading 
     const definitions = new Map([[empty.id, empty], ['test:missing-image', parseParticle({
         schemaVersion: 3, id: 'test:missing-image', emitters: [{ sprite: 'test:missing' }],
     })]])
+    definitions.set('test:flash', parseParticle({
+        schemaVersion: 3, id: 'test:flash', emitters: [{ sprite: 'test:missing', fullScreen: true }],
+    }))
+    const whiteTexture = {}
     const modules: Record<string, unknown> = {
+        cc: {
+            builtinResMgr: { get: (id: string) => id === 'white-texture' ? whiteTexture : undefined },
+            SpriteFrame: class {
+                originalSize = { width: 2, height: 2 }
+                trimmedBorder = { x: 0, y: 0, z: 0, w: 0 }
+                uv = [0, 1, 1, 1, 0, 0, 1, 0]
+            },
+        },
+        '@/shared/kernel/index': await import('@/shared/kernel/index'),
         '@/client/content/ModResources': { modResources: {
             ids: async (kind: string) => kind === 'particles' ? [empty.id] : [],
             json: async (kind: string, id: string) => kind === 'particles' ? JSON.parse(JSON.stringify(definitions.get(id))) : undefined,
@@ -30,6 +43,8 @@ test('empty converted particles preload and expire without hiding image loading 
     }
     const exports = loadScript('assets/scripts/client/particle/ParticleAssets.ts', (id: string) => modules[id] ?? {}, { console: { warn() {} } })
     await exports.ParticleAssets.preloadAll()
+    const flash = await exports.ParticleAssets.load('test:flash', 'test:missing-override')
+    assert.equal(flash.emitters[0].frame.texture, whiteTexture, 'a full-screen fill draws even with no loadable sprite')
     const loaded = exports.ParticleAssets.get(empty.id)
     assert.equal(loaded.emitters.length, 0)
     const system = new KernelParticles(loaded.packed, 1, 0)

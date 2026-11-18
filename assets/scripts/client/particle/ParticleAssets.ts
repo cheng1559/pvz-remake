@@ -1,4 +1,4 @@
-import type { SpriteFrame } from 'cc'
+import { builtinResMgr, SpriteFrame, type Texture2D } from 'cc'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { modResources } from '@/client/content/ModResources'
 import { preloadTasks } from '@/client/content/preloadTasks'
@@ -28,6 +28,16 @@ function centeredGeometry(frame: SpriteFrame, output: Float64Array, offset: numb
     output.set(frame.uv.slice(0, 8), offset + 4)
 }
 const cells = new WeakMap<SpriteFrame, Map<string, Float64Array>>()
+let fillFrame: SpriteFrame | undefined
+
+/** FillRect uses only the particle's vertex color and alpha. */
+function solidFillFrame(): SpriteFrame {
+    if (!fillFrame) {
+        fillFrame = new SpriteFrame()
+        fillFrame.texture = builtinResMgr.get<Texture2D>('white-texture')
+    }
+    return fillFrame
+}
 
 const loaded = new Map<string, LoadedParticle>()
 const pending = new Map<string, Promise<LoadedParticle>>()
@@ -62,6 +72,7 @@ export class ParticleAssets {
         const definition = parseParticle(json)
         if (definition.id !== id) throw new Error(`particle ID mismatch: expected ${id}, got ${definition.id}`)
         const emitters = (await Promise.all(definition.emitters.map(async emitter => {
+            if (emitter.fullScreen) return this.emitterAssets(emitter, solidFillFrame())
             const image = sprite ?? emitter.sprite
             try {
                 return this.emitterAssets(emitter, await modResources.sprite(image))
@@ -86,7 +97,7 @@ export class ParticleAssets {
         if (!geometry) {
             geometry = kernel().f64(columns * rows * IMAGE)
             for (let index = 0; index < columns * rows; index++) {
-                const cell = columns === 1 && rows === 1 ? frame : getAtlasFrame(frame, index, width, height, columns)
+                const cell = definition.fullScreen || columns === 1 && rows === 1 ? frame : getAtlasFrame(frame, index, width, height, columns)
                 centeredGeometry(cell, geometry, index * IMAGE)
             }
             grids.set(key, geometry)

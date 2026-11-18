@@ -80,19 +80,12 @@ function fillScreen(node: Node, positions: Float32Array, stride: number, quads: 
     while (canvas && !canvas.getComponent(Canvas)) canvas = canvas.parent
     const screen = canvas?.getComponent(UITransform)?.getBoundingBoxToWorld()
     if (!screen) return
-    const world = node.worldMatrix, inverse = Mat4.invert(new Mat4(), world), corner = new Vec3()
+    const inverse = Mat4.invert(new Mat4(), node.worldMatrix), corner = new Vec3()
     for (let quad = 0; quad < quads; quad++) {
         const first = quad * 4 * stride
-        // The quad's middle on the screen, from its corners.
-        let middleX = 0, middleY = 0
-        for (let vertex = 0; vertex < 4; vertex++) {
-            Vec3.transformMat4(corner, corner.set(positions[first + vertex * stride], positions[first + vertex * stride + 1], 0), world)
-            middleX += corner.x / 4; middleY += corner.y / 4
-        }
         for (let vertex = 0; vertex < 4; vertex++) {
             const at = first + vertex * stride
-            Vec3.transformMat4(corner, corner.set(positions[at], positions[at + 1], 0), world)
-            corner.set(corner.x < middleX ? screen.xMin : screen.xMax, corner.y < middleY ? screen.yMin : screen.yMax, 0)
+            corner.set(vertex & 1 ? screen.xMax : screen.xMin, vertex & 2 ? screen.yMax : screen.yMin, 0)
             Vec3.transformMat4(corner, corner, inverse)
             positions[at] = corner.x
             positions[at + 1] = corner.y
