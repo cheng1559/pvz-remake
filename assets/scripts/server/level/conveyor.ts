@@ -1,4 +1,7 @@
 import type { GameSystem, World } from '@/server/state/World'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { graves } from '../gridItems/graves'
+import { plantsInPlay } from './lawn'
 import { pickWeighted } from '@/shared/random'
 import { LevelStateResource, RandomResource, SeedBankResource, WaveResource } from '../state/resources'
 import { levelAwardDropped } from './levelAward'
@@ -14,7 +17,11 @@ export function startConveyor(world: World): void {
 }
 
 /** SeedBank::UpdateConveyorBelt and Challenge's weighted packet supply. */
-export function createConveyorSystem(): GameSystem {
+export function createConveyorSystem(definitions: GameplayDefinitions): GameSystem {
+    const isGraveBuster = (seedId: string) => {
+        const seed = definitions.seeds[seedId]
+        return seed.kind === 'plant' && !!definitions.plants[seed.id].graveBuster
+    }
     return { id: 'pvz:conveyor', run({ world, tick }) {
         const level = world.resources.get(LevelStateResource)
         const rules = level.definition.conveyor
@@ -28,13 +35,20 @@ export function createConveyorSystem(): GameSystem {
         const count = conveyor.packets.length
         conveyor.spawnAtTick = tick + rules.spawnDelay.filter(entry => count >= entry.minPackets).at(-1)!.ticks
         if (count >= rules.capacity) return
-        // Challenge::UpdateConveyorBelt reduces duplicates in a multi-plant supply.
-        const choices = rules.seeds.map(seed => {
+        let supply = rules.seeds
+        if (supply.some(seed => isGraveBuster(seed.id))) {
+            const planted = [...plantsInPlay(world)].filter(plant => definitions.plants[plant.typeId].graveBuster).length
+            const waiting = conveyor.packets.filter(packet => isGraveBuster(packet.card.seedId)).length
+            if (planted + waiting >= graves(world).length) supply = supply.filter(seed => !isGraveBuster(seed.id))
+        }
+        // Challenge::UpdateConveyorBelt applies duplicate weights after the grave limit.
+        const choices = supply.map(seed => {
             const count = conveyor.packets.filter(packet => packet.card.seedId === seed.id).length
             const weight = rules.seeds.length <= 2 ? seed.weight : count >= 4 ? 1 : count >= 3 ? 5
                 : seed.id === conveyor.lastSeedId ? Math.trunc(seed.weight / 2) : seed.weight
             return { ...seed, weight }
         })
+        if (!choices.some(seed => seed.weight > 0)) return
         const seed = pickWeighted(choices, world.resources.get(RandomResource))
         const previousOffset = count ? conveyor.packets[count - 1].x - (count - 1) * rules.spacing : 0
         let offset = rules.entryX - (rules.spacing + rules.removalGap) * count

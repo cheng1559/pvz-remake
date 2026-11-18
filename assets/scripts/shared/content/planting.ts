@@ -89,6 +89,8 @@ export type PlantingRefusal =
     | 'not-on-grave'
     /** A grave buster's cell has no grave (PLANTING_ONLY_ON_GRAVES). */
     | 'cell-needs-grave'
+    /** An aquatic seed needs a pool square (PLANTING_ONLY_IN_POOL). */
+    | 'cell-needs-water'
     /** A grave buster's cell has a grave of its own side, which it does not eat. */
     | 'cell-has-own-grave'
 
@@ -114,13 +116,15 @@ export function plantingRefusal(lawn: PlantingLawn, seed: SeedDefinition, team: 
     // The level's red line (Wall-nut Bowling's): nothing right of its column.
     const line = lawn.level.plantingLine
     if (line && column > line.column) return 'past-line'
-    if (lawn.plantAt(row, column)) return 'cell-occupied'
+    if (seed.placement !== 'water' && lawn.plantAt(row, column)) return 'cell-occupied'
     // Board::CanPlantAt: a crater keeps out every plant, of either side.
     if (lawn.craterAt(row, column)) return 'not-on-crater'
     // Graves block planting, except that a plant placed on graves (the Grave Buster) needs one, of the other side, to eat.
     const grave = lawn.graveAt(row, column)
     if (seed.placement === 'grave') return !grave ? 'cell-needs-grave' : isHostile(graveTeam(grave), team) ? undefined : 'cell-has-own-grave'
-    return grave ? 'not-on-grave' : undefined
+    if (grave) return 'not-on-grave'
+    // The installed day and night lawns have only land cells.
+    return seed.placement === 'water' ? 'cell-needs-water' : undefined
 }
 
 /** The client's lawn: a snapshot's plants and things of the cells, on the level's board, with its rule's view. */

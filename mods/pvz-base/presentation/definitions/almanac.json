@@ -15,6 +15,7 @@
   "pvz:scaredyshroom": {"ground": "night"},
   "pvz:iceshroom": {"ground": "night"},
   "pvz:doomshroom": {"ground": "night"},
+  "pvz:lilypad": {"ground": "pool"},
   "pvz:normal": {"ground": "day"},
   "pvz:flag": {"ground": "day"},
   "pvz:conehead": {"ground": "day"},

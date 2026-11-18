@@ -248,11 +248,12 @@ export class LevelView {
         const audio = new LevelAudioPresenter(presentation.board.music)
         const createSeedChooser = async (chooser: NonNullable<WorldSnapshot['seedChooser']>) => {
             const created = await LevelSeedChooser.create(ui, content, hud, chooser.availableSeeds, chooser.slots, root, seedId => {
-                // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
+                // Board::SeedNotRecommendedForLevel, on the installed land boards.
                 const seed = content.definitions.seeds[seedId]
                 if (seed.kind !== 'plant') return undefined
                 if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
+                if (seed.placement === 'water') return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
             }, { almanac: player.almanacZombies !== undefined, store: player.store }, chooser.entries, chooser.cheatSeeds === true)
             created.placeBefore(cursorLayer)

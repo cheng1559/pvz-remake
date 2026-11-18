@@ -386,12 +386,14 @@
       ],
       "animations": [
         "anim_idle"
-      ]
+      ],
+      "exports": {"anim_idle": "pvz:lilypad"}
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {"anim_blink": "pvz:lilypad_blink"}
     }
   },
   "squash": {

@@ -333,6 +333,14 @@
       "blink": {"clip": "blink"}
     }
   },
+  "pvz:lilypad": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "animation": {
+      "clips": {"body": {"frames": 1, "fps": [10, 15]}, "blink": {"frames": 3, "fps": 15, "once": true}},
+      "layers": {"body": "body"},
+      "blink": {"clip": "blink"}
+    }
+  },
   "pvz:doomshroom": {
     "kind": "fuse",
     "unfreezable": true,

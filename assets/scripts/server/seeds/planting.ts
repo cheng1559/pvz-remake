@@ -30,12 +30,14 @@ const REJECTIONS: Record<PlantingRefusal, CommandRejectionCode> = {
     'past-line': 'column-out-of-range', 'cell-occupied': 'cell-occupied', 'cell-has-grave': 'cell-has-grave',
     'not-on-grave': 'cell-has-grave', 'cell-needs-grave': 'cell-needs-grave', 'cell-has-own-grave': 'cell-has-own-grave',
     'cell-has-crater': 'cell-has-crater', 'not-on-crater': 'cell-has-crater',
+    'cell-needs-water': 'cell-needs-water',
 }
 
-/** Board::MouseDownWithPlant: the advice a refusal of a grave or a crater shows. */
-const GRAVE_ADVICE: Partial<Record<PlantingRefusal, string>> = {
+/** Board::MouseDownWithPlant: advice for terrain that refuses the held seed. */
+const PLANTING_ADVICE: Partial<Record<PlantingRefusal, string>> = {
     'not-on-grave': 'ADVICE_PLANT_NOT_ON_GRAVE', 'cell-needs-grave': 'ADVICE_GRAVEBUSTERS_ON_GRAVES',
     'not-on-crater': 'ADVICE_PLANT_NOT_ON_CRATER',
+    'cell-needs-water': 'ADVICE_LILYPAD_ON_WATER',
 }
 
 /**
@@ -118,8 +120,8 @@ export const planting = {
             // Board::MouseDownWithPlant: the line's advice once a game; Board::DisplayAdvice remembers a grave's help
             // index for the rest of this game, and the next planting clears it.
             if (refusal === 'past-line') displayAdviceOnce(world, 'ADVICE_NOT_PASSED_LINE', 'hint')
-            const graveAdvice = GRAVE_ADVICE[refusal]
-            if (graveAdvice && displayAdviceOnce(world, graveAdvice, 'hint')) session.graveAdvice = graveAdvice
+            const advice = PLANTING_ADVICE[refusal]
+            if (advice && displayAdviceOnce(world, advice, 'hint')) session.plantingAdvice = advice
             return refuseCell(REJECTIONS[refusal])
         }
         if (seed.kind === 'zombie') {
@@ -141,9 +143,9 @@ export const planting = {
             emitServerEvent(world.resources.get(EventQueueResource), 'craterPlaced', { seedId, row, column })
             return
         }
-        if (session.graveAdvice) {
-            emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.graveAdvice })
-            session.graveAdvice = undefined
+        if (session.plantingAdvice) {
+            emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.plantingAdvice })
+            session.plantingAdvice = undefined
         }
 
         const entity = planting.createPlant(session, seedId, row, column, team)

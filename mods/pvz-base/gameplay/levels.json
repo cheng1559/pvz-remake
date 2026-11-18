@@ -406,6 +406,7 @@
   },
   "pvz:adventure-2-9": {
     "adventureIndex": 19,
+    "nextLevel": "pvz:adventure-2-10",
     "board": "pvz:night",
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],
@@ -417,5 +418,32 @@
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:screendoor", "pvz:dancer"],
     "rules": {"kind": "pvz:adventure", "count": 20},
     "award": {"kind": "note", "id": "pvz:zombie-note-2", "titleKey": "FOUND_NOTE", "width": 78, "height": 52}
+  },
+  "pvz:adventure-2-10": {
+    "adventureIndex": 20,
+    "board": "pvz:night",
+    "lawnMower": "pvz:lawnmower",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 50,
+    "firstWaveTicks": 100,
+    "graves": [{"column": 3, "count": 1}, {"column": 4, "count": 2}, {"column": 5, "count": 2}, {"column": 6, "count": 2}, {"column": 7, "count": 3}, {"column": 8, "count": 3}],
+    "graveZombies": ["pvz:normal", "pvz:conehead"],
+    "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:screendoor", "pvz:football", "pvz:dancer"],
+    "rules": {"kind": "pvz:adventure", "count": 20, "pointsScale": 3},
+    "conveyor": {
+      "capacity": 10, "spacing": 50, "entryX": 515, "moveTicks": 4, "insertionGap": 40, "removalGap": 1,
+      "initialDelayTicks": 200,
+      "spawnDelay": [{"minPackets": 0, "ticks": 400}, {"minPackets": 5, "ticks": 425}, {"minPackets": 7, "ticks": 500}, {"minPackets": 9, "ticks": 1000}],
+      "seeds": [
+        {"id": "pvz:gravebuster", "weight": 20},
+        {"id": "pvz:iceshroom", "weight": 15},
+        {"id": "pvz:doomshroom", "weight": 15},
+        {"id": "pvz:hypnoshroom", "weight": 10},
+        {"id": "pvz:scaredyshroom", "weight": 15},
+        {"id": "pvz:fumeshroom", "weight": 15},
+        {"id": "pvz:puffshroom", "weight": 10}
+      ]
+    },
+    "award": {"kind": "seed", "id": "pvz:lilypad"}
   }
 }

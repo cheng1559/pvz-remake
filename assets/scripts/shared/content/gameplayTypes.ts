@@ -166,7 +166,7 @@ export interface PlantSeedDefinition extends SeedCommon {
     /** The plant it plants: the seed's own ID unless its definition names another. */
     id: string
     /** `grave`: only on a grave, like the Grave Buster (PLANTING_ONLY_ON_GRAVES). */
-    placement: 'ground' | 'grave'
+    placement: 'ground' | 'grave' | 'water'
 }
 
 /**

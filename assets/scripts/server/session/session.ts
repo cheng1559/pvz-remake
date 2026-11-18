@@ -48,6 +48,7 @@ export type CommandRejectionCode =
     /** A crater holds the cell (PLANTING_NOT_ON_CRATER), or a grave or crater seed's cell has one already. */
     | 'cell-has-crater'
     | 'cell-needs-grave'
+    | 'cell-needs-water'
     /** A grave buster's cell has a grave of its own side, which it does not eat. */
     | 'cell-has-own-grave'
     | 'item-not-found'
@@ -81,8 +82,8 @@ export interface Session extends ServerContent {
     mods: EnabledMod[]
     commands: Array<{ sequence: number, command: QueuedCommand }>
     commandResults: CommandResult[]
-    /** Grave advice on screen now; the next successful planting clears it once (Board::ClearAdvice). Not saved. */
-    graveAdvice?: string
+    /** Placement advice cleared by the next successful planting (Board::ClearAdvice). */
+    plantingAdvice?: string
 }
 
 export function createWorld(content: ServerContent): World {
@@ -130,7 +131,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'plant', system: createPlantAttackSystem(definitions) },
         { phase: 'plant', system: createProductionSystem(definitions) },
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
-        { phase: 'plant', system: createConveyorSystem() },
+        { phase: 'plant', system: createConveyorSystem(definitions) },
         { phase: 'plant', system: createPlantRollSystem() },
         { phase: 'plant', system: plantAnimation },
         { phase: 'zombie', system: createZombieGroanSystem() },

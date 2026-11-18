@@ -50447,6 +50447,8 @@
       "pvz:doomshroom": "assets/reanim/doomshroom.json",
       "pvz:doomshroom_sleep": "assets/reanim/doomshroom_sleep.json",
       "pvz:doomshroom_explode": "assets/reanim/doomshroom_explode.json",
+      "pvz:lilypad": "assets/reanim/lilypad.json",
+      "pvz:lilypad_blink": "assets/reanim/lilypad_blink.json",
       "pvz:dancer_moonwalk": "assets/reanim/dancer_moonwalk.json",
       "pvz:dancer_point": "assets/reanim/dancer_point.json",
       "pvz:dancer_walk": "assets/reanim/dancer_walk.json",

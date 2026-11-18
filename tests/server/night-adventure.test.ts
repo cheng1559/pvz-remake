@@ -146,6 +146,73 @@ test('2-9 offers the doom-shroom and drops the second note after two flags on th
     assert.ok(game.drainEvents().some(event => event.type === 'levelAwardCollected' && event.data.awardId === 'pvz:zombie-note-2'))
 })
 
+test('2-10 starts its night conveyor at 200 ticks, after the first wave at 100, and awards the lily pad', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ ...options, levelId: 'pvz:adventure-2-10' })
+    const opening = game.render()
+    assert.equal(opening.seedChooser, undefined)
+    assert.deepEqual(opening.gridItems!.map(item => item.column), [3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 8, 8])
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    const advance = (ticks: number) => { for (let i = 0; i < ticks; i++) game.update(TICK_SECONDS) }
+    advance(99)
+    assert.equal(game.render().wave.index, 0)
+    advance(1)
+    assert.equal(game.render().wave.index, 1)
+    advance(99)
+    assert.deepEqual(game.render().conveyorPackets, [])
+    advance(1)
+    assert.equal(game.render().conveyorPackets!.length, 1)
+
+    const flags: number[] = []
+    for (let wave = 2; wave <= 20; wave++) {
+        assert.ok(game.debugCommand('/kill').ok)
+        assert.ok(game.debugCommand('/nextwave').ok)
+        const types = game.render().zombies.map(zombie => zombie.typeId)
+        if (types.includes('pvz:flag')) flags.push(wave)
+        if (wave === 20) assert.deepEqual(new Set(types), new Set(['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:screendoor', 'pvz:football', 'pvz:dancer']))
+    }
+    assert.deepEqual(flags, [10, 20])
+    assert.ok(game.debugCommand('/kill').ok)
+    advance(1)
+    const award = game.render().items.find(item => item.typeId === 'pvz:level-award')!
+    game.command({ type: 'collectItemAt', x: award.x + 1, y: award.y + 1 })
+    game.update(0)
+    assert.equal(game.render().result, 'won')
+    assert.ok(game.drainEvents().some(event => event.type === 'levelAwardCollected' && event.data.awardId === 'pvz:lilypad'))
+})
+
+test('the conveyor counts planted and waiting grave busters before dealing another', () => {
+    // A one-seed belt makes every eligible draw visible.
+    const id = 'pvz:adventure-2-10'
+    const source = readGameplaySource('levels')
+    const level = source.levels[id]
+    level.graves = [{ column: 4, count: 2 }]
+    Object.assign(level.conveyor, { initialDelayTicks: 1, spawnDelay: [{ minPackets: 0, ticks: 1 }], seeds: [{ id: 'pvz:gravebuster', weight: 20 }] })
+    const game = new LocalIntegratedGame(definitions, parseGameplayLevels(source, definitions), undefined, true)
+    game.start({ ...options, levelId: id })
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    game.update(TICK_SECONDS)
+    const [first, second] = game.render().gridItems!
+    game.command({ type: 'selectConveyorPacket', packetId: game.render().conveyorPackets![0].id })
+    game.command({ type: 'placePlant', row: first.row, column: first.column })
+    game.update(TICK_SECONDS)
+    assert.equal(game.render().plants.length, 1)
+    const waiting = game.render().conveyorPackets!
+    assert.equal(waiting.length, 1)
+    game.update(TICK_SECONDS)
+    assert.equal(game.render().conveyorPackets!.length, 1, 'one planted and one waiting cover both graves')
+    assert.ok(game.debugCommand('/griditem grave 1 1').ok)
+    game.update(TICK_SECONDS)
+    assert.equal(game.render().conveyorPackets!.length, 2, 'a new grave opens supply again')
+    for (const cell of [first, second, { row: 0, column: 0 }]) assert.ok(game.debugCommand(`/griditem crater ${cell.row + 1} ${cell.column + 1}`).ok)
+    assert.ok(game.debugCommand('/seed 1 empty').ok)
+    assert.ok(game.debugCommand('/seed 1 empty').ok)
+    game.update(TICK_SECONDS)
+    assert.deepEqual(game.render().conveyorPackets, [], 'an empty lawn draws no grave buster')
+})
+
 function worldFor(night: boolean) {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']

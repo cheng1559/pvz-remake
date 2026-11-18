@@ -163,7 +163,7 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
     const id = () => source.id === undefined ? seedId : qualifiedId(source.id, `${name}.id`)
     switch (source.kind) {
         case 'plant':
-            if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
+            if (source.placement !== 'ground' && source.placement !== 'grave' && source.placement !== 'water') throw new Error(`${name}.placement must be ground, grave or water`)
             return { ...common, kind: 'plant', id: id(), placement: source.placement }
         case 'zombie':
             return { ...common, kind: 'zombie', id: id() }

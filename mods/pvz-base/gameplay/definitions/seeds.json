@@ -18,6 +18,7 @@
   "pvz:scaredyshroom": {"kind": "plant", "position": 13, "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
   "pvz:iceshroom": {"kind": "plant", "position": 14, "sunCost": 75, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
   "pvz:doomshroom": {"kind": "plant", "position": 15, "sunCost": 125, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
+  "pvz:lilypad": {"kind": "plant", "position": 16, "sunCost": 25, "cooldownTicks": 750, "placement": "water"},
   "pvz:normal": {"kind": "zombie", "position": 8, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:flag": {"kind": "zombie", "position": 9, "hidden": true, "sunCost": 50, "cooldownTicks": 0},
   "pvz:conehead": {"kind": "zombie", "position": 10, "hidden": true, "sunCost": 75, "cooldownTicks": 0},
