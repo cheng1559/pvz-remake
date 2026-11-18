@@ -1,7 +1,7 @@
 {
     "name": "pvz-remake",
     "type": "3d",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "uuid": "9814cd28-be9a-426e-9590-3aae15254ff3",
     "creator": {
         "version": "4.0.0-alpha.35"

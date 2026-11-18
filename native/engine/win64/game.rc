@@ -79,8 +79,8 @@ GLFW_ICON               ICON                    "res\\game.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 0,2,0,2
+ PRODUCTVERSION 0,2,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -96,12 +96,12 @@ BEGIN
         BLOCK "040904B0"
         BEGIN
             VALUE "FileDescription", "Plants vs. Zombies"
-            VALUE "FileVersion", "1, 0, 0, 1"
+            VALUE "FileVersion", "0.2.0.2"
             VALUE "InternalName", "Plants vs. Zombies"
             VALUE "LegalCopyright", "Copyright "
             VALUE "OriginalFilename", "Plants vs. Zombies.exe"
             VALUE "ProductName", "Plants vs. Zombies"
-            VALUE "ProductVersion", "1, 0, 0, 1"
+            VALUE "ProductVersion", "0.2.0"
         END
     END
     BLOCK "VarFileInfo"

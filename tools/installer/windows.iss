@@ -17,6 +17,7 @@
 AppId={{3A58FFFC-D614-4590-993A-0A6A803A2281}
 AppName={#AppName}
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
