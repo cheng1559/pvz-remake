@@ -12,6 +12,7 @@ export class ScreenTransition {
     private animation: Tween<{ progress: number }> | null = null
     private completeAnimation: (() => void) | null = null
     private disposed = false
+    private blocking = false
 
     constructor(parent: Node) {
         const cover = uiNode({
@@ -26,6 +27,7 @@ export class ScreenTransition {
         if (this.disposed) return
         this.cover.setSiblingIndex(this.cover.parent!.children.length - 1)
         this.cover.active = true
+        this.blocking = true
         UIHoverManager.beginInputBlock()
         try {
             const commit = await prepare()
@@ -33,7 +35,7 @@ export class ScreenTransition {
             await commit()
         } finally {
             if (!this.disposed) this.cover.active = false
-            UIHoverManager.endInputBlock()
+            this.releaseInput()
         }
     }
 
@@ -51,10 +53,17 @@ export class ScreenTransition {
     }
 
     dispose(): void {
+        if (this.disposed) return
         this.disposed = true
         this.animation?.stop()
         this.completeAnimation?.()
         this.cover.destroy()
+        this.releaseInput()
+    }
+
+    private releaseInput(): void {
+        if (this.blocking) UIHoverManager.endInputBlock()
+        this.blocking = false
     }
 
     private animate(seconds: number, update: (progress: number) => void): Promise<void> {

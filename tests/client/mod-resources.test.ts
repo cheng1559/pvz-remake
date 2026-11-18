@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import { readBaseContent } from '../../tools/mod/content'
+import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
+import { mergeStringLayers } from '@/shared/content/strings'
 
 function setup() {
     const files = new Map<string, any>()
@@ -206,6 +208,38 @@ test('bootstrap artwork loads from the base archive without waiting for Mod inst
     assert.equal(modReads, 1)
     assert.equal(baseReads, 1, 'ordinary loading reuses the archive already opened for the logo')
     assert.equal(await resources.baseSprite('pvz:button'), frame)
+})
+
+test('the recovery UI loads its base art, fonts and text when a Mod UI sprite fails to decode', async () => {
+    const { fresh, manager, modules, load, blobs } = setup()
+    const pack = zipFiles('broken-theme')
+    const content = JSON.parse(strFromU8(pack['content.json']))
+    content.resources.sprites = { 'pvz:dialog_topleft': content.resources.sprites['pvz:button'] }
+    pack['button.png'] = new Uint8Array([...pack['button.png'], ...strToU8('FAIL')])
+    pack['content.json'] = strToU8(JSON.stringify(content))
+    await manager.install(zipSync(pack))
+    const assets = fresh(async () => new Uint8Array(readFileSync('assets/resources/base.zip')))
+    modules.cc.assetManager.loadRemote = async (url: string, _options: unknown, done: Function) => {
+        const blob = blobs.get(url)!
+        if (await blob.slice(-4).text() === 'FAIL') return done(new Error('image decoder failed'))
+        const head = new DataView(await blob.slice(0, 24).arrayBuffer())
+        done(null, { width: head.getUint32(16), height: head.getUint32(20) })
+    }
+    modules['@/client/content/ModResources'] = { modResources: assets }
+    modules['@/shared/content/DefinitionRegistry'] = { buildPresentationDefinitions }
+    modules['@/shared/content/strings'] = { mergeStringLayers }
+    modules['@/client/content/loadPresentationDefinitions'] = {
+        basePresentationJson: () => readBaseContent().presentation,
+        loadPresentationDefinitions: async () => buildPresentationDefinitions(readBaseContent().presentation),
+    }
+    const { loadUIAssets, loadBaseUIAssets } = load('assets/scripts/client/ui/UIAssets.ts')
+    await assert.rejects(loadUIAssets(), (error: any) => error.owner === 'broken-theme' && /decoder failed/.test(error.message))
+    const restored = await loadBaseUIAssets()
+    assert.equal(restored.strings.MOD_RUNTIME_ERROR_HEADER, 'Game Error')
+    assert.ok(restored.sprites.dialog_topleft.originalSize.width > 3 && restored.fonts.profile.textures.length)
+    assert.deepEqual(Array.from(await manager.list()), ['broken-theme'], 'the manager can still read the selection')
+    await manager.queueChanges({ enabled: [], order: ['broken-theme'], imports: [], uninstalls: [] })
+    assert.ok(manager.hasPendingChanges(), 'disabling the failed Mod can be applied on restart')
 })
 
 test('the builtin archive and resource-only Mods share validation and decoding', async () => {

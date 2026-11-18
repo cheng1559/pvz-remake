@@ -1,3 +1,4 @@
+import { modFaults } from '@/shared/mod/ModHost'
 import { prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { modManager } from '@/client/content/ModManager'
@@ -95,7 +96,8 @@ export class StartupScreen extends Component {
         // Let the menu commit first, including disposing any menu behind a returned title page.
         await Promise.resolve()
         if (!this.node?.isValid) return
-        while (this.applyingMods && this.age < 50 && this.node?.isValid) await waitForPreloadFrame()
+        while (this.applyingMods && this.age < 50 && this.node?.isValid && !modFaults.current) await waitForPreloadFrame()
+        if (modFaults.current) return
         while (this.applyingMods && this.node?.isValid) {
             try {
                 await modManager.applyPendingChanges(waitForPreloadFrame)
@@ -113,7 +115,7 @@ export class StartupScreen extends Component {
             this.loadTitle(),
             this.preload(progress => { this.progress = progress }),
         ])
-        if (!this.node?.isValid) return
+        if (!this.node?.isValid || modFaults.current) return
         this.progress = 1
         this.complete = true
         if (this.phase === 'loading') this.startButton.interactable = true
@@ -138,7 +140,7 @@ export class StartupScreen extends Component {
             MusicSystem.preloadTune('title_theme'),
             SoundSystem.load(SoundEffect.LoadingBarFlower), SoundSystem.load(SoundEffect.LoadingBarZombie),
         ])
-        if (!this.node?.isValid) return
+        if (!this.node?.isValid || modFaults.current) return
         this.ui = ui
         const title = uiNode({ name: 'LoadingScreen', parent: this.content, active: false }).node
         const [background, logo, dirt, grass, roll] = frames
@@ -186,6 +188,7 @@ export class StartupScreen extends Component {
     }
 
     protected update(dt: number): void {
+        if (modFaults.current) return
         this.ticks += gameClock.delta(dt) * 100
         while (this.ticks >= 1) {
             this.ticks--
@@ -275,6 +278,7 @@ export class StartupScreen extends Component {
     }
 
     private tryStart(playSound = true): void {
+        if (modFaults.current) return
         if (this.retryMods) {
             const retry = this.retryMods
             this.retryMods = undefined

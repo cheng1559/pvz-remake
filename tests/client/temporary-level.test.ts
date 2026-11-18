@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
+import { modFaults, ownedModError } from '@/shared/mod/ModHost'
 
 // The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
 const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
@@ -77,11 +78,18 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     assert.equal(saved.length, 1)
     assert.equal(deletions, 0)
     // A failed replacement leaves the last successful adventure save available for the next startup.
-    const failure = new Error('level view failed')
+    const failure = ownedModError('broken-view', new Error('level view failed'))
     modules['@/client/level/LevelView'].LevelView.create = async () => { throw failure }
-    await assert.rejects(controller.play({ forceNewGame: true, levelId: 'normal' }), (error: unknown) => error === failure)
-    assert.equal(deletions, 0)
-    assert.equal(saved.length, 1)
+    modFaults.onFault = () => {}
+    try {
+        await assert.rejects(controller.play({ forceNewGame: true, levelId: 'normal' }), (error: unknown) => error === failure)
+        assert.equal(modFaults.current, undefined, 'the controller propagates the error to the navigation boundary')
+        assert.equal(deletions, 0)
+        assert.equal(saved.length, 1)
+    } finally {
+        modFaults.onFault = undefined
+        modFaults.current = undefined
+    }
     controller.hide()
 })
 

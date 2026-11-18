@@ -1,3 +1,4 @@
+import { modFaults } from '@/shared/mod/ModHost'
 import {
     _decorator,
     Component,
@@ -104,6 +105,12 @@ export class LevelScene extends Component {
     }
 
     update(dt: number): void {
+        if (modFaults.current) return
+        try { this.updateLevel(dt) }
+        catch (error) { if (!modFaults.report(error, '', true)) throw error }
+    }
+
+    private updateLevel(dt: number): void {
         if (this.snapshotting || this.completing || this.gameOverNotified || !this.game || !this.view || !this.audio) return
         if (this.game.render().paused) {
             // Debug commands can create animation components after the initial pause.

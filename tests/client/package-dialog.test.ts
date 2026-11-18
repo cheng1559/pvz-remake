@@ -9,7 +9,7 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
     for (const id of ['new', 'existing']) for (const action of ['cancel', 'apply', 'rejectRestart']) {
         const confirmations: string[] = [], saves: any[] = [], discarded: any[] = [], steps: string[] = []
         let confirm = true, restarts = 0, importButton: any
-        const texts: string[] = []
+        const texts: string[] = [], tooltips: string[] = []
         const imported = { id, version: '2.0.0', stagingId: 'draft' }
         const makeNode = (parent?: any): any => {
             const node: any = { isValid: true, activeInHierarchy: true, active: true, children: [], position: { x: 0, y: 0 },
@@ -38,6 +38,7 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
                 return { result: Promise.resolve(confirm) }
             },
             button: () => importButton = {},
+            tooltip: (_parent: unknown, options: { text: string }) => tooltips.push(options.text),
             label: (parent: any, options: any) => { texts.push(options.text); return { node: makeNode(parent), renderer: {} } },
             checkbox: (parent: any) => ({ node: makeNode(parent), button: {} }),
             scroll: () => ({ content: makeNode(), contentWidth: 500, offset: 0, setContentHeight() {} }),
@@ -60,14 +61,17 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
         }
         modules['./RestartingDialog'] = loadScript('assets/scripts/client/dialogs/RestartingDialog.ts', (name: string) => modules[name] ?? {})
         const exports = loadScript('assets/scripts/client/dialogs/PackageDialog.ts', (name: string) => modules[name] ?? {}, { setTimeout })
-        await exports.showPackageDialog(makeNode(), ui, { import: async () => [imported],
+        const fault = action === 'cancel' ? { owner: 'existing', message: 'bad sprite' } : undefined
+        await exports.showPackageDialog(makeNode(), ui, { fault, import: async () => [imported],
             save: async () => { steps.push('save-game') }, restart: async () => { steps.push('restart'); restarts++ } })
         assert.deepEqual(steps.splice(0), ['paint'], 'the dialog shows Loading before it reads the installed Mods')
+        assert.equal(texts.includes('existing [Error]'), !!fault)
+        assert.deepEqual(tooltips, fault ? ['bad sprite'] : [])
         importButton.onClick()
         await setImmediate()
         assert.equal(saves.length, 0, 'Import must not write files or settings')
         assert.equal(installedReads, 1, 'showing a draft import reuses the installed list read on opening')
-        assert.ok(['existing', '1.0.0'].every(text => texts.includes(text)) && !texts.includes('Uika'), 'rows show the Mod ID and version in their own columns')
+        assert.ok(texts.includes(fault ? 'existing [Error]' : 'existing') && texts.includes('1.0.0') && !texts.includes('Uika'), 'rows show the Mod ID and version in their own columns')
         if (action === 'cancel') {
             dialog.onCancel()
             await setImmediate()

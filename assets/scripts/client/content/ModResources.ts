@@ -2,6 +2,7 @@ import { Asset, assetManager, AudioClip, director, dynamicAtlasManager, ImageAss
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
 import { baseQualified } from '@/shared/mod'
+import { ownedModError } from '@/shared/mod/ModHost'
 import { fontAreaMaterial } from '@/client/font/FontAreaMaterial'
 import { applySpriteDensity, getTextureDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
@@ -208,7 +209,7 @@ export class ModResources {
     }
 
     async baseContent(): Promise<ContentArchive> {
-        await this.ready()
+        await this.readyBase()
         if (!this.baseArchive) throw new Error('Base content is not loaded')
         return this.baseArchive
     }
@@ -258,7 +259,7 @@ export class ModResources {
         await this.ready()
         const qualified = baseQualified(id)
         return this.running().filter(pack => pack.manifest.json[qualified])
-            .map(pack => ({ owner: pack.manifest.id, json: contentJson(pack.files, pack.manifest.json[qualified]) }))
+            .map(pack => ({ owner: pack.manifest.id, json: this.readJson(pack, pack.manifest.json[qualified]) }))
     }
 
     /** The IDs of a kind of resource that any running pack registers. */
@@ -298,7 +299,16 @@ export class ModResources {
     async json(kind: JsonResourceKind, id: string): Promise<unknown> {
         await this.ready()
         const pack = this.find(kind, id)
-        return pack && packJson(pack, pack.manifest[kind][baseQualified(id)])
+        return pack && this.readJson(pack, pack.manifest[kind][baseQualified(id)])
+    }
+
+    private readJson(pack: LoadedPack, file: string): unknown {
+        try { return packJson(pack, file) }
+        catch (error) { throw this.resourceError(pack, error) }
+    }
+
+    private resourceError(pack: LoadedPack, error: unknown): unknown {
+        return pack === this.base ? error : ownedModError(pack.manifest.id, error)
     }
 
     /** A prefab: the base's are the engine's own imports, which keep their compiled scripts and bindings. */
@@ -312,9 +322,10 @@ export class ModResources {
         return new Promise((resolve, reject) => resources.load(path, Prefab, (error, asset) => error ? reject(error) : resolve(asset)))
     }
 
-    async font(id: string): Promise<BitmapFontAssets> {
-        await this.ready()
-        const pack = this.find('fonts', id)
+    async font(id: string, baseOnly = false): Promise<BitmapFontAssets> {
+        if (baseOnly) await this.readyBase()
+        else await this.ready()
+        const pack = this.find('fonts', id, undefined, baseOnly)
         if (!pack) throw new Error(`Font is not installed: ${id}`)
         const qualified = baseQualified(id)
         const cached = pack.fonts.get(qualified)
@@ -335,7 +346,7 @@ export class ModResources {
             for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
             // Pixel fonts such as Pix118Bold need area sampling to keep even strokes at non-integer scales.
             return { config, textures, materials: await Promise.all(textures.map(fontAreaMaterial)) }
-        })().catch(error => { pack.fonts.delete(qualified); throw error })
+        })().catch(error => { pack.fonts.delete(qualified); throw this.resourceError(pack, error) })
         pack.fonts.set(qualified, pending)
         return pending
     }
@@ -356,7 +367,7 @@ export class ModResources {
                 return remote<AudioClip>(pack, file, ext, ext === '.mp3' ? 'audio/mpeg' : 'audio/wav')
             }
             return remote<T>(pack, file, file.slice(file.lastIndexOf('.')), 'application/octet-stream')
-        })().catch(error => { pack.assets.delete(key); throw error })
+        })().catch(error => { pack.assets.delete(key); throw this.resourceError(pack, error) })
         pack.assets.set(key, pending)
         return pending as Promise<T>
     }
@@ -394,7 +405,7 @@ export class ModResources {
             applySpriteDensity(frame)
             if (pack.premultiplied.has(entry.file)) frame.packable = false
             return frame
-        }).catch(error => { pack.sprites.delete(id); throw error })
+        }).catch(error => { pack.sprites.delete(id); throw this.resourceError(pack, error) })
         pack.sprites.set(id, pending)
         return pending
     }

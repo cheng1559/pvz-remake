@@ -1,4 +1,5 @@
 import type { LocalGameChannel } from '@/shared/channel/index'
+import { ownedModError } from '@/shared/mod/ModHost'
 import type {
     GameCommand,
     JsonValue,
@@ -139,6 +140,7 @@ export class IntegratedGameClient {
                 this.lastSaveSequence = packet.acknowledgedSequence
                 return
             case 'fatalServerError':
+                if (packet.modId) throw ownedModError(packet.modId, new Error(packet.message))
                 throw new Error(`${packet.code}: ${packet.message}`)
             case 'sessionStopped': return
         }

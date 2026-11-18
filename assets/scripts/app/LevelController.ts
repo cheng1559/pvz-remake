@@ -1,3 +1,4 @@
+import { modErrorOwner, modFaults, ModRuntimeError } from '@/shared/mod/ModHost'
 import { BlockInputEvents, Mask, Node } from 'cc'
 import { isZombieOnScreen } from '@/shared/content/zombieStates'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
@@ -27,7 +28,7 @@ async function restoring<T>(save: GameSave | undefined, task: () => T | Promise<
     try {
         return await task()
     } catch (error) {
-        if (!save || error instanceof IncompatibleSaveError) throw error
+        if (!save || error instanceof IncompatibleSaveError || modErrorOwner(error)) throw error
         throw new IncompatibleSaveError(error instanceof Error ? error.message : String(error))
     }
 }
@@ -169,10 +170,12 @@ export function createLevelController(
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
             try {
-                if (scene && rollback && current?.root.isValid) {
+                if (!modFaults.current && scene && rollback && current?.root.isValid) {
                     scene.prepareForReplacement()
                     await current.scene.restorePresentation(rollback)
                 }
+            } catch (rollbackError) {
+                throw new ModRuntimeError(modErrorOwner(rollbackError), rollbackError)
             } finally { if (root.isValid) root.destroy() }
             throw error
         }
@@ -180,7 +183,7 @@ export function createLevelController(
     const commit = async (save?: GameSave, levelId?: string): Promise<Node> => {
         const expectedRevision = revision
         const candidate = await load(save, levelId)
-        if (revision !== expectedRevision) {
+        if (modFaults.current || revision !== expectedRevision) {
             if (candidate.root.isValid) candidate.root.destroy()
             throw new Error('Level scene was closed while loading')
         }
@@ -221,7 +224,10 @@ export function createLevelController(
     const save = () => {
         if (current?.level.persistent === false) return Promise.reject(new Error('Temporary levels cannot be saved'))
         return saving ??= snapshot()
-        .then(value => storeForProfile(value.profileId).save(value))
+        .then(value => {
+            if (modFaults.current) throw modFaults.current
+            return storeForProfile(value.profileId).save(value)
+        })
         .finally(() => { saving = null })
     }
     const controller: LevelController = {
@@ -251,6 +257,7 @@ export function createLevelController(
                 if (!save || !(error instanceof IncompatibleSaveError)) throw error
                 // AGENTS.md: dev saves only support the current format, so a mismatched save counts as no save.
                 console.warn(`[LevelController] Discarding incompatible save: ${error.message}`)
+                if (modFaults.current) throw modFaults.current
                 const fresh = await startLoading(undefined, requestedLevelId ?? (await menuApi.getAdventure()).levelId)
                 await controller.deleteSave()
                 return fresh
@@ -319,7 +326,7 @@ export function createLevelController(
             if (current?.root.isValid) current.scene.pause(quiet, keepMusic)
         },
         resume() {
-            if (current?.root.isValid) current.scene.resume()
+            if (!modFaults.current && current?.root.isValid) current.scene.resume()
         },
         async syncPurse() {
             const level = current
@@ -345,7 +352,8 @@ export function createLevelController(
             return save()
         },
         async deleteSave() {
-            storeForProfile(await profileId()).delete()
+            const id = await profileId()
+            if (!modFaults.current) storeForProfile(id).delete()
         },
     }
     return controller

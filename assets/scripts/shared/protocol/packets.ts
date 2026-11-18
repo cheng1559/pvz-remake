@@ -158,6 +158,7 @@ export interface FatalServerErrorPacket {
     type: 'fatalServerError'
     code: string
     message: string
+    modId?: string
 }
 
 export type ServerPacket =
@@ -273,6 +274,7 @@ export function validateServerPacket(value: unknown): ServerPacket {
         case 'fatalServerError':
             nonEmptyString(packet.code, 'fatalServerError.code')
             nonEmptyString(packet.message, 'fatalServerError.message')
+            if (packet.modId !== undefined) nonEmptyString(packet.modId, 'fatalServerError.modId')
             break
         default:
             throw new TypeError('server packet.type is unknown')

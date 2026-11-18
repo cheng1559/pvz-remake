@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { IntegratedGameHost } from '@/server/session/IntegratedGameHost'
+import { IntegratedGameClient } from '@/client/game/IntegratedGameClient'
+import { modErrorOwner, ownedModError } from '@/shared/mod/ModHost'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LocalGameChannel } from '@/shared/channel/index'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
@@ -123,6 +125,21 @@ test('integrated host fatally stops before an oversized catch-up', () => {
     assert.deepEqual(packets.map(packet => packet.type), ['sessionStarted', 'fatalServerError'])
     assert.equal(packets[1].type === 'fatalServerError' && packets[1].code, 'tick-limit-exceeded')
     assert.equal(packets[0].type === 'sessionStarted' && packets[0].snapshot.tick, 0)
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [])
+})
+
+test('a fatal server exception propagates to the client with its Mod attribution', () => {
+    const channel = new LocalGameChannel()
+    const server = new IntegratedGameServer(definitions, levels)
+    const host = new IntegratedGameHost(server, channel)
+    const client = new IntegratedGameClient(channel)
+    send(channel, startPacket)
+    host.update(0)
+    client.update()
+    server.step = () => { throw ownedModError('broken-rule', new Error('rule failed')) }
+    host.update(0.01)
+    assert.throws(() => client.update(), error => error instanceof Error && error.message === 'rule failed' && modErrorOwner(error) === 'broken-rule')
     host.update(1)
     assert.deepEqual(channel.drainClientPackets(), [])
 })

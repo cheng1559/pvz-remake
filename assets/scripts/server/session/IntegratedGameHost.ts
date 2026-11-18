@@ -1,3 +1,4 @@
+import { modErrorOwner } from '@/shared/mod/ModHost'
 import { LocalGameChannel } from '@/shared/channel/index'
 import { TICK_SECONDS } from '@/shared/protocol'
 import type {
@@ -51,7 +52,7 @@ export class IntegratedGameHost {
         } catch (error) {
             // The client only receives the message; keep the stack in the console.
             console.error('[IntegratedGameHost]', error)
-            this.fatal('server-error', (error instanceof Error ? error.message : String(error)) || 'Server error')
+            this.fatal('server-error', (error instanceof Error ? error.message : String(error)) || 'Server error', modErrorOwner(error))
         }
     }
 
@@ -196,8 +197,8 @@ export class IntegratedGameHost {
         this.channel.sendToClient({ protocolVersion: 1, type: 'commandRejected', sequence, code })
     }
 
-    private fatal(code: string, message: string): void {
-        this.channel.sendToClient({ protocolVersion: 1, type: 'fatalServerError', code, message })
+    private fatal(code: string, message: string, modId?: string): void {
+        this.channel.sendToClient({ protocolVersion: 1, type: 'fatalServerError', code, message, ...(modId ? { modId } : {}) })
         this.accumulatorSeconds = 0
         this.stopped = true
     }

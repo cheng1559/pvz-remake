@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as validate from '../assets/scripts/shared/validate'
+import * as modHost from '../assets/scripts/shared/mod/ModHost'
 
 const transpiled = new Map<string, string>()
 
@@ -20,7 +21,7 @@ export function loadScript(path: string, require: (id: string) => unknown, globa
         transpiled.set(path, code)
     }
     const module = { exports: {} as Record<string, any> }
-    const resolve = (id: string) => id === '@/shared/validate' ? validate : require(id)
+    const resolve = (id: string) => id === '@/shared/validate' ? validate : id === '@/shared/mod/ModHost' ? modHost : require(id)
     runInNewContext(code, { module, exports: module.exports, require: resolve, ...globals })
     return module.exports
 }

@@ -5,7 +5,7 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { loadUIAssets, type UIAssets, type UIFont } from './UIAssets'
+import { loadBaseUIAssets, loadUIAssets, type UIAssets, type UIFont } from './UIAssets'
 import { UIButton, type UIButtonPolygon, type UIButtonState } from './UIButton'
 import { UIDialog } from './UIDialog'
 import { UILabel, type UILabelOptions } from './UILabel'
@@ -84,6 +84,7 @@ export class UI {
     private glowMaterial?: Material
 
     static async load(): Promise<UI> { return new UI(await loadUIAssets()) }
+    static async recovery(useLoadedLanguage = true): Promise<UI> { return new UI(await loadBaseUIAssets(useLoadedLanguage)) }
 
     constructor(readonly assets: UIAssets) {}
 

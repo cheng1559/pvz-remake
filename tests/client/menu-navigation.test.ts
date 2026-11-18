@@ -6,7 +6,7 @@ import { loadScript } from '../loadScript'
 import { isMenuDialog, LEVEL_DIALOGS, MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import { gameClock } from '@/core/GameClock'
 import { DEBUG_GOTO_PAGES, type DebugCliResult } from '@/shared/debug/DebugCli'
-import { ModHost } from '@/shared/mod/ModHost'
+import { ModHost, modFaults, ownedModError } from '@/shared/mod/ModHost'
 
 test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
     const calls: string[] = [], ui = {}
@@ -436,6 +436,21 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         }
     }
     assert.equal(prompts, 3)
+    const uiModule = modules['@/client/ui/UI'] as { UI: { load(): Promise<unknown> } }
+    const loadUI = uiModule.UI.load
+    let finishLoad!: () => void
+    uiModule.UI.load = () => new Promise(resolve => { finishLoad = () => resolve({}) })
+    try {
+        const pending = app.navigate('play')
+        await setImmediate()
+        modFaults.current = ownedModError('theme', new Error('loading failed'))
+        finishLoad()
+        await pending
+        assert.equal(prompts, 3, 'a late continue prompt stays closed after a fault')
+    } finally {
+        modFaults.current = undefined
+        uiModule.UI.load = loadUI
+    }
     restoreOnPlay = false
     let clearedAdvice = 0
     app.advice = { clear() { clearedAdvice++ } }
@@ -508,6 +523,83 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     }
 })
 
+test('a loading fault opens one base UI dialog and the manager can cancel or restart without saving', async () => {
+    const steps: string[] = [], buttons: any[] = []
+    const faultDialog = { node: { isValid: true }, onCancel() {}, onConfirm() {} }
+    let close!: () => void
+    let actions: any
+    const strings = JSON.parse(readFileSync('tools/pvz/ui-strings.json', 'utf8'))
+    const ui = {
+        text: (key: string) => key,
+        format: (key: string, args: string[]) => strings[key].replace('%s', () => args[0]),
+        dialog(_parent: unknown, options: any) {
+            assert.deepEqual(options.message.split('\n'), ['The game encountered the following error:', 'bad sprite',
+                'You can change the enabled Mods in the Mod manager and restart.'])
+            assert.equal(options.width, undefined)
+            buttons.push(...options.buttons)
+            steps.push('fault')
+            return faultDialog
+        },
+    }
+    const modules: Record<string, unknown> = {
+        cc: { Component: class {}, Color: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+            sys: { isNative: false }, game: { end() { steps.push('exit') } } },
+        '@/client/music/MusicSystem': { MusicSystem: { playTune() {} } },
+        '@/client/ui/UI': { UI: { recovery: async () => ui, load() { assert.fail('faulty UI was reloaded') } } },
+        '@/client/view/uiNode': { uiNode: () => ({ node: { isValid: true, destroy() {} } }) },
+        '@/client/dialogs/PackageDialog': { async showPackageDialog(parent: unknown, assets: unknown, callbacks: unknown) {
+            assert.equal(parent, faultDialog.node)
+            assert.equal(assets, ui)
+            actions = callbacks
+            steps.push('manage')
+            return { result: new Promise<void>(resolve => { close = resolve }) }
+        } },
+        '@/client/content/ModManager': { modManager: { finishStartup() {} } },
+    }
+    const events = new Map<string, (event: { reason: unknown }) => void>()
+    const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => modules[id] ?? {}, {
+        console: { error() {} },
+        window: { addEventListener: events.set.bind(events), removeEventListener: events.delete.bind(events) },
+    })
+    const app = new GameApp()
+    app.node = { isValid: true }
+    app.gameLayer = { active: true }
+    app.transitions = { dispose() { steps.push('stop') } }
+    app.controller = { saveIfRunning() { assert.fail('faulty game was saved') } }
+    app.restartGame = () => steps.push('restart')
+    app.loading = true
+    app.listenForModFaults()
+    try {
+        const failure = ownedModError('theme', new Error('bad sprite'))
+        const { StartupScreen } = loadScript('assets/scripts/client/screens/StartupScreen.ts', id => modules[id] ?? {})
+        const loading = new StartupScreen()
+        loading.node = app.node
+        loading.preload = async () => {}
+        loading.loadTitle = async () => { throw failure }
+        await assert.rejects(loading.show(), (error: unknown) => error === failure)
+        assert.deepEqual(steps, [], 'a caller can handle a rejected load before it reaches the application')
+        events.get('unhandledrejection')!({ reason: failure })
+        events.get('unhandledrejection')!({ reason: failure })
+        await setImmediate()
+        assert.equal(app.gameLayer.active, false)
+        assert.deepEqual(buttons.map(button => button.text), ['MOD_RUNTIME_MANAGE', 'MOD_RUNTIME_EXIT'])
+        app.save()
+        buttons[0].onClick(faultDialog)
+        buttons[0].onClick(faultDialog)
+        await setImmediate()
+        close()
+        await setImmediate()
+        buttons[0].onClick(faultDialog)
+        await setImmediate()
+        await actions.save()
+        assert.equal(actions.fault.owner, 'theme')
+        await actions.restart()
+        close()
+        buttons[1].onClick()
+        assert.deepEqual(steps, ['stop', 'fault', 'manage', 'manage', 'restart', 'exit'])
+    } finally { app.removeErrorListeners() }
+})
+
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
     for (const isNative of [false, true]) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
         const steps: string[] = []
@@ -552,7 +644,7 @@ test('manager imports read sequentially, continue after failure and leave instal
             window: { location: { reload: () => steps.push('web-restart') } } })
         const app = new GameApp()
         app.node = { isValid: true }
-        const imported = await app.importPackage()
+        const imported = await app.importPackage(ui)
         assert.deepEqual(Array.from(imported, (mod: any) => mod.id), names.filter(name => name !== 'bad'))
         const expected = ['pick']
         if (names.length) {

@@ -21,6 +21,8 @@ const CHECKBOX_CENTER_Y = 17
 const ARROW_WIDTH = 20
 
 export interface PackageDialogOptions {
+    /** The running Mod responsible for the recovery dialog, when its owner is known. */
+    fault?: { readonly owner?: string; readonly message: string }
     /** Picks and validates ZIPs without saving them; empty when cancelled or all failed. */
     import: () => Promise<ModImport[]>
     /** Saves the running level before handing the draft to the next startup. */
@@ -79,6 +81,9 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     try {
         initial = await manager.list()
         installedEntries = await manager.installed()
+        const fault = options.fault
+        if (fault?.owner) installedEntries = installedEntries.map(entry => entry.id === fault.owner
+            ? { ...entry, error: fault.message || ui.text('MOD_RUNTIME_ERROR_HEADER') } : entry)
     } catch (error) {
         dialog.close(false)
         throw error

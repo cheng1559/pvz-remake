@@ -1,3 +1,5 @@
+import { ownedModError } from '../mod/ModHost'
+
 /** One running package's `pvz:strings` table; the base comes first, then Mods from lowest to highest priority. */
 export interface StringLayer { owner: string; table: unknown }
 
@@ -7,11 +9,15 @@ export interface StringLayer { owner: string; table: unknown }
  * Later layers win. Keys a Mod may not add are left out and reported.
  */
 export function mergeStringLayers(layers: readonly StringLayer[]): { strings: Record<string, string>, rejected: string[] } {
-    const tables = layers.map(({ owner, table }) => {
-        if (!table || typeof table !== 'object' || Array.isArray(table)) throw new Error(`${owner}: pvz:strings must be an object`)
+    const tables = layers.map(({ owner, table }, index) => {
+        const invalid = (message: string) => {
+            const error = new Error(`${owner}: pvz:strings${message}`)
+            return index ? ownedModError(owner, error) : error
+        }
+        if (!table || typeof table !== 'object' || Array.isArray(table)) throw invalid(' must be an object')
         for (const [key, value] of Object.entries(table)) {
             // The original table has deliberately empty entries (spacer credit lines), so only the type is checked.
-            if (typeof value !== 'string') throw new Error(`${owner}: pvz:strings.${key} must be a string`)
+            if (typeof value !== 'string') throw invalid(`.${key} must be a string`)
         }
         return { owner, table: table as Record<string, string> }
     })
