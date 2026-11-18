@@ -1,7 +1,7 @@
 import type { EntityAllocatorSnapshot, EntityId, Position } from '@/server/state/World'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
-import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
+import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag, uint32 } from '@/shared/validate'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
 import type { GridItem } from '../gridItems/gridItems'
@@ -51,7 +51,9 @@ export interface SavedFields {
 export type SavedLists = { [K in keyof SavedFields]: (SavedEntity & SavedFields[K])[] }
 
 export interface ServerSaveSnapshot extends SavedLists {
-    schemaVersion: 4
+    schemaVersion: 5
+    /** Recreates the board's per-cell artwork, including cells with no current grave. */
+    boardSeed: number
     levelId: string
     mods: EnabledMod[]
     tick: number
@@ -75,10 +77,10 @@ export interface ServerSaveSnapshot extends SavedLists {
 export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
     const save = exact(value, [
-        'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
+        'schemaVersion', 'boardSeed', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
         'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', ...SAVED_LISTS.map(list => list.key),
     ], 'server save', ['packetUpgradeOffer'])
-    if (save.schemaVersion !== 4) throw new TypeError('server save.schemaVersion must be 4')
+    if (save.schemaVersion !== 5) throw new TypeError('server save.schemaVersion must be 5')
 
     const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
     const allocator = { nextEntity: positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity') }
@@ -138,7 +140,8 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     if (gameplayTick > tick) throw new TypeError('server save.gameplayTick must not exceed tick')
 
     return {
-        schemaVersion: 4,
+        schemaVersion: 5,
+        boardSeed: uint32(save.boardSeed, 'server save.boardSeed'),
         levelId: nonEmptyString(save.levelId, 'server save.levelId'),
         mods,
         tick,

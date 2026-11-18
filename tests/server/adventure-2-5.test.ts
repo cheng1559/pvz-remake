@@ -46,6 +46,7 @@ test('2-5 opens on nine graves from column 4 with three ready packets, no sun an
     const server = play()
     const snapshot = server.snapshot()
     assert.equal(snapshot.gridItems!.length, 9)
+    assert.equal((snapshot.gridItems as GraveSnapshot[]).filter(grave => grave.special).length, 1)
     assert.ok((snapshot.gridItems as GraveSnapshot[]).every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
     assert.deepEqual(snapshot.seedPackets.map(packet => [packet!.seedId, packet!.ready]),
         [['pvz:potatomine', true], ['pvz:gravebuster', true], ['pvz:cherrybomb', true]])

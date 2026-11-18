@@ -1,10 +1,11 @@
 import type { EntityId, World } from '@/server/state/World'
+import { DeterministicRng } from '../state/DeterministicRng'
 import { cellPosition, type GameplayDefinitions, zombieRowY } from '@/shared/content/gameplay'
 import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
 import { holdsCell } from '@/shared/content/planting'
 import type { GraveSnapshot } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
-import { LevelStateResource, RandomResource, WaveResource } from '../state/resources'
+import { BoardSeedResource, LevelStateResource, RandomResource, WaveResource } from '../state/resources'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped } from '../level/levelAward'
@@ -13,6 +14,16 @@ import { gridItems } from './gridItems'
 
 /** A grave (GraveSnapshot), a grid item. */
 export type Grave = Omit<GraveSnapshot, 'entityId'> & { id: EntityId }
+
+/** Mix the cell coordinates with the saved seed, then use MurmurHash3's 32-bit finalizer. */
+export function graveCellLook(seed: number, row: number, column: number): Pick<Grave, 'variant' | 'offsetX' | 'offsetY'> {
+    let hash = seed ^ Math.imul(row, 0x9e3779b1) ^ Math.imul(column, 0x85ebca77)
+    hash = Math.imul(hash ^ (hash >>> 16), 0x85ebca6b)
+    hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2ae35)
+    const value = (hash ^ (hash >>> 16)) >>> 0
+    const offsets = Math.floor(value / GRAVE_VARIANTS)
+    return { variant: value % GRAVE_VARIANTS, offsetX: offsets % 10 - 5, offsetY: Math.floor(offsets / 10) % 10 - 5 }
+}
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Grave[] {
@@ -23,8 +34,9 @@ export function graves(world: World): Grave[] {
 export function createGrave(world: World, row: number, column: number, more: Pick<Grave, 'riseAtTick' | 'team'> = {}): EntityId {
     const random = world.resources.get(RandomResource)
     const entity = world.createEntity()
-    world.insert(world.gridItems, { id: entity, typeId: GRAVE, column, row, variant: random.integer(0, GRAVE_VARIANTS - 1),
-        riseDelay: random.integer(0, GRAVE_MAX_RISE_DELAY), offsetX: random.integer(-5, 4), offsetY: random.integer(-5, 4), ...more })
+    const look = graveCellLook(world.resources.get(BoardSeedResource), row, column)
+    world.insert(world.gridItems, { id: entity, typeId: GRAVE, column, row, ...look,
+        riseDelay: random.integer(0, GRAVE_MAX_RISE_DELAY), ...more })
     return entity
 }
 
@@ -44,21 +56,28 @@ export function placeGrave(world: World, definitions: GameplayDefinitions, row: 
     return createGrave(world, row, column, { ...(riseAtTick === undefined ? {} : { riseAtTick }), ...(team ? { team } : {}) })
 }
 
-/** Board::AddGraveStones: each column picks distinct rows (columns are unique per level). Keep the look stable on restore. */
+/** Board::AddGraveStones retries inactive and occupied rows using its own level RNG (1096, 0x40c4c0). */
 export function createGraves(world: World): void {
-    const level = world.resources.get(LevelStateResource).definition
-    const random = world.resources.get(RandomResource)
-    const made: EntityId[] = []
+    const { definition: level, board } = world.resources.get(LevelStateResource)
+    const seed = world.resources.get(BoardSeedResource)
+    const random = new DeterministicRng((seed + level.adventureIndex) >>> 0)
+    const rowCount = Math.max(6, board.rows) // 1096 also draws the reserved sixth row on five-row lawns.
     for (const { column, count } of level.graves ?? []) {
-        const rows = [...level.activeRows]
-        for (let i = 0; i < count; i++) {
-            const [row] = rows.splice(random.integer(0, rows.length - 1), 1)
-            made.push(createGrave(world, row, column))
+        const available = new Set(level.activeRows)
+        for (let placed = 0; placed < count;) {
+            const row = random.integer(0, rowCount - 1)
+            if (available.delete(row)) {
+                createGrave(world, row, column)
+                placed++
+            }
         }
     }
-    // Board::PickSpecialGraveStone, right after placing them: one stone looks different.
-    const special = made.length ? world.gridItems.get(made[random.integer(0, made.length - 1)]) : undefined
-    if (special?.typeId === GRAVE) special.special = true
+}
+
+/** Board::PickSpecialGraveStone runs once after all opening graves, including Whack-a-Zombie's, are in place. */
+export function pickSpecialGrave(world: World): void {
+    const opening = graves(world)
+    if (opening.length) opening[world.resources.get(RandomResource).integer(0, opening.length - 1)].special = true
 }
 
 /**

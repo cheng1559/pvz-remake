@@ -81,17 +81,21 @@ function troupe(server: IntegratedGameServer, team = '') {
     return { leader, events, backups: zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId) }
 }
 
-test('2-8 follows 2-7 with 10 waves over eleven graves, brings the dancer in on waves 6 and 10 and awards the doom-shroom', () => {
+test('2-8 follows 2-7 with 10 waves over seven graves, brings the dancer in on waves 6 and 10 and awards the doom-shroom', () => {
     const level = levels.levels['pvz:adventure-2-8']
     assert.equal(levels.levels['pvz:adventure-2-7'].nextLevel, 'pvz:adventure-2-8')
     // LawnApp::GetAwardSeedForLevel(18): (2 - 1) * 8 + 8 - 1 = 15, SEED_DOOMSHROOM.
     assert.deepEqual(level.award, { kind: 'seed', id: 'pvz:doomshroom' })
-    // Board::InitLevel: AddGraveStones(4, 1), (5, 2), (6, 2), (7, 3), (8, 3) on levels 17-19.
-    const graves = start().snapshot().gridItems!
-    assert.deepEqual([4, 5, 6, 7, 8].map(column => graves.filter(grave => grave.column === column).length), [1, 2, 2, 3, 3])
+    // 1096 Board::InitLevel groups level 18 with 14 and 16.
+    assert.deepEqual(start().snapshot().gridItems, start().snapshot().gridItems, 'same board seed reproduces the opening graves')
     const allowed = new Set(['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:dancer'])
     for (let seed = 1; seed <= 10; seed++) {
-        const waves = start({ randomSeed: seed }).save().wave.plan.map(wave => wave.zombies)
+        const game = start({ randomSeed: seed })
+        const graves = game.snapshot().gridItems!
+        assert.deepEqual(graves.map(grave => grave.column).sort((a, b) => a - b), [5, 6, 7, 7, 8, 8, 8])
+        assert.equal(new Set(graves.map(grave => `${grave.column},${grave.row}`)).size, 7)
+        assert.ok(graves.every(grave => level.activeRows.includes(grave.row)))
+        const waves = game.save().wave.plan.map(wave => wave.zombies)
         assert.equal(waves.length, 10)
         assert.deepEqual(waves.flatMap((wave, index) => wave.includes('pvz:flag') ? [index] : []), [9])
         assert.ok(waves.flat().every(id => allowed.has(id)), 'gZombieAllowedLevels for level 18')

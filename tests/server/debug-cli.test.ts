@@ -83,6 +83,15 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save })
     assert.deepEqual(restored.render(), game.render())
+    // The cell keeps its look even through a save with a crater where the grave stood.
+    const look = (item: GraveSnapshot) => [item.variant, item.offsetX, item.offsetY]
+    const original = graves.find(item => item.row === 2 && item.column === 1) as GraveSnapshot
+    assert.ok(restored.debugCommand('/griditem crater 3 2').ok)
+    const craterSave = restored.saveAtBoundary()
+    restored.start({ levelId: 'pvz:adventure-1-1', randomSeed: 999, initialMoney: 0, firstAdventure: false, mods: [], save: craterSave })
+    assert.ok(restored.debugCommand('/griditem grave 3 2').ok)
+    const regrown = restored.render().gridItems!.find(item => item.row === 2 && item.column === 1) as GraveSnapshot
+    assert.deepEqual(look(regrown), look(original))
     game.command({ type: 'resume' })
     game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
     game.command({ type: 'placePlant', row: 2, column: 1 })

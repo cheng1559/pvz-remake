@@ -88,6 +88,7 @@ export const LevelStateResource = defineResource<LevelState>('pvz:level-state')
 export const EconomyStateResource = defineResource<EconomyState>('pvz:economy-state')
 
 export const RandomResource = defineResource<DeterministicRng>('pvz:random-state')
+export const BoardSeedResource = defineResource<number>('pvz:board-seed')
 
 export const SeedBankResource = defineResource<SeedBankState>('pvz:seed-bank')
 

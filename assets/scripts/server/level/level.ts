@@ -6,7 +6,7 @@ import { getActiveTutorial, levelTutorial } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
 import { seedAffordable } from '../seeds/seedBank'
-import { createGraves } from '../gridItems/graves'
+import { createGraves, pickSpecialGrave } from '../gridItems/graves'
 
 /** Board::InitZombieWaves: ZOMBIE_COUNTDOWN_FIRST_WAVE, the first wave's countdown when the level gives none. */
 const FIRST_WAVE_TICKS = 1800
@@ -35,6 +35,7 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
         } : {}),
     })
     rules.get(level)?.initialize?.(world, definitions)
+    pickSpecialGrave(world)
     script?.initialize?.(world, firstAdventure)
 }
 

@@ -6,7 +6,9 @@ import { ZOMBIE_STATES } from '@/shared/content/zombieStates'
 import { PLANT_STATES } from '@/shared/content/plantKinds'
 import { jsonRoundTrip, parseGridItem, TEAMS, type JsonObject } from '@/shared/protocol/index'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag } from '@/shared/validate'
-import { LevelStateResource } from '../state/resources'
+import { BoardSeedResource, LevelStateResource } from '../state/resources'
+import { GRAVE } from '@/shared/content/graves'
+import { graveCellLook } from '../gridItems/graves'
 import type { Item } from '../items/items'
 import type { SavedEntity, SavedFields, SavedOfList } from './save'
 import { type Plant, PLANT_FIELDS, PlantFactoryResource, type SavedPlant } from '../plants/Plant'
@@ -181,6 +183,10 @@ export const SAVED_LISTS: readonly SavedList[] = [
         check: (item, { world, entity }) => {
             const { board } = world.resources.get(LevelStateResource)
             if (item.row >= board.rows || item.column >= board.columns) throw new Error(`Saved grid item ${entity.id} is outside the board`)
+        },
+        restore(item, { world, entity }) {
+            if (item.typeId === GRAVE) return { ...item, id: entity.id, ...graveCellLook(world.resources.get(BoardSeedResource), item.row, item.column) }
+            return { ...item, id: entity.id }
         },
     }),
     savedList({

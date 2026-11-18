@@ -5,7 +5,7 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/resources'
+import { BoardSeedResource, EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/resources'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../items/items'
@@ -168,6 +168,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
+    world.resources.set(BoardSeedResource, packet.randomSeed)
     const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },

@@ -3,6 +3,7 @@ import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip, sameMods } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
 import {
+    BoardSeedResource,
     EconomyStateResource,
     LevelStateResource,
     PacketUpgradeOfferResource,
@@ -38,7 +39,8 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     })]))
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
-        schemaVersion: 4,
+        schemaVersion: 5,
+        boardSeed: world.resources.get(BoardSeedResource),
         levelId: level.id,
         mods: mods.map(mod => ({ ...mod })),
         tick,
@@ -125,6 +127,7 @@ export function restoreSession(
     })
     if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, jsonRoundTrip(save.packetUpgradeOffer))
     world.resources.set(RandomResource, DeterministicRng.restore(save.random))
+    world.resources.set(BoardSeedResource, save.boardSeed)
     world.resources.set(SeedBankResource, jsonRoundTrip(save.seedBank))
     world.resources.set(TutorialResource, jsonRoundTrip(save.tutorial))
     world.resources.set(SkySunResource, jsonRoundTrip(save.skySun))

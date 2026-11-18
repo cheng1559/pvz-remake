@@ -67,7 +67,7 @@ test('2-7 follows 2-6 with 20 waves over eleven graves and awards the ice-shroom
     assert.equal(levels.levels['pvz:adventure-2-6'].nextLevel, 'pvz:adventure-2-7')
     // LawnApp::GetAwardSeedForLevel(17): (2 - 1) * 8 + 7 - 1 = 14, SEED_ICESHROOM.
     assert.deepEqual(level.award, { kind: 'seed', id: 'pvz:iceshroom' })
-    // Board::InitLevel: AddGraveStones(4, 1), (5, 2), (6, 2), (7, 3), (8, 3) on levels 17-19.
+    // Steam 1096 uses this layout on levels 17 and 19.
     const graves = start().snapshot().gridItems!
     assert.deepEqual([4, 5, 6, 7, 8].map(column => graves.filter(grave => grave.column === column).length), [1, 2, 2, 3, 3])
     const allowed = new Set(['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:screendoor', 'pvz:football'])
