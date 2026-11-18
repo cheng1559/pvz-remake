@@ -24,7 +24,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(parseDebugCliCommand(' /PLANT "Pea Shooter" 3 1 '), { name: 'plant', args: ['Pea Shooter', '3', '1'] })
     assert.deepEqual(parseDebugCliCommand('sun set 100'), { name: 'sun', args: ['set', '100'] })
     assert.deepEqual(parseDebugCliCommand('/seed 1 snowpea'), { name: 'seed', args: ['1', 'snowpea'] })
-    assert.deepEqual(parseDebugCliCommand('/grave 3 2'), { name: 'grave', args: ['3', '2'] })
+    assert.deepEqual(parseDebugCliCommand('/griditem grave 3 2'), { name: 'griditem', args: ['grave', '3', '2'] })
     assert.deepEqual(parseDebugCliCommand('/mod'), { name: 'mod', args: [] })
     assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), [])
     assert.equal(getDebugCliSuffix('/mod'), '')
@@ -34,7 +34,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     for (const args of ['install', 'load local:widescreen', 'unload all', 'uninstall local:hd', 'list']) {
         assert.equal((parseDebugCliCommand('/mod ' + args) as { failure: string }).failure, 'syntax')
     }
-    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/grave', '/grave 3', '/grave 3 2 1']) {
+    for (const command of ['/unknown', '/grave 3 2', '/griditem rock 3 2', '/gravezombies 1', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/griditem grave', '/griditem grave 3', '/griditem grave 3 2 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
     const game = setup()
@@ -44,6 +44,8 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(catalog.plants, plantSeeds.map(id => id.replace(/^pvz:/, '')))
     assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor', 'football', 'dancer', 'backup_dancer'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
+    assert.deepEqual(getDebugCliCompletions('/griditem ', catalog, true), ['/griditem grave', '/griditem crater'])
+    assert.deepEqual(getDebugCliCompletions('/gravezo'), ['/gravezombies'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
     assert.deepEqual(getDebugCliCompletions('/plantinvincible ', catalog, true), [], 'a switch takes nothing: it turns over')
@@ -56,24 +58,24 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
 test('CLI graves rise from where they are told, replace a grave in their cell, block planting, survive saves and open after the last wave', () => {
     const game = setup()
     const tick = game.render().gameplayTick
-    for (const command of ['/grave 0 1', '/grave 6 1', '/grave 1 10', '/grave nope 1']) {
+    for (const command of ['/griditem grave 0 1', '/griditem grave 6 1', '/griditem grave 1 10', '/griditem grave nope 1']) {
         assert.equal(game.debugCommand(command).failure, 'syntax')
     }
-    assert.equal(game.debugCommand('/grave 3 2').ok, true)
-    assert.equal(game.debugCommand('/grave 1 9').ok, true, 'debug commands can use inactive board rows')
+    assert.equal(game.debugCommand('/griditem grave 3 2').ok, true)
+    assert.equal(game.debugCommand('/griditem grave 1 9').ok, true, 'debug commands can use inactive board rows')
     assert.deepEqual((game.render().gridItems as GraveSnapshot[]).map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
         'they rise from the current gameplay tick')
     assert.equal(game.render().paused, true)
     assert.equal(game.render().gameplayTick, tick)
-    assert.equal(game.debugCommand('/grave 3 2 plants').ok, true, 'a grave in the cell is replaced')
+    assert.equal(game.debugCommand('/griditem grave 3 2 plants').ok, true, 'a grave in the cell is replaced')
     assert.equal(game.render().gridItems!.find(grave => grave.row === 2 && grave.column === 1)!.team, 'plants', "`plants`: on the plants' side")
-    assert.equal(game.debugCommand('/grave 3 2 zombies').ok, true)
+    assert.equal(game.debugCommand('/griditem grave 3 2 zombies').ok, true)
     assert.equal(game.render().gridItems!.find(grave => grave.row === 2 && grave.column === 1)!.team, undefined)
     assert.equal(game.debugCommand('/plant wallnut 3 3').ok, true)
-    assert.equal(game.debugCommand('/grave 3 3').ok, true, 'plants do not stop a debug grave')
+    assert.equal(game.debugCommand('/griditem grave 3 3').ok, true, 'plants do not stop a debug grave')
     assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'Challenge::GraveDangerSpawnGraveAt kills the plants in the cell')
     assert.equal(game.debugCommand('/plant bowling-wallnut 2 3').ok, true)
-    assert.equal(game.debugCommand('/grave 2 3').ok, true)
+    assert.equal(game.debugCommand('/griditem grave 2 3').ok, true)
     assert.ok(game.render().plants.some(plant => plant.typeId === 'pvz:bowling-wallnut'), 'a bowling nut holds no cell, so it rolls on')
     const graves = game.render().gridItems!
     assert.deepEqual(graves.map(({ row, column }) => [row, column]), [[0, 8], [2, 1], [2, 2], [1, 2]])
@@ -114,6 +116,55 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
         'only the grave at counter 100 raises a zombie')
 })
 
+test('CLI grid items replace the terrain in their cell and craters use the crater seed lifetime', () => {
+    const game = setup()
+    game.debugCommand('/griditem grave 3 3')
+    game.debugCommand('/plant wallnut 3 3')
+    assert.equal(game.debugCommand('/griditem crater 3 3 zombies').ok, true)
+    const [crater] = game.render().gridItems!
+    const seed = definitions.seeds['pvz:crater']
+    assert.ok(crater?.typeId === 'pvz:crater' && seed.kind === 'crater')
+    assert.deepEqual([crater.row, crater.column, crater.team, crater.ticks], [2, 2, 'zombies', seed.craterTicks])
+    assert.equal(game.render().plants.length, 0)
+    assert.equal(game.debugCommand('/griditem crater 3 3').ok, true)
+    assert.deepEqual(game.render().gridItems!.map(item => [item.typeId, item.team]), [['pvz:crater', undefined]])
+    assert.equal(game.debugCommand('/griditem grave 3 3 plants').ok, true)
+    assert.deepEqual(game.render().gridItems!.map(item => [item.typeId, item.team]), [['pvz:grave', 'plants']])
+})
+
+test('CLI grave zombies rise from newly placed graves on their own side, even while paused with an award on the lawn', () => {
+    const game = setup()
+    assert.deepEqual(game.debugCommand('/gravezombies'), { ok: true, message: 'Raised 0 zombie(s) from graves' })
+    game.debugCommand('/griditem grave 3 2 plants')
+    game.debugCommand('/griditem grave 3 4')
+    assert.equal(game.debugCommand('/item award').ok, true)
+    const tick = game.render().gameplayTick
+    assert.equal(game.debugCommand('/gravezombies').ok, true)
+    assert.equal(game.render().gameplayTick, tick)
+    const risen = game.render().zombies.filter(zombie => zombie.riseTicks !== undefined)
+    assert.deepEqual(risen.map(zombie => [zombie.typeId, zombie.team, zombie.riseTicks]),
+        [['pvz:normal', 'plants', 150], ['pvz:normal', undefined, 150]])
+    assert.equal(game.drainEvents().filter(event => event.type === 'zombieRoseFromGrave').length, 2)
+})
+
+test('each /item award adds a collectible reward at the current wave and tutorial step', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: true, mods: [] })
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    const before = game.render()
+    for (const alias of ['levelaward', 'finalseedpacket']) assert.equal(game.debugCommand(`/item ${alias}`).failure, 'condition')
+    assert.equal(game.debugCommand('/item award 3 2').ok, true)
+    assert.equal(game.debugCommand('/item award 3 4').ok, true)
+    const after = game.render()
+    const awards = after.items.filter(item => item.typeId === 'pvz:level-award')
+    assert.equal(awards.length, 2)
+    assert.deepEqual([after.wave, after.tutorial], [before.wave, before.tutorial])
+    game.command({ type: 'collectItemAt', x: awards[1].x + 1, y: awards[1].y + 1 })
+    game.update(0)
+    assert.equal(game.render().result, 'won')
+})
+
 test("a grave seed puts down a grave in any active cell, on the zombies' side or its packet's, whose zombies rise on that side", () => {
     // 1-2's bank holds two packets.
     const game = setup(true, 'pvz:adventure-1-2')
@@ -135,7 +186,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     place(1, 2, 5)
     place(0, 2, 5)
     const rejection = () => game.lastRejection
-    assert.equal(rejection()?.code, 'cell-has-grave', 'unlike /grave, a planted grave leaves a grave there alone')
+    assert.equal(rejection()?.code, 'cell-has-grave', 'unlike /griditem grave, a planted grave leaves a grave there alone')
     place(1, 1, 4)
     assert.deepEqual((game.render().gridItems as GraveSnapshot[]).map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
         [[2, 2, tick, undefined], [2, 5, tick, 'plants'], [1, 4, tick, 'plants']])
@@ -250,6 +301,7 @@ test('CLI game mutations go through the channel while paused and preserve valid 
     assert.equal(game.render().zombies.length, 0)
     assert.equal(game.debugCommand('/removeplant 1 1').ok, true)
     assert.equal(game.render().plants.length, 0)
+    assert.equal(game.debugCommand('/removeplant 1 1').ok, true, 'an empty cell also succeeds')
 })
 
 test('CLI can put one seed in two slots; each slot recharges, flashes and restores on its own', () => {
@@ -284,7 +336,7 @@ test("a grave buster goes only on a grave of the other side", () => {
     // 1-2 opens rows 2-4 (the CLI's numbering); the four graves stand in row 3.
     const game = setup(true, 'pvz:adventure-1-2')
     for (const command of ['/seed 1 gravebuster', '/seed 2 gravebuster zombies', '/cooldown', '/suncost',
-        '/grave 3 4 zombies', '/grave 3 5 plants', '/grave 3 6 zombies', '/grave 3 7 plants']) {
+        '/griditem grave 3 4 zombies', '/griditem grave 3 5 plants', '/griditem grave 3 6 zombies', '/griditem grave 3 7 plants']) {
         assert.equal(game.debugCommand(command).ok, true, command)
     }
     game.command({ type: 'resume' })

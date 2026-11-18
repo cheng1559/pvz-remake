@@ -9,7 +9,7 @@ npm install
 npm run preview:debug                     # preview server, http://localhost:9527 by default
 ```
 
-The project uses the local Cocos CLI and Cocos 4.0.0-alpha.35. In the game, `/` opens the debug CLI (`/level <id>`, `/seed`, `/grave`, `/cooldown`, `/suncost`, `/goto store` and more): see [Debug CLI](DEBUG_CLI.md).
+The project uses the local Cocos CLI and Cocos 4.0.0-alpha.35. In the game, `/` opens the debug CLI (`/level <id>`, `/seed`, `/griditem`, `/gravezombies`, `/cooldown`, `/suncost`, `/goto store` and more): see [Debug CLI](DEBUG_CLI.md).
 
 ## Common commands
 

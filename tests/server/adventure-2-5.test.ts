@@ -145,7 +145,7 @@ test('with every grave being eaten and no zombie left, the award drops when the 
 
 test("a grave of the plants' side raises its zombies on that side, and the mallet only meets the other side's", () => {
     const server = play({ randomSeed: 11 })
-    for (const grave of server.snapshot().gridItems!) assert.equal(debug(server, `/grave ${grave.row + 1} ${grave.column + 1} plants`)?.ok, true)
+    for (const grave of server.snapshot().gridItems!) assert.equal(debug(server, `/griditem grave ${grave.row + 1} ${grave.column + 1} plants`)?.ok, true)
     let snapshot = server.snapshot()
     for (let tick = 0; tick < 2000 && !snapshot.zombies.length; tick++) snapshot = server.tick()
     assert.ok(snapshot.zombies.length > 0)

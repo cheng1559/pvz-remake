@@ -82,14 +82,19 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
     const waves = world.resources.get(WaveResource)
     if (waves.graveRiseAtTick === undefined || tick < waves.graveRiseAtTick) return
     waves.graveRiseAtTick = undefined
-    const { definition } = world.resources.get(LevelStateResource)
-    // Board::UpdateGame stops the rise counter after HasLevelAwardDropped.
     if (levelAwardDropped(world)) return
-    const choices = definition.graveZombies!, random = world.resources.get(RandomResource)
-    for (const grave of graves(world)) {
-        // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves
-        // rose in the intro.
-        if ((graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) < GRAVE_RISEN_COUNTER) continue
+    // The final wave opens only fully risen graves. The level's starting graves rose during the intro.
+    const risen = graves(world).filter(grave => (graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) >= GRAVE_RISEN_COUNTER)
+    spawnZombiesFromGraves(world, definitions, risen)
+}
+
+/** Board::SpawnZombiesFromGraves, on the final wave's timer or immediately for /gravezombies. */
+export function spawnZombiesFromGraves(world: World, definitions: GameplayDefinitions, from = graves(world)): number {
+    const choices = world.resources.get(LevelStateResource).definition.graveZombies
+    if (!choices?.length) return 0
+    const random = world.resources.get(RandomResource)
+    for (const grave of from) {
         raiseZombieFromGrave(world, definitions, grave, pickWeighted(choices, random).id, 150)
     }
+    return from.length
 }

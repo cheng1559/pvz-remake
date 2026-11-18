@@ -172,7 +172,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     views[0].sync(graves[0], world(0, 'gameplay'))
     assert.equal(stone(roots[0]), 100, 'a level in play has them risen')
 
-    // /grave: a grave added in play rises from its gameplay tick, with the intro's dirt, once.
+    // /griditem grave: a grave added in play rises from its gameplay tick, with the intro's dirt, once.
     const added = { entityId: 9, typeId: 'pvz:grave', row: 1, column: 3, variant: 4, riseDelay: 0, offsetX: 0, offsetY: 0, riseAtTick: 500 }
     const root = new Node(), board = { intro: { complete: true }, quiet: false, gridItemOrder, particle() { particles++ } }
     const playing = await makeGrave({ node: root, content, item: added, stage: board })

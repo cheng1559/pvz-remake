@@ -9,22 +9,21 @@ import {
     LevelStateResource,
     RandomResource,
     SeedBankResource,
-    TutorialResource,
     WaveResource,
 } from '../state/resources'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { createWaveSystem } from '../level/waves'
-import { placeGrave } from '../gridItems/graves'
+import { placeGrave, spawnZombiesFromGraves } from '../gridItems/graves'
+import { placeCrater } from '../gridItems/craters'
 import { startRepick } from '../seeds/seedChooser'
 import { createMower } from '../mowers/mowers'
 import { readyMowers } from '../level/lawn'
-import { gridItems } from '../gridItems/gridItems'
-import { craterAt } from '@/shared/content/craters'
+import { CRATER } from '@/shared/content/craters'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
-import { levelAwardDropped, spawnLevelAward } from '../level/levelAward'
+import { spawnLevelAward } from '../level/levelAward'
 import { cellPosition, LEVEL_AWARD, zombieRowY } from '@/shared/content/gameplay'
 
 export const executor = { execute: executeCommand }
@@ -96,7 +95,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)
             // A repick's bank is the chooser's until the level goes on after it.
-            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
+            if (bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
             // `empty` clears the slot; a seed fills an empty one or replaces the packet there.
             const empty = args[1].toLowerCase() === EMPTY_SLOT
             const seedId = empty ? undefined : findType(definitions.seeds, args[1])
@@ -141,22 +140,31 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         case 'removeplant': {
             const grid = position(args[0], args[1])
             if (!grid) return invalidPosition()
-            const entity = grid.column === undefined ? undefined : planting.findPlantAt(session, grid.row, grid.column)
-            if (entity === undefined) return debugCondition('DEBUG_NO_PLANT_THERE')
-            world.destroyEntity(entity)
+            const entity = planting.findPlantAt(session, grid.row, grid.column!)
+            if (entity !== undefined) world.destroyEntity(entity)
             return debugSuccess('Plant removed')
         }
-        case 'grave': {
-            const grid = position(args[0], args[1])
+        case 'griditem': {
+            const [kind, row, col, side] = args
+            const grid = position(row, col)
             if (!grid) return invalidPosition()
-            // `plants`: a grave on the plants' side, whose zombies rise on that side.
-            const team = args[2]?.toLowerCase()
-            if (team !== undefined && team !== 'plants' && team !== 'zombies') return debugSyntax('Team must be plants or zombies')
-            // Board::CanAddGraveStoneAt keeps a grave off a crater. Challenge::GraveDangerSpawnGraveAt (placeGrave): the
-            // plants there die, a grave there gives way.
-            if (craterAt(gridItems(world), grid.row, grid.column!)) return debugCondition('DEBUG_CELL_HAS_CRATER', args[0], args[1])
-            placeGrave(world, definitions, grid.row, grid.column!, tick, team === 'plants' ? 'plants' : undefined)
-            return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}${team === 'plants' ? ' (plants)' : ''}`)
+            const team = side?.toLowerCase()
+            let placed: number
+            if (kind.toLowerCase() === 'grave') {
+                placed = placeGrave(world, definitions, grid.row, grid.column!, tick, team === 'plants' ? 'plants' : undefined)
+            } else {
+                const seed = definitions.seeds[CRATER]
+                if (seed?.kind !== 'crater') return debugCondition('DEBUG_SEED_NOT_INSTALLED', CRATER)
+                placed = placeCrater(world, definitions, grid.row, grid.column!, seed.craterTicks, team === 'zombies' ? 'zombies' : 'plants')
+            }
+            for (const item of world.gridItems) {
+                if (item.row === grid.row && item.column === grid.column && item.id !== placed) world.destroyEntity(item.id)
+            }
+            return debugSuccess(`Placed ${kind} at ${row}, ${col}`)
+        }
+        case 'gravezombies': {
+            const count = spawnZombiesFromGraves(world, definitions)
+            return debugSuccess(`Raised ${count} zombie(s) from graves`)
         }
         case 'zombie': {
             const typeId = findType(definitions.zombies, args[0])
@@ -247,22 +255,14 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             return debugSwitched(name, enabled)
         }
         case 'item': {
-            const award = ['award', 'levelaward', 'finalseedpacket'].includes(normalizeDebugName(args[0]))
+            const award = args[0].toLowerCase() === 'award'
             const typeId = award ? LEVEL_AWARD : findType(definitions.items, args[0])
             if (!typeId) return debugCondition('DEBUG_ITEM_NOT_INSTALLED', args[0])
-            if (award && levelAwardDropped(world)) return debugCondition('DEBUG_AWARD_EXISTS')
             const grid = args.length === 3 ? position(args[1], args[2]) : undefined
             if (grid === null) return invalidPosition()
             const { x, y } = grid ? cellPosition(level.board, grid.row, grid.column!) : { x: 400, y: 280 }
-            if (!award) {
-                // Board::AddCoin with COIN_MOTION_COIN, like a zombie's loot.
-                spawnLoot(world, definitions, world, typeId, x, y)
-                return debugSuccess(`Spawned ${args[0]}`)
-            }
-            world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
-            world.resources.get(TutorialResource).step = 'complete'
-            // Unlike Zombie::TrySpawnLevelAward, the debug award leaves the zombies on the board.
-            spawnLevelAward(world, x, y)
+            if (award) spawnLevelAward(world, x, y)
+            else spawnLoot(world, definitions, world, typeId, x, y)
             return debugSuccess(`Spawned ${args[0]}`)
         }
         case 'achievement': {

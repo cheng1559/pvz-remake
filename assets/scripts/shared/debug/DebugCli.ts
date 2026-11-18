@@ -31,13 +31,13 @@ export const DEBUG_GOTO_PAGES = ['main', 'minigames', 'puzzle', 'survival', 'alm
     'garden', 'mushroom', 'aquarium', 'tree', 'achievements', 'help'] as const
 export type DebugGotoPage = (typeof DEBUG_GOTO_PAGES)[number]
 const builtins: CommandSpec[] = [
-    ...['win', 'lose', 'nextflag', 'nextwave', 'kill', 'restart', 'reload', 'quit'].map(name => ({ name, parameters: [], minimum: 0 })),
+    ...['win', 'lose', 'nextflag', 'nextwave', 'gravezombies', 'kill', 'restart', 'reload', 'quit'].map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'goto', parameters: ['{page}'], minimum: 1, values: { 0: DEBUG_GOTO_PAGES } },
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}', '[team]'], minimum: 3, values: { 3: ['plants', 'zombies'] } },
     { name: 'seed', parameters: ['{slot}', '{seed_name}', '[team]'], minimum: 2, values: { 2: ['plants', 'zombies'] } },
     { name: 'repick', parameters: [], minimum: 0 },
     { name: 'removeplant', parameters: ['{row}', '{col}'], minimum: 2 },
-    { name: 'grave', parameters: ['{row}', '{col}', '[team]'], minimum: 2, values: { 2: ['zombies', 'plants'] } },
+    { name: 'griditem', parameters: ['{grave|crater}', '{row}', '{col}', '[team]'], minimum: 3, values: { 0: ['grave', 'crater'], 3: ['plants', 'zombies'] } },
     { name: 'zombie', parameters: ['{zombie_name}', '[row]', '[col]', '[team]'], minimum: 1, values: { 3: ['zombies', 'plants'] } },
     { name: 'item', parameters: ['{item_name}', '[row]', '[col]'], minimum: 1 },
     { name: 'damage', parameters: ['{damage}'], minimum: 1 },

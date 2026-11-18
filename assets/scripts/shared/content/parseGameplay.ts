@@ -841,7 +841,7 @@ function parseZombiePool(value: unknown, name: string, definitions: GameplayDefi
 }
 
 /**
- * Board::PickGraveRisingZombieType for a level without graves of its own (they come from /grave): the zombies with
+ * Board::PickGraveRisingZombieType for a level without graves of its own (they come from /griditem grave): the zombies with
  * `graveRise` that the level allows (mZombieAllowed), in definition order.
  */
 function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefinition['waves'],

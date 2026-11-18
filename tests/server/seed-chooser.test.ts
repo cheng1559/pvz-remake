@@ -432,6 +432,7 @@ test('partial and confirmed seed choices survive saving without reselecting or l
 test('/repick stands the level still and chooses the bank again, its cards still chosen, keeping their recharge as Survival does', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
+    assert.deepEqual(game.debugCommand('/seed 1 empty'), { ok: false, failure: 'condition', key: 'DEBUG_REQUIRES_LEVEL', args: ['seed'] })
     const first = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea']
     for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
@@ -455,6 +456,7 @@ test('/repick stands the level still and chooses the bank again, its cards still
     game.update(0)
     assert.equal(game.lastRejection?.code, 'choosing-seeds', 'nothing but the choice goes on')
     assert.equal(game.debugCommand('/repick').ok, false, 'one repick at a time')
+    assert.equal(game.debugCommand('/seed 1 empty').failure, 'condition')
 
     // A card the bank held picks its recharge up again; any other is ready.
     for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
@@ -485,6 +487,7 @@ test('/repick stands the level still and chooses the bank again, its cards still
     command(game, { type: 'confirmSeeds' })
     const confirmed = game.render()
     const second = ['pvz:chomper', 'pvz:cherrybomb', 'pvz:repeater', 'pvz:peashooter', 'pvz:sunflower', 'pvz:wallnut']
+    assert.equal(game.debugCommand('/seed 1 empty').failure, 'condition', 'the chooser is still closing')
     assert.deepEqual([confirmed.seedChooser?.choosing, confirmed.seedChooser?.repick, chosen(game)], [false, true, second])
     game.update(TICK_SECONDS)
     assert.equal(game.render().gameplayTick, confirmed.gameplayTick, "after Let's Rock the level waits for the chooser to lift out")

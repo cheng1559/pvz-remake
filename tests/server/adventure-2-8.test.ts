@@ -350,7 +350,7 @@ test('a crater seed puts a crater down on any cell but a crater or a grave, the 
     debug(server, '/seed 1 crater')
     debug(server, '/seed 2 grave')
     debug(server, '/seed 3 crater zombies')
-    debug(server, '/grave 4 4')
+    debug(server, '/griditem grave 4 4')
     const place = (seedId: string, slot: number, row: number, column: number) => {
         assert.equal(runCommand(server, { type: 'selectSeed', seedId, slot }), undefined)
         return runCommand(server, { type: 'placePlant', row, column })

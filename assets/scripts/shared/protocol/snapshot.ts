@@ -29,7 +29,7 @@ export interface GraveSnapshot {
     offsetY: number
     /** Board::PickSpecialGraveStone: one grave of a level draws the first stone row (GRIDITEM_STATE_GRAVESTONE_SPECIAL). */
     special?: true
-    /** A grave added during play (/grave) rises from this gameplay tick; the level's own graves rise in the intro. */
+    /** A grave added during play (/griditem grave) rises from this gameplay tick; the level's own graves rise in the intro. */
     riseAtTick?: number
     /** A grave put down on the plants' side (a grave seed's packet of that side): its zombies rise on that side too. */
     team?: 'plants'
