@@ -2,21 +2,36 @@ import { TICK_SECONDS } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
 import type { AnimationClip, AnimationDefinition } from './gameplay'
 
-/** PvzpCurves: how a value animated from one end to the other goes (PvzpCurveEvaluate). */
-export type AnimateCurve = 'linear' | 'ease-in' | 'ease-in-out' | 'bounce'
+/** PvzpCurves: how a value animated from one end to the other goes (PvzpCurveEvaluate); a bounce goes there and back. */
+export type AnimateCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'bounce' | 'bounce-slow-middle'
 const curveS = (t: number) => 3 * t * t - 2 * t * t * t
-const CURVES: Record<AnimateCurve, (t: number) => number> = {
-    linear: t => t, 'ease-in': t => t * t, 'ease-in-out': t => curveS(curveS(t)), bounce: t => 1 - Math.abs(1 - 2 * t),
+/** PvzpCurveInvQuad. */
+const invQuad = (t: number) => 2 * t - t * t
+/** PvzpCurveBounce. */
+const bounce = (t: number) => 1 - Math.abs(1 - 2 * t)
+
+/** PvzpCurves' CURVE_EASE_IN_OUT of a progress from 0 to 1: the S curve of the S curve (PvzpCurveS). */
+export function easeInOutCurve(t: number): number {
+    return curveS(curveS(t))
 }
+
+const CURVES: Record<AnimateCurve, (t: number) => number> = {
+    linear: t => t, 'ease-in': t => t * t, 'ease-out': invQuad, 'ease-in-out': easeInOutCurve, bounce,
+    // CURVE_BOUNCE_SLOW_MIDDLE: the bounce eased out, lingering at its far end.
+    'bounce-slow-middle': t => invQuad(bounce(t)),
+}
+
+/** The curves that end where they start (PvzpCurveEvaluateClamped). */
+const BOUNCES: readonly AnimateCurve[] = ['bounce', 'bounce-slow-middle']
 
 /**
  * PvzpAnimateCurveFloat: the value `from` at `start` going to `to` at `end`, as `age` goes between them by `curve`;
- * before the start it is `from`, after the end `to`, and a bounce is back at `from` (PvzpCurveEvaluateClamped).
+ * before the start it is `from`, after the end `to`, or back at `from` for a bounce (PvzpCurveEvaluateClamped).
  */
 export function animateCurveFloat(start: number, end: number, age: number, from: number, to: number, curve: AnimateCurve = 'linear'): number {
     const t = (age - start) / (end - start)
     if (t <= 0) return from
-    if (t >= 1) return curve === 'bounce' ? from : to
+    if (t >= 1) return BOUNCES.includes(curve) ? from : to
     return from + (to - from) * CURVES[curve](t)
 }
 

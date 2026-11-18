@@ -1,7 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import { type Node, Sprite } from 'cc'
 import { SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
-import { easeInOutCurve } from '@/client/view/GameScreenMath'
+import { animateCurveFloat } from '@/shared/content/animation'
 import { levelAwardSize } from '@/client/level/LevelGeometry'
 import type { EntityView, StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
@@ -76,12 +76,11 @@ export class AwardView implements EntityView<ItemSnapshot> {
         let { x, y, scale } = item
         // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size; a
         // note fades out where it is instead.
-        const moveTime = Math.min(1, ticks / AWARD_MOVE_TICKS)
-        this.collectProgress = collected && award.kind !== 'note' ? 2 * moveTime - moveTime * moveTime : 0
+        this.collectProgress = collected && award.kind !== 'note' ? animateCurveFloat(0, AWARD_MOVE_TICKS, ticks, 0, 1, 'ease-out') : 0
         if (collected && award.kind !== 'note') {
             x += (400 - size.width / 2 - x) * this.collectProgress
             y += (200 - size.height / 2 - y) * this.collectProgress
-            scale = 1.01 + 0.99 * easeInOutCurve(Math.min(1, ticks / AWARD_GROW_TICKS))
+            scale = animateCurveFloat(0, AWARD_GROW_TICKS, ticks, 1.01, 2, 'ease-in-out')
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: collected && award.kind === 'note' ? Math.round(item.alpha * Math.max(0, 1 - ticks / 15)) : item.alpha })

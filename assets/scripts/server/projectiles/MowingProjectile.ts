@@ -1,5 +1,5 @@
 import type { World } from '@/server/state/World'
-import { startLayer } from '@/shared/content/animation'
+import { animateCurveFloat, startLayer } from '@/shared/content/animation'
 import { type GameplayDefinitions, type ProjectileDefinition, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { isHostile, plantTeam, projectileTeam, type Team, zombieTeam } from '@/shared/content/teams'
 import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'
@@ -47,7 +47,7 @@ export class MowingProjectile extends Projectile {
 
     /** LawnMower::UpdatePlaying: it slows toward a third of its speed and back as it chews. */
     speedScale(): number {
-        return this.chompCounter > 0 ? bounceSlowMiddle(CHOMP_ACTIVE_TICKS, 0, --this.chompCounter, 1, CHOMP_SPEED_SCALE) : 1
+        return this.chompCounter > 0 ? animateCurveFloat(CHOMP_ACTIVE_TICKS, 0, --this.chompCounter, 1, CHOMP_SPEED_SCALE, 'bounce-slow-middle') : 1
     }
 
     /** It takes the other side's zombies (mowsZombie), and their plants unless /plantinvincible keeps them. */
@@ -116,12 +116,4 @@ export class MowingProjectile extends Projectile {
 /** LawnMower::UpdatePlaying (EffectedByDamage(127)): a mower takes the other side's zombies, dying ones too, once. */
 export function mowsZombie(zombie: Zombie, team: Team): boolean {
     return zombie.state !== 'mowered' && isHostile(zombieTeam(zombie), team)
-}
-
-function bounceSlowMiddle(timeStart: number, timeEnd: number, age: number, start: number, end: number): number {
-    const warpedAge = (age - timeStart) / (timeEnd - timeStart)
-    if (warpedAge <= 0 || warpedAge >= 1) return start
-    const bounce = 1 - Math.abs(2 * warpedAge - 1)
-    const invQuad = 2 * bounce - bounce * bounce
-    return (end - start) * invQuad + start
 }

@@ -6,7 +6,7 @@ import { FontMetricsUtil } from '@/client/font'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { loadedReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
-import { ASSET_FPS } from '@/shared/content/animation'
+import { animateCurve, ASSET_FPS } from '@/shared/content/animation'
 import { sampleReanimTrack } from '@/shared/content/reanim'
 import type { AdviceWidgetSnapshot, AdviceWidgetStyle } from './AdviceWidgetSnapshot'
 
@@ -331,12 +331,9 @@ export class AdviceWidget {
         }
     }
 
+    /** MessageWidget::Draw: from its least alpha to full and back every 75 ticks, lingering bright. */
     private _pulseAlpha() {
-        // MessageWidget::Draw: CURVE_BOUNCE_SLOW_MIDDLE, the bounce eased out (PvzpCurveInvQuad) so it lingers bright.
-        const t = (this._pulseTick % 75) / 75
-        const bounce = 1 - Math.abs(t * 2 - 1)
-        const peak = 2 * bounce - bounce * bounce
-        return Math.round(ADVICE_TEXT_MIN_ALPHA + (255 - ADVICE_TEXT_MIN_ALPHA) * peak)
+        return animateCurve(75, 0, this._pulseTick % 75, ADVICE_TEXT_MIN_ALPHA, 255, 'bounce-slow-middle')
     }
 }
 

@@ -7,7 +7,7 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
-import { easeInOut } from '@/client/view/GameScreenMath'
+import { animateCurve } from '@/shared/content/animation'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
@@ -428,8 +428,8 @@ export class LevelSeedChooser {
         for (const choice of this.choices) {
             const motion = choice.motion
             if (!motion) continue
-            choice.view.node.setPosition(easeInOut(motion.start, motion.end, this.age, motion.fromX, motion.x),
-                -easeInOut(motion.start, motion.end, this.age, motion.fromY, motion.y))
+            choice.view.node.setPosition(animateCurve(motion.start, motion.end, this.age, motion.fromX, motion.x, 'ease-in-out'),
+                -animateCurve(motion.start, motion.end, this.age, motion.fromY, motion.y, 'ease-in-out'))
             if (this.age >= motion.end) this.land(choice)
         }
         if (!this.inFlight && !UIHoverManager.isModalBlocked) for (const choice of this.choices) {
@@ -447,7 +447,7 @@ export class LevelSeedChooser {
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active
         this.buttons.active = this.panel.active
-        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516)
+        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
         for (const choice of this.choices) {

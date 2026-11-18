@@ -1,4 +1,4 @@
-import { easeInOutCurve } from '@/client/view/GameScreenMath'
+import { easeInOutCurve } from '@/shared/content/animation'
 import { _decorator, Color, Component, input, Input, Mask, Node, UITransform, Vec3, type EventMouse, type EventTouch } from 'cc'
 import { getWheelScrollSteps, TouchScrollGesture } from '@/client/input/ScrollGesture'
 import { uiNode, type UiNodeParts } from '@/client/view/uiNode'

@@ -5,7 +5,7 @@ import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/con
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { easeInOut, linearFloat } from '@/client/view/GameScreenMath'
+import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import { LevelAudioPresenter } from '../LevelAudioPresenter'
 import type {
     LevelIntroSnapshot,
@@ -328,18 +328,18 @@ export class AdventureIntro implements LevelIntro {
         const boardX = this.layout.stationary ? 0 : tick <= PAN_RIGHT_START
             ? 220
             : tick <= PAN_RIGHT_END
-                ? easeInOut(PAN_RIGHT_START, PAN_RIGHT_END, tick, 220, -380)
+                ? animateCurve(PAN_RIGHT_START, PAN_RIGHT_END, tick, 220, -380, 'ease-in-out')
                 : tick <= PAN_LEFT_START
                     ? -380
                     : tick <= PAN_LEFT_END
-                        ? easeInOut(PAN_LEFT_START, PAN_LEFT_END, tick, -380, 0)
+                        ? animateCurve(PAN_LEFT_START, PAN_LEFT_END, tick, -380, 0, 'ease-in-out')
                         : 0
         this.board.setPosition(boardX, 0)
 
-        const sodProgress = this.sodTicks ? linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick, 0, 1) : 1
+        const sodProgress = this.sodTicks ? animateCurveFloat(ROLL_SOD_START, ROLL_SOD_END, tick, 0, 1) : 1
         const sodTransform = uiNode({ node: this.sodClip }).transform
         sodTransform.setContentSize(this.layout.width * sodProgress, sodTransform.height)
-        const rollProgress = linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick + 1, 0, 1)
+        const rollProgress = animateCurveFloat(ROLL_SOD_START, ROLL_SOD_END, tick + 1, 0, 1)
         for (const roll of this.sodRolls) {
             roll.node.active = tick >= ROLL_SOD_START && rollProgress < 1
             if (roll.node.active) roll.seek(roll.lastFrameTimeSeconds * rollProgress)
@@ -359,8 +359,8 @@ export class AdventureIntro implements LevelIntro {
         const bankStart = this.seedChooser ? SEED_CHOOSER_SLIDE.onStart : SEED_BANK_START + this.sodTicks
         this.bank.active = !this.layout.hiddenSeedBank && tick > bankStart
         this.bank.setPosition(
-            easeInOut(SEED_BANK_RIGHT_START, PAN_LEFT_END, tick, 0, 10),
-            easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),
+            animateCurve(SEED_BANK_RIGHT_START, PAN_LEFT_END, tick, 0, 10, 'ease-in-out'),
+            animateCurve(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
         )
     }
 

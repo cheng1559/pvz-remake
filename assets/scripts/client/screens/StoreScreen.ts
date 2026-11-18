@@ -1,4 +1,4 @@
-import { easeInOutCurve } from '@/client/view/GameScreenMath'
+import { easeInOutCurve } from '@/shared/content/animation'
 import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, Node, type Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'

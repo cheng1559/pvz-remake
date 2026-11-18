@@ -3,7 +3,7 @@ import { modResources } from '@/client/content/ModResources'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import type { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
-import { easeInOut } from '@/client/view/GameScreenMath'
+import { animateCurve } from '@/shared/content/animation'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import type { AchievementEntry } from '@/shared/menu'
@@ -66,7 +66,7 @@ export class AwardAchievements extends Component {
         this.ticks += gameClock.delta(dt) * 100
         this.rows.forEach((row, index) => {
             const start = FIRST_TICK + ROW_TICKS * index
-            if (this.ticks >= start) row.node.setPosition(0, -easeInOut(start, start + ROW_TICKS, this.ticks, START_Y, row.destY))
+            if (this.ticks >= start) row.node.setPosition(0, -animateCurve(start, start + ROW_TICKS, this.ticks, START_Y, row.destY, 'ease-in-out'))
         })
         if (this.ticks >= FIRST_TICK + ROW_TICKS * this.rows.length) this.continueButton.node.active = true
     }

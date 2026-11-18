@@ -1,6 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { floatRoundToInt } from '@/shared/content/animation'
+import { animateCurve } from '@/shared/content/animation'
 import { LevelHitboxes } from './LevelHitboxes'
 import { LevelCoinBank } from './LevelCoinBank'
 import { LevelProgressMeter } from './LevelProgressMeter'
@@ -9,7 +9,6 @@ import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
 import { UI } from '@/client/ui/UI'
 import { formatMoney } from '@/client/ui/formatMoney'
@@ -374,9 +373,9 @@ export class LevelView {
                 // drops, as the intro's does, for the cards to be chosen into it, and goes back up as the chooser lifts: the
                 // level stood still meanwhile, so it is no nearer its time.
                 if (repick <= SEED_CHOOSER_SLIDE.onEnd) hiddenBankY ??= bank.position.y
-                bank.setPosition(repick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, 10, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, 10),
+                bank.setPosition(repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, 10, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, 10, 'ease-in-out'),
                     hiddenBankY === undefined ? bank.position.y
-                        : repick <= SEED_CHOOSER_SLIDE.onEnd ? easeInOut(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, hiddenBankY, 0) : easeInOut(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, hiddenBankY))
+                        : repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, hiddenBankY, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, hiddenBankY, 'ease-in-out'))
                 if (repick >= SEED_CHOOSER_SLIDE.offEnd) hiddenBankY = undefined
                 chooser.setBankShift(bank.position.x, bank.position.y)
                 raiseBankToChooser(repick < SEED_CHOOSER_SLIDE.offEnd)
@@ -617,9 +616,9 @@ export class LevelView {
         const remaining = this.shake.endTick - tick
         if (remaining <= 0) { target.node.setPosition(target.x, target.y); return }
         if (Math.random() < 1 / 3) this.shake.x = -this.shake.x
-        const bounce = 1 - Math.abs(2 * remaining / this.shake.ticks - 1)
-        // PvzpAnimateCurve's FloatRoundToInt: a shake to the left rounds as far as one to the right.
-        target.node.setPosition(target.x + floatRoundToInt(this.shake.x * bounce), target.y - floatRoundToInt(this.shake.y * bounce))
+        // Board::Update: PvzpAnimateCurve(12, 0, mShakeCounter, 0, mShakeAmountX, CURVE_BOUNCE), and the same down.
+        const { ticks, x, y } = this.shake
+        target.node.setPosition(target.x + animateCurve(ticks, 0, remaining, 0, x, 'bounce'), target.y - animateCurve(ticks, 0, remaining, 0, y, 'bounce'))
     }
 
     async snapshot(flow: LevelFlowSnapshot): Promise<LevelPresentationSnapshot> {

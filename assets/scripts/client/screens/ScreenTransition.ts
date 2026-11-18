@@ -1,4 +1,4 @@
-import { easeInOutCurve } from '@/client/view/GameScreenMath'
+import { easeInOutCurve } from '@/shared/content/animation'
 import { BlockInputEvents, Node, tween, type Tween } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { startGameTween } from '@/core/GameTween'

@@ -1,6 +1,6 @@
 import type { StageEvent } from '@/client/level/LevelStage'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { easeInOutCurve, lerp } from '@/client/view/GameScreenMath'
+import { animateCurve } from '@/shared/content/animation'
 import { MOWER_INTRO_X } from '@/shared/content/gameplay'
 import type { MowerSnapshot } from '@/shared/protocol/index'
 import { ProjectileView } from '../projectiles/ProjectileView'
@@ -24,7 +24,7 @@ export class MowerView extends ProjectileView {
     sync(mower: MowerSnapshot): void {
         // CutScene::UpdateIntro: CalcPosition from MOWER_INTRO_X to where it waits, shown once on its way.
         const arrival = this.stage.intro.mowerArrival(mower.row)
-        super.sync(arrival < 1 ? { ...mower, x: Math.round(lerp(MOWER_INTRO_X, mower.x, easeInOutCurve(arrival))) } : mower)
+        super.sync(arrival < 1 ? { ...mower, x: animateCurve(0, 1, arrival, MOWER_INTRO_X, mower.x, 'ease-in-out') } : mower)
         this.context.node.active = arrival > 0
         if (this.shadowNode?.isValid) this.shadowNode.active = arrival > 0
         const animation = this.animation

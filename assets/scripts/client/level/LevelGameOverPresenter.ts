@@ -4,7 +4,8 @@ import { Color, Graphics, Mask, Node, Sprite, UITransform, SpriteFrame } from 'c
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport } from '@/client/view/ClientViewport'
-import { easeInOut, lerp } from '@/client/view/GameScreenMath'
+import { lerp } from '@/client/view/GameScreenMath'
+import { animateCurve } from '@/shared/content/animation'
 import type { ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol'
 import type { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelEntityRenderer } from './LevelEntityRenderer'
@@ -99,12 +100,12 @@ export class LevelGameOverPresenter {
     }
 
     private draw(): void {
-        this.board.setPosition(easeInOut(PAN_START, PAN_END, this.ticks, 0, this.presentation.panX), 0)
+        this.board.setPosition(animateCurve(PAN_START, PAN_END, this.ticks, 0, this.presentation.panX, 'ease-in-out'), 0)
         if (this.winner && this.winnerLayer) {
             // The original hides the winner while relocating it to the doorway row.
             // Keep that approach visible so a wide viewport never reveals a teleport.
-            const y = easeInOut(0, PAN_START, this.ticks, this.winner.y, this.presentation.winnerY)
-            const x = easeInOut(0, PAN_START, this.ticks, this.winner.x, Math.max(this.winner.x, this.presentation.clipX))
+            const y = animateCurve(0, PAN_START, this.ticks, this.winner.y, this.presentation.winnerY, 'ease-in-out')
+            const x = animateCurve(0, PAN_START, this.ticks, this.winner.x, Math.max(this.winner.x, this.presentation.clipX), 'ease-in-out')
             // Late loss thresholds can put the root behind the doorway already.
             // Approach in front of the door, then start the clipped walk from its edge.
             this.entities.syncGameOverWinner({ ...this.winner, x }, this.ticks < PAN_START ? this.entityLayer : this.winnerLayer,

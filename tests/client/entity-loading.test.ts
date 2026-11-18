@@ -148,7 +148,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     assert.equal(particles, 3, 'the dirt of each as the rise starts')
     assert.deepEqual([...orders].sort((left, right) => left - right), [2, 22, 32], 'one over its grave, as the board draws it')
     // GridItem::DrawGraveStone at whole ticks, with mGridItemCounter = ticks + 1 - delay.
-    const { easeInOut } = loadClientModule('view/GameScreenMath', {})
+    const easeInOut = (start: number, end: number, age: number, from: number, to: number) => animationModule.animateCurve(start, end, age, from, to, 'ease-in-out')
     const round = (value: number) => Math.trunc(value + 0.5)
     const expected = (counter: number) => {
         const position = round(easeInOut(0, 100, counter, 1000, 0))
@@ -946,7 +946,6 @@ test("the level's award is collected by its own view: its sounds, the starburst,
         '@/client/hud/SeedPacketRenderer': { SEED_PACKET_WIDTH: 50, SEED_PACKET_HEIGHT: 70, SeedPacketRenderer: { drawSeedPacket: ({ parent, name }: any) => new FakeNode(name, parent) } },
         '@/client/level/LevelGeometry': { levelAwardSize: () => ({ width: 50, height: 70 }) },
         '@/client/plants/definitions': { plantPacket: () => ({ plant: {} }) },
-        '@/client/view/GameScreenMath': { easeInOutCurve: (value: number) => value },
     })
     const layer = new FakeNode('AwardLayer'), node = new FakeNode('Entity-5', layer)
     const stage: any = { level: { award: { id: 'test:seed', kind: 'seed' } }, levelEndTicks: () => -1 }

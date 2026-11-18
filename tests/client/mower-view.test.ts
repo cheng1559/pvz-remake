@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
+import * as animationModule from '@/shared/content/animation'
 import * as gameplayModule from '@/shared/content/gameplay'
 import * as protocolModule from '@/shared/protocol'
 import * as renderOrderModule from '@/shared/content/renderOrder'
@@ -10,14 +11,14 @@ import { MOWER_INTRO_X, MOWER_READY_X } from '@/shared/content/gameplay'
 /** A client module run with `modules` for its imports, the shared ones real and the rest empty. */
 function load(path: string, modules: Record<string, unknown> = {}): Record<string, any> {
     const shared: Record<string, unknown> = {
-        '@/shared/content/gameplay': gameplayModule, '@/shared/protocol': protocolModule, '@/shared/protocol/index': protocolModule,
+        '@/shared/content/animation': animationModule, '@/shared/content/gameplay': gameplayModule,
+        '@/shared/protocol': protocolModule, '@/shared/protocol/index': protocolModule,
         '@/shared/content/renderOrder': renderOrderModule, '@/shared/content/teams': teamsModule,
-        '@/client/view/GameScreenMath': loadScript('assets/scripts/client/view/GameScreenMath.ts', () => ({})),
     }
     return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? shared[id] ?? {})
 }
 
-const { easeInOut } = load('view/GameScreenMath')
+const { animateCurve } = animationModule
 
 class Node {
     isValid = true
@@ -84,7 +85,7 @@ test("a row's mower waiting is rolled in by the intro's time and held where it w
     for (let tick = 0; tick <= 25; tick += 0.5) {
         intro.arrival = tick / 25
         view.sync(ready)
-        const x = easeInOut(0, 25, tick, MOWER_INTRO_X, MOWER_READY_X)
+        const x = animateCurve(0, 25, tick, MOWER_INTRO_X, MOWER_READY_X, 'ease-in-out')
         assert.deepEqual([node.active, shadow.active, node.position.x], [tick > 0, tick > 0, x - 400], `tick ${tick}`)
         assert.equal(shadow.position.x, x + 36 - 400, 'its shadow under it')
     }
