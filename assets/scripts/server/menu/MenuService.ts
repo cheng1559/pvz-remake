@@ -1,5 +1,5 @@
 import { type AchievementEntry, type AchievementView, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
-import type { GameplayDefinitions, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, GameplayLevels, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
 import type { AlmanacCatalog } from './almanacCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
@@ -44,6 +44,7 @@ export class MenuService {
         private readonly catalog?: StoreCatalog,
         private readonly almanac?: AlmanacCatalog,
         private readonly gameplay?: MenuGameplaySettings,
+        private readonly levels?: GameplayLevels,
     ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
@@ -118,8 +119,17 @@ export class MenuService {
             case 'getAdventure': {
                 const profile = this.profiles.loadCurrentProfile()
                 if (!profile) throw new Error('Adventure requires a player profile')
-                const index = profile.adventureLevel - 1
-                return { levelId: `pvz:adventure-${Math.floor(index / 10) + 1}-${index % 10 + 1}` }
+                let levelId = 'pvz:adventure-1-1'
+                const levels = this.levels?.levels
+                if (!levels?.[levelId]) throw new Error('The first adventure level is not installed')
+                let level = levels[levelId]
+                const visited = new Set([levelId])
+                while (level.adventureIndex < profile.adventureLevel && level.nextLevel && !visited.has(level.nextLevel)) {
+                    levelId = level.nextLevel
+                    visited.add(levelId)
+                    level = levels[levelId]
+                }
+                return { levelId, adventureIndex: level.adventureIndex }
             }
             case 'completeLevel': {
                 if (!this.canCompleteLevel()) throw new Error('Cannot complete a level before winning')

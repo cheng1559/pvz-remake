@@ -79,7 +79,7 @@ export class GameApp extends Component {
         modManager.useProfiles(() => createProfileStore(sys.localStorage).getCurrentProfile()?.id ?? null)
         modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
-            loadGameplayContent().then(({ definitions }) => [createStoreCatalog(definitions), createAlmanacCatalog(definitions), definitions]))
+            loadGameplayContent().then(({ definitions, levels }) => [createStoreCatalog(definitions), createAlmanacCatalog(definitions), definitions, levels]))
         UIHoverManager.start(this.node)
         // Load the original arrow now rather than on the first mouse move.
         CursorManager.refresh()

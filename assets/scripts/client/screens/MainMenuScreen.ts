@@ -153,11 +153,8 @@ export class MainMenuScreen extends Component {
             ...[...this.flowers].reverse().map(flower => flower.node), this.signsRoot,
         ]
         layers.forEach((layer, index) => layer.setSiblingIndex(index + 1))
-        this.user = await menuApi.getCurrentUser()
-        if (!this.node.isValid) return
-        if (!this.node.isValid) return
-        this.refreshButtons()
         this.ready = true
+        await this.refreshProfile()
     }
 
     show(): void {
@@ -228,13 +225,15 @@ export class MainMenuScreen extends Component {
     }
 
     async refreshProfile(): Promise<void> {
+        if (!this.ready) return
         const user = await menuApi.getCurrentUser()
-        if (!this.ready || !this.node.isValid) return
+        const level = user ? (await menuApi.getAdventure()).adventureIndex : 1
+        if (!this.node.isValid) return
         this.user = user
-        this.refreshButtons()
+        this.refreshButtons(level)
     }
 
-    private refreshButtons(): void {
+    private refreshButtons(level: number): void {
         for (const child of [
             ...this.buttons.map(view => view.button.node), ...this.flowerButtons.map(button => button.node),
             ...this.numbersRoot.children,
@@ -248,7 +247,6 @@ export class MainMenuScreen extends Component {
         // The original DrawOverlay skips the grass until a player exists; its clock still runs. The flowers are
         // attached to SelectorScreen_BG_Right, so the background draws them, and MouseDown pops them, without one.
         this.grass.setTracksVisible(this.grass.trackIds, profile !== null)
-        const level = profile?.adventureLevel ?? 1
         this.startAdventure = level <= 1 && (profile?.finishedAdventure ?? 0) === 0
         this.profileLabel.text = profile ? `${profile.name}!` : ''
         // Without a player every mode is locked and the almanac, store and garden are hidden.

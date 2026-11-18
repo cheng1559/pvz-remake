@@ -23,9 +23,9 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
     }
     const profiles = createProfileStore(storage)
     const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, createStoreCatalog(definitions), createAlmanacCatalog(definitions),
-        definitions))
-    return { data, storage, profiles, api }
+    const reconnect = (levels: GameplayLevels = readGameplaySource('levels')) => new MenuApi(createLocalMenuTransport(
+        storage, getLevel, canCompleteLevel, createStoreCatalog(definitions), createAlmanacCatalog(definitions), definitions, levels))
+    return { data, storage, profiles, api: reconnect(), reconnect }
 }
 
 test('shop rules, tiers and purchase effects follow the store table, for a Mod\'s item as for the base\'s', async () => {
@@ -259,16 +259,16 @@ test('winning advances the current profile once and exposes the next installed l
     const levels = readGameplaySource('levels') as GameplayLevels
     let level = levels.levels['pvz:adventure-1-1']
     let won = false
-    const { api, storage, profiles } = fixture(() => level, () => won)
+    const { api, reconnect, profiles } = fixture(() => level, () => won)
     await api.createUser('Alice')
-    assert.deepEqual(await api.getAdventure(), { levelId: 'pvz:adventure-1-1' })
+    assert.deepEqual(await api.getAdventure(), { levelId: 'pvz:adventure-1-1', adventureIndex: 1 })
     await assert.rejects(api.completeLevel(), /before winning/)
     assert.equal((await api.getCurrentUser())!.adventureLevel, 1)
     won = true
     assert.equal((await api.completeLevel()).nextLevelId, 'pvz:adventure-1-2')
     await api.completeLevel()
     assert.equal((await api.getCurrentUser())!.adventureLevel, 2)
-    assert.deepEqual(await new MenuApi(createLocalMenuTransport(storage)).getAdventure(), { levelId: 'pvz:adventure-1-2' })
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: 'pvz:adventure-1-2', adventureIndex: 2 })
     level = levels.levels['pvz:adventure-1-2']
     const award = await api.completeLevel()
     assert.equal(award.seed, 'pvz:cherrybomb')
@@ -292,9 +292,9 @@ test('winning advances the current profile once and exposes the next installed l
         assert.equal(award.kind, kind)
         assert.equal(award.seed, seed)
         assert.equal(award.nextLevelId, index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1')
-        const reconnected = new MenuApi(createLocalMenuTransport(storage))
+        const reconnected = reconnect(levels)
         assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
-        assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
+        assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1', adventureIndex: index + 1 })
     }
     for (const [index, kind, seed, next] of [[1, 'seed', 'pvz:sunshroom', 'pvz:adventure-2-2'], [2, 'seed', 'pvz:fumeshroom', 'pvz:adventure-2-3'],
         [3, 'seed', 'pvz:gravebuster', 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 'pvz:hypnoshroom', 'pvz:adventure-2-6'],
@@ -317,6 +317,13 @@ test('winning advances the current profile once and exposes the next installed l
     assert.equal((await api.getAlmanac()).plants.find(card => card.seed === 'pvz:lilypad')?.cost, 25)
     await api.completeLevel()
     assert.deepEqual((await api.getPurse()).ownedSeeds, owned, 'winning a level again adds nothing')
+    // The same profile at 21 reaches 3-1 only once that level is connected to the mainline.
+    const next = 'pvz:adventure-3-1'
+    levels.levels[next] = { ...level, adventureIndex: 21 }
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: 'pvz:adventure-2-10', adventureIndex: 20 })
+    levels.levels['pvz:adventure-2-10'] = { ...level, nextLevel: next }
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: next, adventureIndex: 21 })
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 21)
 })
 
 test("Crazy Dave's seed-slot offer saves the upgrade or a refusal together with the level's coins", async () => {

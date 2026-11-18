@@ -131,7 +131,8 @@ export interface MenuEndpoints {
     earnAchievement: { args: { id: string, shown: boolean }, result: { earned: boolean } }
     /** Debug: forget one achievement, or every one without an ID. */
     resetAchievements: { args: { id?: string }, result: AchievementView }
-    getAdventure: { args: Record<string, never>, result: { levelId: string } }
+    /** The installed mainline level to display and play for the current profile. */
+    getAdventure: { args: Record<string, never>, result: { levelId: string, adventureIndex: number } }
     completeLevel: { args: Record<string, never>, result: AwardView }
     getAward: { args: Record<string, never>, result: AwardView }
     /** Coins in original units, seed-slot upgrades bought, and the next upgrade's price (Dave quotes it in 2-2). */
