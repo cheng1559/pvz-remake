@@ -683,7 +683,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     static readonly rose: StageEvent = (stage, event, world) => {
         SoundSystem.playSounds(stage.graveRise.sounds)
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
-        if (zombie) stage.particle(stage.graveRise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
+        if (zombie) stage.particle(stage.graveRise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row),
+            undefined, zombie.team === 'plants')
     }
 
     /** Zombie::EatPlant and EatZombie gulp the last bite. */
