@@ -92,7 +92,12 @@ function packClip(data: Reanim): PackedClip {
 }
 
 /** Consecutive tracks drawn by one batch, or a track drawn by its own node. */
-type Segment = ({ first: number, end: number, frame: FrameGeometry, source: KernelQuadSource } | { trackId: string, view: TrackView }) & { clipped: boolean }
+/**
+ * What a player draws, in order: a batch of tracks, a track drawn by its own node, or the nodes drawn after a batched
+ * track (drawAfterTrack).
+ */
+type Segment = ({ first: number, end: number, frame: FrameGeometry, source: KernelQuadSource } | { trackId: string, view: TrackView }
+    | { trackId: string, followed: true }) & { clipped: boolean }
 
 /**
  * Graphics::SetClipRect around Reanimation::Draw: a rectangle in the player's own coordinates, from its origin with
@@ -218,15 +223,17 @@ export class ReanimPlayer extends Component {
     }
 
     /**
-     * Draws a child node right after the track, where Reanimation::DrawRenderGroup draws the track's attachment.
-     * The order holds while the batches are reordered; reloading the animation forgets it.
+     * Draws a child node right after the track, where Reanimation::DrawRenderGroup draws the track's attachment: the
+     * batch the track is drawn in ends with it, and the next one starts after the node. The track needs no node of its
+     * own for that (a shooter's head after its stem, which shows nothing). The order holds while the batches are
+     * reordered; reloading the animation forgets it.
      */
     drawAfterTrack(node: Node, trackId: string): void {
         const followers = this.followers.get(trackId) ?? []
         if (!followers.includes(node)) followers.push(node)
         this.followers.set(trackId, followers)
         node.setParent(this.node)
-        this.getTrackNode(trackId)
+        this.drawingStale = true
         this.writePose()
     }
 
@@ -791,6 +798,8 @@ export class ReanimPlayer extends Component {
                 this.writeTrackNode(segment.trackId, segment.view)
                 if (ours(segment.view.node!)) order.push({ node: segment.view.node!, clipped })
                 for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
+            } else if ('followed' in segment) {
+                for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
             } else if (shown) {
                 const batch = this.batchAt(used++)
                 // Room for every track and its extra additive image; the kernel clears unused quads.
@@ -872,14 +881,20 @@ export class ReanimPlayer extends Component {
             }
             // Batches split where the texture changes, which images of one animation normally share, and where the
             // clip starts or ends.
-            if (run && (!image || image.texture === run.frame.texture && run.clipped === clipped)) { run.end = index + 1; return }
-            if (!image) return
-            const segment: Extract<Segment, { first: number }> = {
-                first: index, end: index + 1, frame: image, clipped,
-                source: { writeQuads: (...target) => this.writeRun(segment.first, segment.end, ...target) },
+            if (run && (!image || image.texture === run.frame.texture && run.clipped === clipped)) run.end = index + 1
+            else if (image) {
+                const segment: Extract<Segment, { first: number }> = {
+                    first: index, end: index + 1, frame: image, clipped,
+                    source: { writeQuads: (...target) => this.writeRun(segment.first, segment.end, ...target) },
+                }
+                run = segment
+                segments.push(segment)
             }
-            run = segment
-            segments.push(segment)
+            // What is drawn after the track (drawAfterTrack) comes between the batch it ends and the next.
+            if (this.followers.has(id)) {
+                run = null
+                segments.push({ trackId: id, followed: true, clipped })
+            }
         })
         const blends = Header.SIZE + views.length * 4, imageStart = blends + views.length * BLEND
         const state = drawing.f64(imageStart + images.length * IMAGE)
