@@ -391,6 +391,7 @@
   },
   "pvz:adventure-2-8": {
     "adventureIndex": 18,
+    "nextLevel": "pvz:adventure-2-9",
     "board": "pvz:night",
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],
@@ -402,5 +403,19 @@
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:dancer"],
     "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:dancer", "waves": [6, 10]}]},
     "award": {"kind": "seed", "id": "pvz:doomshroom"}
+  },
+  "pvz:adventure-2-9": {
+    "adventureIndex": 19,
+    "board": "pvz:night",
+    "lawnMower": "pvz:lawnmower",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 50,
+    "firstWaveTicks": 1800,
+    "graves": [{"column": 4, "count": 1}, {"column": 5, "count": 2}, {"column": 6, "count": 2}, {"column": 7, "count": 3}, {"column": 8, "count": 3}],
+    "graveZombies": ["pvz:normal", "pvz:conehead"],
+    "tutorial": "pvz:adventure-2-9",
+    "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:screendoor", "pvz:dancer"],
+    "rules": {"kind": "pvz:adventure", "count": 20},
+    "award": {"kind": "note", "id": "pvz:zombie-note-2", "titleKey": "FOUND_NOTE", "width": 78, "height": 52}
   }
 }

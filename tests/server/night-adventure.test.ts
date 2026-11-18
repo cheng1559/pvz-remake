@@ -115,6 +115,37 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
     assert.equal(cleared.snapshot().zombies.length, 0)
 })
 
+test('2-9 offers the doom-shroom and drops the second note after two flags on the night lawn', () => {
+    const levelId = 'pvz:adventure-2-9'
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ ...options, levelId, ownedSeeds: adventureSeeds(levels, levelId) })
+    assert.equal(game.render().gridItems!.length, 11)
+    for (const seed of ['doomshroom', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster', 'iceshroom']) {
+        game.command({ type: 'chooseSeed', seedId: `pvz:${seed}` })
+    }
+    game.command({ type: 'confirmSeeds' })
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    assert.equal(game.render().seedPackets[0]?.seedId, 'pvz:doomshroom')
+    assert.equal(game.render().wave.total, 20)
+    const flags: number[] = []
+    for (let wave = 1; wave <= 20; wave++) {
+        assert.equal(game.debugCommand('/nextwave').ok, true)
+        const types = game.render().zombies.map(zombie => zombie.typeId)
+        if (types.includes('pvz:flag')) flags.push(wave)
+        if (wave === 20) assert.deepEqual(new Set(types), new Set(['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:screendoor', 'pvz:dancer']))
+        assert.equal(game.debugCommand('/kill').ok, true)
+    }
+    assert.deepEqual(flags, [10, 20])
+    game.update(TICK_SECONDS)
+    const note = game.render().items.find(item => item.typeId === 'pvz:level-award')
+    assert.ok(note)
+    game.command({ type: 'collectItemAt', x: note.x + 1, y: note.y + 1 })
+    game.update(0)
+    assert.equal(game.render().result, 'won')
+    assert.ok(game.drainEvents().some(event => event.type === 'levelAwardCollected' && event.data.awardId === 'pvz:zombie-note-2'))
+})
+
 function worldFor(night: boolean) {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']

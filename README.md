@@ -1,6 +1,6 @@
 # PvZ Remake — Client / Server
 
-This worktree contains the new client/server implementation. The scene starts with the splash/title screens and a menu shell. The menu connects challenge categories, almanac, store, gardens, achievements, help/options, and Adventure 1-1 through 2-8. The previous game loop has been removed; the workspace's `../pvz-remake` worktree remains the reference implementation.
+This worktree contains the new client/server implementation. The scene starts with the splash/title screens and a menu shell. The menu connects challenge categories, almanac, store, gardens, achievements, help/options, and Adventure 1-1 through 2-9. The previous game loop has been removed; the workspace's `../pvz-remake` worktree remains the reference implementation.
 
 ## Run
 

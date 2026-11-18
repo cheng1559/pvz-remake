@@ -38,5 +38,17 @@
         "y": 132
       }
     ]
+  },
+  "pvz:zombie-note-2": {
+    "sprite": "pvz:zombienotesmall",
+    "scale": 1,
+    "x": 0,
+    "y": 0,
+    "pageY": 80,
+    "pageImages": [
+      {"sprite": "pvz:background2", "x": -700, "y": -300, "width": 2800, "height": 1200},
+      {"sprite": "pvz:zombienote", "x": 80, "y": 80},
+      {"sprite": "pvz:zombie_note2", "x": 133, "y": 127}
+    ]
   }
 }
