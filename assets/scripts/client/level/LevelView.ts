@@ -572,8 +572,7 @@ export class LevelView {
                 this.attachSeedChooser(chooser)
                 if (this.lastSnapshot) chooser.sync(this.lastSnapshot)
                 this.syncSeedChooserIntro()
-            }).catch(error => console.error('[LevelView] Failed to open the seed chooser for a repick', error))
-                .finally(() => { this.openingSeedChooser = false })
+            }).finally(() => { this.openingSeedChooser = false })
         }
         this.hud.seedBank.awaitingChooser = repick && !this.seedChooser
         this.standStill(repick)

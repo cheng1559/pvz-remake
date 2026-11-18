@@ -192,10 +192,10 @@ export class ParticlePlayer extends Component {
             initialize(cached)
             player.readiness = Promise.resolve()
         } else {
-            player.readiness = ParticleAssets.load(args.id, args.spriteOverride).then(initialize)
-            void player.readiness.catch(error => {
-                if (node.isValid) node.destroy()
-                console.error(`[ParticlePlayer] Failed to load ${args.id}`, error)
+            player.readiness = ParticleAssets.load(args.id, args.spriteOverride).then(initialize).catch(error => {
+                if (!node.isValid) return
+                node.destroy()
+                throw error
             })
         }
         return player

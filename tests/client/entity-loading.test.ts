@@ -42,6 +42,20 @@ const clientStubs: Record<string, unknown> = {
     '@/shared/content/presentation': presentationModule,
 }
 
+test('failed entity creation rejects after removing its unfinished view', async () => {
+    const error = new Error('missing grave art')
+    const node = { isValid: true, active: true, destroy() { this.isValid = false } }
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', { '@/client/view/uiNode': { uiNode: () => ({ node }) } })
+    const board = renderer(LevelEntityRenderer, { gridItems: { create: async () => { throw error } } })
+    board.syncLayerOrder = () => {}
+    const item = { entityId: 1, typeId: 'pvz:grave', row: 0, column: 1 }
+    board.sync({ levelId: 'test:level', gameplayTick: 0, plants: [], zombies: [], projectiles: [], items: [], mowers: [], gridItems: [item], cursor: { mode: 'none' } },
+        { added: [1], removed: [] }, [])
+    await assert.rejects(board.creationTasks.get(1), (reason: unknown) => reason === error)
+    assert.equal(node.isValid, false)
+    assert.equal(board.node(1), undefined)
+})
+
 function loadClientModule(path: string, modules: Record<string, unknown>) {
     return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? clientStubs[id] ?? {})
 }

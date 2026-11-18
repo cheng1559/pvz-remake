@@ -76,6 +76,12 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     assert.equal(await controller.saveIfRunning(), null)
     assert.equal(saved.length, 1)
     assert.equal(deletions, 0)
+    // A failed replacement leaves the last successful adventure save available for the next startup.
+    const failure = new Error('level view failed')
+    modules['@/client/level/LevelView'].LevelView.create = async () => { throw failure }
+    await assert.rejects(controller.play({ forceNewGame: true, levelId: 'normal' }), (error: unknown) => error === failure)
+    assert.equal(deletions, 0)
+    assert.equal(saved.length, 1)
     controller.hide()
 })
 

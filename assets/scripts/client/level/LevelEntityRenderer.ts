@@ -172,7 +172,6 @@ export class LevelEntityRenderer implements LevelStage {
             const id = entity.entityId
             if (!added.has(id) || this.entities.has(id)) continue
             const task = this.create(kind, entity)
-                .catch(error => console.error('[Level] Failed to create entity', error))
                 .finally(() => this.creationTasks.delete(id))
             this.creationTasks.set(id, task)
         }
@@ -265,8 +264,9 @@ export class LevelEntityRenderer implements LevelStage {
             const now = this.lastSnapshot && LISTS[kind](this.lastSnapshot).find(value => value.entityId === id)
             if (now) view.sync(now, this.lastSnapshot!)
         } catch (error) {
+            if (this.entities.get(id)?.node !== node) return
             if (node.isValid) node.destroy()
-            if (this.entities.get(id)?.node === node) this.entities.delete(id)
+            this.entities.delete(id)
             throw error
         }
     }

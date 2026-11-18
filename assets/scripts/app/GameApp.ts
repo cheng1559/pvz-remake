@@ -126,12 +126,11 @@ export class GameApp extends Component {
         this.transitions = new ScreenTransition(this.node)
         // Animations and particles draw through the kernel and its material; the kernel may compile asynchronously on the web.
         void Promise.all([loadKernel(), loadKernelMaterial()]).then(() => this.node?.isValid && this.navigate('splash'))
-            .catch(error => console.error('[GameApp] Failed to load the drawing kernel', error))
         void UI.load().then(ui => {
             if (!this.node?.isValid) return
             initializeViewport()
             this.fpsDisplay = new FpsDisplay(this.node, ui)
-        }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
+        })
     }
 
     /**
@@ -351,25 +350,20 @@ export class GameApp extends Component {
     }
 
     private async finish(page: 'award' | 'gameOver'): Promise<void> {
-        try {
-            if (this.controller?.getLevelDefinition()?.persistent === false) {
-                await this.navigate('main')
-                return
-            }
-            if (page === 'award') {
-                const award = await menuApi.completeLevel()
-                this.nextLevelId = award.nextLevelId
-                this.awardStart = award.opens?.page ?? 'nextLevel'
-            }
-            await this.controller?.deleteSave()
-            if (page === 'gameOver') await this.openDialog('gameOver')
-            else {
-                await this.navigate('award')
-                if (this.currentPage === 'award') this.controller?.hide()
-            }
-        } catch (error) {
-            console.error('[GameApp] Failed to finish level', error)
-            this.showAdvice(error instanceof Error ? error.message : String(error))
+        if (this.controller?.getLevelDefinition()?.persistent === false) {
+            await this.navigate('main')
+            return
+        }
+        if (page === 'award') {
+            const award = await menuApi.completeLevel()
+            this.nextLevelId = award.nextLevelId
+            this.awardStart = award.opens?.page ?? 'nextLevel'
+        }
+        await this.controller?.deleteSave()
+        if (page === 'gameOver') await this.openDialog('gameOver')
+        else {
+            await this.navigate('award')
+            if (this.currentPage === 'award') this.controller?.hide()
         }
     }
 

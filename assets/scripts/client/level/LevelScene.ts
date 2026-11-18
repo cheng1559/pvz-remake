@@ -136,7 +136,7 @@ export class LevelScene extends Component {
             const destroy = () => {
                 if (this.node.isValid) this.node.destroy()
             }
-            Promise.resolve(this.lifecycle.onComplete()).then(destroy, destroy)
+            void Promise.resolve(this.lifecycle.onComplete()).finally(destroy)
         }
     }
 

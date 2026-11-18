@@ -168,15 +168,12 @@ export function createLevelController(
             if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
-            if (scene && rollback && current?.root.isValid) {
-                scene.prepareForReplacement()
-                try {
+            try {
+                if (scene && rollback && current?.root.isValid) {
+                    scene.prepareForReplacement()
                     await current.scene.restorePresentation(rollback)
-                } catch {
-                    // Preserve the original restore error; the old screen remains mounted.
                 }
-            }
-            if (root.isValid) root.destroy()
+            } finally { if (root.isValid) root.destroy() }
             throw error
         }
     }
@@ -241,8 +238,6 @@ export function createLevelController(
                     ? current.level : requestedLevelId ? (await loadIntegratedGameContent()).levels.levels[requestedLevelId] : undefined
                 const temporary = targetLevel?.persistent === false
                 if (temporary) await controller.saveIfRunning()
-                // The running level stays on screen until the new one replaces it in commit.
-                if (!temporary) storeForProfile(await profileId()).delete()
             } else if (current?.root.isValid && (!requestedLevelId || requestedLevelId === current.game.render().levelId)) {
                 return current.root
             }
@@ -256,9 +251,11 @@ export function createLevelController(
                 if (!save || !(error instanceof IncompatibleSaveError)) throw error
                 // AGENTS.md: dev saves only support the current format, so a mismatched save counts as no save.
                 console.warn(`[LevelController] Discarding incompatible save: ${error.message}`)
-                storeForProfile(await profileId()).delete()
-                return startLoading(undefined, requestedLevelId ?? (await menuApi.getAdventure()).levelId)
+                const fresh = await startLoading(undefined, requestedLevelId ?? (await menuApi.getAdventure()).levelId)
+                await controller.deleteSave()
+                return fresh
             }
+            if (options.forceNewGame && current?.level.persistent !== false) await controller.deleteSave()
             if (save && current?.root.isValid) {
                 if (options.onRestore) {
                     current.scene.pause()

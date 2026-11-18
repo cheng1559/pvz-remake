@@ -44,7 +44,7 @@ export class StartupScreen extends Component {
     private startButton!: UIButton
     private label!: UILabel
     private effects: ReanimPlayer[] = []
-    private phase: 'logo' | 'loading' | 'done' | 'failed' = 'logo'
+    private phase: 'logo' | 'loading' | 'done' = 'logo'
     private age = 0
     private ticks = 0
     private titleCounter = 100
@@ -89,40 +89,34 @@ export class StartupScreen extends Component {
         this.logoOpacity = logo.opacity
     }
 
-    show(): void {
+    async show(): Promise<void> {
         if (this.started) return
         this.started = true
         // Let the menu commit first, including disposing any menu behind a returned title page.
-        void Promise.resolve().then(async () => {
-            if (!this.node?.isValid) return
-            while (this.applyingMods && this.age < 50 && this.node?.isValid) await waitForPreloadFrame()
-            while (this.applyingMods && this.node?.isValid) {
-                try {
-                    await modManager.applyPendingChanges(waitForPreloadFrame)
-                    break
-                } catch (error) {
-                    console.error('[Mods] Pending changes failed', error)
-                    await new Promise<void>(resolve => { this.retryMods = resolve })
-                }
+        await Promise.resolve()
+        if (!this.node?.isValid) return
+        while (this.applyingMods && this.age < 50 && this.node?.isValid) await waitForPreloadFrame()
+        while (this.applyingMods && this.node?.isValid) {
+            try {
+                await modManager.applyPendingChanges(waitForPreloadFrame)
+                break
+            } catch (error) {
+                console.error('[Mods] Pending changes failed', error)
+                await new Promise<void>(resolve => { this.retryMods = resolve })
             }
-            if (!this.node?.isValid) return
-            // The logo waits only for Mod installation; loading continues on the title screen.
-            this.applyingMods = false
-            void MusicSystem.playTune('title_theme', true)
-            await Promise.all([
-                this.loadTitle(),
-                this.preload(progress => { this.progress = progress }),
-            ])
-            if (!this.node?.isValid) return
-            this.progress = 1
-            this.complete = true
-            if (this.phase === 'loading') this.startButton.interactable = true
-        }).catch(error => {
-            if (!this.node?.isValid) return
-            this.phase = 'failed'
-            this.ui?.label(this.content, { text: String(error), x: 50, y: 450, width: 700, align: 'center' })
-            console.error('[StartupScreen] Failed to load', error)
-        })
+        }
+        if (!this.node?.isValid) return
+        // The logo waits only for Mod installation; loading continues on the title screen.
+        this.applyingMods = false
+        void MusicSystem.playTune('title_theme', true)
+        await Promise.all([
+            this.loadTitle(),
+            this.preload(progress => { this.progress = progress }),
+        ])
+        if (!this.node?.isValid) return
+        this.progress = 1
+        this.complete = true
+        if (this.phase === 'loading') this.startButton.interactable = true
     }
 
     onEnable(): void {
@@ -201,7 +195,7 @@ export class StartupScreen extends Component {
     }
 
     private tick(): void {
-        if (this.phase === 'done' || this.phase === 'failed') return
+        if (this.phase === 'done') return
         this.age++
         if (this.phase === 'logo') {
             if (this.applyingMods) { this.age = Math.min(this.age, 100); return }
