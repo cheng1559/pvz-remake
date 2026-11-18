@@ -100,7 +100,6 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
         '@/client/content/ModResources': { modResources: { async sprite() { return { originalSize: { width: 500, height: 400 } } } } },
         '@/client/render/atlasFrame': { getAtlasFrame(_atlas: unknown, cell: number) { cells.push(cell) } },
         '@/client/sound/SoundSystem': { SoundEffect: { DirtRise: 'dirt_rise' }, SoundSystem: { playFoley: async () => {} } },
-        '@/client/view/GameScreenMath': loadClientModule('view/GameScreenMath', {}),
         '@/client/view/uiNode': { uiNode(options: any) {
             const node = new Node()
             node.name = options.name ?? ''

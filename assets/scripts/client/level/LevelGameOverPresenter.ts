@@ -4,8 +4,7 @@ import { Color, Graphics, Mask, Node, Sprite, UITransform, SpriteFrame } from 'c
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport } from '@/client/view/ClientViewport'
-import { lerp } from '@/client/view/GameScreenMath'
-import { animateCurve } from '@/shared/content/animation'
+import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import type { ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol'
 import type { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelEntityRenderer } from './LevelEntityRenderer'
@@ -116,16 +115,16 @@ export class LevelGameOverPresenter {
         const right = Math.min(TITLE_KEYS.length - 1, left + 1)
         const t = Math.min(1, frame - left)
         this.black!.clear()
-        const alpha = this.ticks < GRAPHIC_START ? 0 : Math.min(128, Math.round(255 * lerp(BLACK_KEYS[left], BLACK_KEYS[right], t)))
+        const alpha = this.ticks < GRAPHIC_START ? 0 : Math.min(128, Math.round(255 * animateCurveFloat(0, 1, t, BLACK_KEYS[left], BLACK_KEYS[right])))
         if (alpha > 0) {
             this.black!.fillColor = new Color(0, 0, 0, alpha)
             const { width, height } = this.black!.node.getComponent(UITransform)!
             this.black!.fillRect(-width / 2, -height / 2, width, height)
         }
         this.title!.active = this.ticks >= GRAPHIC_START && this.ticks < END
-        const x = lerp(TITLE_KEYS[left][0], TITLE_KEYS[right][0], t) + this.shake.x
-        const y = lerp(TITLE_KEYS[left][1], TITLE_KEYS[right][1], t) + this.shake.y
-        const scale = lerp(TITLE_KEYS[left][2], TITLE_KEYS[right][2], t)
+        const x = animateCurveFloat(0, 1, t, TITLE_KEYS[left][0], TITLE_KEYS[right][0]) + this.shake.x
+        const y = animateCurveFloat(0, 1, t, TITLE_KEYS[left][1], TITLE_KEYS[right][1]) + this.shake.y
+        const scale = animateCurveFloat(0, 1, t, TITLE_KEYS[left][2], TITLE_KEYS[right][2])
         this.title!.setPosition(x - 400, 300 - y)
         this.title!.setScale(scale, scale, 1)
     }
