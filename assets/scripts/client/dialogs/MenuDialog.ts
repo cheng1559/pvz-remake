@@ -9,14 +9,16 @@ import { showOptionsDialog } from './OptionsDialog'
 import { showUserDialog } from './UserDialog'
 
 /** What a menu dialog's buttons ask for; `back` just closes it. */
-export type MenuDialogAction = 'resume' | 'back' | 'restart' | 'main' | 'almanac' | 'mods'
+export type MenuDialogAction = 'resume' | 'back' | 'restart' | 'main' | 'almanac'
 
 /** Opens the dialog straight on `parent` (the app's node), as the debug CLI's dialog is. */
-export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { levelIntro, almanac, act, profileChanged, restartGame }: {
+export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { levelIntro, almanac, act, manageMods, profileChanged, restartGame }: {
     levelIntro: boolean
     /** LawnApp::CanShowAlmanac: the in-game options offer the almanac (OptionsDialog hides it during the level intro). */
     almanac: boolean
     act: (action: MenuDialogAction) => void
+    /** The main menu's options' Mods button: the Mod manager over the options, done once it closes. */
+    manageMods: () => Promise<void>
     /** The player list changed the current player (the main menu's sign follows it). */
     profileChanged: () => void | Promise<void>
     /** Switching to a player with other Mods restarts the game. */
@@ -49,7 +51,7 @@ export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { l
             onRestart: () => act('restart'),
             onMainMenu: () => act('main'),
             ...(almanac ? { onAlmanac: () => act('almanac') } : {}),
-            ...(inGame ? {} : { onMods: () => act('mods') }),
+            ...(inGame ? {} : { onMods: manageMods }),
         })
     }
     if (id === 'gameOver') {

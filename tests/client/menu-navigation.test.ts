@@ -83,7 +83,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
-    const opened: Array<{ id: string, act: (action: string) => void, dialog: { node: { isValid: boolean } } }> = []
+    const opened: Array<{ id: string, act: (action: string) => void, manageMods: () => Promise<void>, dialog: { node: { isValid: boolean } } }> = []
     let dialogFails = false
     let awardOpens: Record<string, unknown> = {}
     const musicFrames: Array<{ ticks: number; zombies: number }> = []
@@ -106,10 +106,10 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         } },
         '@/client/screens/MenuPages': { MENU_PAGES, isMenuDialog, LEVEL_DIALOGS },
         '@/client/dialogs/MenuDialog': {
-            async showMenuDialog(_parent: unknown, _ui: unknown, id: string, options: { act: (action: string) => void }) {
+            async showMenuDialog(_parent: unknown, _ui: unknown, id: string, options: { act: (action: string) => void, manageMods: () => Promise<void> }) {
                 if (dialogFails) throw new Error('missing game menu')
                 const dialog = { node: { isValid: true, destroy() { this.isValid = false } } }
-                opened.push({ id, act: options.act, dialog })
+                opened.push({ id, act: options.act, manageMods: options.manageMods, dialog })
                 return dialog
             },
         },
@@ -466,15 +466,14 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     assert.deepEqual([app.dialog, app.currentPage, commits.length], [null, 'garden', shownBefore], 'OK leaves the garden as it was')
 
-    // The main menu's options close and open the Mod manager; closing it leaves the main menu without the options.
+    // The main menu's options open the Mod manager over them; they stay open under it and are there once it closes.
     await app.navigate('main')
     await app.openDialog('options')
-    const optionsShown = opened.length
-    opened.at(-1)!.act('mods')
-    await setImmediate()
-    await setImmediate()
+    const optionsShown = opened.length, options = opened.at(-1)!
+    await options.manageMods()
     assert.equal(packageDialogs, 2)
-    assert.deepEqual([app.dialog, opened.length, app.currentPage], [null, optionsShown, 'main'], 'the options do not come back')
+    assert.deepEqual([app.dialog?.id, opened.length, options.dialog.node.isValid, app.currentPage], ['options', optionsShown, true, 'main'],
+        'the options are still open, not opened again')
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
@@ -607,7 +606,7 @@ test('options use direct exit during seed selection and confirmed exit during ga
             button(_parent: unknown, options: { text: string; onClick: () => void }) { buttons.push(options) },
         }
         // The almanac is offered in a level, but not during its intro (NewOptionsDialog hides mAlmanacButton then).
-        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ }, onAlmanac() {}, onMods() {} })
+        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ }, onAlmanac() {}, async onMods() {} })
         assert.deepEqual(buttons.map(button => button.text), expected)
         if (!inGame) continue
         const main = buttons.find(button => button.text === 'MAIN_MENU_BUTTON')!

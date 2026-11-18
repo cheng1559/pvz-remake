@@ -13,8 +13,8 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     onMainMenu: () => void
     /** NewOptionsDialog::mAlmanacButton, offered in a level once the almanac is unlocked and the intro is over. */
     onAlmanac?: () => void
-    /** The main menu's options close and open the Mod manager. */
-    onMods?: () => void
+    /** The main menu's options open the Mod manager over them, done once it closes; they stay under it. */
+    onMods?: () => Promise<void>
 }) {
     const settings = await menuApi.getSettings()
     const dialog = ui.dialog(parent, {
@@ -105,9 +105,15 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
         })
     } else {
         const mods = options.onMods
+        let managing = false
         if (mods) ui.button(content, {
             text: ui.text('OPTIONS_MODS_BUTTON'), x: 107, y: 327, width: 209,
-            onClick: () => close(mods),
+            // The options wait under the Mod manager; a second click before it closes opens no other.
+            onClick: () => {
+                if (managing) return
+                managing = true
+                void mods().finally(() => { managing = false })
+            },
         })
     }
     ui.button(content, {

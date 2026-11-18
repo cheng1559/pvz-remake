@@ -292,6 +292,7 @@ export class GameApp extends Component {
             if (!this.node?.isValid || this.dialog !== entry) return
             entry.node = (await showMenuDialog(this.node, ui, id, {
                 levelIntro, almanac,
+                manageMods: () => this.manageMods(),
                 profileChanged: () => this.menu?.refreshProfile(),
                 restartGame: () => this.restartGame(),
                 act: action => {
@@ -301,8 +302,7 @@ export class GameApp extends Component {
                         // NewOptionsDialog_Almanac: the almanac returns to these options.
                         this.returnDialog = id
                         void this.navigate('almanac')
-                    } else if (action === 'mods') void this.manageModsFrom(id)
-                    else if (action !== 'back') void this.navigate(action)
+                    } else if (action !== 'back') void this.navigate(action)
                     else if (id === 'players') void this.requirePlayer()
                 },
             })).node
@@ -316,17 +316,16 @@ export class GameApp extends Component {
         }
     }
 
-    /** The options' Mods button: the options close and the Mod manager takes their place until it closes. */
-    private async manageModsFrom(id: MenuDialogId): Promise<void> {
-        const entry: NonNullable<GameApp['dialog']> = { id }
-        this.dialog = entry
+    /**
+     * The main menu's options' Mods button: the Mod manager over the options, which stay the open menu dialog under it
+     * and are back as they were once it closes.
+     */
+    private async manageMods(): Promise<void> {
         try {
             await this.showModManager()
         } catch (error) {
             console.error('[Packages]', error)
             this.showAdvice(String(error))
-        } finally {
-            if (this.dialog === entry) this.dialog = null
         }
     }
 
