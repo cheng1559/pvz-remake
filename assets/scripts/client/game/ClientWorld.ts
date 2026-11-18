@@ -135,12 +135,10 @@ function interpolate<T extends Positioned>(
     canInterpolate?: (before: T, after: T) => boolean,
 ): T[] {
     const previousById = byId(previous)
+    // Every display frame: one that stood still (most plants) is the snapshot's own; only one that moved is copied.
     return current.map(entity => {
         const before = previousById.get(entity.entityId)
-        return before && (!canInterpolate || canInterpolate(before, entity)) ? {
-            ...entity,
-            x: before.x + (entity.x - before.x) * alpha,
-            y: before.y + (entity.y - before.y) * alpha,
-        } : { ...entity }
+        if (!before || before.x === entity.x && before.y === entity.y || canInterpolate && !canInterpolate(before, entity)) return entity
+        return { ...entity, x: before.x + (entity.x - before.x) * alpha, y: before.y + (entity.y - before.y) * alpha }
     })
 }

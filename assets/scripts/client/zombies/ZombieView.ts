@@ -17,7 +17,7 @@ import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS,
 import { animateCurve, ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
-import { layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
+import { type LayerClips, layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { MIRRORED_SHIFT, ZOMBIE_PIVOT, zombiePartVisibility } from './zombieParts'
@@ -276,13 +276,17 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      */
     protected shown(layer: string, zombie: ShownZombie): LayerShown | undefined {
         const state = zombie.animations[layer]
-        if (!state) return undefined
-        const { death, superLongDeath } = ZOMBIE_CLIPS
-        return shownLayer(state, zombie.animations, {
-            picture: name => this.clip(name),
-            played: name => zombieClip(this.animation, name === superLongDeath && !this.clips()[superLongDeath] ? death : name),
-            duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
-        })
+        return state && shownLayer(state, zombie.animations, this.layerClips)
+    }
+
+    /** The zombie's clips, for what a layer shows (shownLayer): made once, as it is asked for every layer every frame. */
+    /** The layers the board last posed it on (pose): a snapshot's, new each tick. */
+    private posedAnimations: ShownZombie['animations'] | undefined
+
+    private readonly layerClips: LayerClips = {
+        picture: name => this.clip(name),
+        played: name => zombieClip(this.animation, name === ZOMBIE_CLIPS.superLongDeath && !this.clips()[ZOMBIE_CLIPS.superLongDeath] ? ZOMBIE_CLIPS.death : name),
+        duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
     }
 
     /** How a player shows what the zombie's body plays (the mower's driver takes the body's place). */
@@ -428,6 +432,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
                 : null
         // What it has on goes back on the clip it came back to: off the board (a street's zombie) nothing shows it again.
         this.parts = ''
+        this.posedAnimations = undefined
         if (this.latestZombie) this.applyParts(this.latestZombie)
     }
 
@@ -503,6 +508,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      * there is to a zombie off the board.
      */
     protected pose(zombie: ShownZombie, board = true): void {
+        // On the board, a frame of the tick the last one showed has the same layers and parts: they play on from there
+        // until the next tick sets them right (LayerPlayers.show).
+        if (board && zombie.animations === this.posedAnimations) return
+        this.posedAnimations = board ? zombie.animations : undefined
         const changed = this.bodyClip !== body(zombie).clip
         this.layers.show(layer => this.shown(layer, zombie), {
             blend: (layer, _clip, first) => layer === ZOMBIE_BODY_LAYER && !first ? this.bodyBlend(zombie) : 0,

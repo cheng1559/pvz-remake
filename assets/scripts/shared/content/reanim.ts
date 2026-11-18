@@ -76,14 +76,18 @@ export function attachReanimPose(
         scaleY = -scaleY
         skewY += 180
     }
+    // Every attached track every frame (a shooter's head on its stem): built field by field, without a spread.
     return {
-        ...pose,
+        timeSeconds: pose.timeSeconds,
         x: attached.tx,
         y: -attached.ty,
         scaleX,
         scaleY,
         skewX: -Math.atan2(attached.b, attached.a) * 180 / Math.PI,
         skewY,
+        alpha: pose.alpha,
+        sprite: pose.sprite,
+        interpolation: pose.interpolation,
     }
 }
 

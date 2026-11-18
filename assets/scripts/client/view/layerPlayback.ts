@@ -29,11 +29,11 @@ const END = 1e-6
  * the layer's rate and comes round by its own length; a clip played once goes at that rate over its own pictures and
  * stays on its last; one that fits a time (`frames`) is stretched over that many of the animation's frames.
  */
-export function layerPlayback(shown: LayerShown, durationSeconds: number): { loop: boolean, rate: number, timeSeconds: number } {
+export function layerPlayback(shown: LayerShown, durationSeconds: number, time = shown.time): { loop: boolean, rate: number, timeSeconds: number } {
     const { clip, frames } = shown
     // Seconds of the clip's own pictures to a frame of the animation's.
     const length = frames === undefined ? secondsPerFrame(clip) : durationSeconds / frames
-    return { loop: frames === undefined && !shown.once, rate: shown.rate * length, timeSeconds: (frames === undefined ? shown.time : Math.min(shown.time, frames)) * length }
+    return { loop: frames === undefined && !shown.once, rate: shown.rate * length, timeSeconds: (frames === undefined ? time : Math.min(time, frames)) * length }
 }
 
 /** What a layer shows: a clip of the presentation, and how far into it in the animation's frames. */
@@ -77,21 +77,27 @@ export interface LayerClips {
 export function shownLayer(state: { clip: string, time: number, rate: number, hidden?: true }, layers: Readonly<Record<string, { clip: string, time: number, rate: number }>> | undefined,
     clips: LayerClips): LayerShown | undefined {
     const clip = clips.picture(state.clip), played = clips.played(state.clip)
-    const own = (picture: ClientAnimationClip) => clips.duration(picture.reanimId) / secondsPerFrame(picture)
     const leader = played?.sync === undefined ? undefined : layers?.[played.sync]
-    const shown: LayerShown = { key: state.clip, clip, time: state.time, rate: state.rate, ...(state.hidden ? { hidden: true } : {}),
-        ...(leader ? { sync: { time: leader.time, own: own(clips.picture(leader.clip)) } } : {}) }
+    // Shown for every layer every frame: built field by field, without spreads.
+    const shown: LayerShown = { key: state.clip, clip, time: state.time, rate: state.rate }
+    if (state.hidden) shown.hidden = true
+    if (leader) shown.sync = { time: leader.time, own: ownLength(clips, clips.picture(leader.clip)) }
     if (!played || played.next === undefined && !played.once && !played.hold && !played.fit) return shown
-    if (played.fit) return { ...shown, frames: played.frames }
-    const length = own(clip)
+    if (played.fit) { shown.frames = played.frames; return shown }
+    const length = ownLength(clips, clip)
     // Pictures longer than the clip are stretched over it, so they end where the animation does (a pack's longer death).
-    if (length > played.frames + END) return { ...shown, frames: played.frames }
-    if (played.hold || state.time < length) return { ...shown, once: true }
+    if (length > played.frames + END) { shown.frames = played.frames; return shown }
+    if (played.hold || state.time < length) { shown.once = true; return shown }
     if (played.next === undefined) return undefined
     // The next clip from where this one ended: at the time of the layer it goes with, or on from here at its own pace.
     const next = clips.played(played.next), sync = next?.sync === undefined ? undefined : layers?.[next.sync]
     const rate = sync?.rate ?? (next?.fps ? (next.fps.min + next.fps.max) / 2 : state.rate)
     return shownLayer({ clip: played.next, time: sync?.time ?? (state.time - length) / state.rate * rate, rate }, layers, clips)
+}
+
+/** How long a clip's own pictures are, in frames of its pace. */
+function ownLength(clips: LayerClips, picture: ClientAnimationClip): number {
+    return clips.duration(picture.reanimId) / secondsPerFrame(picture)
 }
 
 /** `offset`: what a synced layer's pictures are ahead of its time by, from where it started (LayerShown.sync). */
@@ -170,7 +176,7 @@ export class LayerPlayers {
                 if (clip.onlyTracks) player.setTracksVisible(player.trackIds.filter(id => !clip.onlyTracks!.includes(id)), false)
                 else player.setTracksVisible(this.alone, false)
             }
-            const playback = layerPlayback(layer.offset ? { ...what, time: what.time + layer.offset } : what, player.durationSeconds)
+            const playback = layerPlayback(what, player.durationSeconds, what.time + layer.offset)
             // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
             // one's 0, a chilled one's half).
             if (what.hidden) { if (layer.shown) player.hide() }

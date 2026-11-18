@@ -166,22 +166,28 @@ export class PlantView implements EntityView<PlantSnapshot> {
      * there is to a plant off the board.
      */
     pose(plant: ShownPlant): void {
-        const { draw } = this.context
-        this.layers.show(name => this.shown(name, plant), {
-            blend: (_name, clip, first) => first ? 0 : clip.blend ?? BLEND_SECONDS,
-            // The bottom layer at its place and size; another on no part, at its own place.
-            place: (_name, player, clip, first) => {
-                const own = draw?.position ?? clip, scale = first ? draw?.scale ?? this.presentation.scale : 1
-                player.node.setPosition(own.x, own.y)
-                player.node.setScale(scale, scale, 1)
-            },
-            basePose: (clip, track) => this.basePose(clip, track),
-        })
-        // Plant::DoBlink hides the eyes under the blink, for as long as it is shown.
-        const blinking = this.shown(PLANT_BLINK_LAYER, plant) !== undefined
-        for (const name of Object.keys(this.animation.layers)) {
-            const clip = plant.animations?.[name] && this.clip(plant.animations[name].clip)
-            if (clip && !clip.onlyTracks) this.layers.player(name).setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
+        const { draw, stage } = this.context
+        // On the board, a frame of the tick the last one showed has the same layers: they play on from there until the
+        // next tick sets them right (LayerPlayers.show), and only the colors and the shadow are of the frame.
+        const again = !!stage && plant.animations !== undefined && plant.animations === this.posedAnimations
+        this.posedAnimations = stage ? plant.animations : undefined
+        if (!again) {
+            this.layers.show(name => this.shown(name, plant), {
+                blend: (_name, clip, first) => first ? 0 : clip.blend ?? BLEND_SECONDS,
+                // The bottom layer at its place and size; another on no part, at its own place.
+                place: (_name, player, clip, first) => {
+                    const own = draw?.position ?? clip, scale = first ? draw?.scale ?? this.presentation.scale : 1
+                    player.node.setPosition(own.x, own.y)
+                    player.node.setScale(scale, scale, 1)
+                },
+                basePose: (clip, track) => this.basePose(clip, track),
+            })
+            // Plant::DoBlink hides the eyes under the blink, for as long as it is shown.
+            const blinking = this.shown(PLANT_BLINK_LAYER, plant) !== undefined
+            for (const name of Object.keys(this.animation.layers)) {
+                const clip = plant.animations?.[name] && this.clip(plant.animations[name].clip)
+                if (clip && !clip.onlyTracks) this.layers.player(name).setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
+            }
         }
         // On the board and off it (the almanac): the layers over the first are on its parts, so its colors reach them all.
         if (this.body.loadedId) this.body.setColorOverride(this.tinted())
@@ -216,12 +222,13 @@ export class PlantView implements EntityView<PlantSnapshot> {
         return value === undefined ? undefined : read(value, `${plant.typeId}.own.${field}`)
     }
 
-    /** The plant's clips, for what a layer shows (shownLayer). */
-    private get layerClips(): LayerClips {
-        return {
-            picture: name => this.clip(name), played: name => this.animation.clips[name],
-            duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
-        }
+    /** The plant's clips, for what a layer shows (shownLayer): made once, as it is asked for every layer every frame. */
+    /** The layers the board last posed it on (pose): a snapshot's, new each tick. */
+    private posedAnimations: ShownPlant['animations']
+
+    private readonly layerClips: LayerClips = {
+        picture: name => this.clip(name), played: name => this.animation.clips[name],
+        duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
     }
 
     /** The pose a clip says its part is attached from (the first frame of the part in another of the plant's clips), when it does. */
