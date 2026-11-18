@@ -176,8 +176,14 @@ export class Projectile {
         const motion = world.resources.get(ProjectileMotionsResource).of(this)
         const height = motion.height?.(this.motionState) ?? heightOverRow(world, this), facing = motion.facing?.(this.motionState)
         const lift = motion.lift?.(this.motionState) ?? 0, own = this.snapshotOwn()
-        return { entityId: entity, typeId: this.typeId, ...position, age: this.age, ...(this.team === 'zombies' ? { team: 'zombies' as const } : {}),
-            ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }), ...(own ? { own } : {}) }
+        // Made for every projectile every tick: built field by field, without spreads.
+        const snapshot: ProjectileSnapshot = { entityId: entity, typeId: this.typeId, x: position.x, y: position.y, row: position.row, age: this.age }
+        if (this.team === 'zombies') snapshot.team = 'zombies'
+        if (height > 0) snapshot.height = height
+        if (lift > 0) snapshot.lift = lift
+        if (facing !== undefined) snapshot.facing = facing
+        if (own) snapshot.own = own
+        return snapshot
     }
 
     /** Whether the level can run it as it was saved, where it was. */

@@ -105,7 +105,13 @@ export const CHILLED_ANIMATION_FACTOR = 0.5
 
 /** The layers as a view plays them: each at its rate times the part of it it goes at (`pace`, stepLayers' `slowed`). */
 export function pacedLayers(layers: Readonly<Record<string, LayerState>>, pace: (layer: string) => number): Record<string, LayerState> {
-    return Object.fromEntries(Object.entries(layers).map(([layer, state]) => [layer, { ...state, rate: state.rate * pace(layer) }]))
+    // Made for every plant and zombie every tick: built field by field, without spreads.
+    const paced: Record<string, LayerState> = {}
+    for (const layer in layers) {
+        const { clip, time, rate, hidden } = layers[layer]
+        paced[layer] = hidden ? { clip, time, rate: rate * pace(layer), hidden } : { clip, time, rate: rate * pace(layer) }
+    }
+    return paced
 }
 
 /**

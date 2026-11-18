@@ -181,11 +181,12 @@ export class Plant {
 
     /**
      * What the client is shown of it, with what only its kind shows (snapshotOwn) at the gameplay `tick`; one mowed down
-     * shows how far it is squashed instead, as it stood (not asleep, nothing counting down).
+     * shows how far it is squashed instead, as it stood (not asleep, nothing counting down). Made for every plant every
+     * tick, so it is built field by field, without spreads.
      */
     snapshot(world: World, tick: number): PlantSnapshot {
         const { position, mowered } = this, inPlay = this.inPlay, own = this.snapshotOwn(inPlay ? tick : undefined)
-        return {
+        const snapshot: PlantSnapshot = {
             entityId: this.id,
             typeId: this.typeId,
             state: this.state,
@@ -193,15 +194,16 @@ export class Plant {
             column: this.column,
             health: this.health,
             maxHealth: this.maxHealth,
-            ...(inPlay && this.asleep(world) ? { asleep: true as const } : {}),
-            ...(this.team === undefined ? {} : { team: this.team }),
-            ...(this.mindControlled ? { mindControlled: true as const } : {}),
-            ...(this.chilledTicks ? { chilledTicks: this.chilledTicks } : {}),
-            ...(this.frozenTicks !== undefined ? { frozen: true as const } : {}),
-            ...(this.animations ? { animations: pacedLayers(this.animations, () => plantPace(this)) } : {}),
-            ...(own ? { own } : {}),
-            ...(mowered ? { mowered: { time: mowered.squash.time, ...(mowered.left ? { left: true as const } : {}) } } : {}),
         }
+        if (inPlay && this.asleep(world)) snapshot.asleep = true
+        if (this.team !== undefined) snapshot.team = this.team
+        if (this.mindControlled) snapshot.mindControlled = true
+        if (this.chilledTicks) snapshot.chilledTicks = this.chilledTicks
+        if (this.frozenTicks !== undefined) snapshot.frozen = true
+        if (this.animations) snapshot.animations = pacedLayers(this.animations, () => plantPace(this))
+        if (own) snapshot.own = own
+        if (mowered) snapshot.mowered = mowered.left ? { time: mowered.squash.time, left: true } : { time: mowered.squash.time }
+        return snapshot
     }
 
     /** What only its kind shows its view (PlantSnapshot.own), none when nothing. */

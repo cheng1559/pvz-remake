@@ -255,12 +255,17 @@ export class Zombie {
         return false
     }
 
-    /** What the client is shown of it, beside its entity and its place, with what only its kind shows (snapshotOwn). */
-    snapshot(): Omit<ZombieSnapshot, 'entityId' | 'x' | 'y' | 'row'> {
-        const own = this.snapshotOwn()
-        return {
+    /**
+     * What the client is shown of it, with what only its kind shows (snapshotOwn). Made for every zombie every tick, so
+     * it is built field by field, without spreads.
+     */
+    snapshot(): ZombieSnapshot {
+        const { position } = this, own = this.snapshotOwn()
+        const snapshot: ZombieSnapshot = {
+            entityId: this.id,
             typeId: this.typeId,
             state: this.state,
+            x: position.x, y: position.y, row: position.row,
             health: this.health,
             maxHealth: this.maxHealth,
             // The rates a view plays them at: a chilled zombie's body's is halved, a frozen one's stopped.
@@ -272,12 +277,13 @@ export class Zombie {
             helmHealth: this.helmHealth,
             shieldHealth: this.shieldHealth,
             chilled: this.chilledTicks > 0,
-            ...(this.frozenTicks !== undefined ? { frozen: true as const } : {}),
-            ...(this.team === 'plants' ? { team: 'plants' as const } : {}),
-            ...(this.mindControlled ? { mindControlled: true as const } : {}),
-            ...(this.riseTicks ? { riseTicks: this.riseTicks } : {}),
-            ...(own ? { own } : {}),
         }
+        if (this.frozenTicks !== undefined) snapshot.frozen = true
+        if (this.team === 'plants') snapshot.team = 'plants'
+        if (this.mindControlled) snapshot.mindControlled = true
+        if (this.riseTicks) snapshot.riseTicks = this.riseTicks
+        if (own) snapshot.own = own
+        return snapshot
     }
 
     /** What only its kind shows its view (ZombieSnapshot.own), none when nothing: a pole vaulter's pole, ... */
