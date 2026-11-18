@@ -1,39 +1,37 @@
 import type { Node } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { layerRateScale, showClip } from '@/client/reanim/clips'
 import { uiNode } from '@/client/view/uiNode'
 import type { AnimationClip } from '@/shared/content/gameplay'
 import type { ReanimKeyframe } from '@/shared/content/reanim'
-import { ASSET_FPS } from '@/shared/content/animation'
-
-/** Seconds of a clip's own pictures to a frame of an animation: at the pace they were made at (`fps`, 12 by default). */
-function secondsPerFrame(clip: ClientAnimationClip): number {
-    return (clip.rateScale ?? 1) / (clip.fps ?? 12)
-}
 
 /**
- * How long a loaded Reanim is, in the frames of its own pace (12 a second): what a view's Mod times a clip of its own
- * by (PlantView.ownFrames, ZombieView.ownFrames).
+ * How long a loaded Reanim is, in frames of its own (at the pace it was made at, Reanim.fps): what a view's Mod times a
+ * clip of its own by (PlantView.ownFrames, ZombieView.ownFrames).
  */
 export function ownFrames(reanimId: string): number {
-    const seconds = ReanimPlayer.duration(reanimId)
-    if (seconds === undefined) throw new Error(`Reanim is not loaded: ${reanimId}`)
-    return seconds * ASSET_FPS
+    const frames = ReanimPlayer.frames(reanimId)
+    if (frames === undefined) throw new Error(`Reanim is not loaded: ${reanimId}`)
+    return frames
 }
 
 /** Within this of a clip's length, pictures are as long as the clip: their length is a sum of seconds. */
 const END = 1e-6
 
 /**
- * How a player shows a layer (LayerShown) on the presentation's clip, which may be as long as it likes: a loop goes at
- * the layer's rate and comes round by its own length; a clip played once goes at that rate over its own pictures and
- * stays on its last; one that fits a time (`frames`) is stretched over that many of the animation's frames.
+ * How a player shows a layer (LayerShown) on the presentation's clip, a Reanim (`reanim`, its pace and length) that may
+ * be as long as it likes: a loop goes at the layer's rate and comes round by its own length; a clip played once goes at
+ * that rate over its own pictures and stays on its last; one that fits a time (`frames`) is stretched over that many of
+ * the animation's frames.
  */
-export function layerPlayback(shown: LayerShown, durationSeconds: number, time = shown.time): { loop: boolean, rate: number, timeSeconds: number } {
+export function layerPlayback(shown: LayerShown, reanim: { readonly fps: number, readonly durationSeconds: number },
+    time = shown.time): { loop: boolean, fps: number, timeSeconds: number } {
     const { clip, frames } = shown
-    // Seconds of the clip's own pictures to a frame of the animation's.
-    const length = frames === undefined ? secondsPerFrame(clip) : durationSeconds / frames
-    return { loop: frames === undefined && !shown.once, rate: shown.rate * length, timeSeconds: (frames === undefined ? time : Math.min(time, frames)) * length }
+    // The clip's own pictures to a frame of the animation's.
+    const pictures = frames === undefined ? layerRateScale(clip) : reanim.durationSeconds * reanim.fps / frames
+    return { loop: frames === undefined && !shown.once, fps: shown.rate * pictures,
+        timeSeconds: (frames === undefined ? time : Math.min(time, frames)) * pictures / reanim.fps }
 }
 
 /** What a layer shows: a clip of the presentation, and how far into it in the animation's frames. */
@@ -60,8 +58,8 @@ export interface LayerShown {
 export interface LayerClips {
     picture(name: string): ClientAnimationClip
     played(name: string): AnimationClip | undefined
-    /** How long a picture is, in seconds. */
-    duration(reanimId: string): number
+    /** How many frames of its own a picture is (ReanimPlayer.frames). */
+    frames(reanimId: string): number
 }
 
 /**
@@ -95,9 +93,9 @@ export function shownLayer(state: { clip: string, time: number, rate: number, hi
     return shownLayer({ clip: played.next, time: sync?.time ?? (state.time - length) / state.rate * rate, rate }, layers, clips)
 }
 
-/** How long a clip's own pictures are, in frames of its pace. */
+/** How long a clip's own pictures are, in frames of the animation it is shown for (its `rateScale` of its own). */
 function ownLength(clips: LayerClips, picture: ClientAnimationClip): number {
-    return clips.duration(picture.reanimId) / secondsPerFrame(picture)
+    return clips.frames(picture.reanimId) / layerRateScale(picture)
 }
 
 /** `offset`: what a synced layer's pictures are ahead of its time by, from where it started (LayerShown.sync). */
@@ -159,31 +157,38 @@ export class LayerPlayers {
             // A clip started over (a second shot) blends from where the first had got to, as a clip changed to does.
             const started = layer.key !== what.key || !loop && what.time < layer.time
             if (started) {
-                player.change(clip.reanimId, options.blend(name, clip, layer.key === undefined))
-                player.fullLastFrame = clip.fullLastFrame === true
-                // A synced layer starts at the part of its pictures the one it goes with is at of its own.
-                const own = player.durationSeconds / secondsPerFrame(clip)
-                layer.offset = what.sync && what.sync.own > 0 ? (what.sync.time / what.sync.own % 1) * own - what.time : 0
-                const track = clip.attachmentTrackId, parent = track ? [...below].reverse().find(([, , drawn]) => drawn.includes(track)) : undefined
-                if (track && parent) {
-                    parent[1].drawAfterTrack(player.node, track)
-                    player.node.setPosition(0, 0)
-                    player.node.setScale(1, 1, 1)
-                    const key = `${parent[0]}/${track}`, base = this.bases.get(key) ?? options.basePose?.(clip, track)
-                    player.attachToTrack(parent[1], track, base)
-                    if (!base && player.attachmentBasePose) this.bases.set(key, player.attachmentBasePose)
-                } else options.place(name, player, clip, !below.length)
-                if (clip.onlyTracks) player.setTracksVisible(player.trackIds.filter(id => !clip.onlyTracks!.includes(id)), false)
-                else player.setTracksVisible(this.alone, false)
-            }
-            const playback = layerPlayback(what, player.durationSeconds, what.time + layer.offset)
-            // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
-            // one's 0, a chilled one's half).
-            if (what.hidden) { if (layer.shown) player.hide() }
-            else if (started || !layer.shown) player.play({ ...playback, hideOnFinish: false })
-            else {
-                if (player.playbackRate !== playback.rate) player.setRate(playback.rate)
-                player.seek(playback.timeSeconds)
+                const first = !below.length
+                showClip(player, clip, {
+                    blend: options.blend(name, clip, layer.key === undefined),
+                    place: (player, clip) => {
+                        const track = clip.attachmentTrackId, parent = track ? [...below].reverse().find(([, , drawn]) => drawn.includes(track)) : undefined
+                        if (!track || !parent) return options.place(name, player, clip, first)
+                        parent[1].drawAfterTrack(player.node, track)
+                        player.node.setPosition(0, 0)
+                        player.node.setScale(1, 1, 1)
+                        const key = `${parent[0]}/${track}`, base = this.bases.get(key) ?? options.basePose?.(clip, track)
+                        player.attachToTrack(parent[1], track, base)
+                        if (!base && player.attachmentBasePose) this.bases.set(key, player.attachmentBasePose)
+                    },
+                    playback: player => {
+                        // A synced layer starts at the part of its pictures the one it goes with is at of its own.
+                        const own = player.durationSeconds * player.fps / layerRateScale(clip)
+                        layer.offset = what.sync && what.sync.own > 0 ? (what.sync.time / what.sync.own % 1) * own - what.time : 0
+                        return layerPlayback(what, player, what.time + layer.offset)
+                    },
+                })
+                player.setTracksVisible(this.alone, !!clip.onlyTracks)
+                if (what.hidden) player.hide()
+            } else {
+                const playback = layerPlayback(what, player, what.time + layer.offset)
+                // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
+                // one's 0, a chilled one's half).
+                if (what.hidden) { if (layer.shown) player.hide() }
+                else if (!layer.shown) player.play({ ...playback, hideOnFinish: false })
+                else {
+                    if (player.playbackFps !== playback.fps) player.setFps(playback.fps)
+                    player.seek(playback.timeSeconds)
+                }
             }
             layer.key = what.key
             layer.time = what.time

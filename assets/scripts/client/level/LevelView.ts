@@ -142,7 +142,7 @@ export class LevelView {
             LevelGameOverPresenter.loadAssets(presentation.board.gameOver),
             UI.load(),
             content.views.preload(content, level),
-            AdviceWidget.loadAssets(),
+            AdviceWidget.loadAssets(content.presentation.clips),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)

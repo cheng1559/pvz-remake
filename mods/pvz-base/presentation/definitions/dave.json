@@ -1,9 +1,19 @@
 {
-  "clips": {"enter": "pvz:dave_enter", "leave": "pvz:dave_leave", "idle": "pvz:dave_idle", "smalltalk": "pvz:dave_smalltalk", "mediumtalk": "pvz:dave_mediumtalk", "blahblah": "pvz:dave_blahblah", "crazy": "pvz:dave_crazy", "idle_handing": "pvz:dave_idle_handing", "talk_handing": "pvz:dave_talk_handing", "blink": "pvz:dave_blink"},
-  "sourceFps": 24, "transitionFps": 24, "talkFps": 12, "blinkFps": 15,
-  "idleBlend": 0.2, "talkBlend": 0.5, "delay": 2, "blinkSeconds": [4, 8], "talkLengths": [23, 52],
+  "clips": {
+    "enter": {"reanimId": "pvz:dave_enter", "fps": 24, "hold": true},
+    "leave": {"reanimId": "pvz:dave_leave", "fps": 24, "hold": true, "blend": 0.2},
+    "idle": {"reanimId": "pvz:dave_idle", "fps": 12, "loop": true, "blend": 0.2},
+    "smalltalk": {"reanimId": "pvz:dave_smalltalk", "fps": 12, "hold": true, "blend": 0.5},
+    "mediumtalk": {"reanimId": "pvz:dave_mediumtalk", "fps": 12, "hold": true, "blend": 0.5},
+    "blahblah": {"reanimId": "pvz:dave_blahblah", "fps": 12, "hold": true, "blend": 0.5},
+    "crazy": {"reanimId": "pvz:dave_crazy", "fps": 12, "hold": true, "blend": 0.5},
+    "idle_handing": {"reanimId": "pvz:dave_idle_handing", "fps": 12, "loop": true, "blend": 0.2},
+    "talk_handing": {"reanimId": "pvz:dave_talk_handing", "fps": 12, "hold": true, "blend": 0.5},
+    "blink": {"reanimId": "pvz:dave_blink", "fps": 15},
+    "hand": {"reanimId": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "loop": true, "attachmentTrackId": "Dave_handinghand"}
+  },
+  "delay": 2, "blinkSeconds": [4, 8], "talkLengths": [23, 52],
   "bubble": {"sprite": "pvz:store_speechbubble2", "x": 285, "y": 20, "textX": 25, "textY": 6, "textWidth": 233, "textHeight": 144, "continueX": 139, "continueY": 140, "shake": 2},
-  "hand": {"reanim": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "track": "Dave_handinghand"},
   "parts": {"mouth": "Dave_mouths", "eyes": ["Dave_eye"], "head": "Dave_head"},
   "mouths": {"MOUTH_BIG_SMILE": "pvz:crazydave_mouth1", "MOUTH_SMALL_SMILE": "pvz:crazydave_mouth5", "MOUTH_SMALL_OH": "pvz:crazydave_mouth6"}
 }

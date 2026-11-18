@@ -1,0 +1,10 @@
+{
+  "pvz:sod-roll": {"reanimId": "pvz:sodroll", "hold": true},
+  "pvz:ready-set-plant": {"reanimId": "pvz:readysetplant", "y": -24, "hold": true},
+  "pvz:final-wave": {"reanimId": "pvz:finalwave", "x": -400, "y": 300},
+  "pvz:advice-enter": {"reanimId": "pvz:textfadeon_enter", "fps": 60, "hold": true},
+  "pvz:advice-leave": {"reanimId": "pvz:textfadeon_leave", "fps": 40, "hold": true},
+  "pvz:mowered": {"reanimId": "pvz:lawnmowered_zombie"},
+  "pvz:puff": {"reanimId": "pvz:puff", "x": -73, "y": 56},
+  "pvz:charred": {"reanimId": "pvz:zombie_charred"}
+}

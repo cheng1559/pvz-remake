@@ -1,3 +1,4 @@
+import { prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, director, Director, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
@@ -93,14 +94,21 @@ export class MainMenuScreen extends Component {
         const pending: (() => Promise<void>)[] = []
         const player = (name: string, parent = content): ReanimPlayer => {
             const animation = uiNode({ name, parent, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
-            pending.push(() => animation.load(`pvz:selector_${name}`).then(report))
+            const clip = menu.clips[name]
+            pending.push(async () => {
+                await prepareClips([clip])
+                if (!animation.node?.isValid) return
+                showClip(animation, clip, { blend: 0 })
+                animation.pause()
+                report()
+            })
             return animation
         }
         this.clouds = menu.clouds.map(name => ({ player: player(name), delay: 0 }))
         this.open = player('open')
         this.sign = player('sign')
         this.grass = player('grass')
-        this.flowers = menu.flowers.map((_, index) => player(`flower${index + 1}`))
+        this.flowers = menu.flowers.map(flower => player(flower.clip))
         const hand = this.hand = player('zombie_hand')
         await preloadTasks(pending)
         if (!this.node.isValid) return
@@ -113,9 +121,9 @@ export class MainMenuScreen extends Component {
             animation.setTracksVisible([menu.startAdventure.track], false)
         }
         // The screen's clip, in the hand's own coordinates; the rocks it pushes aside are drawn outside it.
-        const { x, y, clip, rocks } = menu.hand
-        hand.node.setPosition(x, -y)
-        hand.setClip({ x: clip.x - x, y: clip.y - y, width: clip.width, height: clip.height, ignore: rocks })
+        const { clipRect: clip, rocks } = menu.hand
+        const { x = 0, y = 0 } = menu.clips.zombie_hand
+        hand.setClip({ x: clip.x - x, y: clip.y + y, width: clip.width, height: clip.height, ignore: rocks })
         hand.hide()
         this.signsRoot = uiNode({ name: 'Signs', parent: content, anchor: { x: 0, y: 1 }, active: false }).node
         const signTrack = this.sign.getTrackNode(menu.tracks.profileSign)!
@@ -181,14 +189,14 @@ export class MainMenuScreen extends Component {
         void SoundSystem.play(SoundEffect.RollIn)
         for (const cloud of this.clouds) {
             const delay = random(-60, 20)
-            if (delay <= 0) this.playCloud(cloud, -delay / 60 * (cloud.player.durationSeconds - 1 / 20))
+            if (delay <= 0) this.playCloud(cloud, -delay / 60 * (cloud.player.durationSeconds - 1 / cloud.player.fps))
             else {
-                cloud.player.play({ loop: false, hideOnFinish: false, timeSeconds: 0 })
+                showClip(cloud.player, this.menu.clips[cloud.player.node.name], { timeSeconds: 0 })
                 cloud.player.pause()
                 cloud.delay = delay
             }
         }
-        this.open.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0, onFinish: () => {
+        showClip(this.open, this.menu.clips.open, { onFinish: () => {
             this.opened = true
             this.setButtonsEnabled(true)
             this.addTrophySparkle()
@@ -211,7 +219,7 @@ export class MainMenuScreen extends Component {
         this.sign.node.active = true
         this.signsRoot.active = true
         this.current = this.sign
-        this.sign.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0 })
+        showClip(this.sign, this.menu.clips.sign)
     }
 
     /** SELECTOR_NEW_USER: the create-user dialog has closed with a player, so the opened menu drops the sign. */
@@ -298,7 +306,7 @@ export class MainMenuScreen extends Component {
             button.onClick = () => {
                 this.playedFlowers.add(flower)
                 void SoundSystem.playFoley(SoundEffect.LimbsPop, 10)
-                flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false })
+                showClip(flower, this.menu.clips[center.clip])
             }
             this.flowerButtons.push(button)
             node.active = true
@@ -362,7 +370,10 @@ export class MainMenuScreen extends Component {
         const left = this.current.getTrackNode(this.menu.trophy.track)
         if (left) this.trophy.node.setPosition(left.position.x + 12, left.position.y - 345)
         const right = this.current.getTrackNode(this.menu.tracks.anchor)!
-        for (const animation of [this.grass, ...this.flowers]) animation.node.setPosition(right.position.x - 71, right.position.y + 41)
+        for (const animation of [this.grass, ...this.flowers]) {
+            const clip = this.menu.clips[animation.node.name]
+            animation.node.setPosition(right.position.x - 71 + (clip.x ?? 0), right.position.y + 41 + (clip.y ?? 0))
+        }
         const offset = this.buttons.find(view => view.config.name === 'adventure')?.pressed ? 1 : 0
         this.numbersRoot.setPosition(right.position.x + offset, right.position.y - offset)
     }
@@ -377,7 +388,7 @@ export class MainMenuScreen extends Component {
             MusicSystem.stop()
             void SoundSystem.play(SoundEffect.LoseMusic)
             void SoundSystem.playFoley(SoundEffect.DirtRise)
-            this.hand?.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
+            if (this.hand) showClip(this.hand, this.menu.clips.zombie_hand)
         } else if (config.target && isMenuDialog(config.target)) void this.onOpenDialog(config.target)
         else if (config.target) void this.onNavigate(config.target as MenuAction)
         else this.ui.dialog(this.node, { title: this.ui.text('ZOMBATAR_UNAVAILABLE_HEADER'), message: this.ui.text('ZOMBATAR_UNAVAILABLE_BODY') })
@@ -385,7 +396,7 @@ export class MainMenuScreen extends Component {
 
     private playCloud(cloud: { player: ReanimPlayer, delay: number }, timeSeconds = 0): void {
         cloud.delay = 0
-        cloud.player.play({ loop: false, rate: 0.5 / 20, timeSeconds, hideOnFinish: false, onFinish: () => { cloud.delay = random(20, 40) } })
+        showClip(cloud.player, this.menu.clips[cloud.player.node.name], { timeSeconds, onFinish: () => { cloud.delay = random(20, 40) } })
     }
 
     private setAdventureShade(shade: number): void {
@@ -405,8 +416,8 @@ export class MainMenuScreen extends Component {
             if (cloud.delay <= 0) this.playCloud(cloud)
         }
         if ((this.grassDelay -= dt) <= 0) {
-            this.grass.blendFrom(this.grass, 0.2)
-            this.grass.play({ loop: true, rate: random(3, 12) / 20, timeSeconds: 0 })
+            showClip(this.grass, this.menu.clips.grass)
+            this.syncPositions()
             this.grassDelay = random(2, 4)
         }
         if (this.startingSeconds === null) return

@@ -1,3 +1,4 @@
+import { clipNamed, prepareClips, showClip } from '@/client/reanim/clips'
 import { Color, Graphics, Node, UITransform } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -88,23 +89,24 @@ export class LevelEndPresenter {
     private async createFinalWave(snapshot?: LevelEndSnapshot['finalWave']): Promise<void> {
         if (this.finalWave?.node.isValid) return
         const node = uiNode({
-            name: 'FinalWave', parent: this.overlayLayer, position: { x: -400, y: 300 },
+            name: 'FinalWave', parent: this.overlayLayer,
             size: { width: 800, height: 600 }, anchor: { x: 0, y: 1 },
         }).node
         const player = node.addComponent(ReanimPlayer)
         this.finalWave = player
         try {
-            await player.load('pvz:finalwave')
+            const clip = clipNamed(this.content.presentation.clips, 'pvz:final-wave')
+            await prepareClips([clip])
             if (!node.isValid) return
             const finish = () => {
                 if (node.isValid) node.destroy()
                 if (this.finalWave === player) this.finalWave = null
             }
+            showClip(player, clip, { onFinish: finish })
             if (snapshot) {
                 player.restore(snapshot)
                 player.setOnFinish(finish)
             } else {
-                player.play({ loop: false, rate: 1, onFinish: finish })
                 this.audio.finalWave(node)
             }
         } catch (error) {

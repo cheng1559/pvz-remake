@@ -75,8 +75,8 @@
     "view": "fuse",
     "jitter": 1,
     "clips": {
-      "idle": {"reanimId": "pvz:cherrybomb_idle", "fps": 30, "x": 0, "y": 0},
-      "explode": {"reanimId": "pvz:cherrybomb_explode", "fps": 30, "x": 0, "y": 0}
+      "idle": {"reanimId": "pvz:cherrybomb_idle", "x": 0, "y": 0},
+      "explode": {"reanimId": "pvz:cherrybomb_explode", "x": 0, "y": 0}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1,

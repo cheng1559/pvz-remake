@@ -15,10 +15,25 @@
     {"name": "quit", "target": "quit", "track": "SelectorScreen_BG_Right", "x": 644, "y": 469, "width": 57, "height": 37, "imageX": 5, "imageY": 5, "image": "selectorscreen_quit1", "highlight": "selectorscreen_quit2"}
   ],
   "images": ["selectorscreen_bg", "selectorscreen_levelnumbers"],
+  "clips": {
+    "open": {"reanimId": "pvz:selector_open", "fps": 30, "hold": true},
+    "sign": {"reanimId": "pvz:selector_sign", "fps": 30, "hold": true},
+    "grass": {"reanimId": "pvz:selector_grass", "fps": [3, 12], "loop": true, "blend": 0.2},
+    "zombie_hand": {"reanimId": "pvz:selector_zombie_hand", "x": -70, "y": -10, "hold": true},
+    "cloud1": {"reanimId": "pvz:selector_cloud1", "fps": 0.5, "hold": true},
+    "cloud2": {"reanimId": "pvz:selector_cloud2", "fps": 0.5, "hold": true},
+    "cloud4": {"reanimId": "pvz:selector_cloud4", "fps": 0.5, "hold": true},
+    "cloud5": {"reanimId": "pvz:selector_cloud5", "fps": 0.5, "hold": true},
+    "cloud6": {"reanimId": "pvz:selector_cloud6", "fps": 0.5, "hold": true},
+    "cloud7": {"reanimId": "pvz:selector_cloud7", "fps": 0.5, "hold": true},
+    "flower1": {"reanimId": "pvz:selector_flower1", "fps": 24, "hold": true},
+    "flower2": {"reanimId": "pvz:selector_flower2", "fps": 24, "hold": true},
+    "flower3": {"reanimId": "pvz:selector_flower3", "fps": 24, "hold": true}
+  },
   "clouds": ["cloud1", "cloud2", "cloud4", "cloud5", "cloud6", "cloud7"],
-  "flowers": [{"x": 765, "y": 483},{"x": 663, "y": 455},{"x": 701, "y": 439}],
+  "flowers": [{"clip": "flower1", "x": 765, "y": 483}, {"clip": "flower2", "x": 663, "y": 455}, {"clip": "flower3", "x": 701, "y": 439}],
   "tracks": {"sky": "SelectorScreen_BG", "anchor": "SelectorScreen_BG_Right", "profileSign": "woodsign1", "replaced": ["leaf1", "leaf2", "leaf22", "leaf3", "leaf4", "leaf5", "leaf_SelectorScreen_Leaves", "flower1", "flower2", "flower3"]},
-  "hand": {"x": -70, "y": 10, "clip": {"x": 0, "y": 0, "width": 800, "height": 560}, "rocks": ["rock1", "rock2", "rock2.2", "rock3", "rock4", "rock4.2", "rock5", "rock5.2", "rock5.3", "rock5.4", "rock5.5", "rock6", "rock6.2", "rock6.2_2"]},
+  "hand": {"clipRect": {"x": 0, "y": 0, "width": 800, "height": 560}, "rocks": ["rock1", "rock2", "rock2.2", "rock3", "rock4", "rock4.2", "rock5", "rock5.2", "rock5.3", "rock5.4", "rock5.5", "rock6", "rock6.2", "rock6.2_2"]},
   "keyShadow": {"track": "almanac_key_shadow", "almanac": "selectorscreen_almanac_shadow", "store": "selectorscreen_key_shadow"},
   "trophy": {"track": "SelectorScreen_BG_Left", "image": "sunflower_trophy", "particle": "pvz:trophysparkle"},
   "startAdventure": {"track": "SelectorScreen_StartAdventure_button", "image": "selectorscreen_startadventure_button1", "highlight": "selectorscreen_startadventure_highlight", "shadow": "SelectorScreen_StartAdventure_shadow", "adventureShadow": "SelectorScreen_Adventure_shadow"}

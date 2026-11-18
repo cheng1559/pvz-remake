@@ -1,3 +1,4 @@
+import { clipNamed, prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { renderOrder } from '@/shared/content/renderOrder'
@@ -104,21 +105,24 @@ export class AdventureIntro implements LevelIntro {
                 size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
             }).node
             node.setSiblingIndex(slots.sodRoll.getSiblingIndex() + index)
-            const player = node.addComponent(ReanimPlayer)
-            await player.load('pvz:sodroll')
-            player.play({ loop: false, rate: 1, hideOnFinish: false })
+            const clip = clipNamed(content.presentation.clips, 'pvz:sod-roll')
+            const player = uiNode({ name: 'Animation', parent: node }).node.addComponent(ReanimPlayer)
+            await prepareClips([clip])
+            showClip(player, clip)
             player.pause()
-            node.active = false
+            node.active = true
+            player.node.active = false
             return player
         }))
 
         let ready: ReanimPlayer | null = null
         if (layout.readySetPlant) {
             // Screen text: it stays centered when a wide viewport shifts the lawn.
-            const node = uiNode({ name: 'ReadySetPlant', parent: slots.overlayLayer, position: { x: 0, y: -24 }, active: false }).node
+            const node = uiNode({ name: 'ReadySetPlant', parent: slots.overlayLayer, active: false }).node
             ready = node.addComponent(ReanimPlayer)
-            await ready.load('pvz:readysetplant')
-            ready.play({ loop: false, rate: 1, hideOnFinish: false })
+            const clip = clipNamed(content.presentation.clips, 'pvz:ready-set-plant')
+            await prepareClips([clip])
+            showClip(ready, clip)
             ready.pause()
         }
         const previewTypes = new Map<Node, string>()
@@ -346,7 +350,7 @@ export class AdventureIntro implements LevelIntro {
         }
         if (this.ready?.node.isValid) {
             this.ready.node.active = tick >= this.readyStart && !this.complete
-            if (this.ready.node.active) this.ready.seek((tick - this.readyStart) / 100)
+            if (this.ready.node.active) this.ready.seek((tick - this.readyStart) / 100 * this.ready.playbackFps / this.ready.fps)
         }
 
         const houseNameTicks = Math.max(0, HOUSE_NAME_DURATION - tick)

@@ -36,16 +36,16 @@ class Node {
 class Player {
     node!: Node
     playing = false
-    rate = 0
-    async load() {}
-    play(options: { rate: number }) { this.playing = true; this.rate = options.rate }
+    fps = 0
+    change() {}
+    play(options: { fps: number }) { this.playing = true; this.fps = options.fps }
     pause() { this.playing = false }
 }
 
 const MOWER = 'pvz:lawnmower', ROW = 2, Y = 303
 const content = {
     definitions: { projectiles: { [MOWER]: { hitbox: { x: 0, y: 0, width: 50, height: 80 } } } },
-    presentation: { projectiles: { [MOWER]: { view: 'mowing', reanim: { id: MOWER, x: 6, y: -19, scale: 0.85, rate: 5.8 }, plantShadow: { x: 36, y: 65 }, layer: 'lawnMower' } } },
+    presentation: { projectiles: { [MOWER]: { view: 'mowing', clips: { fly: { reanimId: MOWER, x: 6, y: -19, scale: 0.85, fps: 70, loop: true } }, plantShadow: { x: 36, y: 65 }, layer: 'lawnMower' } } },
 }
 
 /** A view of `path` (MowerView, MowingProjectileView) on a board whose intro has brought a row's mower `arrival` of its way on. */
@@ -55,6 +55,7 @@ async function projectileView(path: string, name: string, mower: object) {
         '@/client/level/LevelStage': {
             boardToLayer: (x: number, y: number) => ({ x: x - 400, y: 300 - y }), plantShadow: async () => ({ originalSize: { width: 80, height: 30 } }),
         },
+        '@/client/reanim/clips': load('reanim/clips', { './ReanimAssets': { prepareReanims: async () => {} } }),
         '@/client/reanim/ReanimPlayer': { ReanimPlayer: Player },
         '@/client/view/uiNode': { uiNode(options: any) {
             const node = options.node ?? new Node()
@@ -100,7 +101,7 @@ test("a mowing projectile is drawn by its own view, running from the start where
     const { view, node, stage } = await projectileView('projectiles/MowingProjectileView', 'MowingProjectileView', fired)
     view.sync(fired)
     const animation = node.children.find(child => child.name === 'ProjectileAnimation')!
-    assert.deepEqual([node.active, animation.position, animation.component!.playing, animation.component!.rate], [true, { x: 6, y: -19 }, true, 5.8])
+    assert.deepEqual([node.active, animation.position, animation.component!.playing, animation.component!.fps], [true, { x: 6, y: -19 }, true, 70])
     assert.equal(stage.layer.children[0].position.y, 300 - (Y - 40) - 65 - 40, 'its shadow on the ground under it')
 })
 

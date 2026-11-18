@@ -112,7 +112,7 @@ export function buildPresentationDefinitions(value: unknown, sources: readonly D
     const base = record(jsonRoundTrip(value), 'presentation definitions')
     // The tables a Mod adds to or overrides, all by qualified ID: `awards` by the level award's, `rules` by the rule's kind,
     // `store` by the store item's, `almanac` by the plant or zombie the almanac shows.
-    const kinds = ['plants', 'zombies', 'projectiles', 'gridItems', 'items', 'awards', 'tools', 'foley', 'boards', 'screens', 'levels', 'rules', 'challenges',
+    const kinds = ['plants', 'zombies', 'projectiles', 'gridItems', 'items', 'awards', 'tools', 'foley', 'boards', 'screens', 'clips', 'levels', 'rules', 'challenges',
         'store', 'almanac']
     const registry = new DefinitionRegistry(kinds)
     registry.register(BASE_MOD_ID, Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)

@@ -101,7 +101,7 @@ export class MenuScreen extends Component {
     /** A page's animations and controls over its backgrounds: its screen, or its buttons. True for an award on paper (a note). */
     private async buildPage(id: MenuPageId, page: (typeof MENU_PAGES)[MenuPageId], root: Node, ui: UI): Promise<boolean> {
         const animations = ui.assets.presentation.screens?.[`pvz:${id}`]
-        if (animations?.length) await showScreenAnimations(root, animations)
+        if (animations) await showScreenAnimations(root, animations.clips)
         const controls = uiNode({
             name: 'Controls', parent: root, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
         }).node

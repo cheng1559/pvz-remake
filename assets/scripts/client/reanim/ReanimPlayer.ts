@@ -156,6 +156,7 @@ export class ReanimPlayer extends Component {
     private playing = false
     private loop = true
     private rate = 1
+    private onlyTracks?: readonly string[]
     private visible = true
     private hideOnFinish = true
     private onFinish: (() => void) | null = null
@@ -188,6 +189,8 @@ export class ReanimPlayer extends Component {
     private drawingStale = true
 
     get durationSeconds(): number { return this.requireData().durationSeconds }
+    /** The frames a second the loaded clip was made at (Reanim.fps), its own pace. */
+    get fps(): number { return this.requireData().fps }
     /** Where a track of a clip in memory (prepareReanims) is in its first frame, for attaching from it. */
     static firstPose(id: string, trackId: string): ReanimKeyframe | undefined {
         const track = loadedReanim(id)?.data.tracks.find(candidate => candidate.id === trackId)
@@ -196,6 +199,11 @@ export class ReanimPlayer extends Component {
     /** How long a clip in memory (prepareReanims) is, for timing it before a player shows it. */
     static duration(id: string): number | undefined {
         return loadedReanim(id)?.data.durationSeconds
+    }
+    /** How many frames of its own a clip in memory (prepareReanims) is, at the pace it was made at. */
+    static frames(id: string): number | undefined {
+        const data = loadedReanim(id)?.data
+        return data && data.durationSeconds * data.fps
     }
     /** The loaded clip, or null before the first load. */
     get loadedId(): string | null { return this.data?.id ?? null }
@@ -284,6 +292,7 @@ export class ReanimPlayer extends Component {
         if (!this.node?.isValid) throw new Error('reanim player was destroyed while loading')
 
         this.clearViews()
+        this.onlyTracks = undefined
         this.data = data
         this.frames.clear()
         for (const [spriteId, frame] of frames) this.frames.set(spriteId, frame)
@@ -307,13 +316,16 @@ export class ReanimPlayer extends Component {
      * images, colors) starts over, as with a clip just loaded. `blendSeconds`: from the pose it shows now (the
      * original's StartBlend). The clip is in memory already (prepareReanims).
      */
-    change(id: string, blendSeconds = 0): void {
+    change(id: string, blendSeconds = 0, onlyTracks?: readonly string[]): void {
         const assets = loadedReanim(id)
         if (!assets) throw new Error(`reanim is not loaded: ${id}`)
         const previous = this.data
         // The pose showing now, before its tracks are the other clip's.
         const poses = previous && blendSeconds > 0 ? previous.tracks.map(track => [track.id, this.sampleBlendedTrack(track)] as const) : []
-        if (assets.data !== previous) {
+        // A Mod may have extended this player's poses with replaceAnimation. Replaying the same ID keeps them.
+        const filterChanged = this.onlyTracks !== onlyTracks
+        this.onlyTracks = onlyTracks
+        if (previous?.id !== id) {
             const views = new Map(this.views)
             this.views.clear()
             this.frameOverrides.clear()
@@ -324,13 +336,15 @@ export class ReanimPlayer extends Component {
                 // A track's own node stays for what is attached to it or drawn after it.
                 const { node, sprite, skew, additive } = views.get(track.id) ?? {}
                 views.delete(track.id)
-                if (node) node.active = true
+                if (node) node.active = this.trackIncluded(track.id)
                 this.views.set(track.id, node ? { track, visible: true, node, sprite, skew, additive } : { track, visible: true })
             }
             for (const [trackId, view] of views) {
                 if (isValid(view.node, true)) view.node!.destroy()
                 this.followers.delete(trackId)
             }
+        } else if (filterChanged) {
+            for (const [trackId, view] of this.views) if (view.node) view.node.active = view.visible && this.trackIncluded(trackId)
         }
         this.blendFromPoses.clear()
         for (const [trackId, pose] of poses) if (this.views.has(trackId) && pose?.sprite) this.blendFromPoses.set(trackId, pose)
@@ -394,15 +408,19 @@ export class ReanimPlayer extends Component {
         this.applyPose()
     }
 
+    /**
+     * Plays the loaded clip from here (or `timeSeconds`). `fps`: frames of it a second (Reanimation::mAnimRate); it goes
+     * on at the pace it had without, its own (`fps`) at first.
+     */
     play(options: {
         loop?: boolean
-        rate?: number
+        fps?: number
         timeSeconds?: number
         hideOnFinish?: boolean
         onFinish?: () => void
     } = {}): void {
         this.requireData()
-        if (options.rate != null) this.setRate(options.rate)
+        if (options.fps != null) this.setFps(options.fps)
         if (options.loop != null) this.loop = options.loop
         this.hideOnFinish = options.hideOnFinish ?? true
         this.onFinish = options.onFinish ?? null
@@ -417,15 +435,16 @@ export class ReanimPlayer extends Component {
     }
 
     /**
-     * The rate it plays on at from here, where it is: 0 stands it still where it plays (a frozen plant's or zombie's
-     * body, whose server animation stops), and it goes on at the next rate.
+     * The frames a second it plays on at from here, where it is: 0 stands it still where it plays (a frozen plant's or
+     * zombie's body, whose server animation stops), and it goes on at the next pace.
      */
-    setRate(rate: number): void {
-        if (!Number.isFinite(rate) || rate < 0) throw new Error('reanim rate must be finite and non-negative')
-        this.rate = rate
+    setFps(fps: number): void {
+        if (!Number.isFinite(fps) || fps < 0) throw new Error('reanim fps must be finite and non-negative')
+        this.rate = fps / this.requireData().fps
     }
 
-    get playbackRate(): number { return this.rate }
+    /** The frames a second it plays at. */
+    get playbackFps(): number { return this.rate * this.requireData().fps }
 
     setOnFinish(callback: (() => void) | null): void {
         this.requireData()
@@ -443,12 +462,16 @@ export class ReanimPlayer extends Component {
         return [...this.views.keys()]
     }
 
+    private trackIncluded(id: string): boolean {
+        return !this.onlyTracks || this.onlyTracks.includes(id)
+    }
+
     /** Exact track IDs; ones this clip lacks are skipped. */
     setTracksVisible(trackIds: readonly string[], visible: boolean): void {
         let changed = false
         for (const [id, view] of this.views) if (trackIds.includes(id) && view.visible !== visible) {
             view.visible = visible
-            if (view.node) view.node.active = visible
+            if (view.node) view.node.active = visible && this.trackIncluded(id)
             changed = true
         }
         if (changed) this.drawingStale = true
@@ -714,7 +737,7 @@ export class ReanimPlayer extends Component {
         const parts = uiNode({
             name: trackId,
             parent: this.node,
-            active: view.visible !== false,
+            active: view.visible !== false && this.trackIncluded(trackId),
             anchor: { x: 0, y: 1 },
             sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false },
             skew: { x: 0, y: 0 },
@@ -866,7 +889,7 @@ export class ReanimPlayer extends Component {
             const track = view.track ?? data.tracks.find(candidate => candidate.id === id)
             const override = this.frameOverrides.get(id)
             const overrideSlot = override && !view.node ? images.push(frameGeometry(override)) - 1 : -1
-            tracks.set(track ? [clip.starts.get(track)!, track.keyframes.length, overrideSlot, view.visible === false ? 0 : 1] : [0, 0, -1, 0], index * TRACK)
+            tracks.set(track ? [clip.starts.get(track)!, track.keyframes.length, overrideSlot, view.visible !== false && this.trackIncluded(id) ? 1 : 0] : [0, 0, -1, 0], index * TRACK)
             // Packed once per clip: walking every keyframe here took most of a rebuild, 160 times over when a wave arrives.
             const trackImages = view.node ? [] : overrideSlot >= 0 ? [images[overrideSlot]]
                 : track ? (clip.trackSprites.get(track) ?? []).map(slot => images[slot]) : []

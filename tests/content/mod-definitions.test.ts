@@ -301,10 +301,10 @@ test('a Mod adds and overrides item, award and rule presentations, and one missi
     const plain = buildPresentationDefinitions(source, [presentation()])
     const added = buildPresentationDefinitions(source, [{ ownerId: 'example', data: { ...presentation().data,
         items: { 'example:moon': sun }, awards: { 'example:key': almanac }, rules: { 'example:rule': whack },
-        overrides: { items: { 'pvz:sun': { ...sun, offset: [1, 2] } }, awards: { 'pvz:almanac': { ...almanac, x: 7 } }, rules: { 'pvz:whack-a-zombie': { ...whack, seedBankSlide: 3 } } },
+        overrides: { items: { 'pvz:sun': { ...sun, clips: { idle: { ...sun.clips.idle, x: 1, y: 2 } } } }, awards: { 'pvz:almanac': { ...almanac, x: 7 } }, rules: { 'pvz:whack-a-zombie': { ...whack, seedBankSlide: 3 } } },
     } }])
     assert.deepEqual([added.items['example:moon'], added.awards!['example:key'], added.rules!['example:rule']], [sun, almanac, whack])
-    assert.deepEqual([added.items['pvz:sun'].offset, added.awards!['pvz:almanac'].x, added.rules!['pvz:whack-a-zombie'].seedBankSlide], [[1, 2], 7, 3])
+    assert.deepEqual([[added.items['pvz:sun'].clips.idle.x, added.items['pvz:sun'].clips.idle.y], added.awards!['pvz:almanac'].x, added.rules!['pvz:whack-a-zombie'].seedBankSlide], [[1, 2], 7, 3])
     for (const kind of ['items', 'awards', 'rules']) {
         assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'other', data: { [kind]: { 'pvz:extra': {} } } }]), /cannot register pvz:extra/)
     }

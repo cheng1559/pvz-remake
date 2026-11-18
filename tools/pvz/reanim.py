@@ -383,8 +383,9 @@ def build_reanim_clip(
             track["zIndex"] = top + offset
         tracks.sort(key=lambda track: (track["zIndex"], track["id"]))
     return {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "id": content_id,
+        "fps": fps,
         "durationSeconds": (end - start + 1) / fps,
         "tracks": tracks,
     }

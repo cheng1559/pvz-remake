@@ -1,3 +1,4 @@
+import { prepareClips, showClip } from '@/client/reanim/clips'
 import { Node } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
@@ -5,21 +6,20 @@ import { uiNode } from '@/client/view/uiNode'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { presentationSounds, type LevelRulePresentation, type PresentationSound } from '@/shared/content/presentation'
+import { parseClip, presentationSounds, type ClientAnimationClip, type LevelRulePresentation, type PresentationSound } from '@/shared/content/presentation'
 import { allFields, finite, named, nonEmptyString, positiveFinite } from '@/shared/validate'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
 import type { LevelRuleView, LevelRuleViewContext } from './LevelRuleView'
 import { boolean, record } from '@/shared/validate'
 
-/** Converted Reanim clips play at 12 frames per second at rate 1. */
-const CLIP_FPS = 12
 /** CursorObject::Update draws the cursor at the pointer minus (25, 35); the mallet sits at its (x, y) from there. */
 const CURSOR_OFFSET = { x: -25, y: -35 }
 
 /** `rules["pvz:whack-a-zombie"]`: the mallet and its blows, from Challenge::StartLevel and MouseDownWhackAZombie. */
 interface WhackPresentation {
     /** The cursor animation at `x`, `y` from the pointer; a click restarts it at `swingTime` of the clip. */
-    readonly hammer: { readonly reanimId: string; readonly x: number; readonly y: number; readonly fps: number; readonly swingTime: number }
+    readonly clips: { readonly hammer: ClientAnimationClip }
+    readonly swingTime: number
     readonly swingSounds: readonly PresentationSound[]
     /** Per helm type, the sound a mallet blow on it plays; a bare zombie gets `bonk` and its particle at its offset. */
     readonly helmSounds: Readonly<Record<string, readonly PresentationSound[]>>
@@ -32,7 +32,8 @@ interface WhackPresentation {
 function parseConfig(config: LevelRulePresentation, name: string): WhackPresentation {
     const { graveRise: _graveRise, ...own } = config
     return allFields<WhackPresentation>(own, name, {
-        hammer: (value, name) => allFields<WhackPresentation['hammer']>(value, name, { reanimId: nonEmptyString, x: finite, y: finite, fps: finite, swingTime: finite }),
+        clips: (value, name) => allFields<WhackPresentation['clips']>(value, name, { hammer: parseClip }),
+        swingTime: finite,
         swingSounds: presentationSounds,
         helmSounds: (value, name) => named(value, name, presentationSounds),
         bonk: (value, name) => allFields<WhackPresentation['bonk']>(value, name, { sounds: presentationSounds, particle: nonEmptyString, x: finite, y: finite }),
@@ -69,12 +70,12 @@ export class WhackAZombieView implements LevelRuleView {
         const config = parseConfig(context.config, `rules.${context.kind}`)
         const isSun = (typeId: string) => content.definitions.items[typeId] !== undefined && content.definitions.items[typeId].kind !== 'money'
         const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, isSun, context.bankHeight)
-        const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 }, active: false }).node
+        const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 } }).node
         node.once(Node.EventType.NODE_DESTROYED, () => UIHoverManager.setIdleCursor('default'))
-        const hammer = node.addComponent(ReanimPlayer)
-        await hammer.load(config.hammer.reanimId)
+        const hammer = uiNode({ name: 'Mallet', parent: node, active: false }).node.addComponent(ReanimPlayer)
+        await prepareClips([config.clips.hammer])
         // Challenge::StartLevel: held on its last frame until the first blow.
-        hammer.play({ loop: false, rate: config.hammer.fps / CLIP_FPS, timeSeconds: hammer.durationSeconds, hideOnFinish: false })
+        showClip(hammer, config.clips.hammer)
         view.hammer = hammer
         // A restored game with sun already has its bank down.
         if (view.hasSun(context.initial)) view.bankY = 0
@@ -88,9 +89,9 @@ export class WhackAZombieView implements LevelRuleView {
         const hammer = this.hammer
         if (!this.hammerOut(snapshot) || !hammer?.node.isValid) return false
         if (touch) this.touchSwing = point
-        hammer.play({
-            loop: false, rate: this.config.hammer.fps / CLIP_FPS, timeSeconds: this.config.hammer.swingTime * hammer.durationSeconds,
-            hideOnFinish: false, onFinish: () => { if (this.touchSwing === point) this.touchSwing = undefined },
+        showClip(hammer, this.config.clips.hammer, {
+            timeSeconds: this.config.swingTime * hammer.durationSeconds,
+            onFinish: () => { if (this.touchSwing === point) this.touchSwing = undefined },
         })
         SoundSystem.playSounds(this.config.swingSounds)
         return true
@@ -121,8 +122,7 @@ export class WhackAZombieView implements LevelRuleView {
         // Board::UpdateCursor: over nothing clickable, the mallet replaces the system cursor.
         UIHoverManager.setIdleCursor(visible && !GameDebugSettings.isMobileMode() ? 'none' : 'default')
         if (visible) {
-            const { x, y } = this.config.hammer
-            hammer.node.setPosition(point.x + CURSOR_OFFSET.x + x, -(point.y + CURSOR_OFFSET.y + y))
+            hammer.node.parent!.setPosition(point.x + CURSOR_OFFSET.x, -(point.y + CURSOR_OFFSET.y))
         }
     }
 

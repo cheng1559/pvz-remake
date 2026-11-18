@@ -24,8 +24,10 @@ export interface ReanimTrack {
 }
 
 export interface Reanim {
-    schemaVersion: 2
+    schemaVersion: 3
     id: string
+    /** The frames a second it was made at (the Reanim's <fps>): what a rate in frames a second plays it by. */
+    fps: number
     durationSeconds: number
     tracks: ReanimTrack[]
 }
@@ -92,9 +94,10 @@ export function attachReanimPose(
 }
 
 export function parseReanim(value: unknown): Reanim {
-    const source = exactObject(value, ['schemaVersion', 'id', 'durationSeconds', 'tracks'], 'reanim')
-    if (source.schemaVersion !== 2) throw new Error('reanim.schemaVersion must be 2')
+    const source = exactObject(value, ['schemaVersion', 'id', 'fps', 'durationSeconds', 'tracks'], 'reanim')
+    if (source.schemaVersion !== 3) throw new Error('reanim.schemaVersion must be 3')
     if (!isQualifiedId(source.id)) throw new Error('reanim.id must be a qualified ID')
+    const fps = positiveFinite(source.fps, 'reanim.fps')
 
     const durationSeconds = positiveFinite(source.durationSeconds, 'reanim.durationSeconds')
     if (!Array.isArray(source.tracks) || source.tracks.length === 0) {
@@ -155,7 +158,7 @@ export function parseReanim(value: unknown): Reanim {
         return { id, zIndex: record.zIndex as number, keyframes }
     })
 
-    return { schemaVersion: 2, id: source.id, durationSeconds, tracks } as Reanim
+    return { schemaVersion: 3, id: source.id, fps, durationSeconds, tracks } as Reanim
 }
 
 function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {

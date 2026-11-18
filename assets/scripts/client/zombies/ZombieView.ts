@@ -6,6 +6,7 @@ import { zombieDefinition } from './definitions'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { clipNamed, prepareClips, showClip } from '@/client/reanim/clips'
 import { entityTint } from '@/client/view/tints'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
@@ -187,7 +188,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         // Zombie::PlayDeathAnim removes the surprise mark (AttachmentReanimTypeDie).
         if (zombie.state === 'dying' || zombie.state === 'mowered') {
             for (const armor of [this.presentation.helm, this.presentation.shield]) {
-                if (armor?.dropReanim) this.attachments.remove(armor.dropReanim.reanimId)
+                if (armor?.clips) this.attachments.remove(armor.clips.drop.reanimId)
             }
         }
         uiNode({ node: this.node, opacity: zombie.alpha })
@@ -286,12 +287,12 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private readonly layerClips: LayerClips = {
         picture: name => this.clip(name),
         played: name => zombieClip(this.animation, name === ZOMBIE_CLIPS.superLongDeath && !this.clips()[ZOMBIE_CLIPS.superLongDeath] ? ZOMBIE_CLIPS.death : name),
-        duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
+        frames: reanimId => ReanimPlayer.frames(reanimId) ?? 0,
     }
 
     /** How a player shows what the zombie's body plays (the mower's driver takes the body's place). */
     private playback(zombie: ShownZombie, player: ReanimPlayer): ReturnType<typeof layerPlayback> {
-        return layerPlayback(this.shown(ZOMBIE_BODY_LAYER, zombie)!, player.durationSeconds)
+        return layerPlayback(this.shown(ZOMBIE_BODY_LAYER, zombie)!, player)
     }
 
     private placeShadow(): void {
@@ -343,19 +344,18 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         return { x: at.x + mirrorX(offset[0], ZOMBIE_WIDTH, this.mirrored), y: at.y + offset[1] }
     }
 
-    /** Zombie::DropHelm or DropShield: plays the armor's `dropReanim` on the zombie. */
+    /** Zombie::DropHelm or DropShield: plays the armor's drop clip on the zombie. */
     armorDropped(slot: 'helm' | 'shield'): void {
-        const drop = this.presentation[slot]?.dropReanim
+        const drop = this.presentation[slot]?.clips?.drop
         if (!drop) return
         // Zombie::AddAttachedReanim: follows the zombie and plays the whole clip once.
-        const node = uiNode({ name: 'HelmDrop', parent: this.root, position: { x: drop.offset[0], y: -drop.offset[1] } }).node
+        const node = uiNode({ name: 'HelmDrop', parent: this.root }).node
         this.attachments.add(node, drop.reanimId)
         const player = node.addComponent(ReanimPlayer)
         const dispose = () => { if (node.isValid) node.destroy() }
-        void player.load(drop.reanimId).then(() => {
-            if (node.isValid) player.play({ loop: false, rate: 1, onFinish: dispose })
-            else dispose()
-        }, error => {
+        void prepareClips([drop]).then(() => {
+            if (node.isValid) showClip(player, drop, { onFinish: dispose })
+        }).catch(error => {
             dispose()
             if (this.node.isValid) console.error('[Level] Failed to load helm drop animation', error)
         })
@@ -380,7 +380,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (!player) return
         // The walk goes on from where the server left it, by the server's rule (walkZombie): the clip comes round by
         // its length while its frames, and the ground under them, are spread over its length less one; at its size.
-        const { rate, timeSeconds } = this.playback(zombie, player), cycle = player.durationSeconds, last = player.lastFrameTimeSeconds
+        const { fps, timeSeconds } = this.playback(zombie, player), rate = fps / player.fps, cycle = player.durationSeconds, last = player.lastFrameTimeSeconds
         const start = timeSeconds + approachTicks / 100 * rate, time = start + ticks / 100 * rate
         const ground = this.presentation.parts.ground
         const groundAt = (seconds: number) => player.sampleTrack(ground, seconds % cycle / cycle * last)?.x ?? 0
@@ -475,11 +475,12 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         if (!this.player) return
         const driver = this.mowerDriver = uiNode({ name: 'MoweredDriver', parent: this.root }).node.addComponent(ReanimPlayer)
-        this.place(driver.node, animation.x, animation.y)
-        driver.change(animation.reanimId)
+        showClip(driver, animation, {
+            place: (player, clip) => this.place(player.node, clip.x ?? 0, clip.y ?? 0),
+            playback: player => this.playback(zombie, player),
+        })
         this.bodyClip = ZOMBIE_CLIPS.mowered
         this.player.attachToTrack(driver, attachmentTrack(animation))
-        driver.play({ ...this.playback(zombie, driver), hideOnFinish: false })
         driver.pause()
     }
 
@@ -514,10 +515,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.posedAnimations = board ? zombie.animations : undefined
         const changed = this.bodyClip !== body(zombie).clip
         this.layers.show(layer => this.shown(layer, zombie), {
-            blend: (layer, _clip, first) => layer === ZOMBIE_BODY_LAYER && !first ? this.bodyBlend(zombie) : 0,
+            blend: (layer, clip, first) => first ? 0 : clip.blend ?? (layer === ZOMBIE_BODY_LAYER ? this.bodyBlend(zombie) : 0),
             place: (layer, player, clip) => {
                 const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
-                if (player.node.parent === this.root) this.place(player.node, at.x, at.y)
+                if (player.node.parent === this.root) this.place(player.node, at.x ?? 0, at.y ?? 0)
             },
         })
         if (changed) {
@@ -753,7 +754,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const { x, y, row, rate, entityId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
         const mirrored = event.data.team === 'plants'
-        ZombieView.remains(stage, 'CharredZombie', 'pvz:zombie_charred', x + (mirrored ? CHARRED_MIRRORED_SHIFT : 0), y, stage.zombieOrder(row), entityId, rate, mirrored)
+        ZombieView.remains(stage, 'CharredZombie', 'pvz:charred', x + (mirrored ? CHARRED_MIRRORED_SHIFT : 0), y, stage.zombieOrder(row), entityId, rate, mirrored)
     }
 
     /** Zombie::MowDown for a zombie that is not flattened: REANIM_PUFF two above it and the mower's cloud one above, with the splat. */
@@ -763,22 +764,26 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         void SoundSystem.playFoley(SoundEffect.Splat)
         const order = stage.zombieOrder(row)
         stage.particle('pvz:mowercloud', x + 110, y, order + 1)
-        ZombieView.remains(stage, 'MowerPuff', 'pvz:puff', x - 73, y - 56, order + 2, zombieId, 1, false)
+        ZombieView.remains(stage, 'MowerPuff', 'pvz:puff', x, y, order + 2, zombieId, 1, false)
     }
 
-    /** An animation played once where a zombie was, at a draw order among what is drawn with that zombie. */
-    private static remains(stage: Parameters<StageEvent>[0], name: string, reanim: string, x: number, y: number, order: number, entityId: number,
-        rate: number, mirrored: boolean): void {
+    /**
+     * The presentation's clip `id` played once where a zombie was (`x`, `y` on the board, the clip's own place from there),
+     * at a draw order among what is drawn with that zombie, by the factor the server picked (`rateScale`).
+     */
+    private static remains(stage: Parameters<StageEvent>[0], name: string, id: string, x: number, y: number, order: number, entityId: number,
+        rateScale: number, mirrored: boolean): void {
+        const clip = clipNamed(stage.content.presentation.clips, id)
         const node = uiNode({ name, parent: stage.layer, position: boardToLayer(x, y), anchor: { x: 0, y: 1 } }).node
         if (mirrored) node.setScale(-1, 1, 1)
         stage.addScenery(node, order, entityId)
         const end = () => { if (node.isValid) node.destroy() }
-        const player = node.addComponent(ReanimPlayer)
-        void player.load(reanim).then(() => {
-            if (node.isValid) player.play({ loop: false, rate, timeSeconds: 0, onFinish: end })
+        const player = uiNode({ name: 'Animation', parent: node }).node.addComponent(ReanimPlayer)
+        void prepareClips([clip]).then(() => {
+            if (node.isValid) showClip(player, clip, { rateScale, onFinish: end })
         }).catch(error => {
             end()
-            console.error(`[Level] Failed to play ${reanim}`, error)
+            console.error(`[Level] Failed to play ${clip.reanimId}`, error)
         })
     }
 }

@@ -33,7 +33,7 @@ class ReanimConverterTest(unittest.TestCase):
             "pvz:phase2_clip",
             {"pvz:phase2_checker"},
         )
-        self.assertEqual(data["durationSeconds"], 0.2)
+        self.assertEqual([data["schemaVersion"], data["fps"], data["durationSeconds"]], [3, 10, 0.2])
         self.assertEqual([track["id"] for track in data["tracks"]], ["back", "face"])
         self.assertEqual(data["tracks"][0]["keyframes"][0]["timeSeconds"], 0)
 

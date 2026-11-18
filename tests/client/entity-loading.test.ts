@@ -46,6 +46,7 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
     return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? clientStubs[id] ?? {})
 }
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
+clientStubs['@/client/reanim/clips'] = loadClientModule('reanim/clips', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
 clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
 clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
@@ -370,17 +371,19 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
         position = { x: 0, y: 0 }
         player?: Player
         setPosition() {}
+        setScale() {}
         destroy() { this.isValid = false; if (this.player) this.player.node = null }
         addComponent(Type: any) { return this.player = Object.assign(new Type(), { node: this }) }
     }
     class Player {
         node: Node | null = null
         onFinish?: () => void
-        async load() { await loading }
+        change() {}
         play(options: { onFinish: () => void }) { playCount++; this.onFinish = options.onFinish }
     }
     const drops: Node[] = []
     const { ZombieView } = loadClientModule('zombies/ZombieView', {
+        '@/client/reanim/clips': loadClientModule('reanim/clips', { './ReanimAssets': { prepareReanims: () => loading } }),
         '@/client/reanim/ReanimPlayer': { ReanimPlayer: Player },
         '@/client/view/uiNode': { uiNode(options: any) {
             if (options.node) return { node: options.node }
@@ -515,23 +518,23 @@ test('presentation track lists name exact tracks that exist in their clips; losi
         for (const track of [...eyes, ...glow, ...face ? [face] : []]) assert.ok(tracks.has(track), `${id} lists ${track}`)
     }
     const dave = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/dave.json', 'utf8'))
-    const daveTracks = new Set(Object.entries<string>(dave.clips).filter(([name]) => name !== 'blink').flatMap(([, id]) => trackIds(id)))
-    for (const track of [dave.parts.mouth, dave.parts.head, ...dave.parts.eyes, dave.hand.track]) assert.ok(daveTracks.has(track), `Dave lists ${track}`)
+    const daveTracks = new Set(Object.entries<{ reanimId: string }>(dave.clips).filter(([name]) => name !== 'blink' && name !== 'hand').flatMap(([, clip]) => trackIds(clip.reanimId)))
+    for (const track of [dave.parts.mouth, dave.parts.head, ...dave.parts.eyes, dave.clips.hand.attachmentTrackId]) assert.ok(daveTracks.has(track), `Dave lists ${track}`)
     const menu = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/main-menu.json', 'utf8'))
-    const selector = new Set(['pvz:selector_open', 'pvz:selector_sign'].flatMap(trackIds))
+    const selector = new Set([menu.clips.open.reanimId, menu.clips.sign.reanimId].flatMap(trackIds))
     const { tracks: menuTracks, startAdventure } = menu
     for (const track of [...menu.buttons.map((button: { track: string }) => button.track), menuTracks.sky, menuTracks.anchor, menuTracks.profileSign,
         ...menuTracks.replaced, startAdventure.track, startAdventure.shadow, startAdventure.adventureShadow, menu.keyShadow.track, menu.trophy.track]) {
         assert.ok(selector.has(track), `the main menu lists ${track}`)
     }
-    const hand = new Set(trackIds('pvz:selector_zombie_hand'))
+    const hand = new Set(trackIds(menu.clips.zombie_hand.reanimId))
     for (const track of menu.hand.rocks) assert.ok(hand.has(track), `the zombie hand lists ${track}`)
     const screens = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/screens.json', 'utf8'))
     const layers = (value: unknown): any[] => Array.isArray(value) ? value.flatMap(layers)
-        : value && typeof value === 'object' ? 'visibleTracks' in value ? [value] : Object.values(value).flatMap(layers) : []
+        : value && typeof value === 'object' ? 'onlyTracks' in value ? [value] : Object.values(value).flatMap(layers) : []
     for (const layer of layers(screens)) {
         const tracks = new Set(trackIds(layer.reanimId))
-        for (const track of layer.visibleTracks) assert.ok(tracks.has(track), `${layer.name} lists ${track}`)
+        for (const track of layer.onlyTracks) assert.ok(tracks.has(track), `${layer.reanimId} lists ${track}`)
     }
     // The no-paper clips add Zombie_paper_hands2, the other hand, which the old prefix also hid.
     assert.deepEqual(zombies['pvz:newspaper'].parts.arm, ['Zombie_paper_leftarm_lower', 'Zombie_paper_hands'])
@@ -608,6 +611,15 @@ test('a player changes to another clip of its body in place: its batches stay, a
     assert.equal(player.batches, batches, 'what draws it is not rebuilt')
     assert.deepEqual([[...player.blendFromPoses.keys()], player.blendDuration, player.blendElapsed, player.timeSeconds, player.drawingStale], [['arm'], 0.2, 0, 0, true],
         'it blends the tracks both clips have, from the start of the new one')
+
+    // A Mod's local replacement survives replay. Two slots can show different tracks of that same resource.
+    const extended = { ...player.getAnimation(), durationSeconds: 3 }
+    player.replaceAnimation(extended)
+    player.change('pvz:death', 0, ['head'])
+    assert.equal(arm.active, false)
+    player.change('pvz:death', 0, ['arm'])
+    assert.equal(arm.active, true)
+    assert.equal(player.durationSeconds, 3)
 
     // The same clip again (a repeated shot) only starts a blend from where it was.
     const views = [...player.views.values()]
@@ -775,7 +787,7 @@ test('a clip that ends plays over its own pictures and goes on where they end; a
         land: { frames: 7, fit: true, hold: true }, blink: { frames: 3, once: true } }
     const clips = {
         picture: (name: string) => ({ reanimId: name, rateScale: 1 }), played: (name: string) => played[name],
-        duration: (reanimId: string) => ({ shootHead: 18, idleHead: 17, land: 9, blink: 2, body: 4 } as Record<string, number>)[reanimId] / 12,
+        frames: (reanimId: string) => ({ shootHead: 18, idleHead: 17, land: 9, blink: 2, body: 4 } as Record<string, number>)[reanimId],
     }
     const layers = { body: { clip: 'body', time: 40, rate: 17 } }
     const shown = (clip: string, time: number) => JSON.parse(JSON.stringify(shownLayer({ clip, time, rate: 45 }, layers, clips) ?? null))
@@ -786,25 +798,24 @@ test('a clip that ends plays over its own pictures and goes on where they end; a
     assert.equal(shown('blink', 2.5), null, 'a blink is gone once its pictures are')
     assert.equal(shown('land', 3).frames, 7, 'a clip that fits its time is stretched over it')
     // Pictures longer than the clip are stretched over it (a pack's death of 77 pictures for the animation's 39), and
-    // pictures made at another pace are counted at it (the cherry bomb's 14 at 30 a second).
+    // pictures are counted in frames of their own, whatever pace they were made at (the cherry bomb's 14, at 30 a second).
     played.death = { frames: 39, hold: true }
     played.explode = { frames: 14, hold: true }
-    const longer = shownLayer({ clip: 'death', time: 39, rate: 27 }, layers, { ...clips, duration: (id: string) => id === 'death' ? 77 / 12 : clips.duration(id) })
+    const longer = shownLayer({ clip: 'death', time: 39, rate: 27 }, layers, { ...clips, frames: (id: string) => id === 'death' ? 77 : clips.frames(id) })
     assert.equal(longer.frames, 39)
     const cherry = shownLayer({ clip: 'explode', time: 5, rate: 12 }, layers,
-        { ...clips, picture: (name: string) => ({ reanimId: name, rateScale: 1, fps: 30 }), duration: () => 14 / 30 })
+        { ...clips, frames: () => 14 })
     assert.deepEqual([cherry.once, cherry.frames], [true, undefined], 'its 14 pictures are as long as the clip')
 })
 
 test('a layer frozen when its view is made stands still at rate 0, and goes on at its rate once it thaws', () => {
     // A plant or zombie frozen in a save: its view is made from a snapshot whose body goes at 0.
     class Player {
-        node = { setPosition() {}, setScale() {} }; durationSeconds = 17 / 12; trackIds = []; fullLastFrame = false; rate = 1
+        node = { setPosition() {}, setScale() {} }; durationSeconds = 17 / 12; fps = 12; trackIds = []; fullLastFrame = false; playbackFps = 12
         calls: unknown[][] = []
-        get playbackRate() { return this.rate }
         change() {} setTracksVisible() {} hide() {}
-        play(options: { rate: number }) { this.calls.push(['play', options.rate]); this.rate = options.rate }
-        setRate(rate: number) { this.calls.push(['rate', rate]); this.rate = rate }
+        play(options: { fps: number }) { this.calls.push(['play', options.fps]); this.playbackFps = options.fps }
+        setFps(fps: number) { this.calls.push(['fps', fps]); this.playbackFps = fps }
         seek(time: number) { this.calls.push(['seek', time]) }
     }
     const player = new Player()
@@ -817,16 +828,16 @@ test('a layer frozen when its view is made stands still at rate 0, and goes on a
     show(0, 3)
     show(0, 3)
     show(12, 3.12)
-    assert.deepEqual(player.calls, [['play', 0], ['seek', 0.25], ['rate', 1], ['seek', 0.26]], 'it takes the rate it goes at as it changes')
+    assert.deepEqual(player.calls, [['play', 0], ['seek', 0.25], ['fps', 12], ['seek', 0.26]], 'it takes the pace it goes at as it changes')
 
     const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
         cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
     })
-    const real = Object.create(ReanimPlayer.prototype)
-    real.setRate(0)
-    assert.equal(real.playbackRate, 0, 'a player stands still at 0')
-    assert.throws(() => real.setRate(-1), /finite and non-negative/)
+    const real = Object.assign(Object.create(ReanimPlayer.prototype), { data: { fps: 12 } })
+    real.setFps(0)
+    assert.equal(real.playbackFps, 0, 'a player stands still at 0')
+    assert.throws(() => real.setFps(-1), /finite and non-negative/)
 })
 
 test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {
@@ -895,14 +906,14 @@ test("the winner's blend into its walk goes on by the game over's ticks, its pla
     const { ZombieView } = loadClientModule('zombies/ZombieView', {})
     const steps: unknown[] = []
     const player = {
-        loadedId: 'pvz:walk', durationSeconds: 1, lastFrameTimeSeconds: 0.9, sampleTrack: () => ({ x: 0 }),
+        loadedId: 'pvz:walk', durationSeconds: 1, fps: 12, lastFrameTimeSeconds: 0.9, sampleTrack: () => ({ x: 0 }),
         advanceBlend(seconds: number) { steps.push(['blend', Math.round(seconds * 1000) / 1000]) },
         seek(seconds: number) { steps.push(['seek', Math.round(seconds * 1000) / 1000]) },
     }
     const node = () => ({ parent: null as unknown, active: true, setParent(to: unknown) { this.parent = to }, setPosition() {} })
     const view = Object.assign(Object.create(ZombieView.prototype), {
         node: node(), shadowNode: null, scale: 1, gameOverTicks: 0, layers: { player: () => player },
-        presentation: { parts: { ground: '_ground' } }, playback: () => ({ rate: 1, timeSeconds: 0 }), placeShadow() {},
+        presentation: { parts: { ground: '_ground' } }, playback: () => ({ fps: 12, timeSeconds: 0 }), placeShadow() {},
     })
     const parent = {}
     view.syncGameOverWalk({ entityId: 1 }, parent, 0, 300, 5)

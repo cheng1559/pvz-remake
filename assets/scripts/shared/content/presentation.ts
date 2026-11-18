@@ -9,21 +9,40 @@ import { isRenderLayer, type RenderLayer } from './renderOrder'
 import type { PlantPhase } from './plantKinds'
 import { type JsonObject, jsonRoundTrip } from '@/shared/protocol'
 
+/**
+ * An animation a presentation shows, one shape for every owner of one (a plant's or zombie's, an item's, a projectile's,
+ * an armor's, Crazy Dave's, the menu's, a screen's, a level rule's, and the presentation's own `clips`), read by
+ * parseClip and shown by showClip (client/reanim/clips) alone.
+ */
 export interface ClientAnimationClip {
     readonly reanimId: string
-    /** How much faster than its `fps` it plays; 1 when left out (ClientAnimationRegistry fills it in). */
-    readonly rateScale?: number
-    readonly x: number
-    readonly y: number
+    /** Where its node is from its owner's, up positive; 0 when left out. */
+    readonly x?: number
+    readonly y?: number
+    readonly scale?: number
+    /**
+     * Frames a second it plays at (Reanimation::mAnimRate), or [min, max] to pick between (a diamond's); its Reanim's own
+     * (Reanim.fps) when left out. A plant's or zombie's goes at its server animation's.
+     */
+    readonly fps?: number | readonly [number, number]
+    /**
+     * A factor on that pace (`mAnimRate *=`), or [min, max] to pick between (a coin's); 1 when left out. A plant's or
+     * zombie's, a single one: how many frames of its Reanim go by a frame of its animation.
+     */
+    readonly rateScale?: number | readonly [number, number]
+    /** It plays round and round; otherwise once, gone at its end unless it `hold`s. */
+    readonly loop?: true
+    /** Played once, it stays on its last picture. */
+    readonly hold?: true
+    /** Where it starts: its end (a mallet before its first blow, a grown tree) or a random point (a coin's spin); its beginning without. */
+    readonly start?: 'end' | 'random'
     readonly attachmentTrackId?: string
     /** Another of its owner's clips, from whose first frame of that track it is attached whenever it is (Reanimation::mFrameBasePose). */
     readonly attachmentBase?: string
     /** The only tracks of it that are drawn (Reanimation::ShowOnlyTrack); its owner's other clips leave them to it. */
     readonly onlyTracks?: readonly string[]
-    /** Seconds a layer blends into it from the pose it had (Reanimation::StartBlend), 0.2 by default. */
+    /** Seconds it blends in from the pose its player had (Reanimation::StartBlend); a plant's or zombie's 0.2 without. */
     readonly blend?: number
-    /** The frames a second its Reanim was made for, 12 when left out. */
-    readonly fps?: number
     /**
      * REANIM_*_FULL_LAST_FRAME (Plant::DoBlink's blink): its last picture keeps a frame's time, instead of the pictures
      * being spread over the clip's length (Reanimation::GetFrameTime).
@@ -32,6 +51,10 @@ export interface ClientAnimationClip {
 }
 
 export interface AnimationDefinition { readonly [slot: string]: ClientAnimationClip }
+
+/** Crazy Dave's clips: entering and leaving, idling, talking, handing something over, blinking, and what he hands over. */
+export const DAVE_CLIPS = ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink', 'hand'] as const
+export type DaveClip = typeof DAVE_CLIPS[number]
 
 /** The parent track a head, blink or flag clip attaches to; the data must name it. */
 export function attachmentTrack(clip: ClientAnimationClip): string {
@@ -202,15 +225,15 @@ export function gridItemCell(presentation: Pick<PresentationDefinitions, 'gridIt
     return presentation.gridItems[typeId]?.cell ?? [0, 0]
 }
 
-/** Exactly one of `sprite` and `reanim`. */
+/** Exactly one of `sprite` and `clips`. */
 export interface ProjectilePresentationDefinition {
     /** Its view (ProjectileViewRegistry): `projectile` when omitted, a mower's `mower`. */
     readonly view?: string
     /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
     readonly viewConfig?: Readonly<JsonObject>
     readonly sprite?: string
-    /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
-    readonly reanim?: { readonly id: string; readonly x: number; readonly y: number; readonly scale: number; readonly rate: number }
+    /** Its animation (`fly`) in place of a picture, from its corner: a running mower's (LawnMower::StartMower's 70 a second). */
+    readonly clips?: { readonly fly: ClientAnimationClip }
     /**
      * The board's plant shadow (the darker one at night) on the ground under it, a mower's: its middle this far from
      * the projectile's corner, down positive, and as far down again as the projectile flies above the ground.
@@ -253,16 +276,9 @@ export interface ProjectilePresentationDefinition {
     readonly loud?: true
 }
 
+/** A screen's scenery (the Tree of Wisdom's): its clips by name, drawn in this order from its top-left. */
 export interface ScreenAnimationDefinition {
-    readonly name: string
-    readonly reanimId: string
-    readonly x: number
-    readonly y: number
-    readonly rate: number
-    readonly playback: 'loop' | 'last'
-    readonly randomPhase?: boolean
-    /** Exact tracks to show; the others are hidden. */
-    readonly visibleTracks?: readonly string[]
+    readonly clips: AnimationDefinition
 }
 
 export interface SeedPacketPlacement { readonly scale: number; readonly offsetX: number; readonly offsetY: number }
@@ -387,9 +403,9 @@ export interface ZombieArmorPresentation {
     readonly muffles?: true
     /** Played when a bowled nut strikes it: a shield, or a helm without a shield in front. */
     readonly bowlingImpactSounds?: readonly PresentationSound[]
-    /** Plays once on the zombie when it breaks, like the newspaper's surprise mark. */
-    readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] }
-    /** Play with dropReanim, like the newspaper's rip; neither plays when the hit bypasses the shield (Zombie::DropShield). */
+    /** Its clip played once on the zombie as it breaks (`drop`), from the zombie's corner, like the newspaper's surprise mark. */
+    readonly clips?: { readonly drop: ClientAnimationClip }
+    /** Play with its drop clip, like the newspaper's rip; neither plays when the hit bypasses the shield (Zombie::DropShield). */
     readonly dropSounds?: readonly PresentationSound[]
 }
 
@@ -470,16 +486,14 @@ export interface GraveZombiePresentation {
     readonly riseTicks: number
     readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number; readonly settleTicks: number }
 }
-/** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
+/** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets and clips are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
     /** Its view (ItemViewRegistry): `item` when omitted. */
     readonly view?: string
     /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
     readonly viewConfig?: Readonly<JsonObject>
-    /** Looping animation; `rate` is a random speed range relative to the clip's fps. */
-    readonly reanim: string
-    readonly offset: readonly [number, number]
-    readonly rate: readonly [number, number]
+    /** Its animation (`idle`): the sun's at 6 a second, a coin's spin at its own pace by 0.6 to 1 (Coin::CoinInitialize). */
+    readonly clips: { readonly idle: ClientAnimationClip }
     /** Silver and gold coins show this flat image instead of the animation while in flight or being collected. */
     readonly flight?: { readonly sprite: string; readonly offset: readonly [number, number] }
     /** Drawn under the item at `offset` (the image's top-left); `inFlight` shows it only with the flat image. */
@@ -539,8 +553,12 @@ export interface MainMenuDefinition {
     readonly buttons: readonly MainMenuButtonDefinition[]
     /** Preloaded images besides the buttons'. */
     readonly images: readonly string[]
+    /** GameSelector's animations by the name of their node: `open`, `sign`, `grass`, `zombie_hand`, the clouds' and the flowers'. */
+    readonly clips: AnimationDefinition
+    /** The clouds' clips, drifting in turn. */
     readonly clouds: readonly string[]
-    readonly flowers: readonly { readonly x: number; readonly y: number }[]
+    /** The flowers' clips, each played as the pointer comes within 20 of its middle, (`x`, `y`) on the screen (gFlowerCenter). */
+    readonly flowers: readonly { readonly clip: string; readonly x: number; readonly y: number }[]
     readonly tracks: {
         /** Hidden: the game draws the sky behind the moving foreground. */
         readonly sky: string
@@ -552,13 +570,12 @@ export interface MainMenuDefinition {
         readonly replaced: readonly string[]
     }
     /**
-     * GameSelector's zombie hand rising out of the ground: placed at (`x`, `y`) on the screen and drawn inside `clip`
+     * GameSelector's zombie hand rising out of the ground (its clip `zombie_hand`): drawn inside `clipRect`, on the screen
      * (GameSelector::Draw's SetClipRect), all but its `rocks`, the tracks it pushes aside, which ignore the clip
      * (mIgnoreClipRect).
      */
     readonly hand: {
-        readonly x: number; readonly y: number
-        readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+        readonly clipRect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
         readonly rocks: readonly string[]
     }
     /** Drawn under the almanac and the store key; with only one of them, that one's own shadow, and none without either. */
@@ -649,19 +666,25 @@ export interface PresentationDefinitions {
         readonly zombie: GraveZombiePresentation
     }
     readonly dave: {
-        readonly clips: Readonly<Record<string, string>>
-        readonly sourceFps: number; readonly transitionFps: number; readonly talkFps: number; readonly blinkFps: number
-        readonly idleBlend: number; readonly talkBlend: number; readonly delay: number
+        /** His clips (DAVE_CLIPS); what he hands over (`hand`) is held on his body's track its attachmentTrackId names. */
+        readonly clips: Readonly<Record<DaveClip, ClientAnimationClip>>
+        readonly delay: number
         readonly blinkSeconds: readonly [number, number]; readonly talkLengths: readonly [number, number]
         readonly bubble: { readonly sprite: string; readonly x: number; readonly y: number; readonly textX: number; readonly textY: number; readonly textWidth: number; readonly textHeight: number; readonly continueX: number; readonly continueY: number; readonly shake: number }
-        readonly hand: { readonly reanim: string; readonly x: number; readonly y: number; readonly scale: number; readonly track: string }
         /** Body tracks by exact ID: the mouth takes the mouth sprites, the eyes hide under the blink attached to the head. */
         readonly parts: { readonly mouth: string; readonly eyes: readonly string[]; readonly head: string }
         readonly mouths: Readonly<Record<string, string>>
     }
     readonly boards?: Readonly<Record<string, BoardPresentation>>
     readonly rules?: Readonly<Record<string, LevelRulePresentation>>
-    readonly screens?: Readonly<Record<string, readonly ScreenAnimationDefinition[]>>
+    readonly screens?: Readonly<Record<string, ScreenAnimationDefinition>>
+    /**
+     * The clips the game plays of its own, by qualified ID: a level's sod rolling out (`pvz:sod-roll`), "Ready, Set, Plant!"
+     * (`pvz:ready-set-plant`), the final wave's (`pvz:final-wave`), the advice's text coming and going
+     * (`pvz:advice-enter`, `pvz:advice-leave`), a mowed plant's driver (`pvz:mowered`), a mowed zombie's puff
+     * (`pvz:puff`) and a burned zombie's remains (`pvz:charred`).
+     */
+    readonly clips: AnimationDefinition
     readonly levels?: Readonly<Record<string, LevelPresentationDefinition>>
     readonly awards?: Readonly<Record<string, AwardPresentationDefinition>>
     /** Keyed `pvz:<page>`. */
@@ -686,7 +709,7 @@ export interface PresentationDefinitions {
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const definitions = fields<PresentationDefinitions>(value, 'presentation', [
         'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'iceTrap', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
-        'gridItems', 'seedPackets',
+        'gridItems', 'seedPackets', 'clips',
     ], {
         mainMenu: parseMainMenu,
         conveyor: (value, name) => allFields<PresentationDefinitions['conveyor']>(value, name, {
@@ -712,7 +735,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         dave: parseDave,
         boards: table(parseBoard),
         rules: table(parseRule),
-        screens: table(parseScreen),
+        screens: table((value, name) => allFields<ScreenAnimationDefinition>(value, name, { clips: parseClips })),
+        clips: parseClips,
         levels: table(parseLevel),
         awards: table(parseAward),
         challenges: table(parseChallengePage),
@@ -806,15 +830,37 @@ function music(value: unknown, name: string): BoardPresentation['music'] {
     return allFields<BoardPresentation['music']>(value, name, { choosing: tune, gameplay: tune })
 }
 
-/** A clip's picture; ClientAnimationRegistry fills in what it leaves out. */
-function clip(value: unknown, name: string): ClientAnimationClip {
-    return fields<ClientAnimationClip>(value, name, ['reanimId', 'x', 'y'], {
-        reanimId: nonEmptyString, rateScale: positiveFinite, x: finite, y: finite, attachmentTrackId: nonEmptyString, attachmentBase: nonEmptyString,
-        onlyTracks: nonEmptyStrings, blend: nonNegativeFinite, fps: positiveFinite, fullLastFrame: trueFlag,
+/** A pace: a value, or [min, max] to pick between. */
+function pace(value: unknown, name: string): number | readonly [number, number] {
+    return typeof value === 'number' ? positiveFinite(value, name) : range(value, name, 0)
+}
+
+/** A clip (ClientAnimationClip), wherever one is: the one reader of its fields. */
+export function parseClip(value: unknown, name: string): ClientAnimationClip {
+    return fields<ClientAnimationClip>(value, name, ['reanimId'], {
+        reanimId: nonEmptyString, x: finite, y: finite, scale: positiveFinite, fps: pace, rateScale: pace,
+        loop: trueFlag, hold: trueFlag, start: (value, name) => oneOf(value, ['end', 'random'] as const, name),
+        attachmentTrackId: nonEmptyString, attachmentBase: nonEmptyString, onlyTracks: nonEmptyStrings, blend: nonNegativeFinite, fullLastFrame: trueFlag,
     })
 }
 
-const clips = table(clip)
+/** Clips by name. */
+export const parseClips: (value: unknown, name: string) => AnimationDefinition = table(parseClip)
+
+/**
+ * A plant's or a zombie's clips: each goes at its server animation's pace from its time, and is placed and sized by its
+ * view, so none sets a pace of its own, how it plays, where it starts or its size.
+ */
+function layerClips(value: unknown, name: string): AnimationDefinition {
+    const result = parseClips(value, name)
+    for (const [key, clip] of Object.entries(result)) {
+        for (const field of ['fps', 'loop', 'hold', 'start', 'scale'] as const) {
+            if (clip[field] !== undefined) throw new TypeError(`${name}.${key}.${field} is not supported: a plant's or zombie's clip plays by its server animation`)
+        }
+        if (Array.isArray(clip.rateScale)) throw new TypeError(`${name}.${key}.rateScale must be a single factor`)
+    }
+    return result
+}
 
 /** A view's own settings (`viewConfig`): any JSON object, copied as it is, for the view to read and check. */
 function viewConfig(value: unknown, name: string): Readonly<JsonObject> {
@@ -825,14 +871,16 @@ function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
     const menu = allFields<MainMenuDefinition>(value, name, {
         buttons: (value, name) => array(value, name).map((entry, index) => parseMainMenuButton(entry, `${name}[${index}]`)),
         images: nonEmptyStrings,
+        clips: parseClips,
         clouds: nonEmptyStrings,
-        flowers: (value, name) => array(value, name).map((entry, index) => point(entry, `${name}[${index}]`)),
+        flowers: (value, name) => array(value, name).map((entry, index) =>
+            allFields<MainMenuDefinition['flowers'][number]>(entry, `${name}[${index}]`, { clip: nonEmptyString, x: finite, y: finite })),
         tracks: (value, name) => allFields<MainMenuDefinition['tracks']>(value, name, {
             sky: nonEmptyString, anchor: nonEmptyString, profileSign: nonEmptyString, replaced: nonEmptyStrings,
         }),
         hand: (value, name) => allFields<MainMenuDefinition['hand']>(value, name, {
-            x: finite, y: finite, rocks: nonEmptyStrings,
-            clip: (value, name) => allFields<MainMenuDefinition['hand']['clip']>(value, name, {
+            rocks: nonEmptyStrings,
+            clipRect: (value, name) => allFields<MainMenuDefinition['hand']['clipRect']>(value, name, {
                 x: finite, y: finite, width: positiveFinite, height: positiveFinite,
             }),
         }),
@@ -841,6 +889,9 @@ function parseMainMenu(value: unknown, name: string): MainMenuDefinition {
         startAdventure: strings(['track', 'image', 'highlight', 'shadow', 'adventureShadow']),
     })
     if (!menu.buttons.length) throw new TypeError(`${name}.buttons must not be empty`)
+    for (const clip of ['open', 'sign', 'grass', 'zombie_hand', ...menu.clouds, ...menu.flowers.map(flower => flower.clip)]) {
+        if (!menu.clips[clip]) throw new TypeError(`${name}.clips.${clip} is required`)
+    }
     const names = new Set<string>()
     for (const [index, button] of menu.buttons.entries()) {
         if (names.has(button.name)) throw new TypeError(`${name}.buttons[${index}].name is duplicated`)
@@ -910,19 +961,19 @@ function parseStoreDialogue(value: unknown, name: string): StoreDialoguePresenta
 
 function parseDave(value: unknown, name: string): PresentationDefinitions['dave'] {
     type Dave = PresentationDefinitions['dave']
-    return allFields<Dave>(value, name, {
-        clips: strings(['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink']),
-        sourceFps: positiveFinite, transitionFps: positiveFinite, talkFps: positiveFinite, blinkFps: positiveFinite,
-        idleBlend: positiveFinite, talkBlend: positiveFinite, delay: positiveFinite,
+    const dave = allFields<Dave>(value, name, {
+        clips: (value, name) => allFields<Dave['clips']>(value, name, Object.fromEntries(DAVE_CLIPS.map(clip => [clip, parseClip])) as FieldParsers<Dave['clips']>),
+        delay: positiveFinite,
         blinkSeconds: pair, talkLengths: pair,
         bubble: (value, name) => allFields<Dave['bubble']>(value, name, {
             sprite: nonEmptyString, x: finite, y: finite, textX: finite, textY: finite, textWidth: positiveFinite, textHeight: positiveFinite,
             continueX: finite, continueY: finite, shake: finite,
         }),
-        hand: (value, name) => allFields<Dave['hand']>(value, name, { reanim: nonEmptyString, x: finite, y: finite, scale: positiveFinite, track: nonEmptyString }),
         parts: (value, name) => allFields<Dave['parts']>(value, name, { mouth: nonEmptyString, eyes: nonEmptyStrings, head: nonEmptyString }),
         mouths: table(nonEmptyString),
     })
+    if (!dave.clips.hand.attachmentTrackId) throw new TypeError(`${name}.clips.hand.attachmentTrackId is required`)
+    return dave
 }
 
 function parseBoard(value: unknown, name: string): BoardPresentation {
@@ -946,21 +997,6 @@ function parseRule(value: unknown, name: string): LevelRulePresentation {
         ...own,
         ...rise === undefined ? {} : { graveRise: graveRise(rise, `${name}.graveRise`) },
     }
-}
-
-function parseScreen(value: unknown, name: string): ScreenAnimationDefinition[] {
-    const names = new Set<string>()
-    return array(value, name).map((entry, index) => {
-        const entryName = `${name}[${index}]`
-        const layer = fields<ScreenAnimationDefinition>(entry, entryName, ['name', 'reanimId', 'x', 'y', 'rate', 'playback'], {
-            name: nonEmptyString, reanimId: nonEmptyString, x: finite, y: finite, rate: positiveFinite,
-            playback: (value, name) => oneOf(value, ['loop', 'last'] as const, name), randomPhase: boolean, visibleTracks: nonEmptyStrings,
-        })
-        if (names.has(layer.name)) throw new TypeError(`${name} has duplicate animation names`)
-        names.add(layer.name)
-        if (layer.randomPhase !== undefined && layer.playback !== 'loop') throw new TypeError(`${entryName}.randomPhase requires loop playback`)
-        return layer
-    })
 }
 
 function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
@@ -1029,8 +1065,8 @@ function parseChallengePage(value: unknown, name: string): ChallengePagePresenta
 
 function parseItem(value: unknown, name: string): ItemPresentationDefinition {
     type Item = ItemPresentationDefinition
-    return fields<Item>(value, name, ['reanim', 'offset', 'rate'], {
-        view: nonEmptyString, viewConfig, reanim: nonEmptyString, offset: pair, rate: (value, name) => range(value, name, 0),
+    return fields<Item>(value, name, ['clips'], {
+        view: nonEmptyString, viewConfig, clips: (value, name) => allFields<Item['clips']>(value, name, { idle: parseClip }),
         flight: (value, name) => allFields<NonNullable<Item['flight']>>(value, name, { sprite: nonEmptyString, offset: pair }),
         glow: (value, name) => fields<NonNullable<Item['glow']>>(value, name, ['sprite', 'offset'], { sprite: nonEmptyString, offset: pair, inFlight: boolean }),
         arrow: (value, name) => allFields<NonNullable<Item['arrow']>>(value, name, { particle: nonEmptyString, offset: pair }),
@@ -1062,7 +1098,7 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         parts: (value, name) => fields<PlantParts>(value, name, [], { eyes: nonEmptyStrings, face: nonEmptyString, prey: nonEmptyStrings }),
         view: nonEmptyString,
         viewConfig,
-        clips,
+        clips: layerClips,
         packet: (value, name) => fields<NonNullable<Plant['packet']>>(value, name, [], {
             placement, x: finite, y: finite, scale: positiveFinite, time: finite,
             phase: nonEmptyString,
@@ -1091,7 +1127,7 @@ function iceTrapPlacement(value: unknown, name: string, others: readonly string[
 const ARMOR_FIELDS: FieldParsers<ZombieArmorPresentation> = {
     track: nonEmptyString, damagedSprites: twoSprites, effect: nonEmptyString, offset: pair, impactSounds: sounds, muffles: trueFlag,
     bowlingImpactSounds: sounds,
-    dropReanim: (value, name) => allFields<NonNullable<ZombieArmorPresentation['dropReanim']>>(value, name, { reanimId: nonEmptyString, offset: pair }),
+    clips: (value, name) => allFields<NonNullable<ZombieArmorPresentation['clips']>>(value, name, { drop: parseClip }),
     dropSounds: sounds,
 }
 const ARMOR_REQUIRED = ['track', 'damagedSprites', 'effect', 'offset', 'impactSounds'] as const
@@ -1106,7 +1142,7 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
         nameKey: nonEmptyString,
         view: nonEmptyString,
         viewConfig,
-        clips,
+        clips: layerClips,
         shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite, scale: positiveFinite }),
         packet: (value, name) => fields<NonNullable<Zombie['packet']>>(value, name, ['x', 'y', 'scale'], {
             x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
@@ -1174,9 +1210,7 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
         view: nonEmptyString,
         viewConfig,
         sprite: nonEmptyString,
-        reanim: (value, name) => allFields<NonNullable<Projectile['reanim']>>(value, name, {
-            id: nonEmptyString, x: finite, y: finite, scale: positiveFinite, rate: positiveFinite,
-        }),
+        clips: (value, name) => allFields<NonNullable<Projectile['clips']>>(value, name, { fly: parseClip }),
         plantShadow: point,
         layer,
         shadow(value, name) {
@@ -1200,7 +1234,7 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
         impactSounds: sounds,
         loud: trueFlag,
     })
-    if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(`${name} needs exactly one of sprite and reanim`)
+    if ((projectile.sprite === undefined) === (projectile.clips === undefined)) throw new TypeError(`${name} needs exactly one of sprite and clips`)
     return projectile
 }
 

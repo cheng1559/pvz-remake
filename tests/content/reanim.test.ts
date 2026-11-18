@@ -5,8 +5,9 @@ import { attachReanimPose, parseReanim, sampleReanimTrack } from '@/shared/conte
 
 function reanim() {
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         id: 'pvz:sunflower',
+        fps: 12,
         durationSeconds: 1,
         tracks: [{
             id: 'petal',

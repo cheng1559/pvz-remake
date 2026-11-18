@@ -228,7 +228,7 @@
       "offset": [0, 0],
       "impactSounds": [],
       "damagedSprites": ["pvz:zombie_paper_paper2", "pvz:zombie_paper_paper3"],
-      "dropReanim": {"reanimId": "pvz:zombie_surprise", "offset": [-11, 0]},
+      "clips": {"drop": {"reanimId": "pvz:zombie_surprise", "x": -11, "y": 0}},
       "dropSounds": [{"audio": "pvz:newspaper_rip", "foley": true, "pitchRange": -2}]
     }
   },
@@ -335,13 +335,13 @@
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair", "Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_disco_glasses"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand", "Zombie_disco_outerhand_point"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArmSprite": "pvz:zombie_disco_outerarm_upper_bone",
     "clips": {
-      "idle": {"reanimId": "pvz:dancer_armraise", "fps": 24, "x": 15, "y": 8},
-      "moonwalk": {"reanimId": "pvz:dancer_moonwalk", "fps": 24, "x": 15, "y": 8},
-      "point": {"reanimId": "pvz:dancer_point", "fps": 24, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:dancer_walk", "fps": 24, "x": 15, "y": 8},
-      "raise": {"reanimId": "pvz:dancer_armraise", "fps": 24, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:dancer_eat", "fps": 24, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:dancer_death", "fps": 24, "x": 15, "y": 8},
+      "idle": {"reanimId": "pvz:dancer_armraise", "x": 15, "y": 8},
+      "moonwalk": {"reanimId": "pvz:dancer_moonwalk", "x": 15, "y": 8},
+      "point": {"reanimId": "pvz:dancer_point", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:dancer_walk", "x": 15, "y": 8},
+      "raise": {"reanimId": "pvz:dancer_armraise", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:dancer_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:dancer_death", "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
@@ -388,11 +388,11 @@
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_backup_stash"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArmSprite": "pvz:zombie_backup_outerarm_upper_bone",
     "clips": {
-      "idle": {"reanimId": "pvz:backup_dancer_armraise", "fps": 24, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:backup_dancer_walk", "fps": 24, "x": 15, "y": 8},
-      "raise": {"reanimId": "pvz:backup_dancer_armraise", "fps": 24, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:backup_dancer_eat", "fps": 24, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:backup_dancer_death", "fps": 24, "x": 15, "y": 8},
+      "idle": {"reanimId": "pvz:backup_dancer_armraise", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:backup_dancer_walk", "x": 15, "y": 8},
+      "raise": {"reanimId": "pvz:backup_dancer_armraise", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:backup_dancer_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:backup_dancer_death", "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {

@@ -1,3 +1,4 @@
+import { prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { type Node, Sprite } from 'cc'
 import { type LevelEntitySnapshot, parseSavedPlayback, viewSaveData } from '@/client/level/LevelPresentationSnapshot'
@@ -53,13 +54,12 @@ export class ItemView implements EntityView<ItemSnapshot> {
         }
         // Glow first so it draws under the coin.
         this.glow = definition.glow && await image('ItemGlow', definition.glow.sprite, definition.glow.offset)
-        const [x, y] = definition.offset
-        const animation = this.animation = uiNode({ name: 'ItemAnimation', parent: node, position: { x: x - HALF, y: HALF - y } }).node
-        const player = animation.addComponent(ReanimPlayer)
-        await player.load(definition.reanim)
-        const [min, max] = definition.rate
-        // Coins start at a random point of their spin, each at its own speed.
-        player.play({ loop: true, rate: min + Math.random() * (max - min), timeSeconds: min === max ? 0 : Math.random() * player.durationSeconds })
+        const corner = uiNode({ name: 'ItemCorner', parent: node, position: { x: -HALF, y: HALF } }).node
+        const animation = this.animation = uiNode({ name: 'ItemAnimation', parent: corner }).node
+        const clip = definition.clips.idle
+        await prepareClips([clip])
+        if (!node.isValid) return
+        showClip(animation.addComponent(ReanimPlayer), clip)
         this.flight = definition.flight && await image('ItemFlight', definition.flight.sprite, definition.flight.offset)
     }
 

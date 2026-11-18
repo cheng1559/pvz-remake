@@ -1,4 +1,5 @@
-import { loadReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
+import { clipNamed } from '@/client/reanim/clips'
+import { loadedReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
 import { Color, type Node, Sprite } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
@@ -11,10 +12,9 @@ import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
-import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
+import { type ReanimKeyframe, sampleReanimTrack } from '@/shared/content/reanim'
 export type { LayerShown } from '@/client/view/layerPlayback'
 import { renderOrder } from '@/shared/content/renderOrder'
-import { ASSET_FPS } from '@/shared/content/animation'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
 import { PLANT_WIDTH } from '@/shared/content/teams'
@@ -48,14 +48,10 @@ export interface PlantViewContext {
 
 /** Reanimation::StartBlend(20): a layer that changes its clip blends from the pose it had, unless the clip says how long. */
 const BLEND_SECONDS = 0.2
-/** The original's driver for a mowed zombie, which a mowed plant is squashed by too (MOWERED_CLIP). */
-const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
 /** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
-/** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
-let locator: { track?: ReanimTrack } | undefined
 
 /**
  * A plant, drawn by its animation (PlantDefinition.animation): a player for each of its layers, showing the clip the
@@ -105,7 +101,9 @@ export class PlantView implements EntityView<PlantSnapshot> {
             this.placeShadow(plant)
         }
         // Every clip is in memory from here on, so a layer changes to one at once.
-        await prepareReanims(this.playable())
+        const ids = this.playable()
+        if (this.context.stage) ids.push(clipNamed(this.context.content.presentation.clips, 'pvz:mowered').reanimId)
+        await prepareReanims(ids)
         if (!node.isValid) return
         this.root = uiNode({ name: 'Layers', parent: node }).node
         // Tracks a clip of the plant draws alone (the potato mine's light) are left to it by the others.
@@ -177,7 +175,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
                 // The bottom layer at its place and size; another on no part, at its own place.
                 place: (_name, player, clip, first) => {
                     const own = draw?.position ?? clip, scale = first ? draw?.scale ?? this.presentation.scale : 1
-                    player.node.setPosition(own.x, own.y)
+                    player.node.setPosition(own.x ?? 0, own.y ?? 0)
                     player.node.setScale(scale, scale, 1)
                 },
                 basePose: (clip, track) => this.basePose(clip, track),
@@ -228,7 +226,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     private readonly layerClips: LayerClips = {
         picture: name => this.clip(name), played: name => this.animation.clips[name],
-        duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
+        frames: reanimId => ReanimPlayer.frames(reanimId) ?? 0,
     }
 
     /** The pose a clip says its part is attached from (the first frame of the part in another of the plant's clips), when it does. */
@@ -319,14 +317,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
             for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
             if (this.shadow?.node.isValid) this.shadow.node.active = false
         }
-        if (!locator) {
-            const loaded: { track?: ReanimTrack } = locator = {}
-            loadReanim(MOWERED_REANIM)
-                .then(({ data }) => { loaded.track = data.tracks.find(track => track.id === 'locator') })
-                .catch(error => console.error('[Level] Failed to load the mowed animation', error))
-        }
-        // The driver's frames are its pictures', made at their own pace, as a zombie's presentation has its clip.
-        const pose = locator.track && sampleReanimTrack(locator.track, plant.mowered!.time / ASSET_FPS)
+        const clip = clipNamed(this.context.content.presentation.clips, 'pvz:mowered')
+        const data = loadedReanim(clip.reanimId)!.data
+        const locator = data.tracks.find(track => track.id === 'locator')
+        const pose = locator && sampleReanimTrack(locator, plant.mowered!.time / data.fps)
         if (!pose) return
         const facing = plant.team === 'zombies' ? -1 : 1, tip = plant.mowered!.left ? -1 : 1
         const origin = boardToLayer(plant.x + (facing < 0 ? PLANT_WIDTH : 0), plant.y)

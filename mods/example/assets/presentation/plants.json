@@ -8,14 +8,12 @@
       "body": {
         "reanimId": "pvz:peashooter",
         "rateScale": 1,
-        "fps": 12,
         "x": 0,
         "y": 0
       },
       "idleHead": {
         "reanimId": "pvz:peashooter_head_idle",
         "rateScale": 1,
-        "fps": 12,
         "x": 0,
         "y": 0,
         "attachmentTrackId": "anim_stem"
@@ -23,7 +21,6 @@
       "shootHead": {
         "reanimId": "pvz:peashooter_shoot",
         "rateScale": 1,
-        "fps": 12,
         "x": 0,
         "y": 0,
         "attachmentTrackId": "anim_stem"
@@ -31,7 +28,6 @@
       "blink": {
         "reanimId": "pvz:peashooter_blink",
         "rateScale": 1,
-        "fps": 12,
         "x": 0,
         "y": 0,
         "attachmentTrackId": "anim_face",
@@ -53,7 +49,6 @@
       "body": {
         "reanimId": "example:beacon",
         "rateScale": 1,
-        "fps": 12,
         "x": 0,
         "y": 0
       }

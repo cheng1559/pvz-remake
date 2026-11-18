@@ -1,6 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "example:beacon",
+  "fps": 12,
   "durationSeconds": 1,
   "tracks": [
     {

@@ -1,4 +1,4 @@
-import { loadReanim } from '@/client/reanim/ReanimAssets'
+import { prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { type Node, Sprite, type SpriteFrame } from 'cc'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
@@ -70,7 +70,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
                 ProjectileView.shadows.set(id, getAtlasFrame(atlas, cell, atlas.originalSize.width / columns, atlas.originalSize.height, columns))
             }
             // A mower's animation is ready when the first one sets off.
-            if (definition.reanim) await loadReanim(definition.reanim.id)
+            if (definition.clips) await prepareClips([definition.clips.fly])
         }))
     }
 
@@ -92,14 +92,13 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
      * projectile went meanwhile.
      */
     private async picture(): Promise<boolean> {
-        const { node, projectile: { typeId } } = this.context, { reanim, sprite } = this.presentation
-        if (reanim) {
-            const animation = uiNode({ name: 'ProjectileAnimation', parent: node, position: reanim, anchor: { x: 0, y: 1 } }).node
-            animation.setScale(reanim.scale, reanim.scale, 1)
+        const { node, projectile: { typeId } } = this.context, { clips, sprite } = this.presentation
+        if (clips) {
+            const animation = uiNode({ name: 'ProjectileAnimation', parent: node, anchor: { x: 0, y: 1 } }).node
             const player = animation.addComponent(ReanimPlayer)
-            await player.load(reanim.id)
+            await prepareClips([clips.fly])
             if (!node.isValid) return false
-            player.play({ loop: true, rate: reanim.rate })
+            showClip(player, clips.fly)
             this.animation = player
             return true
         }

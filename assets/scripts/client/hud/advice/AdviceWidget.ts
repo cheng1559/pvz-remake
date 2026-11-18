@@ -1,3 +1,5 @@
+import { clipFps, clipNamed, prepareClips } from '@/client/reanim/clips'
+import type { AnimationDefinition, ClientAnimationClip } from '@/shared/content/presentation'
 import { Color, Graphics, Node } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport } from '@/client/view/ClientViewport'
@@ -5,9 +7,9 @@ import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
-import { loadedReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
-import { animateCurve, ASSET_FPS } from '@/shared/content/animation'
-import { sampleReanimTrack } from '@/shared/content/reanim'
+import { loadedReanim } from '@/client/reanim/ReanimAssets'
+import { animateCurve } from '@/shared/content/animation'
+import { type Reanim, sampleReanimTrack } from '@/shared/content/reanim'
 import type { AdviceWidgetSnapshot, AdviceWidgetStyle } from './AdviceWidgetSnapshot'
 
 export type { AdviceWidgetSnapshot, AdviceWidgetStyle } from './AdviceWidgetSnapshot'
@@ -26,11 +28,6 @@ const ADVICE_DURATION_STAY = 10000
 /** MESSAGE_STYLE_HUGE_WAVE: 750 ticks of red text on a baseline at y=330, coming and going by TextFadeOn. */
 const ADVICE_DURATION_HUGE_WAVE = 750
 const ADVICE_HUGE_WAVE_Y = 330
-const TEXT_FADE_ON_ENTER = 'pvz:textfadeon_enter'
-const TEXT_FADE_ON_LEAVE = 'pvz:textfadeon_leave'
-/** MessageWidget::Update plays TextFadeOn's anim_enter at 60 frames a second and its anim_leave at 40. */
-const TEXT_FADE_ON_ENTER_FPS = 60
-const TEXT_FADE_ON_LEAVE_FPS = 40
 const PVZ_NATIVE_FONT_SIZE = 0
 const ADVICE_TEXT_SIZE = PVZ_NATIVE_FONT_SIZE
 const ADVICE_TEXT_OFFSET_Y = -4
@@ -39,6 +36,8 @@ const ADVICE_TEXT_MIN_ALPHA = 192
 export class AdviceWidget {
     readonly node: Node
 
+    private readonly clips: AnimationDefinition
+    private fade?: { clip: ClientAnimationClip, fps: number }
     private readonly _font: BitmapFontAssets
     private readonly _backdrop: Graphics
     private readonly _label: UILabel
@@ -59,6 +58,7 @@ export class AdviceWidget {
         layer?: number
         font: BitmapFontAssets
     }) {
+        this.clips = args.ui.assets.presentation.clips
         this._font = args.font
         const parts = uiNode({
             node: args.node,
@@ -87,8 +87,8 @@ export class AdviceWidget {
     }
 
     /** The huge wave's TextFadeOn clips, for a widget that shows it. */
-    static loadAssets(): Promise<void> {
-        return prepareReanims([TEXT_FADE_ON_ENTER, TEXT_FADE_ON_LEAVE])
+    static loadAssets(clips: AnimationDefinition): Promise<void> {
+        return prepareClips([clipNamed(clips, 'pvz:advice-enter'), clipNamed(clips, 'pvz:advice-leave')])
     }
 
     /** MessageWidget::SetLabel: a message given while the huge wave's is up waits for it to leave, which it now does. */
@@ -220,10 +220,13 @@ export class AdviceWidget {
         uiNode({ node: this._label.node, size: { width: labelWidth, height: metrics.height }, anchor: { x: 0, y: 1 } })
         this._label.node.setPosition(-labelWidth / 2, metrics.ascent, 0)
         const slideOff = this._slideOffTicks()
-        const pose = this._durationTicks > slideOff
-            ? heldPose(TEXT_FADE_ON_ENTER, TEXT_FADE_ON_ENTER_FPS, this._shownTicks)
-            // anim_leave starts as the message reaches its slide-off time and plays from the tick after.
-            : heldPose(TEXT_FADE_ON_LEAVE, TEXT_FADE_ON_LEAVE_FPS, slideOff - this._durationTicks - 1)
+        const entering = this._durationTicks > slideOff
+        const clip = clipNamed(this.clips, entering ? 'pvz:advice-enter' : 'pvz:advice-leave')
+        const data = loadedReanim(clip.reanimId)?.data
+        if (data && this.fade?.clip !== clip) this.fade = { clip, fps: clipFps(clip, data.fps) }
+        // anim_leave starts on the tick after the message reaches its slide-off time.
+        const ticks = entering ? this._shownTicks : slideOff - this._durationTicks - 1
+        const pose = data && this.fade && heldPose(data, this.fade.fps, ticks)
         this.node.setScale(pose?.scaleX ?? 1, pose?.scaleY ?? 1, 1)
         uiNode({ node: this.node, opacity: Math.round(255 * (pose?.alpha ?? 1)) })
     }
@@ -341,10 +344,10 @@ export class AdviceWidget {
  * A TextFadeOn clip's locator after `ticks` played at `fps` frames a second, held on its last frame
  * (Reanimation::Update, REANIM_PLAY_ONCE_AND_HOLD); nothing while the clip is not loaded.
  */
-function heldPose(id: string, fps: number, ticks: number) {
-    const clip = loadedReanim(id)?.data, track = clip?.tracks.find(track => track.id === 'locator_text')
-    if (!clip || !track) return null
-    const frames = Math.round(clip.durationSeconds * ASSET_FPS)
+function heldPose(clip: Reanim, fps: number, ticks: number) {
+    const track = clip.tracks.find(track => track.id === 'locator_text')
+    if (!track) return null
+    const frames = Math.round(clip.durationSeconds * clip.fps)
     const played = Math.min(1, Math.max(0, ticks) / 100 * fps / frames)
-    return sampleReanimTrack(track, played * (frames - 1) / ASSET_FPS)
+    return sampleReanimTrack(track, played * (frames - 1) / clip.fps)
 }

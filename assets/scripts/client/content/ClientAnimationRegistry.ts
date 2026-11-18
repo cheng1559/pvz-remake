@@ -30,7 +30,7 @@ export class ClientAnimationRegistry {
     }
 }
 
-/** A copy of the clips with what they leave out filled in (rateScale 1). */
+/** A copy of the clips with what they leave out filled in (zero offset, rateScale 1). */
 function cloneDefinition(value: AnimationDefinition): AnimationDefinition {
-    return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { rateScale: 1, ...animation }]))
+    return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { x: 0, y: 0, rateScale: 1, ...animation }]))
 }
