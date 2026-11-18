@@ -3,7 +3,8 @@
     "useSplashScreen": false,
     "packages": {
         "mac": {
-            "skipUpdateXcodeProject": false
+            "skipUpdateXcodeProject": false,
+            "targetVersion": "12.0"
         }
     }
 }
