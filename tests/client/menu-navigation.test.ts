@@ -86,12 +86,16 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     const opened: Array<{ id: string, act: (action: string) => void, manageMods: () => Promise<void>, dialog: { node: { isValid: boolean } } }> = []
     let dialogFails = false
     let awardOpens: Record<string, unknown> = {}
+    type CompletionDialog = { title: string; buttons: { text: string; onClick(dialog: { onConfirm(): void }): void }[] }
+    const completionDialogs: CompletionDialog[] = []
+    const urls: string[] = []
     const musicFrames: Array<{ ticks: number; zombies: number }> = []
     const modules: Record<string, unknown> = {
         cc: {
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
             KeyCode: { ENTER: 13, SPACE: 32, ESCAPE: 27, KEY_R: 82 },
             game: { restart() { assert.fail('CLI reload must retain loaded assets') } },
+            sys: { openURL(url: string) { urls.push(url) } },
         },
         'cc/env': { DEBUG: false },
         '@/core/GameClock': { gameClock },
@@ -116,7 +120,13 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         '@/client/content/ModManager': { modManager: { finishStartup: () => false, takeUnreportedFailures: () => [] } },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1, unlocks: { almanac: true } }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2', ...awardOpens }) } },
-        '@/client/ui/UI': { UI: { load: async () => ({}) } },
+        '@/client/ui/UI': { UI: { load: async () => ({
+            text: (key: string) => key,
+            dialog(_parent: unknown, options: CompletionDialog) {
+                assert.equal(app.currentPage, 'main')
+                completionDialogs.push(options)
+            },
+        }) } },
         '@/client/ui/UIInput': { UIInput: { handleKeyUp() {} } },
         '@/client/dialogs/ContinueGameDialog': {
             showContinueGameDialog: () => {
@@ -474,6 +484,28 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(packageDialogs, 2)
     assert.deepEqual([app.dialog?.id, opened.length, options.dialog.node.isValid, app.currentPage], ['options', optionsShown, true, 'main'],
         'the options are still open, not opened again')
+    opened.at(-1)!.act('back')
+    await setImmediate()
+    assert.equal(completionDialogs.length, 0)
+    awardOpens = { nextLevelId: null }
+    for (const action of ['nextLevel', 'main']) {
+        await app.finish('award')
+        assert.equal(app.currentPage, 'award')
+        const before: number = completionDialogs.length
+        await Promise.all([app.navigate(action), app.navigate(action)])
+        assert.equal(completionDialogs.length, before + 1)
+        const dialog: CompletionDialog = completionDialogs[before]
+        assert.equal(dialog.title, 'ADVENTURE_COMPLETE_HEADER')
+        assert.deepEqual(Array.from(dialog.buttons, button => button.text), ['GitHub', 'DIALOG_BUTTON_OK'])
+        let closed = false
+        const modal = { onConfirm() { closed = true } }
+        dialog.buttons[0].onClick(modal)
+        assert.equal(urls.at(-1), 'https://github.com/cheng1559/pvz-remake')
+        assert.equal(closed, false)
+        dialog.buttons[1].onClick(modal)
+        assert.equal(closed, true)
+        assert.equal(app.currentPage, 'main')
+    }
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {

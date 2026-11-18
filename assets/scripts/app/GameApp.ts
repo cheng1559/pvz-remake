@@ -153,18 +153,9 @@ export class GameApp extends Component {
         if (this.loading || !controller || !menu || !gameLayer || !transitions) return
         // AwardScreen::StartButtonPressed: closing an almanac opened from the award page continues to the next level.
         if (action === 'back' && this.currentPage && ALMANAC_PAGES.has(this.currentPage) && this.history.at(-1) === 'award') action = 'nextLevel'
-        if (action === 'nextLevel') {
-            if (!this.nextLevelId) {
-                const ui = await UI.load()
-                if (this.node?.isValid) ui.dialog(this.node, {
-                    title: ui.text('NEXT_LEVEL_UNAVAILABLE_HEADER'), message: ui.text('NEXT_LEVEL_UNAVAILABLE_BODY'),
-                    confirmText: ui.text('AWARD_MAIN_MENU_BUTTON'),
-                    onClose: () => { void this.navigate('main') },
-                })
-                return
-            }
-            levelId = this.nextLevelId
-        }
+        const adventureComplete = this.nextLevelId === null && (action === 'nextLevel' || action === 'main' && this.currentPage === 'award')
+        if (adventureComplete) action = 'main'
+        else if (action === 'nextLevel') levelId = this.nextLevelId!
         // Anything else replaces the dialog: a page, the board (resume) or another level.
         this.closeDialog()
         // Pages opened from a running level (debug CLI) have no history and go back to the level.
@@ -236,6 +227,17 @@ export class GameApp extends Component {
                     }
                 }
             })
+            if (adventureComplete && this.currentPage === 'main') {
+                const ui = await UI.load()
+                if (this.node?.isValid) ui.dialog(this.node, {
+                    width: 500, height: 300,
+                    title: ui.text('ADVENTURE_COMPLETE_HEADER'), message: ui.text('ADVENTURE_COMPLETE_BODY'),
+                    buttons: [
+                        { text: 'GitHub', onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake') },
+                        { text: ui.text('DIALOG_BUTTON_OK'), onClick: dialog => dialog.onConfirm() },
+                    ],
+                })
+            }
             if (restoredGame && this.node?.isValid) {
                 this.loading = false
                 const action = await showContinueGameDialog(this.node, await UI.load())
