@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parseLevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
+import { loadScript } from '../loadScript'
 
 function reanim(id: string) {
     return {
@@ -69,6 +70,19 @@ test('Adventure 1-1 presentation snapshot round-trips every owned presentation s
 
 
 
+test('the rollback snapshot preserves the coin bank countdown after changing money during the intro', () => {
+    const { LevelCoinBank } = loadScript('assets/scripts/client/level/LevelCoinBank.ts', () => ({}))
+    const bank = new LevelCoinBank({}, { node: { active: false } })
+    bank.sync({ phase: 'intro', gameplayTick: 0, money: 10000 }, [{ type: 'moneyChanged' }])
+    bank.advance(100 / 60)
+    const before = snapshot()
+    before.flow.introCompletionSent = false
+    before.hud.coinBankTicks = bank.remainingTicks
+    const restored = parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(before)))
+    bank.restore(restored.hud.coinBankTicks)
+    assert.equal(bank.remainingTicks, 1000 - 100 / 60)
+})
+
 test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked state', () => {
     const invalid = (change: (value: any) => void) => {
         const value = snapshot()
@@ -90,6 +104,9 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.particles[1].instanceId = 1 }), /particle instance ID must be unique/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 151 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)
+    for (const ticks of [-0.1, 1000.1]) {
+        assert.throws(invalid(value => { value.hud.coinBankTicks = ticks }), /coinBankTicks/)
+    }
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
     assert.throws(invalid(value => { value.entities[0].animations = {} }), /animations is not supported/, 'a view keeps what it saves in its data')
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)

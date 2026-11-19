@@ -225,7 +225,7 @@ function parseHud(value: unknown): LevelHudSnapshot {
     ], 'Level HUD')
     return {
         sunFlashTicks: integerInRange(source.sunFlashTicks, 0, 70, 'Level HUD.sunFlashTicks'),
-        coinBankTicks: integerInRange(source.coinBankTicks, 0, 1000, 'Level HUD.coinBankTicks'),
+        coinBankTicks: finiteInRange(source.coinBankTicks, 0, 1000, 'Level HUD.coinBankTicks'),
         progressWave: nonNegativeInteger(source.progressWave, 'Level HUD.progressWave'),
         progressCountdownStart: nonNegativeInteger(
             source.progressCountdownStart,
