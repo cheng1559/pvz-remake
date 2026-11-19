@@ -731,7 +731,10 @@ test('a player changes to another clip of its body in place: its batches stay, a
         'pvz:death': { id: 'pvz:death', tracks: [track('head', 3), track('arm', 1)] },
     }
     const reanims = loadClientModule('reanim/ReanimAssets', {
-        '@/client/content/ModResources': { modResources: { async json(_kind: string, id: string) { return clips[id] }, async sprite(id: string) { return { id } } } },
+        '@/client/content/ModResources': { modResources: {
+            async json(_kind: string, id: string, parse: (json: unknown) => unknown) { return parse(clips[id]) },
+            async sprite(id: string) { return { id } },
+        } },
         '@/shared/content/reanim': { parseReanim: (json: unknown) => json },
         '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
     })
@@ -812,7 +815,7 @@ test('an animation loads once for every player with the pictures its packs have 
     let fail = true
     const { loadReanim } = loadClientModule('reanim/ReanimAssets', {
         '@/client/content/ModResources': { modResources: {
-            async json(kind: string, id: string) { reads++; return { kind, id } },
+            async json(kind: string, id: string, parse: (json: unknown) => unknown) { reads++; return parse({ kind, id }) },
             async sprite(id: string, animation: string) {
                 sprites.push(`${animation}:${id}`)
                 if (fail) throw new Error('sprite unavailable')

@@ -9,6 +9,7 @@ import { loadScript } from '../loadScript'
 import { readBaseContent } from '../../tools/mod/content'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { mergeStringLayers } from '@/shared/content/strings'
+import { parseReanim } from '@/shared/content/reanim'
 
 function setup() {
     const files = new Map<string, any>()
@@ -208,6 +209,22 @@ test('bootstrap artwork loads from the base archive without waiting for Mod inst
     assert.equal(modReads, 1)
     assert.equal(baseReads, 1, 'ordinary loading reuses the archive already opened for the logo')
     assert.equal(await resources.baseSprite('pvz:button'), frame)
+})
+
+test('a legacy animation missing fps reports the supplying Mod, including for a base ID it overrides', async () => {
+    const { manager, fresh, modules, load } = setup()
+    const ids = ['widescreen:bushes3', 'pvz:sodroll']
+    const files = { ...modFiles('widescreen'), 'bush.json': strToU8(JSON.stringify({
+        schemaVersion: 2, id: ids[0], durationSeconds: 1, tracks: [],
+    })) }
+    files['content.json'] = strToU8(JSON.stringify({ resources: { reanim: Object.fromEntries(ids.map(id => [id, 'bush.json'])) } }))
+    await manager.install(zipSync(files))
+    modules['@/client/content/ModResources'] = { modResources: fresh(async () => zipSync(zipFiles('pvz'))) }
+    modules['@/shared/content/reanim'] = { parseReanim }
+    const { loadReanim } = load('assets/scripts/client/reanim/ReanimAssets.ts')
+    for (const id of ids) {
+        await assert.rejects(loadReanim(id), (error: any) => error.owner === 'widescreen' && error.message === 'reanim.fps is required')
+    }
 })
 
 test('the recovery UI loads its base art, fonts and text when a Mod UI sprite fails to decode', async () => {

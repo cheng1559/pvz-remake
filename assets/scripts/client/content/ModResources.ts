@@ -296,15 +296,19 @@ export class ModResources {
     }
 
     /** A JSON resource of `kind` as its document, or nothing when no running pack has it. */
-    async json(kind: JsonResourceKind, id: string): Promise<unknown> {
+    json(kind: JsonResourceKind, id: string): Promise<unknown>
+    json<T>(kind: JsonResourceKind, id: string, parse: (json: unknown) => T): Promise<T | undefined>
+    async json(kind: JsonResourceKind, id: string, parse?: (json: unknown) => unknown): Promise<unknown> {
         await this.ready()
         const pack = this.find(kind, id)
-        return pack && this.readJson(pack, pack.manifest[kind][baseQualified(id)])
+        return pack && this.readJson(pack, pack.manifest[kind][baseQualified(id)], parse)
     }
 
-    private readJson(pack: LoadedPack, file: string): unknown {
-        try { return packJson(pack, file) }
-        catch (error) { throw this.resourceError(pack, error) }
+    private readJson(pack: LoadedPack, file: string, parse?: (json: unknown) => unknown): unknown {
+        try {
+            const json = packJson(pack, file)
+            return parse ? parse(json) : json
+        } catch (error) { throw this.resourceError(pack, error) }
     }
 
     private resourceError(pack: LoadedPack, error: unknown): unknown {
