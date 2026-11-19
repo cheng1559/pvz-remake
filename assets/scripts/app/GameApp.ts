@@ -209,12 +209,13 @@ export class GameApp extends Component {
             window.addEventListener?.('error', error)
             window.addEventListener?.('unhandledrejection', rejected)
         }
-        // JSB forwards uncaught native-script exceptions with the source file and stack.
-        const scope = globalThis as typeof globalThis & { __errorHandler?: (file: string, line: number, message: string, stack: string) => void }
+        // V8 also passes the exception object, including a Mod resource's owner.
+        const scope = globalThis as typeof globalThis & { __errorHandler?: (file: string, line: number, message: string, stack: string, error?: unknown) => void }
         const previous = scope.__errorHandler
-        const nativeError: NonNullable<typeof previous> = (file, line, message, stack) => {
-            modFaults.report({ message, stack }, file, true)
-            previous?.(file, line, message, stack)
+        const nativeError: NonNullable<typeof previous> = (...args) => {
+            const [file, , message, stack, error] = args
+            modFaults.report(error ?? { message, stack }, file, true)
+            previous?.(...args)
         }
         if (sys.isNative) scope.__errorHandler = nativeError
         this.removeErrorListeners = () => {

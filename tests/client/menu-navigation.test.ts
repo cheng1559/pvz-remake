@@ -586,6 +586,27 @@ test('focus loss pauses once, hides silently, and regaining focus leaves the pau
     assert.equal(listeners.size, 0)
 })
 
+test('the native fault handler passes the original resource error to recovery and chains the JSB handler', () => {
+    const forwarded: unknown[][] = []
+    const previous = (...args: unknown[]) => { forwarded.push(args) }
+    const scope = { __errorHandler: previous }
+    const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => id === 'cc' ? {
+        Component: class {}, _decorator: { ccclass: () => (value: unknown) => value }, sys: { isNative: true },
+    } : {}, { globalThis: scope, console: { error() {} } })
+    const app = new GameApp()
+    const failure = ownedModError('widescreen', new Error('reanim.fps is required'))
+    let shown: unknown
+    app.showModFault = (error: unknown) => { shown = error }
+    app.listenForModFaults()
+    try {
+        scope.__errorHandler('main/index.js', 1, String(failure), failure.stack, failure)
+        assert.equal(shown, failure)
+        assert.equal(modFaults.current?.owner, 'widescreen')
+        assert.equal(forwarded[0][4], failure)
+    } finally { app.removeErrorListeners() }
+    assert.equal(scope.__errorHandler, previous)
+})
+
 test('a loading fault opens one base UI dialog and the manager can cancel or restart without saving', async () => {
     const steps: string[] = [], buttons: any[] = []
     const faultDialog = { node: { isValid: true }, onCancel() {}, onConfirm() {} }
