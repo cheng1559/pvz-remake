@@ -586,6 +586,46 @@ test('focus loss pauses once, hides silently, and regaining focus leaves the pau
     assert.equal(listeners.size, 0)
 })
 
+test('a slow title load keeps PopCap visible and takes priority over the bulk preload', async () => {
+    const { StartupScreen } = loadScript('assets/scripts/client/screens/StartupScreen.ts', id => ({
+        cc: { Component: class {}, Color: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/music/MusicSystem': { MusicSystem: { playTune() {} } },
+    }[id] ?? {}))
+    const screen = new StartupScreen()
+    screen.node = { isValid: true }
+    screen.logo = { active: true }
+    screen.logoOpacity = { opacity: 0 }
+    screen.startButton = {}
+    let titleReady!: () => void, finishPreload!: () => void
+    screen.loadTitle = async () => {
+        await new Promise<void>(resolve => { titleReady = resolve })
+        screen.title = { active: false }
+    }
+    let preloading = false
+    screen.preload = () => {
+        preloading = true
+        return new Promise<void>(resolve => { finishPreload = resolve })
+    }
+    const loading = screen.show()
+    await setImmediate()
+    for (let tick = 1; tick <= 500; tick++) {
+        screen.tick()
+        screen.render()
+        if (tick >= 50) assert.equal(screen.logoOpacity.opacity, 255)
+    }
+    assert.equal(preloading, false)
+    titleReady()
+    await setImmediate()
+    screen.tick()
+    screen.render()
+    assert.ok(screen.logoOpacity.opacity < 255 && screen.logoOpacity.opacity > 0)
+    for (let tick = 1; tick < 50; tick++) screen.tick()
+    assert.deepEqual([screen.logo.active, screen.title.active, screen.startButton.interactable], [false, true, false])
+    finishPreload()
+    await loading
+    assert.equal(screen.startButton.interactable, true)
+})
+
 test('the native fault handler passes the original resource error to recovery and chains the JSB handler', () => {
     const forwarded: unknown[][] = []
     const previous = (...args: unknown[]) => { forwarded.push(args) }

@@ -19,6 +19,8 @@ import { animateCurve } from '@/shared/content/animation'
 
 const { ccclass } = _decorator
 const BAR_WIDTH = 314
+const LOGO_TICKS = 200
+const LOGO_FADE_TICKS = 50
 /** TitleScreen::Update: 0.906 in 1.0.0.1051, 1.2.0.1073 and 1.2.0.1096 (PvZ-Portable has 0.91). */
 const TRIGGERS = [0.11, 0.32, 0.54, 0.72, 0.906]
 const LOAD_BAR_CLIPS = {
@@ -64,7 +66,7 @@ export class StartupScreen extends Component {
         this.preload = preload
         this.applyingMods = modManager.hasPendingChanges()
         showLogo ||= this.applyingMods
-        this.age = showLogo ? 0 : 200
+        this.age = showLogo ? 0 : LOGO_TICKS
         // Cover the whole viewport: menu pages are prepared and drawn once behind this screen.
         const background = uiNode({ parent: this.node, graphics: true, viewport: true })
         const fill = () => {
@@ -96,7 +98,7 @@ export class StartupScreen extends Component {
         // Let the menu commit first, including disposing any menu behind a returned title page.
         await Promise.resolve()
         if (!this.node?.isValid) return
-        while (this.applyingMods && this.age < 50 && this.node?.isValid && !modFaults.current) await waitForPreloadFrame()
+        while (this.applyingMods && this.age < LOGO_FADE_TICKS && this.node?.isValid && !modFaults.current) await waitForPreloadFrame()
         if (modFaults.current) return
         while (this.applyingMods && this.node?.isValid) {
             try {
@@ -108,13 +110,12 @@ export class StartupScreen extends Component {
             }
         }
         if (!this.node?.isValid) return
-        // The logo waits only for Mod installation; loading continues on the title screen.
         this.applyingMods = false
         void MusicSystem.playTune('title_theme', true)
-        await Promise.all([
-            this.loadTitle(),
-            this.preload(progress => { this.progress = progress }),
-        ])
+        // The title and its progress bar get the texture queue before the rest of the game.
+        await this.loadTitle()
+        if (!this.node?.isValid || modFaults.current) return
+        await this.preload(progress => { this.progress = progress })
         if (!this.node?.isValid || modFaults.current) return
         this.progress = 1
         this.complete = true
@@ -139,6 +140,7 @@ export class StartupScreen extends Component {
             UI.load(), Promise.all(names.map(name => modResources.sprite(name))),
             MusicSystem.preloadTune('title_theme'),
             SoundSystem.load(SoundEffect.LoadingBarFlower), SoundSystem.load(SoundEffect.LoadingBarZombie),
+            prepareClips(Object.values(LOAD_BAR_CLIPS)),
         ])
         if (!this.node?.isValid || modFaults.current) return
         this.ui = ui
@@ -159,8 +161,6 @@ export class StartupScreen extends Component {
         this.roll = ui.image(this.bar, roll).node
         this.roll.getComponent(UITransform)!.setAnchorPoint(0.5, 0.5)
         const effects = uiNode({ name: 'LoadBarEffects', parent: title }).node
-        await prepareClips(Object.values(LOAD_BAR_CLIPS))
-        if (!this.node?.isValid) return
         TRIGGERS.forEach((trigger, index) => {
             const node = uiNode({
                 name: `LoadBarEffect-${index}`, parent: effects,
@@ -202,7 +202,11 @@ export class StartupScreen extends Component {
         this.age++
         if (this.phase === 'logo') {
             if (this.applyingMods) { this.age = Math.min(this.age, 100); return }
-            if (this.age < 200 || !this.title) return
+            if (!this.title) {
+                if (this.logo) this.age = Math.min(this.age, LOGO_TICKS - LOGO_FADE_TICKS)
+                return
+            }
+            if (this.age < LOGO_TICKS) return
             if (this.logo) this.logo.active = false
             this.title.active = true
             this.phase = 'loading'
@@ -236,7 +240,7 @@ export class StartupScreen extends Component {
 
     private render(): void {
         if (this.phase === 'logo') {
-            if (this.logoOpacity) this.logoOpacity.opacity = Math.round(255 * Math.max(0, Math.min(1, this.age / 50, (200 - this.age) / 50)))
+            if (this.logoOpacity) this.logoOpacity.opacity = Math.round(255 * Math.max(0, Math.min(1, this.age / LOGO_FADE_TICKS, (LOGO_TICKS - this.age) / LOGO_FADE_TICKS)))
             return
         }
         if (this.phase !== 'loading') return
