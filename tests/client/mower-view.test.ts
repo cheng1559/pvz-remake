@@ -137,6 +137,27 @@ test("the board makes a waiting mower's view by the mowers' registry, syncs it w
     assert.deepEqual([destroyed, board.node(3)], [1, undefined], 'gone with its entity, as it sets off')
 })
 
+test('rolling sod starts one board-paused loop and stops it when the lawn is unrolled', () => {
+    const calls: unknown[] = []
+    const { LevelAudioPresenter } = load('level/LevelAudioPresenter', {
+        '@/client/sound/SoundSystem': { SoundEffect: { DiggerZombie: 'digger' }, SoundSystem: {
+            play: (id: string, options: { channel: string, loop: boolean, pauseWithGame: boolean }) =>
+                calls.push([id, options.channel, options.loop, options.pauseWithGame]),
+            stopChannel: (channel: string) => calls.push(channel),
+        } },
+    })
+    const { AdventureIntro } = load('level/adventure/AdventureIntro')
+    const intro = new AdventureIntro({}, {}, [], { rolls: [{}, {}] }, null, [], new Map(), {}, {}, {}, new LevelAudioPresenter({}))
+    intro.sync = intro.startSodRoll = () => {}
+    intro.update(5.99)
+    assert.deepEqual(calls, [])
+    intro.update(0.01)
+    intro.update(1.99)
+    assert.deepEqual(calls, [['digger', 'sodRoll', true, true]])
+    intro.update(0.01)
+    assert.equal(calls[1], 'sodRoll')
+})
+
 test("the intro brings each row's mower on as CutScene::UpdateIntro does: the higher rows later, after the sod and the graves", () => {
     const { AdventureIntro } = load('level/adventure/AdventureIntro')
     const intro = (rolls: number, graves: boolean) => {

@@ -73,6 +73,7 @@ async function standInStreet(node: Node, typeId: string, hasTongue: boolean): Pr
 
 export class AdventureIntro implements LevelIntro {
     private ticks = 0
+    private sodSoundPlaying = false
     private destroyed = false
     private hasOpeningDialog = false
     private readonly previewTooltips = new Map<Node, { hit: Node; tooltip: UITooltip }>()
@@ -286,6 +287,10 @@ export class AdventureIntro implements LevelIntro {
         if (snapshot.ticks > this.endTick || snapshot.previews.length !== (snapshot.ticks < this.endTick ? this.introZombies.length : 0)) {
             throw new Error('Invalid adventure intro state')
         }
+        if (this.sodSoundPlaying) {
+            this.audio.setSodRolling(false)
+            this.sodSoundPlaying = false
+        }
         this.ticks = snapshot.ticks
         this.hasOpeningDialog = snapshot.hasOpeningDialog === true
         this.destroyed = this.complete
@@ -313,6 +318,11 @@ export class AdventureIntro implements LevelIntro {
         const previous = this.ticks
         this.ticks = Math.min(stopAtTick, this.endTick, this.ticks + dt * 100)
         if (this.layout.rolls.length && previous < ROLL_SOD_START && this.ticks >= ROLL_SOD_START) this.startSodRoll()
+        const rolling = !!this.layout.rolls.length && this.ticks >= ROLL_SOD_START && this.ticks < ROLL_SOD_END
+        if (rolling !== this.sodSoundPlaying) {
+            this.sodSoundPlaying = rolling
+            this.audio.setSodRolling(rolling)
+        }
         if (this.ready && previous < this.readyStart && this.ticks >= this.readyStart) this.audio.readySetPlant()
         this.sync()
         if (!this.complete) return false
@@ -376,6 +386,5 @@ export class AdventureIntro implements LevelIntro {
             y: HEIGHT / 2 - roll.particleY,
 
         })
-        this.audio.sodRollStarted()
     }
 }

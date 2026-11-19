@@ -29,6 +29,7 @@ export interface SoundOptions {
     volumeGroup?: 'music' | 'sfx'
     channel?: string
     ifBusy?: 'keep' | 'replace'
+    loop?: boolean
     pauseWithGame?: boolean
 }
 
@@ -296,7 +297,8 @@ export class SoundSystem {
     }
 
     private static async _playClip(id: string, clip: AudioClip, pitch: number, options: SoundOptions, voice: Voice) {
-        if (this._playNative(clip, pitch, this._outputVolume(options), voice)) return
+        const loop = options.loop === true
+        if (this._playNative(clip, pitch, this._outputVolume(options), voice, loop)) return
 
         const context = pitch || (!sys.isNative && !voice.channel && !voice.pauseWithGame) ? this._getAudioContext() : null
         const buffer = context ? await this._loadAudioBuffer(id, clip) : null
@@ -308,6 +310,7 @@ export class SoundSystem {
             const source = node.addComponent(AudioSource)
             source.playOnAwake = false
             source.clip = clip
+            source.loop = loop
             source.volume = output
             voice.player = {
                 pause: () => source.pause(), resume: () => source.play(),
@@ -323,6 +326,7 @@ export class SoundSystem {
         const source = context.createBufferSource(), gain = context.createGain()
         const rate = Math.pow(this._pitchStepMultiplier, pitch)
         source.buffer = buffer
+        source.loop = loop
         source.playbackRate.value = paused ? 0 : rate
         gain.gain.value = paused ? 0 : output
         source.connect(gain)
@@ -337,12 +341,12 @@ export class SoundSystem {
         source.start()
     }
 
-    private static _playNative(clip: AudioClip, pitch: number, volume: number, voice: Voice): boolean {
+    private static _playNative(clip: AudioClip, pitch: number, volume: number, voice: Voice, loop: boolean): boolean {
         const engine = (globalThis as NativeBindings).jsb?.AudioEngine
         if (!engine?.pause || !engine.resume || !engine.stop || !engine.setVolume || !engine.setFinishCallback) return false
         const countsAsOneShot = voice.channel === undefined
         if (countsAsOneShot && this._nativeOneShotIds.size >= this._maxNativeOneShots) return true
-        const audioId = this._playNativeSfx(clip, Math.pow(this._pitchStepMultiplier, pitch), volume)
+        const audioId = this._playNativeSfx(clip, Math.pow(this._pitchStepMultiplier, pitch), volume, loop)
         if (audioId === null) return false
 
         if (countsAsOneShot) this._nativeOneShotIds.add(audioId)
@@ -360,14 +364,14 @@ export class SoundSystem {
         return true
     }
 
-    private static _playNativeSfx(clip: AudioClip, pitch: number, volume: number) {
+    private static _playNativeSfx(clip: AudioClip, pitch: number, volume: number, loop: boolean) {
         if (!sys.isNative) return null
         const url = clip.nativeUrl
         if (!url) return null
 
         const audioEngine = (globalThis as NativeBindings).jsb?.AudioEngine
         if (!audioEngine?.play2d) return null
-        const audioId = audioEngine.play2d(url, false, volume)
+        const audioId = audioEngine.play2d(url, loop, volume)
         if (typeof audioId !== 'number' || audioId < 0) return null
         if (pitch !== 1 && !audioEngine.setPitch?.(audioId, pitch)) {
             audioEngine.stop?.(audioId)

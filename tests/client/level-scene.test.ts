@@ -43,7 +43,7 @@ test('a level scene runs an injected intro and level through clock scaling, paus
     }, start, { onComplete() { complete++ } })
     try {
         scene.pause()
-        assert.deepEqual([world.paused, musicPaused, soundsPaused], [true, false, false], 'intro pauses only its board')
+        assert.deepEqual([world.paused, musicPaused, soundsPaused], [true, false, true], 'intro music plays on while board effects pause')
         scene.resume()
         coinBanks = deltas.length = 0
         gameClock.setSpeed(2)

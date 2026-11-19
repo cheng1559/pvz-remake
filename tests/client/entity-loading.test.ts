@@ -626,10 +626,11 @@ test('Grave Buster chewing follows board pause and a late load cannot outlive th
 
 test('focus mute affects active and late sounds and restores the current volume without unpausing the board', async () => {
     const volumes: number[] = [], changes: number[] = [], resumed: number[] = []
+    const loops: boolean[] = [], paused: number[] = []
     const engine = {
-        play2d(_url: string, _loop: boolean, value: number) { volumes.push(value); return volumes.length },
+        play2d(_url: string, loop: boolean, value: number) { loops.push(loop); volumes.push(value); return volumes.length },
         setVolume(_id: number, value: number) { changes.push(value) }, stop() {}, setFinishCallback() {},
-        pause() {}, resume(id: number) { resumed.push(id) },
+        pause(id: number) { paused.push(id) }, resume(id: number) { resumed.push(id) },
     }
     const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
         cc: { sys: { isNative: true } }, '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
@@ -637,10 +638,12 @@ test('focus mute affects active and late sounds and restores the current volume 
     SoundSystem.load = async () => ({ nativeUrl: 'sample' })
     SoundSystem.setSfxVolume(0.6)
     await SoundSystem.play('hit')
-    const late = SoundSystem.play('dancer', { channel: 'dancer', pauseWithGame: true })
+    const late = SoundSystem.play('pvz:digger_zombie', { channel: 'sodRoll', loop: true, pauseWithGame: true })
     SoundSystem.setFocusMuted(true)
     SoundSystem.pauseGameSounds(true)
     await late
+    assert.deepEqual(loops, [false, true])
+    assert.deepEqual(paused, [2])
     assert.deepEqual(volumes, [0.6, 0])
     assert.deepEqual(changes, [0])
     SoundSystem.setMusicVolume(0.5)

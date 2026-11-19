@@ -91,8 +91,9 @@ export class LevelAudioPresenter {
         void SoundSystem.play(SoundEffect.Drop)
     }
 
-    sodRollStarted(): void {
-        void SoundSystem.play(SoundEffect.DiggerZombie)
+    setSodRolling(rolling: boolean): void {
+        if (rolling) void SoundSystem.play(SoundEffect.DiggerZombie, { channel: 'sodRoll', loop: true, pauseWithGame: true })
+        else SoundSystem.stopChannel('sodRoll')
     }
 
     readySetPlant(): void {
