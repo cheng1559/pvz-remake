@@ -103,7 +103,7 @@ export class GraveView implements GridItemView {
         const { stage, content } = this.context
         const cell = cellPosition(content.definitions.boards[content.levels.levels[world.levelId].board], grave.row, grave.column)
         stage!.particle('pvz:gravestonerise', cell.x + 14 + grave.offsetX, cell.y + 78 + grave.offsetY, stage!.gridItemOrder(grave.typeId, grave.row) + 1)
-        void SoundSystem.playFoley(SoundEffect.DirtRise)
+        void SoundSystem.play(SoundEffect.DirtRise, { foley: true })
     }
 
     /** `counter`: how far it has risen (mGridItemCounter); `eaten`: pixels a grave buster has eaten off the stone's top. */

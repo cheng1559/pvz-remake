@@ -670,7 +670,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.zombieId)
         const presentation = plant ? stage.content.presentation.plants[plant.typeId] : undefined
         const nut = presentation?.chewParticle !== undefined
-        void SoundSystem.playFoley(nut || !plant && zombie?.mindControlled ? SoundEffect.ChompSoft : SoundEffect.Chomp)
+        void SoundSystem.play(nut || !plant && zombie?.mindControlled ? SoundEffect.ChompSoft : SoundEffect.Chomp, { foley: true })
         if (!nut || !zombie) return
         const tint = presentation!.visual.tint
         // At (37, 40) from the zombie. A zombie facing right mirrors it across its width, and its debris flies the other way.
@@ -681,7 +681,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
 
     /** Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer, with the grave's rumble. */
     static readonly rose: StageEvent = (stage, event, world) => {
-        SoundSystem.playSounds(stage.graveRise.sounds)
+        void SoundSystem.playSounds(stage.graveRise.sounds)
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
         if (zombie) stage.particle(stage.graveRise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row),
             undefined, zombie.team === 'plants')
@@ -691,16 +691,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     static readonly ate: StageEvent = () => { void SoundSystem.play(SoundEffect.Gulp) }
 
     /** Zombie::ApplyChill plays FOLEY_FROZEN on the first chill. */
-    static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
+    static readonly chilled: StageEvent = () => { void SoundSystem.play(SoundEffect.Frozen, { foley: true }) }
 
     /** Zombie::UpdateZombieGroan. */
-    static readonly groaned: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Groan) }
+    static readonly groaned: StageEvent = () => { void SoundSystem.play(SoundEffect.Groan, { foley: true }) }
 
     /** Zombie::PlayDeathAnim: it falls. */
-    static readonly fell: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.ZombieFalling1, 10) }
+    static readonly fell: StageEvent = () => { void SoundSystem.play(SoundEffect.ZombieFalling1, { foley: true, pitchRange: 10 }) }
 
     /** Zombie::MowDown: squashed by a mower (FOLEY_SPLAT). */
-    static readonly mowered: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Splat) }
+    static readonly mowered: StageEvent = () => { void SoundSystem.play(SoundEffect.Splat, { foley: true }) }
 
     /** Zombie::DropHelm and DropShield: the armor falls as its effect, with its sound and reanim unless bypassed. */
     static readonly armorDropped: StageEvent = (stage, event, world) => {
@@ -713,7 +713,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (!armor) return
         if (event.data.bypassed !== true) {
             view.armorDropped(slot)
-            SoundSystem.playSounds(armor.dropSounds)
+            void SoundSystem.playSounds(armor.dropSounds)
         }
         const at = view.dropPosition(stage.layer, armor.track, armor.offset)
         // One above the zombie; one facing right sheds its armor the way it faces.
@@ -744,7 +744,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             ...(view.scale * (drop.scale ?? 1) === 1 ? {} : { scale: view.scale * (drop.scale ?? 1) }),
             mirrored,
         })
-        SoundSystem.playSounds(drop.sounds)
+        void SoundSystem.playSounds(drop.sounds)
     }
 
     /**
@@ -762,7 +762,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     static readonly puffed: StageEvent = (stage, event) => {
         const { x, y, row, zombieId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof zombieId !== 'number') return
-        void SoundSystem.playFoley(SoundEffect.Splat)
+        void SoundSystem.play(SoundEffect.Splat, { foley: true })
         const order = stage.zombieOrder(row)
         stage.particle('pvz:mowercloud', x + 110, y, order + 1)
         ZombieView.remains(stage, 'MowerPuff', 'pvz:puff', x, y, order + 2, zombieId, 1, false)

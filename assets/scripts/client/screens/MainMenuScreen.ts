@@ -303,7 +303,7 @@ export class MainMenuScreen extends Component {
             button.clickOnPress = true
             button.onClick = () => {
                 this.playedFlowers.add(flower)
-                void SoundSystem.playFoley(SoundEffect.LimbsPop, 10)
+                void SoundSystem.play(SoundEffect.LimbsPop, { foley: true, pitchRange: 10 })
                 showClip(flower, this.menu.clips[center.clip])
             }
             this.flowerButtons.push(button)
@@ -385,7 +385,7 @@ export class MainMenuScreen extends Component {
             this.laughPlayed = false
             MusicSystem.stop()
             void SoundSystem.play(SoundEffect.LoseMusic)
-            void SoundSystem.playFoley(SoundEffect.DirtRise)
+            void SoundSystem.play(SoundEffect.DirtRise, { foley: true })
             if (this.hand) showClip(this.hand, this.menu.clips.zombie_hand)
         } else if (config.target && isMenuDialog(config.target)) void this.onOpenDialog(config.target)
         else if (config.target) void this.onNavigate(config.target as MenuAction)

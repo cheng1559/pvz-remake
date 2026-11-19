@@ -106,16 +106,16 @@ export class ItemView implements EntityView<ItemSnapshot> {
 
     /** Coin::Coin: the sound of an item as it comes. */
     static readonly spawned: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.spawnSounds)
+        void SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.spawnSounds)
     }
 
     /** Coin::Update: as it lands. */
     static readonly landed: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.landSounds)
+        void SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.landSounds)
     }
 
     /** Coin::Collect: as it is picked up, unless picked up silently. */
     static readonly collected: StageEvent = (stage, event) => {
-        if (event.data.silent !== true) SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.collectSounds)
+        if (event.data.silent !== true) void SoundSystem.playSounds(stage.content.presentation.items[String(event.data.typeId)]?.collectSounds)
     }
 }

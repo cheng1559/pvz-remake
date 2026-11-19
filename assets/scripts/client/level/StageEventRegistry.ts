@@ -42,7 +42,7 @@ export type StageEventTime = 'before' | 'after'
  * Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too, and a grave seed goes down alike.
  */
 const planted: StageEvent = (stage, event, world) => {
-    void SoundSystem.playFoley(SoundEffect.Plant)
+    void SoundSystem.play(SoundEffect.Plant, { foley: true })
     if (event.type !== 'plantPlaced') return
     const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
     if (plant) stage.spawnParticle(renderOrder('top'), { id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74) })
@@ -54,7 +54,7 @@ const planted: StageEvent = (stage, event, world) => {
  * that swallowed it (not in the original) at its middle, (40, 40).
  */
 const mindControlled: StageEvent = (stage, event, world) => {
-    void SoundSystem.playFoley(SoundEffect.Floop)
+    void SoundSystem.play(SoundEffect.Floop, { foley: true })
     void SoundSystem.play(SoundEffect.MindControlled)
     const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
     const plant = zombie ? undefined : world.plants.find(candidate => candidate.entityId === event.data.entityId)

@@ -112,11 +112,8 @@ export class DancerView extends ZombieView {
      */
     static readonly snapped: StageEvent = (stage, event) => {
         const music = stage.content.presentation.zombies[String(event.data.typeId)]?.dance?.music
-        if (event.data.music !== true || !music || discoMusic !== undefined && SoundSystem.isExclusivePlaying(DISCO_CHANNEL)) return
-        discoMusic = music
-        // FOLEY_DANCER is muted on pause.
-        SoundSystem.pausesWithGame(DISCO_CHANNEL)
-        void SoundSystem.playExclusive(music, DISCO_CHANNEL)
+        if (event.data.music !== true || !music) return
+        void SoundSystem.play(music, { channel: DISCO_CHANNEL, ifBusy: 'keep', pauseWithGame: true })
     }
 
     /**
@@ -124,11 +121,10 @@ export class DancerView extends ZombieView {
      * DancePresentation) with its head dances on the board.
      */
     static readonly danced: StageEvent = (stage, _event, world) => {
-        if (discoMusic === undefined) return
+        if (!SoundSystem.isChannelActive(DISCO_CHANNEL)) return
         const dancers = stage.content.presentation.zombies
         if (world.zombies.some(zombie => dancers[zombie.typeId]?.dance && zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating'))) return
-        discoMusic = undefined
-        SoundSystem.stopExclusive(DISCO_CHANNEL)
+        SoundSystem.stopChannel(DISCO_CHANNEL)
     }
 
     /** Zombie::SummonBackupDancer: one called up into a troupe comes up with its own dirt and rumble (DancePresentation.rise). */
@@ -136,7 +132,7 @@ export class DancerView extends ZombieView {
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
         const rise = zombie && stage.content.presentation.zombies[zombie.typeId]?.dance?.rise
         if (!rise) return
-        SoundSystem.playSounds(rise.sounds)
+        void SoundSystem.playSounds(rise.sounds)
         stage.particle(rise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
     }
 }
@@ -144,6 +140,5 @@ export class DancerView extends ZombieView {
 /** PlayZombieReanim's blend of 10 ticks from beat to beat (Zombie::UpdateZombieDancer, UpdateZombieBackupDancer). */
 const BEAT_BLEND_SECONDS = 0.1
 
-/** The disco music's channel (FOLEY_DANCER is one at a time), and what plays on it while it does. */
+/** The disco music's channel (FOLEY_DANCER is one at a time), shared by every dancer. */
 const DISCO_CHANNEL = 'dancer'
-let discoMusic: string | undefined

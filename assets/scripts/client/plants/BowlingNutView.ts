@@ -20,9 +20,9 @@ export class BowlingNutView extends PlantView {
      */
     static readonly bowled: StageEvent = (stage, event) => {
         stage.shake(1, -2, 'heavy')
-        void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
+        void SoundSystem.play(SoundEffect.BowlingImpact, { foley: true, pitchRange: -3 })
         const zombie = stage.content.presentation.zombies[String(event.data.typeId)]
-        if (event.data.shield) SoundSystem.playSounds(zombie?.shield?.bowlingImpactSounds)
-        else if (event.data.helm) SoundSystem.playSounds(zombie?.helm?.bowlingImpactSounds)
+        if (event.data.shield) void SoundSystem.playSounds(zombie?.shield?.bowlingImpactSounds)
+        else if (event.data.helm) void SoundSystem.playSounds(zombie?.helm?.bowlingImpactSounds)
     }
 }

@@ -89,8 +89,8 @@ export class LevelGameOverPresenter {
         if (this.ticks < 0) return false
         const previous = this.ticks
         this.ticks = Math.min(END, this.ticks + dt * 100)
-        for (const tick of [510, 560]) if (previous < tick && this.ticks >= tick) void SoundSystem.playFoley(SoundEffect.Chomp)
-        if (previous < GRAPHIC_START && this.ticks >= GRAPHIC_START) void SoundSystem.playFoley(SoundEffect.Scream)
+        for (const tick of [510, 560]) if (previous < tick && this.ticks >= tick) void SoundSystem.play(SoundEffect.Chomp, { foley: true })
+        if (previous < GRAPHIC_START && this.ticks >= GRAPHIC_START) void SoundSystem.play(SoundEffect.Scream, { foley: true })
         // CutScene::UpdateZombiesWon shakes the title by up to 1 each way (SetShakeOverride), anew every tick.
         if (Math.floor(previous) !== Math.floor(this.ticks)) this.shake = this.ticks >= SHAKE_START && this.ticks < SHAKE_END
             ? { x: Math.random() * 2 - 1, y: Math.random() * 2 - 1 } : { x: 0, y: 0 }

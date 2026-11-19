@@ -188,7 +188,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
 
     /** Plant::Fire: the sound of what is fired. */
     static readonly fired: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.projectiles[String(event.data.typeId)]?.fireSounds)
+        void SoundSystem.playSounds(stage.content.presentation.projectiles[String(event.data.typeId)]?.fireSounds)
     }
 
     /**
@@ -204,8 +204,8 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         const targetType = event.data.targetTypeId
         const target = typeof targetType === 'string' ? stage.content.presentation.zombies[targetType] : undefined
         const armor = event.data.shield ? target?.shield : event.data.helm ? target?.helm : undefined
-        SoundSystem.playSounds(armor?.impactSounds)
-        if (!armor?.muffles || projectile?.loud) SoundSystem.playSounds(projectile?.impactSounds)
+        void SoundSystem.playSounds(armor?.impactSounds)
+        if (!armor?.muffles || projectile?.loud) void SoundSystem.playSounds(projectile?.impactSounds)
         const impact = projectile?.impact, { x, y, targetId, row } = event.data
         if (!impact || through || typeof x !== 'number' || typeof y !== 'number') return
         const zombie = world.zombies.find(candidate => candidate.entityId === targetId)

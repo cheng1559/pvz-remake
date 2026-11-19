@@ -54,7 +54,7 @@ export class ShooterView extends PlantView {
 
     /** Plant::Fire for the Fume-shroom plays the fume, and DoRowAreaDamage a splat for the zombies it hits. */
     static readonly areaAttack: StageEvent = (stage, event) => {
-        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.fireSounds)
-        if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
+        void SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.fireSounds)
+        if (Number(event.data.hits) > 0) void SoundSystem.play(SoundEffect.Splat, { foley: true })
     }
 }

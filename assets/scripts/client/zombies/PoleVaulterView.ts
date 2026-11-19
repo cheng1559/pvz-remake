@@ -26,6 +26,6 @@ export class PoleVaulterView extends ZombieView {
 
     /** Zombie::UpdateZombiePolevaulter: the vault, and the step of its landing. */
     static readonly vaulted: StageEvent = (_stage, event) => {
-        void SoundSystem.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
+        void SoundSystem.play(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep, { foley: true })
     }
 }

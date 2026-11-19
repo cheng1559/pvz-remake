@@ -379,14 +379,14 @@ export class PlantView implements EntityView<PlantSnapshot> {
      */
     static readonly planted: StageEvent = (stage, event, world) => {
         if (world.plants.find(plant => plant.entityId === event.data.entityId)?.asleep) return
-        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
+        void SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
     }
 
     /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
     static readonly exploded: StageEvent = (stage, event) => {
         stage.shake(3, -4, 'explosion')
         const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
-        SoundSystem.playSounds(presentation?.explosionSounds)
+        void SoundSystem.playSounds(presentation?.explosionSounds)
         const { x, y, row } = event.data, explosion = presentation?.explosion
         if (!explosion || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
         // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
@@ -394,8 +394,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */
-    static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
+    static readonly chilled: StageEvent = () => { void SoundSystem.play(SoundEffect.Frozen, { foley: true }) }
 
     /** Crushed by a mower, as a zombie is (FOLEY_SPLAT). */
-    static readonly mowered: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Splat) }
+    static readonly mowered: StageEvent = () => { void SoundSystem.play(SoundEffect.Splat, { foley: true }) }
 }

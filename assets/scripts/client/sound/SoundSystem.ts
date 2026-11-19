@@ -7,7 +7,7 @@ type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
     setPitch?: (audioId: number, pitch: number) => boolean
     setFinishCallback?: (audioId: number, callback: () => void) => void
-    getState?: (audioId: number) => number
+    setVolume?: (audioId: number, volume: number) => void
     preload?: (url: string, callback: (success: boolean) => void) => void
     pause?: (audioId: number) => void
     resume?: (audioId: number) => void
@@ -18,6 +18,34 @@ type NativeBindings = typeof globalThis & {
     jsb?: {
         AudioEngine?: NativeAudioEngine
     }
+}
+
+export interface SoundOptions {
+    foley?: boolean
+    pitchRange?: number
+    /** Fixed pitch in semitones. */
+    pitch?: number
+    volume?: number
+    volumeGroup?: 'music' | 'sfx'
+    channel?: string
+    ifBusy?: 'keep' | 'replace'
+    pauseWithGame?: boolean
+}
+
+interface SoundPlayer {
+    pause(): void
+    resume(): void
+    stop(): void
+    setVolume(volume: number): void
+}
+
+/** A channel is occupied from the request until cancellation, failure or playback completion. */
+interface Voice {
+    channel?: string
+    pauseWithGame: boolean
+    volume: number
+    volumeGroup?: SoundOptions['volumeGroup']
+    player?: SoundPlayer
 }
 
 const DEFAULT_MUSIC_VOLUME = 0.85
@@ -129,14 +157,8 @@ export class SoundSystem {
     private static _audioBuffers: Map<string, Promise<AudioBuffer | null>> = new Map()
     private static _foleyLastPlayedAt: Map<string, number> = new Map()
     private static _nativeOneShotIds: Set<number> = new Set()
-    private static _exclusiveSources: Map<string, AudioSource> = new Map()
-    private static _exclusiveEffects: Map<string, string> = new Map()
-    private static _exclusiveBaseVolumes: Map<string, number> = new Map()
-    private static _exclusiveTokens: Map<string, number> = new Map()
-    private static _exclusiveNativeAudioIds: Map<string, number> = new Map()
-    /** Exclusive channels the game's pause pauses (pausesWithGame), and those it has paused. */
-    private static _gameChannels: Set<string> = new Set()
-    private static _pausedChannels: Set<string> = new Set()
+    private static readonly _voices = new Set<Voice>()
+    private static _gamePaused = false
     private static _audioContext: AudioContext | null = null
     private static _source: AudioSource | null = null
     private static _musicVolume = DEFAULT_MUSIC_VOLUME
@@ -158,7 +180,7 @@ export class SoundSystem {
 
     public static setMusicVolume(volume: number) {
         this._musicVolume = this._clampMasterVolume(volume, DEFAULT_MUSIC_VOLUME)
-        this._syncExclusiveSourceVolumes()
+        this._syncVolumes()
         for (const listener of this._musicVolumeListeners) listener()
     }
 
@@ -173,7 +195,7 @@ export class SoundSystem {
 
     public static setSfxVolume(volume: number) {
         this._sfxVolume = this._clampMasterVolume(volume, DEFAULT_SFX_VOLUME)
-        this._syncExclusiveSourceVolumes()
+        this._syncVolumes()
     }
 
     public static load(effect: string): Promise<AudioClip | null> {
@@ -195,190 +217,142 @@ export class SoundSystem {
         return promise
     }
 
-    public static async play(effect: string, volume = 1) {
+    public static async playSounds(sounds: readonly PresentationSound[] | undefined): Promise<void> {
+        if (!sounds?.length) return
+        await Promise.all(sounds.map(sound => this.play(sound.audio, sound)))
+    }
+
+    public static async play(effect: string, options: SoundOptions = {}): Promise<void> {
         if (!GameDebugSettings.perfSfxEnabled) return
-        const clip = await this.load(effect)
-        if (!clip) return
-        return this.playClip(clip, volume)
-    }
 
-    public static async playClip(clip: AudioClip, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return
-        const resolvedVolume = this._resolveEffectVolume(volume)
-        if (await this._playNativeWithPitch(clip, 0, resolvedVolume)) return
-
-        this._getSource().playOneShot(clip, resolvedVolume)
-    }
-
-    public static playMusicVolumeSfx(effect: string, volume = 1) {
-        const sfxVolume = this._sfxVolume
-        const musicScaledVolume = sfxVolume < 1e-6 ? 0 : volume * this._musicVolume / sfxVolume
-        return this.play(effect, musicScaledVolume)
-    }
-
-    /** Sounds a presentation names, each as foley (varied, not overlapping itself) or as a plain sample. */
-    public static playSounds(sounds: readonly PresentationSound[] | undefined): void {
-        for (const sound of sounds ?? []) {
-            if (sound.foley) void this.playFoley(sound.audio, sound.pitchRange)
-            else void this.play(sound.audio)
-        }
-    }
-
-    public static playFoley(effect: string, pitchRange?: number, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
-        if (this._hasFoleyPlayedTooRecently(effect)) return Promise.resolve()
-
-        const selectedEffect = this._pickFoleyEffect(effect)
-        const resolvedPitchRange = pitchRange ?? this._foley[effect]?.pitchRange ?? 0
-        const pitch = resolvedPitchRange === 0 ? 0 : Math.random() * resolvedPitchRange
-        return this.playWithPitch(selectedEffect, pitch, volume)
-    }
-
-    public static async playExclusive(effect: string, channel: string = effect, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return
-        const token = (this._exclusiveTokens.get(channel) ?? 0) + 1
-        this._exclusiveTokens.set(channel, token)
-        this._stopNativeExclusive(channel)
-        const source = this._getExclusiveSource(channel)
-        source.stop()
-
-        const clip = await this.load(effect)
-        if (!GameDebugSettings.perfSfxEnabled) return
-        if (!clip || this._exclusiveTokens.get(channel) !== token) return
-
-        const resolvedVolume = this._resolveEffectVolume(volume)
-        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume)
-        if (nativeAudioId !== null) {
-            this._exclusiveNativeAudioIds.set(channel, nativeAudioId)
-            this._exclusiveEffects.set(channel, effect)
-            this._exclusiveBaseVolumes.set(channel, volume)
-            return
-        }
-        source.stop()
-        source.clip = clip
-        this._exclusiveEffects.set(channel, effect)
-        this._exclusiveBaseVolumes.set(channel, volume)
-        source.volume = resolvedVolume
-        source.loop = false
-        source.play()
-    }
-
-    public static playFoleyExclusive(effect: string, channel: string = effect, pitchRange?: number, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
-        if (this._hasFoleyPlayedTooRecently(effect)) {
-            this.stopExclusive(channel)
-            return Promise.resolve()
-        }
-
-        const selectedEffect = this._pickFoleyEffect(effect)
-        const resolvedPitchRange = pitchRange ?? this._foley[effect]?.pitchRange ?? 0
-        if (resolvedPitchRange === 0) return this.playExclusive(selectedEffect, channel, volume)
-
-        return this.playWithPitch(selectedEffect, Math.random() * resolvedPitchRange, volume)
-    }
-
-    public static isExclusivePlaying(channel: string): boolean {
-        const id = this._exclusiveNativeAudioIds.get(channel)
-        return id === undefined ? this._exclusiveSources.get(channel)?.playing === true
-            : (globalThis as NativeBindings).jsb?.AudioEngine?.getState?.(id) === 1
-    }
-
-    /**
-     * FOLEYFLAGS_MUTE_ON_PAUSE: what plays on `channel` pauses while the game does and goes on after (pauseGameSounds),
-     * and stops with the level (stopGameSounds): the disco music.
-     */
-    public static pausesWithGame(channel: string) {
-        this._gameChannels.add(channel)
-    }
-
-    /** The game pauses or goes on: what plays on the channels that pause with it does too. */
-    public static pauseGameSounds(paused: boolean) {
-        const engine = (globalThis as NativeBindings).jsb?.AudioEngine
-        for (const channel of this._gameChannels) {
-            const audioId = this._exclusiveNativeAudioIds.get(channel), source = this._exclusiveSources.get(channel)
-            if (paused) {
-                if (!this.isExclusivePlaying(channel)) continue
-                this._pausedChannels.add(channel)
-                if (audioId !== undefined) engine?.pause?.(audioId)
-                else source?.pause()
-            } else if (this._pausedChannels.delete(channel)) {
-                if (audioId !== undefined) engine?.resume?.(audioId)
-                else source?.play()
+        const { channel } = options
+        if (channel !== undefined) {
+            const previous = this._channel(channel)
+            if (previous) {
+                if (options.ifBusy === 'keep') return
+                this._stop(previous)
             }
         }
-    }
-
-    /** The level is over: what plays or is paused on the channels that pause with the game stops. */
-    public static stopGameSounds() {
-        for (const channel of this._gameChannels) {
-            if (this._pausedChannels.has(channel) || this.isExclusivePlaying(channel)) this.stopExclusive(channel)
+        if (options.foley && this._hasFoleyPlayedTooRecently(effect)) return
+        const definition = this._foley[effect]
+        const pauseWithGame = options.pauseWithGame ?? definition?.pauseWithGame ?? false
+        const voice: Voice | undefined = channel !== undefined || pauseWithGame
+            ? { channel, pauseWithGame, volume: options.volume ?? 1, volumeGroup: options.volumeGroup } : undefined
+        if (voice) this._voices.add(voice)
+        let started = false
+        try {
+            const id = options.foley ? this._pickFoleyEffect(effect) : effect
+            const range = options.foley ? options.pitchRange ?? definition?.pitchRange ?? 0 : 0
+            const pitch = options.pitch ?? (range ? Math.random() * range : 0)
+            const clip = await this.load(id)
+            if (!clip || !GameDebugSettings.perfSfxEnabled || (voice && !this._voices.has(voice))) return
+            await this._playClip(id, clip, pitch, options, voice)
+            started = !!voice?.player
+        } finally {
+            if (voice && !started && this._voices.has(voice)) this._stop(voice)
         }
     }
 
-    public static stopExclusive(channel: string) {
-        this._pausedChannels.delete(channel)
-        this._exclusiveTokens.set(channel, (this._exclusiveTokens.get(channel) ?? 0) + 1)
-        this._stopNativeExclusive(channel)
-        this._exclusiveSources.get(channel)?.stop()
+    private static _channel(channel: string): Voice | undefined {
+        for (const voice of this._voices) if (voice.channel === channel) return voice
+        return undefined
     }
 
-    public static async playWithPitch(effect: string, pitchSteps: number, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return
-        const clip = await this.load(effect)
-        if (!GameDebugSettings.perfSfxEnabled) return
-        if (!clip) return
-        const resolvedVolume = this._resolveEffectVolume(volume)
+    public static isChannelActive(channel: string): boolean { return !!this._channel(channel) }
 
-        if (await this._playNativeWithPitch(clip, pitchSteps, resolvedVolume)) {
+    public static stopChannel(channel: string): void {
+        const voice = this._channel(channel)
+        if (voice) this._stop(voice)
+    }
+
+    private static _stop(voice: Voice): void {
+        this._voices.delete(voice)
+        voice.player?.stop()
+    }
+
+    public static pauseGameSounds(paused: boolean): void {
+        if (this._gamePaused === paused) return
+        this._gamePaused = paused
+        for (const voice of this._voices) {
+            if (!voice.pauseWithGame) continue
+            if (paused) voice.player?.pause()
+            else voice.player?.resume()
+        }
+    }
+
+    public static stopGameSounds(): void {
+        for (const voice of this._voices) if (voice.pauseWithGame) this._stop(voice)
+        this._gamePaused = false
+    }
+
+    private static async _playClip(id: string, clip: AudioClip, pitch: number, options: SoundOptions, voice?: Voice) {
+        if (this._playNative(clip, pitch, this._outputVolume(options), voice)) return
+
+        const context = pitch ? this._getAudioContext() : null
+        const buffer = context ? await this._loadAudioBuffer(id, clip) : null
+        if (voice && !this._voices.has(voice)) return
+        const paused = voice?.pauseWithGame && this._gamePaused
+        const output = this._outputVolume(options)
+        if (!context || !buffer) {
+            if (!voice) { this._getSource().playOneShot(clip, output); return }
+            const node = this._createPersistentAudioNode('SoundEffect')
+            const source = node.addComponent(AudioSource)
+            source.playOnAwake = false
+            source.clip = clip
+            source.volume = output
+            voice.player = {
+                pause: () => source.pause(), resume: () => source.play(),
+                stop: () => { source.stop(); node.destroy() },
+                setVolume: value => { source.volume = value },
+            }
+            node.once(AudioSource.EventType.ENDED, () => { this._voices.delete(voice); node.destroy() })
+            if (!paused) source.play()
             return
         }
 
-        if (pitchSteps === 0) {
-            this._getSource().playOneShot(clip, resolvedVolume)
-            return
-        }
-
-        const context = this._getAudioContext()
-        if (!context) {
-            this._getSource().playOneShot(clip, resolvedVolume)
-            return
-        }
-
-        const buffer = await this._loadAudioBuffer(effect, clip)
-        if (!buffer) {
-            this._getSource().playOneShot(clip, resolvedVolume)
-            return
-        }
-
-        if (context.state === 'suspended') {
-            void context.resume()
-        }
-
-        const source = context.createBufferSource()
-        const gain = context.createGain()
+        if (context.state === 'suspended') void context.resume()
+        const source = context.createBufferSource(), gain = context.createGain()
+        const rate = Math.pow(this._pitchStepMultiplier, pitch)
         source.buffer = buffer
-        source.playbackRate.value = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        gain.gain.value = resolvedVolume
+        source.playbackRate.value = paused ? 0 : rate
+        gain.gain.value = paused ? 0 : output
         source.connect(gain)
         gain.connect(context.destination)
+        if (voice) {
+            voice.player = {
+                pause() { gain.gain.value = 0; source.playbackRate.value = 0 },
+                resume: () => { source.playbackRate.value = rate; gain.gain.value = this._outputVolume(voice) },
+                stop() { source.stop() },
+                setVolume: value => { if (!voice.pauseWithGame || !this._gamePaused) gain.gain.value = value },
+            }
+            source.onended = () => { this._voices.delete(voice) }
+        }
         source.start()
     }
 
-    private static async _playNativeWithPitch(clip: AudioClip, pitchSteps: number, volume: number) {
-        const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        if (this._nativeOneShotIds.size >= this._maxNativeOneShots) return true
-        const audioId = this._playNativeSfx(clip, pitch, volume)
+    private static _playNative(clip: AudioClip, pitch: number, volume: number, voice?: Voice): boolean {
+        const engine = (globalThis as NativeBindings).jsb?.AudioEngine
+        if (!engine || (voice && !(engine.pause && engine.resume && engine.stop && engine.setFinishCallback))) return false
+        const countsAsOneShot = voice?.channel === undefined
+        if (countsAsOneShot && this._nativeOneShotIds.size >= this._maxNativeOneShots) return true
+        const audioId = this._playNativeSfx(clip, Math.pow(this._pitchStepMultiplier, pitch), volume)
         if (audioId === null) return false
 
-        this._nativeOneShotIds.add(audioId)
-        const forgetAudioId = () => this._nativeOneShotIds.delete(audioId)
-        const audioEngine = (globalThis as NativeBindings).jsb?.AudioEngine
-        if (audioEngine?.setFinishCallback) {
-            audioEngine.setFinishCallback(audioId, forgetAudioId)
-        } else {
-            const duration = clip.getDuration()
-            setTimeout(forgetAudioId, Math.max(1000, duration * 1000 + 1000))
+        if (countsAsOneShot) this._nativeOneShotIds.add(audioId)
+        const finish = () => {
+            this._nativeOneShotIds.delete(audioId)
+            if (voice) this._voices.delete(voice)
         }
+        if (voice) {
+            voice.player = {
+                pause: () => engine.pause!(audioId), resume: () => engine.resume!(audioId),
+                stop: () => { engine.stop!(audioId); finish() },
+                setVolume: value => engine.setVolume?.(audioId, value),
+            }
+            if (voice.pauseWithGame && this._gamePaused) voice.player.pause()
+        }
+        if (engine.setFinishCallback) engine.setFinishCallback(audioId, finish)
+        else setTimeout(finish, Math.max(1000, clip.getDuration() * 1000 + 1000))
         return true
     }
 
@@ -398,30 +372,12 @@ export class SoundSystem {
         return audioId
     }
 
-    private static _stopNativeExclusive(channel: string) {
-        const audioId = this._exclusiveNativeAudioIds.get(channel)
-        if (audioId === undefined) return
-
-        this._exclusiveNativeAudioIds.delete(channel)
-        ;(globalThis as NativeBindings).jsb?.AudioEngine?.stop?.(audioId)
-    }
-
     private static _getSource() {
         if (this._source?.isValid) return this._source
 
         const node = this._createPersistentAudioNode('SoundSystem')
         this._source = node.addComponent(AudioSource)
         return this._source
-    }
-
-    private static _getExclusiveSource(channel: string) {
-        const cached = this._exclusiveSources.get(channel)
-        if (cached?.isValid) return cached
-
-        const node = this._createPersistentAudioNode(`SoundSystem_${channel}`)
-        const source = node.addComponent(AudioSource)
-        this._exclusiveSources.set(channel, source)
-        return source
     }
 
     private static _createPersistentAudioNode(name: string) {
@@ -469,9 +425,10 @@ export class SoundSystem {
         return this._audioContext
     }
 
-    private static _resolveEffectVolume(volume: number) {
-        const baseVolume = Number.isFinite(volume) ? Math.max(0, volume) : 1
-        return baseVolume * this._sfxVolume
+    private static _outputVolume({ volume = 1, volumeGroup }: Pick<SoundOptions, 'volume' | 'volumeGroup'>) {
+        const base = Number.isFinite(volume) ? Math.max(0, volume) : 1
+        if (volumeGroup === 'music') return this._sfxVolume < 1e-6 ? 0 : base * this._musicVolume
+        return base * this._sfxVolume
     }
 
     private static _clampMasterVolume(volume: number, fallback: number) {
@@ -479,13 +436,8 @@ export class SoundSystem {
         return Math.max(0, Math.min(1, volume))
     }
 
-    private static _syncExclusiveSourceVolumes() {
-        for (const [channel, source] of this._exclusiveSources) {
-            const effect = this._exclusiveEffects.get(channel)
-            if (!source.isValid || !effect) continue
-
-            source.volume = this._resolveEffectVolume(this._exclusiveBaseVolumes.get(channel) ?? 1)
-        }
+    private static _syncVolumes() {
+        for (const voice of this._voices) voice.player?.setVolume(this._outputVolume(voice))
     }
 
     private static _loadAudioBuffer(effect: string, clip: AudioClip) {

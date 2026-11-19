@@ -16,5 +16,5 @@ export class ChomperView extends PlantView {
     }
 
     /** Plant::UpdateChomper bites (FOLEY_BIGCHOMP). */
-    static readonly bit: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.BigChomp) }
+    static readonly bit: StageEvent = () => { void SoundSystem.play(SoundEffect.BigChomp, { foley: true }) }
 }

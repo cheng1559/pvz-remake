@@ -16,5 +16,5 @@ export class ProducerView extends PlantView {
     }
 
     /** Plant::UpdateProductionPlant throws its sun (FOLEY_SPAWN_SUN). */
-    static readonly produced: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Throw, 10) }
+    static readonly produced: StageEvent = () => { void SoundSystem.play(SoundEffect.Throw, { foley: true, pitchRange: 10 }) }
 }

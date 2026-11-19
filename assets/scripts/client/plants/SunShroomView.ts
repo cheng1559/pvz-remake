@@ -23,5 +23,5 @@ export class SunShroomView extends ProducerView {
     }
 
     /** It grows (FOLEY_PLANTGROW). */
-    static readonly grew: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.PlantGrow) }
+    static readonly grew: StageEvent = () => { void SoundSystem.play(SoundEffect.PlantGrow, { foley: true }) }
 }

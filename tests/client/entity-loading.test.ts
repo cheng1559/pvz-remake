@@ -114,7 +114,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
         cc: { Mask: { Type: { GRAPHICS_RECT: 0 } }, Sprite: { SizeMode: { RAW: 0 } } },
         '@/client/content/ModResources': { modResources: { async sprite() { return { originalSize: { width: 500, height: 400 } } } } },
         '@/client/render/atlasFrame': { getAtlasFrame(_atlas: unknown, cell: number) { cells.push(cell) } },
-        '@/client/sound/SoundSystem': { SoundEffect: { DirtRise: 'dirt_rise' }, SoundSystem: { playFoley: async () => {} } },
+        '@/client/sound/SoundSystem': { SoundEffect: { DirtRise: 'dirt_rise' }, SoundSystem: { play: async () => {} } },
         '@/client/view/uiNode': { uiNode(options: any) {
             const node = new Node()
             node.name = options.name ?? ''
@@ -559,6 +559,55 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     const player = Object.assign(Object.create(ReanimPlayer.prototype), { views, applyPose() {} })
     player.setTracksVisible(zombies['pvz:newspaper'].parts.arm, false)
     assert.deepEqual([...views.values()].map(view => view.visible), [false, true, false])
+})
+
+test('sound channels reserve during loading, keep or replace requests, and release on completion', async () => {
+    const played: string[] = [], stopped: number[] = [], paused: number[] = [], resumed: number[] = []
+    const ended = new Map<number, () => void>()
+    const engine = {
+        play2d(url: string) { played.push(url); return played.length },
+        pause(id: number) { paused.push(id) }, resume(id: number) { resumed.push(id) },
+        stop(id: number) { stopped.push(id) }, setPitch() { return true },
+        setFinishCallback(id: number, callback: () => void) { ended.set(id, callback) },
+    }
+    const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
+        cc: { sys: { isNative: true } },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
+    }[id]), { jsb: { AudioEngine: engine } })
+    const loads: string[] = []
+    let ready!: (clip: { nativeUrl: string }) => void
+    SoundSystem.load = (id: string) => {
+        loads.push(id)
+        return id === 'slow' ? new Promise(resolve => { ready = resolve }) : Promise.resolve({ nativeUrl: id })
+    }
+
+    const dance = { channel: 'dancer', ifBusy: 'keep', pauseWithGame: true }
+    const first = SoundSystem.play('slow', dance)
+    assert.equal(SoundSystem.isChannelActive('dancer'), true)
+    await SoundSystem.play('duplicate', dance)
+    assert.deepEqual(loads, ['slow'])
+    SoundSystem.pauseGameSounds(true)
+    ready({ nativeUrl: 'dance' })
+    await first
+    assert.deepEqual(paused, [1])
+    SoundSystem.pauseGameSounds(false)
+    assert.deepEqual(resumed, [1])
+
+    const speech = { foley: true, pitch: 2, channel: 'crazyDave' }
+    const late = SoundSystem.play('slow', speech)
+    await SoundSystem.play('line two', speech)
+    ready({ nativeUrl: 'stale' })
+    await late
+    await SoundSystem.play('line three', speech)
+    assert.deepEqual(played, ['dance', 'line two', 'line three'])
+    assert.deepEqual(stopped, [2])
+    ended.get(2)!()
+    assert.equal(SoundSystem.isChannelActive('crazyDave'), true)
+    SoundSystem.stopGameSounds()
+    assert.deepEqual(stopped, [2, 1])
+    assert.equal(SoundSystem.isChannelActive('dancer'), false)
+    ended.get(3)!()
+    assert.equal(SoundSystem.isChannelActive('crazyDave'), false)
 })
 
 test('a screen door zombie holds its door with the door arms, lowers them to eat, and keeps a lost arm hidden', () => {

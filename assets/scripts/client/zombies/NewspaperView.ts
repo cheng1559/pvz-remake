@@ -29,6 +29,6 @@ export class NewspaperView extends ZombieView {
 
     /** Zombie::UpdateZombieNewspaper: one that lost its paper roars when it says so. */
     static readonly enraged: StageEvent = (stage, event) => {
-        if (event.data.roar === true) SoundSystem.playSounds(stage.content.presentation.zombies[String(event.data.typeId)]?.enrageSounds)
+        if (event.data.roar === true) void SoundSystem.playSounds(stage.content.presentation.zombies[String(event.data.typeId)]?.enrageSounds)
     }
 }

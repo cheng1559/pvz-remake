@@ -57,7 +57,7 @@ export class FusePlantView extends PlantView {
      */
     static readonly froze: StageEvent = (stage, event) => {
         const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
-        SoundSystem.playSounds(presentation?.freezeSounds)
+        void SoundSystem.playSounds(presentation?.freezeSounds)
         const { x, y, row } = event.data, freeze = presentation?.freeze
         if (!freeze || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
         stage.particle(freeze.effect, x + PLANT_MIDDLE.x, y + PLANT_MIDDLE.y, renderOrder(freeze.layer, row))

@@ -132,5 +132,5 @@ export class AwardView implements EntityView<ItemSnapshot> {
     }
 
     /** Zombie::TrySpawnLevelAward throws it (FOLEY_SPAWN_SUN). */
-    static readonly dropped: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Throw, 10) }
+    static readonly dropped: StageEvent = () => { void SoundSystem.play(SoundEffect.Throw, { foley: true, pitchRange: 10 }) }
 }

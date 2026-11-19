@@ -49,7 +49,7 @@ export class LevelAudioPresenter {
         if (this.ownsMusic) MusicSystem.pause()
     }
 
-    /** The game pauses or goes on: the sounds that pause with it (SoundSystem.pausesWithGame) do, whatever the music does. */
+    /** The game pauses or goes on: the sounds that pause with it (pauseWithGame) do, whatever the music does. */
     pauseSounds(paused: boolean): void {
         SoundSystem.pauseGameSounds(paused)
     }
@@ -110,7 +110,7 @@ export class LevelAudioPresenter {
 
     play(event: ServerEvent): void {
         switch (event.type) {
-            case 'toolSelected': void SoundSystem.playFoley(SoundEffect.Shovel); break
+            case 'toolSelected': void SoundSystem.play(SoundEffect.Shovel, { foley: true }); break
             case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); break
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
             case 'musicBurst': MusicSystem.startBurst(Number(event.data.countdown)); break
@@ -118,12 +118,12 @@ export class LevelAudioPresenter {
             // ReportAchievement::GiveAchievement plays it with the message, even when the message waits its turn.
             case 'achievementEarned': if (event.data.announce === true) void SoundSystem.play(SoundEffect.Achievement); break
             // Board::UpdateLevelEndSequence raises the pitch by one step for each mower already scored.
-            case 'mowerScored': void SoundSystem.playWithPitch(SoundEffect.Points, Math.max(0, Math.min(6, 6 - Number(event.data.remaining)))); break
+            case 'mowerScored': void SoundSystem.play(SoundEffect.Points, { pitch: Math.max(0, Math.min(6, 6 - Number(event.data.remaining))) }); break
             // Not enough sun, and an enemy producer taking sun away: the sun counter flashes with the buzzer.
             case 'sunFlash': case 'sunDrained': void SoundSystem.play(SoundEffect.Buzzer); break
             // Board::MouseDownWithPlant: FOLEY_DROP for a seed dropped where it cannot be planted.
             case 'seedDropped': void SoundSystem.play(SoundEffect.Drop); break
-            case 'levelWon': void SoundSystem.playMusicVolumeSfx(SoundEffect.WinMusic); break
+            case 'levelWon': void SoundSystem.play(SoundEffect.WinMusic, { volumeGroup: 'music' }); break
             // Board::NextWaveComing: the awooga before the first wave, else the siren where the server says (a flag wave).
             case 'nextWaveComing':
                 if (event.data.first === true) void SoundSystem.play(SoundEffect.Awooga)

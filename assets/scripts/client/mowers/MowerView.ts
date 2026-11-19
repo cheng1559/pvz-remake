@@ -35,5 +35,5 @@ export class MowerView extends ProjectileView {
     }
 
     /** LawnMower::StartMower. */
-    static readonly activated: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Lawnmower) }
+    static readonly activated: StageEvent = () => { void SoundSystem.play(SoundEffect.Lawnmower, { foley: true }) }
 }

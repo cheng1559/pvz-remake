@@ -197,6 +197,7 @@ export interface PresentationSound {
 export interface FoleyDefinition {
     readonly pitchRange?: number
     readonly variants?: readonly string[]
+    readonly pauseWithGame?: true
 }
 
 /** What stands in a cell without being a plant or a zombie (GridItemSnapshot): the view that draws it and where it is drawn among the rest. */
@@ -717,7 +718,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             packetX: finite, packetY: finite, beltY: finite, beltWidth: positiveFinite, beltHeight: positiveFinite,
             frames: positiveFinite, frameTicks: positiveFinite, introStart: finite, introDuration: positiveFinite,
         }),
-        foley: table((value, name) => fields<FoleyDefinition>(value, name, [], { pitchRange: finite, variants: nonEmptyStrings })),
+        foley: table((value, name) => fields<FoleyDefinition>(value, name, [], { pitchRange: finite, variants: nonEmptyStrings, pauseWithGame: trueFlag })),
         tools: table(parseTool),
         store: table(parseStoreItem),
         storeDialogue: parseStoreDialogue,
