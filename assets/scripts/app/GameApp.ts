@@ -81,7 +81,7 @@ export class GameApp extends Component {
         this.listenForModFaults()
         // Before anything loads content: the client reads the Mods this loads for both sides through this.
         provideInstalledMods(loadInstalledMods)
-        uiNode({ node: this.node, viewport: true })
+        uiNode({ node: this.node, viewport: true, mask: Mask.Type.GRAPHICS_RECT })
         // Mods load for the current player, read straight from the profile store (menu requests wait for the store
         // catalog, which is itself built from Mod content).
         modManager.useProfiles(() => createProfileStore(sys.localStorage).getCurrentProfile()?.id ?? null)
@@ -97,7 +97,6 @@ export class GameApp extends Component {
         }).node
         this.menu = uiNode({
             name: 'MenuLayer', parent: this.node, viewport: true,
-            mask: Mask.Type.GRAPHICS_RECT,
         }).node.addComponent(MenuScreen)
         this.menu.onNavigate = action => this.navigate(action)
         this.menu.onOpenDialog = id => this.openDialog(id)

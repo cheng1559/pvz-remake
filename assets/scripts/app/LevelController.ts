@@ -1,5 +1,5 @@
 import { modErrorOwner, modFaults, ModRuntimeError } from '@/shared/mod/ModHost'
-import { BlockInputEvents, Mask, Node } from 'cc'
+import { BlockInputEvents, Node } from 'cc'
 import { isZombieOnScreen } from '@/shared/content/zombieStates'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { loadInstalledMods } from './ModLoader'
@@ -97,10 +97,7 @@ export function createLevelController(
         createLocalGameSaveStore(`${GAME_SAVE_KEY}:${id}:adventure`)
     const load = async (save?: GameSave, levelId = DEFAULT_START_OPTIONS.levelId): Promise<RunningLevel> => {
         const rollback = current?.root.isValid ? await current.scene.snapshotPresentation() : undefined
-        const root = uiNode({
-            name: 'Level', parent, viewport: true,
-            mask: Mask.Type.GRAPHICS_RECT,
-        }).node
+        const root = uiNode({ name: 'Level', parent, viewport: true }).node
         // Built hidden, like a restore; commit shows it in the same frame it removes the previous level, so starting a
         // level (/level, Restart) never shows an empty or half-built screen.
         root.active = false
