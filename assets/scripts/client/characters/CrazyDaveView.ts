@@ -23,6 +23,7 @@ export class CrazyDaveView {
     private blinkSeconds: number
     private shaking = false
     private textY = 0
+    private hand?: ReanimPlayer
 
     static async create(parent: Node, content: { presentation: Pick<PresentationDefinitions, 'dave'> }, ui: UI, options: {
         position?: { x: number, y: number }, bubble?: Partial<PresentationDefinitions['dave']['bubble']>, clickToContinue?: boolean,
@@ -42,23 +43,28 @@ export class CrazyDaveView {
         await prepareClips(Object.values(config.clips))
         const body = uiNode({ name: 'Body', parent: root }).node.addComponent(ReanimPlayer)
         const blink = uiNode({ name: 'blink', parent: root, active: false }).node.addComponent(ReanimPlayer)
-        const hand = uiNode({ name: 'HandItem', parent: root }).node.addComponent(ReanimPlayer)
-        showClip(hand, config.clips.hand)
         body.change(config.clips.idle_handing.reanimId)
         blink.change(config.clips.blink.reanimId)
         // Parenting the entire item applies hand motion to its offset and scale as well as its tracks: it keeps the
         // place it has in the hand here, and waits on Dave himself while no clip holds it out.
-        hand.node.setParent(body.getTrackNode(config.clips.hand.attachmentTrackId!)!, true)
-        hand.node.setParent(root)
-        body.enabled = blink.enabled = hand.enabled = false
-        hand.node.active = false
+        const track = body.getTrackNode(config.clips.hand.attachmentTrackId!)!
+        const handItem = (name: 'hand' | 'hammer') => {
+            const player = uiNode({ name, parent: root }).node.addComponent(ReanimPlayer)
+            showClip(player, config.clips[name])
+            player.node.setParent(track, true)
+            player.node.setParent(root)
+            player.enabled = player.node.active = false
+            return player
+        }
+        const items = { hand: handItem('hand'), hammer: handItem('hammer') }
+        body.enabled = blink.enabled = false
         const mouths = await Promise.all(Object.entries(config.mouths).map(async ([token, id]) => [token, await modResources.sprite(id)] as const))
         root.active = false
-        return new CrazyDaveView(root, bubble, label, body, blink, hand, new Map(mouths), config, hint)
+        return new CrazyDaveView(root, bubble, label, body, blink, items, new Map(mouths), config, hint)
     }
 
     private constructor(readonly node: Node, private bubble: Node, private label: UILabel,
-        private body: ReanimPlayer, private blink: ReanimPlayer, private hand: ReanimPlayer,
+        private body: ReanimPlayer, private blink: ReanimPlayer, private items: { hand: ReanimPlayer, hammer: ReanimPlayer },
         private mouths: Map<string, import('cc').SpriteFrame>, private config: PresentationDefinitions['dave'], private hint?: Node) {
         this.blinkSeconds = config.blinkSeconds[0]
     }
@@ -91,7 +97,8 @@ export class CrazyDaveView {
     stopTalking(): void {
         this.message = this.pending = undefined
         this.shaking = false
-        this.bubble.active = this.hand.node.active = false
+        this.bubble.active = false
+        this.setHandItem(undefined)
         SoundSystem.stopChannel('crazyDave')
         if (this.node.active && !this.entering && !this.leaving) this.play('idle')
     }
@@ -119,8 +126,9 @@ export class CrazyDaveView {
         this.shaking = raw.includes('{SHAKE}')
         this.bubble.active = true
         if (this.hint) this.hint.active = !raw.includes('{NO_CLICK}')
-        const handing = raw.includes('{SHOW_WALLNUT}')
-        this.hand.node.active = handing
+        const hammer = raw.includes('{SHOW_HAMMER}')
+        this.setHandItem(hammer ? this.items.hammer : raw.includes('{SHOW_WALLNUT}') ? this.items.hand : undefined)
+        const handing = !!this.hand
         const animation = handing ? 'talk_handing' : raw.includes('{SHAKE}') ? 'crazy'
             : raw.includes('{SCREAM2}') ? 'mediumtalk' : raw.includes('{SCREAM}') || text.length < this.config.talkLengths[0] ? 'smalltalk' : text.length < this.config.talkLengths[1] ? 'mediumtalk' : 'blahblah'
         this.play(animation, () => {
@@ -128,7 +136,7 @@ export class CrazyDaveView {
             const mouth = [...this.mouths.keys()].find(token => raw.includes(`{${token}}`))
             this.body.setTrackSpriteOverride(this.config.parts.mouth, mouth ? this.mouths.get(mouth)! : null)
         })
-        const effect = raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing || raw.includes('{SCREAM2}') ? SoundEffect.CrazyDaveScream2
+        const effect = hammer ? SoundEffect.CrazyDaveLong1 : raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing || raw.includes('{SCREAM2}') ? SoundEffect.CrazyDaveScream2
             : raw.includes('{SCREAM}') ? SoundEffect.CrazyDaveScream : text.length < this.config.talkLengths[0] ? SoundEffect.CrazyDaveShort1
                 : text.length < this.config.talkLengths[1] ? SoundEffect.CrazyDaveLong1 : SoundEffect.CrazyDaveExtraLong1
         if (!raw.includes('{NO_SOUND}')) {
@@ -136,16 +144,25 @@ export class CrazyDaveView {
         }
     }
 
+    private setHandItem(item: ReanimPlayer | undefined): void {
+        if (this.hand) {
+            this.hand.node.setParent(this.node)
+            this.hand.node.active = false
+        }
+        this.hand = item
+        if (item) item.node.active = true
+    }
+
     private play(name: DaveClip, onFinish?: () => void): void {
         const { body, blink } = this, parts = this.config.parts
         // The hand item leaves the hand's track first: a clip without that track takes the track's node away.
-        this.hand.node.setParent(this.node)
+        this.hand?.node.setParent(this.node)
         showClip(body, this.config.clips[name], { blend: this.started ? undefined : 0, onFinish })
         this.started = true
         body.setTrackSpriteOverride(parts.mouth, null)
         body.setTracksVisible(parts.eyes, !blink.node.active)
         if (blink.node.active) blink.attachToTrack(body, parts.head)
-        if (this.hand.node.active) this.hand.node.setParent(body.getTrackNode(this.config.clips.hand.attachmentTrackId!)!)
+        this.hand?.node.setParent(body.getTrackNode(this.config.clips.hand.attachmentTrackId!)!)
     }
 
     update(dt: number): void {
@@ -153,7 +170,7 @@ export class CrazyDaveView {
         if (this.started) this.body.advance(dt)
         const layout = this.config.bubble
         if (this.shaking && this.bubble.active) this.label.setPosition(layout.textX + Math.floor(Math.random() * layout.shake), this.textY + Math.floor(Math.random() * layout.shake))
-        if (this.hand.node.active) this.hand.advance(dt)
+        this.hand?.advance(dt)
         const { body, blink } = this
         if (!this.entering && !this.leaving && (this.blinkSeconds -= dt) <= 0 && this.started) {
             const [min, max] = this.config.blinkSeconds

@@ -532,7 +532,7 @@ test('presentation track lists name exact tracks that exist in their clips; losi
         for (const track of [...eyes, ...glow, ...face ? [face] : []]) assert.ok(tracks.has(track), `${id} lists ${track}`)
     }
     const dave = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/dave.json', 'utf8'))
-    const daveTracks = new Set(Object.entries<{ reanimId: string }>(dave.clips).filter(([name]) => name !== 'blink' && name !== 'hand').flatMap(([, clip]) => trackIds(clip.reanimId)))
+    const daveTracks = new Set(Object.entries<{ reanimId: string }>(dave.clips).filter(([name]) => !['blink', 'hand', 'hammer'].includes(name)).flatMap(([, clip]) => trackIds(clip.reanimId)))
     for (const track of [dave.parts.mouth, dave.parts.head, ...dave.parts.eyes, dave.clips.hand.attachmentTrackId]) assert.ok(daveTracks.has(track), `Dave lists ${track}`)
     const menu = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/main-menu.json', 'utf8'))
     const selector = new Set([menu.clips.open.reanimId, menu.clips.sign.reanimId].flatMap(trackIds))
@@ -559,6 +559,33 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     const player = Object.assign(Object.create(ReanimPlayer.prototype), { views, applyPose() {} })
     player.setTracksVisible(zombies['pvz:newspaper'].parts.arm, false)
     assert.deepEqual([...views.values()].map(view => view.visible), [false, true, false])
+})
+
+test('Dave shows the held mallet on line 405 and puts it away on line 406', () => {
+    const config = presentationFixture.dave
+    const strings = JSON.parse(readFileSync('mods/pvz-base/assets/json/strings.json', 'utf8'))
+    const track = {}, root = {}
+    const body = { getTrackNode: () => track, setTrackSpriteOverride() {}, setTracksVisible() {} }
+    let animation: string | undefined
+    const { CrazyDaveView } = loadClientModule('characters/CrazyDaveView', {
+        '@/client/sound/SoundSystem': { SoundEffect: {}, SoundSystem: { play: async () => {} } },
+        '@/client/reanim/clips': { showClip(_player: unknown, clip: { reanimId: string }) { animation = clip.reanimId } },
+    })
+    const item = () => ({ node: { active: false, parent: root, setParent(parent: object) { this.parent = parent } } })
+    const items = { hammer: item(), hand: item() }
+    const view = Object.assign(Object.create(CrazyDaveView.prototype), {
+        node: root, body, blink: { node: { active: false } }, items, config,
+        bubble: {}, label: { renderer: { contentHeight: 0 }, setPosition() {} },
+    })
+    view.show(strings.CRAZY_DAVE_405)
+    assert.equal(animation, config.clips.talk_handing.reanimId)
+    assert.equal(items.hammer.node.active, true)
+    assert.equal(items.hammer.node.parent, track)
+    assert.equal(items.hand.node.active, false)
+    assert.deepEqual([config.clips.hammer.reanimId, config.clips.hammer.start, config.clips.hammer.hold], ['pvz:hammer', 'end', true])
+    view.show(strings.CRAZY_DAVE_406)
+    assert.equal(items.hammer.node.active, false)
+    assert.equal(items.hammer.node.parent, root)
 })
 
 test('Grave Buster chewing follows board pause and a late load cannot outlive the level', async () => {

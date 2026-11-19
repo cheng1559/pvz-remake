@@ -53,7 +53,7 @@ export interface ClientAnimationClip {
 export interface AnimationDefinition { readonly [slot: string]: ClientAnimationClip }
 
 /** Crazy Dave's clips: entering and leaving, idling, talking, handing something over, blinking, and what he hands over. */
-export const DAVE_CLIPS = ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink', 'hand'] as const
+export const DAVE_CLIPS = ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink', 'hand', 'hammer'] as const
 export type DaveClip = typeof DAVE_CLIPS[number]
 
 /** The parent track a head, blink or flag clip attaches to; the data must name it. */
@@ -667,7 +667,7 @@ export interface PresentationDefinitions {
         readonly zombie: GraveZombiePresentation
     }
     readonly dave: {
-        /** His clips (DAVE_CLIPS); what he hands over (`hand`) is held on his body's track its attachmentTrackId names. */
+        /** Both hand items attach to the track named by the Wall-nut clip (`hand`). */
         readonly clips: Readonly<Record<DaveClip, ClientAnimationClip>>
         readonly delay: number
         readonly blinkSeconds: readonly [number, number]; readonly talkLengths: readonly [number, number]

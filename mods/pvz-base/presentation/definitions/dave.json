@@ -10,7 +10,8 @@
     "idle_handing": {"reanimId": "pvz:dave_idle_handing", "fps": 12, "loop": true, "blend": 0.2},
     "talk_handing": {"reanimId": "pvz:dave_talk_handing", "fps": 12, "hold": true, "blend": 0.5},
     "blink": {"reanimId": "pvz:dave_blink", "fps": 15},
-    "hand": {"reanimId": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "loop": true, "attachmentTrackId": "Dave_handinghand"}
+    "hand": {"reanimId": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "loop": true, "attachmentTrackId": "Dave_handinghand"},
+    "hammer": {"reanimId": "pvz:hammer", "x": 62, "y": -445, "scale": 1.5, "fps": 24, "start": "end", "hold": true}
   },
   "delay": 2, "blinkSeconds": [4, 8], "talkLengths": [23, 52],
   "bubble": {"sprite": "pvz:store_speechbubble2", "x": 285, "y": 20, "textX": 25, "textY": 6, "textWidth": 233, "textHeight": 144, "continueX": 139, "continueY": 140, "shake": 2},
