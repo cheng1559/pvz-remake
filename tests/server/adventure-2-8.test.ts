@@ -276,6 +276,28 @@ test('a dancer that reaches the house on a raised arm walks in on its walk', () 
     assert.deepEqual([phaseOf(zombie(server, dancer)), body.clip, body.rate > 0], ['walk', 'walk', true])
 })
 
+test('a dancer that stops eating walks on until the beat brings its next phase, in place at its arm\'s pace on one it stands on', () => {
+    const server = playing()
+    // The first tick of the beats it stands on with its arm up, so a few of them are left.
+    until(server, () => beatPhase(server.snapshot().gameplayTick) === 'raise', DANCE_BEAT.ticks * DANCE_BEAT.beats)
+    debug(server, '/zombie backup_dancer 3 9')
+    const id = zombiesOf(server, 'pvz:backup_dancer')[0].entityId, dancer = world(server).zombies.get(id) as Dancer
+    ticks(server, 1)
+    assert.equal(dancer.phase, 'raise')
+    // Zombie::StopEating, with nothing left to eat: StartWalkAnim plays anim_walk, and the phase stays.
+    dancer.state = 'eating'
+    ticks(server, 1)
+    const x = dancer.position.x, walk = dancer.animations[ZOMBIE_BODY_LAYER]
+    assert.deepEqual([dancer.state, dancer.phase, walk.clip, walk.rate], ['walking', 'raise', 'walk', 18],
+        'it walks where it stands, at anim_armraise\'s 18 (mOriginalAnimRate)')
+    const time = walk.time
+    ticks(server, 5)
+    assert.deepEqual([dancer.animations[ZOMBIE_BODY_LAYER].clip, dancer.position.x], ['walk', x])
+    assert.ok(dancer.animations[ZOMBIE_BODY_LAYER].time > time, 'its walk goes on')
+    until(server, () => dancer.phase !== 'raise', DANCE_BEAT.ticks * DANCE_BEAT.beats)
+    assert.deepEqual([dancer.phase, dancer.animations[ZOMBIE_BODY_LAYER].clip], ['raise2', 'raise'], 'the next beat brings its arm up again')
+})
+
 test('a hypnotized Dancing Zombie earns Disco is Undead, a backup dancer does not', () => {
     const server = playing()
     const { leader, backups } = troupe(server)

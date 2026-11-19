@@ -3,7 +3,7 @@ import { type AnimationClip, DANCE_BEAT, type DanceLead, type GameplayDefinition
 import { zombieRowY } from '@/shared/content/levelHelpers'
 import { teamDirection, zombieTeam } from '@/shared/content/teams'
 import { DANCE_PHASES, type DancePhase, isSummoning } from '@/shared/content/zombieStates'
-import type { AnimationRandom } from '@/shared/content/animation'
+import { type AnimationRandom, pace } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { array, nonNegativeInteger, oneOf, positiveInteger } from '@/shared/validate'
 import { LevelStateResource, RandomResource } from '../state/resources'
@@ -131,10 +131,14 @@ export class Dancer extends Zombie {
         return true
     }
 
-    /** A dancer that stops eating takes up its phase again where the dance is, at a speed picked anew (Zombie::StopEating). */
+    /**
+     * Zombie::StopEating: it walks on (StartWalkAnim) whatever phase of the dance it is on, until the beat brings the next
+     * (UpdateZombieDancer plays a phase's clip only as its phase changes). Off its walking phases it walks where it
+     * stands, at the pace of the last clip it played at one of its own (UpdateAnimSpeed's mOriginalAnimRate): its arm's.
+     */
     stopEating(random: AnimationRandom): void {
-        this.speedPerTick = this.pickSpeed(random)
-        this.playPhase(this.phase, random)
+        super.stopEating(random)
+        if (!danceWalks(this.phase)) zombieBody(this).rate = pace(this.definition.animation.clips[ZOMBIE_CLIPS.raise], random)
     }
 
     /** Zombie::ZombieNotWalking: it walks on its walking phases alone, while none of its troupe stands still. */
