@@ -561,6 +561,42 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     assert.deepEqual([...views.values()].map(view => view.visible), [false, true, false])
 })
 
+test('Grave Buster chewing follows board pause and a late load cannot outlive the level', async () => {
+    const effect = 'pvz:gravebusterchomp'
+    for (const native of [false, true]) {
+        const heard: string[] = []
+        const engine = {
+            play2d() { heard.push('play'); return 1 },
+            pause() { heard.push('pause') }, resume() { heard.push('resume') },
+            stop() { heard.push('stop') }, setFinishCallback() {},
+        }
+        const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
+            cc: { sys: { isNative: native }, AudioSource: { EventType: { ENDED: 'ended' } } },
+            '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
+        }[id]), { jsb: { AudioEngine: engine } })
+        const clip = { nativeUrl: 'gravebusterchomp' }
+        SoundSystem.useFoley(presentationFixture.foley)
+        SoundSystem.load = async () => clip
+        SoundSystem._createPersistentAudioNode = () => ({
+            addComponent: () => ({ play: () => heard.push('play'), pause: engine.pause, stop: engine.stop }),
+            once() {}, destroy() {},
+        })
+        await SoundSystem.play(effect, { foley: true })
+        SoundSystem.pauseGameSounds(true)
+        SoundSystem.pauseGameSounds(false)
+        SoundSystem.stopGameSounds()
+        assert.deepEqual(heard, ['play', 'pause', native ? 'resume' : 'play', 'stop'])
+        SoundSystem._foleyLastPlayedAt.clear()
+        let finish!: (value: typeof clip) => void
+        SoundSystem.load = () => new Promise(resolve => { finish = resolve })
+        const pending = SoundSystem.play(effect, { foley: true })
+        SoundSystem.stopGameSounds()
+        finish(clip)
+        await pending
+        assert.equal(heard.length, 4)
+    }
+})
+
 test('sound channels reserve during loading, keep or replace requests, and release on completion', async () => {
     const played: string[] = [], stopped: number[] = [], paused: number[] = [], resumed: number[] = []
     const ended = new Map<number, () => void>()

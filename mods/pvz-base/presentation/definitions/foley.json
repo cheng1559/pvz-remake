@@ -8,6 +8,7 @@
   "pvz:lawnmower": {"pitchRange": 10},
   "pvz:throw": {"pitchRange": 10, "variants": ["pvz:throw", "pvz:throw", "pvz:throw", "pvz:throw2"]},
   "pvz:chompsoft": {"pitchRange": 4},
+  "pvz:gravebusterchomp": {"pauseWithGame": true},
   "pvz:limbs_pop": {"pitchRange": 10},
   "pvz:snow_pea_sparkles": {"pitchRange": 10},
   "pvz:zombie_falling_1": {"pitchRange": 10, "variants": ["pvz:zombie_falling_1", "pvz:zombie_falling_2"]},

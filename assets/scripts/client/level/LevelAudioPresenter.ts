@@ -74,10 +74,10 @@ export class LevelAudioPresenter {
         if (result !== 'playing') this.stop()
     }
 
-    stop(): void {
+    stop(keepMusic = false): void {
         // Board::StopAllZombieSounds as the level ends.
         SoundSystem.stopGameSounds()
-        if (!this.ownsMusic) return
+        if (keepMusic || !this.ownsMusic) return
         MusicSystem.stop()
         this.ownsMusic = false
     }

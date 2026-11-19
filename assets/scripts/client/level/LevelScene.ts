@@ -101,6 +101,8 @@ export class LevelScene extends Component {
     }
 
     prepareForReplacement(): void {
+        // The replacement owns the music now. Retire this board's paused and still-loading effects.
+        this.audio?.stop(true)
         this.stopAudioOnDestroy = false
     }
 
