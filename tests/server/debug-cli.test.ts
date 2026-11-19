@@ -305,7 +305,8 @@ test('CLI game mutations go through the channel while paused and preserve valid 
     const save = game.saveAtBoundary()
     const restored = new LocalIntegratedGame(definitions, levels)
     restored.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save })
-    assert.deepEqual(restored.render(), game.render())
+    // The world the save holds; the paused picture stays between the last two ticks, where the pause found it.
+    assert.deepEqual(restored.currentSnapshot, game.currentSnapshot)
     assert.equal(game.debugCommand('/kill').ok, true)
     assert.equal(game.render().zombies.length, 0)
     assert.equal(game.debugCommand('/removeplant 1 1').ok, true)

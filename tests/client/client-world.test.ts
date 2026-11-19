@@ -111,6 +111,20 @@ test('ClientWorld hands out the frame it last rendered until its frames or the i
     assert.equal(world.render(0.25).zombies[0].x, 22.5, 'a new frame renders afresh')
 })
 
+test('ClientWorld keeps the picture through a pause and its resume: their frames are of the same gameplay tick', () => {
+    const world = new ClientWorld()
+    world.accept(snapshot(1))
+    const moved = snapshot(2)
+    moved.projectiles[0].x = 40
+    world.accept(moved)
+    // The host keeps the part of a tick shown through the pause (interpolationAlpha): a pea between two ticks stays there.
+    assert.equal(world.render(0.4).projectiles[0].x, 28)
+    world.accept({ ...moved, tick: 3, paused: true })
+    assert.equal(world.render(0.4).projectiles[0].x, 28, 'pausing does not jump it on to its latest tick')
+    world.accept({ ...moved, tick: 4 })
+    assert.equal(world.render(0.4).projectiles[0].x, 28, 'nor does resuming')
+})
+
 test('ClientWorld holds the latest frame through a repick, while the host interpolation clock keeps cycling', () => {
     const world = new ClientWorld()
     world.accept(snapshot(1))

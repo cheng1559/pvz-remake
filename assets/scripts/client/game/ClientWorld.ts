@@ -46,8 +46,8 @@ export class ClientWorld {
 
         const before = this.currentValue ? entityIds(this.currentValue) : new Set<EntityId>()
         const after = entityIds(snapshot)
-        // Input-only frames keep the same simulation positions and interpolation history.
-        if (snapshot.gameplayTick !== this.currentValue?.gameplayTick || snapshot.paused !== this.currentValue?.paused) {
+        // Frames of the same gameplay tick (input, a pause) keep the same simulation positions and interpolation history.
+        if (snapshot.gameplayTick !== this.currentValue?.gameplayTick) {
             this.previousValue = this.currentValue
         }
         this.currentValue = snapshot

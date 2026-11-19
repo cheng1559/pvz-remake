@@ -182,12 +182,13 @@ export class LayerPlayers {
             } else {
                 const playback = layerPlayback(what, player, what.time + layer.offset)
                 // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
-                // one's 0, a chilled one's half).
+                // one's 0, a chilled one's half). A frame of the same time (input or a pause between two ticks) leaves it
+                // where it has played on to: set back, every layer would twitch with the game clock stopped.
                 if (what.hidden) { if (layer.shown) player.hide() }
                 else if (!layer.shown) player.play({ ...playback, hideOnFinish: false })
                 else {
                     if (player.playbackFps !== playback.fps) player.setFps(playback.fps)
-                    player.seek(playback.timeSeconds)
+                    if (what.time !== layer.time) player.seek(playback.timeSeconds)
                 }
             }
             layer.key = what.key

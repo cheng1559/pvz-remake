@@ -970,27 +970,33 @@ test('a clip that ends plays over its own pictures and goes on where they end; a
     assert.deepEqual([cherry.once, cherry.frames], [true, undefined], 'its 14 pictures are as long as the clip')
 })
 
-test('a layer frozen when its view is made stands still at rate 0, and goes on at its rate once it thaws', () => {
-    // A plant or zombie frozen in a save: its view is made from a snapshot whose body goes at 0.
-    class Player {
-        node = { setPosition() {}, setScale() {} }; durationSeconds = 17 / 12; fps = 12; trackIds = []; fullLastFrame = false; playbackFps = 12
-        calls: unknown[][] = []
-        change() {} setTracksVisible() {} hide() {}
-        play(options: { fps: number }) { this.calls.push(['play', options.fps]); this.playbackFps = options.fps }
-        setFps(fps: number) { this.calls.push(['fps', fps]); this.playbackFps = fps }
-        seek(time: number) { this.calls.push(['seek', time]) }
-    }
-    const player = new Player()
+/** A layer's player that only says what it was told, for LayerPlayers of one layer (`body`). */
+class CallPlayer {
+    node = { setPosition() {}, setScale() {} }; durationSeconds = 17 / 12; fps = 12; trackIds = []; fullLastFrame = false; playbackFps = 12
+    calls: unknown[][] = []
+    change() {} setTracksVisible() {} hide() {}
+    play(options: { fps: number }) { this.calls.push(['play', options.fps]); this.playbackFps = options.fps }
+    setFps(fps: number) { this.calls.push(['fps', fps]); this.playbackFps = fps }
+    seek(time: number) { this.calls.push(['seek', time]) }
+}
+
+function bodyLayer() {
+    const player = new CallPlayer()
     const { LayerPlayers } = loadClientModule('view/layerPlayback', {
         '@/client/view/uiNode': { uiNode: () => ({ node: { addComponent: () => player } }) },
     })
-    const layers = new LayerPlayers({}, ['body'])
+    return { player, layers: new LayerPlayers({}, ['body']) }
+}
+
+test('a layer frozen when its view is made stands still at rate 0, and goes on at its rate once it thaws', () => {
+    // A plant or zombie frozen in a save: its view is made from a snapshot whose body goes at 0.
+    const { player, layers } = bodyLayer()
     const clip = { reanimId: 'pvz:iceshroom' }
     const show = (rate: number, time: number) => layers.show(() => ({ key: 'body', clip, time, rate }), { blend: () => 0, place() {} })
     show(0, 3)
     show(0, 3)
     show(12, 3.12)
-    assert.deepEqual(player.calls, [['play', 0], ['seek', 0.25], ['fps', 12], ['seek', 0.26]], 'it takes the pace it goes at as it changes')
+    assert.deepEqual(player.calls, [['play', 0], ['fps', 12], ['seek', 0.26]], 'it takes the pace it goes at as it changes')
 
     const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
         cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
@@ -1000,6 +1006,20 @@ test('a layer frozen when its view is made stands still at rate 0, and goes on a
     real.setFps(0)
     assert.equal(real.playbackFps, 0, 'a player stands still at 0')
     assert.throws(() => real.setFps(-1), /finite and non-negative/)
+})
+
+test('a frame of the same time leaves a layer where it has played on to, and the next tick sets it right', () => {
+    // With the game clock stopped (D), a click still brings a frame of the same gameplay tick (the shovel taken, a
+    // pause): set back to the tick's time, every layer twitched by the part of a tick it had played on.
+    const { player, layers } = bodyLayer()
+    const clip = { reanimId: 'pvz:sunflower' }
+    const show = (time: number) => layers.show(() => ({ key: 'body', clip, time, rate: 12 }), { blend: () => 0, place() {} })
+    show(3)
+    show(3)
+    show(3)
+    assert.deepEqual(player.calls, [['play', 12]], 'frames of the same tick leave it playing on')
+    show(3.12)
+    assert.deepEqual(player.calls, [['play', 12], ['seek', 0.26]], 'the next tick sets it right')
 })
 
 test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {

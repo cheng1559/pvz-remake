@@ -44,10 +44,8 @@ export class IntegratedGameHost {
             this.flushCommandResults()
             if (boundaryChanged && !this.server.hasPendingCommands()) this.sendFrame(this.server.snapshot())
             if (!this.server.hasPendingCommands()) this.flushSaveRequest()
-            if (this.server.isPaused()) {
-                this.accumulatorSeconds = 0
-                return
-            }
+            // A pause keeps the part of a tick already shown (interpolationAlpha): the picture stands where it is.
+            if (this.server.isPaused()) return
             this.advance(dtSeconds)
         } catch (error) {
             // The client only receives the message; keep the stack in the console.
@@ -148,10 +146,7 @@ export class IntegratedGameHost {
             // skip building earlier snapshots but keep every event and any save point.
             if (tick >= ticks - 2 || paused || saving) this.sendFrame(this.server.snapshot(), events.splice(0))
             if (saving) this.flushSaveRequest(false)
-            if (paused) {
-                this.accumulatorSeconds = 0
-                break
-            }
+            if (paused) break
         }
     }
 

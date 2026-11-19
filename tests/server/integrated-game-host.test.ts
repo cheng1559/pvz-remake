@@ -117,6 +117,26 @@ test('integrated host processes FIFO commands, acknowledgements, pause, resume, 
     assert.deepEqual(channel.drainClientPackets(), [])
 })
 
+test('a pause keeps the part of a tick the picture has reached, and the game goes on from it', () => {
+    const { channel, host } = setup()
+    send(channel, startPacket)
+    send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+    host.update(0.014)
+    const near = (value: number, expected: number) => Math.abs(value - expected) < 1e-9
+    assert.ok(near(host.interpolationAlpha, 0.4), `${host.interpolationAlpha}`)
+    send(channel, { protocolVersion: 1, sequence: 3, type: 'command', command: { type: 'pause' } })
+    host.update(0)
+    host.update(1)
+    assert.ok(near(host.interpolationAlpha, 0.4), 'the picture stands where it is through the pause')
+    send(channel, { protocolVersion: 1, sequence: 4, type: 'command', command: { type: 'resume' } })
+    host.update(0)
+    assert.ok(near(host.interpolationAlpha, 0.4), 'and resumes from there')
+    channel.drainClientPackets()
+    host.update(0.006)
+    assert.deepEqual(channel.drainClientPackets().map(packet => packet.type), ['frame'], 'the rest of the tick')
+    assert.ok(near(host.interpolationAlpha, 0))
+})
+
 test('integrated host fatally stops before an oversized catch-up', () => {
     const { channel, host } = setup()
     send(channel, startPacket)
