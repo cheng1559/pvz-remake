@@ -315,12 +315,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             this.place(player.node, at.x, at.y)
             return
         }
-        // Still below by what it has to rise, inside the clip (GraveZombiePresentation), which is the zombie's: in the
-        // body's own coordinates, turned round with a body facing right.
         const rise = this.rise(zombie), sunk = this.sunk(rise, zombie.riseTicks), { clip } = rise
         this.place(player.node, at.x, at.y - sunk)
         const top = sunk + clip.y, bottom = clip.bottom - Math.min(clip.settleTicks, zombie.riseTicks), { x, y } = player.node.position
-        player.setClip({ x: this.turned ? x - clip.x - clip.width : clip.x - x, y: top + y, width: clip.width, height: Math.max(0, bottom - top) })
+        // DrawReanim clips in board pixels. The mask is local to the scaled, possibly mirrored body.
+        player.setClip({
+            x: (this.turned ? x - clip.x - clip.width : clip.x - x) / this.scale,
+            y: (top + y) / this.scale,
+            width: clip.width / this.scale,
+            height: Math.max(0, bottom - top) / this.scale,
+        })
     }
 
     /** How it comes up while it rises (`riseTicks`): out of a grave, unless its view has it come up otherwise. */
