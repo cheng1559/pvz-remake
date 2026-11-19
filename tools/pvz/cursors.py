@@ -11,7 +11,8 @@ import struct
 
 from PIL import Image
 
-RT_CURSOR = 1
+from .pe import RT_CURSOR, resources
+
 ARROW_SHA1 = "84414ed41956b7fdf21cc2432185fc101bb8b0a4"
 # (name, SHA-1 of the 256-byte AND+XOR masks, 8 bytes at offset 16 used to find them; the first rows are blank).
 MASKS = [
@@ -20,44 +21,9 @@ MASKS = [
 ]
 
 
-def resources(exe: bytes, kind: int) -> list[bytes]:
-    """Data of every resource of one type, from the PE resource directory."""
-    pe = struct.unpack_from("<I", exe, 0x3C)[0]
-    sections, optional_size = struct.unpack_from("<H12xH", exe, pe + 6)
-    optional = pe + 24
-    directories = optional + (112 if struct.unpack_from("<H", exe, optional)[0] == 0x20B else 96)
-    root_rva = struct.unpack_from("<I", exe, directories + 2 * 8)[0]
-    # Section headers: virtual size, virtual address, raw size, raw file offset.
-    table = [struct.unpack_from("<8xIIII", exe, optional + optional_size + 40 * i) for i in range(sections)]
-
-    def offset(rva: int) -> int:
-        for virtual_size, address, raw_size, raw in table:
-            if address <= rva < address + max(virtual_size, raw_size):
-                return rva - address + raw
-        raise ValueError(f"RVA {rva:#x} is outside every section")
-
-    root = offset(root_rva)
-
-    def entries(directory: int) -> list[int]:
-        named, numbered = struct.unpack_from("<HH", exe, root + directory + 12)
-        return [root + directory + 16 + 8 * i for i in range(named + numbered)]
-
-    found = []
-    for type_entry in entries(0):
-        type_id, type_dir = struct.unpack_from("<II", exe, type_entry)
-        if type_id != kind:
-            continue
-        for name_entry in entries(type_dir & 0x7FFFFFFF):
-            for language_entry in entries(struct.unpack_from("<I", exe, name_entry + 4)[0] & 0x7FFFFFFF):
-                data = root + struct.unpack_from("<I", exe, language_entry + 4)[0]
-                rva, size = struct.unpack_from("<II", exe, data)
-                found.append(exe[offset(rva):offset(rva) + size])
-    return found
-
-
 def arrow(exe: bytes) -> Image.Image:
     """The big arrow: an RT_CURSOR entry (hotspot, then a palette DIB with its AND mask below the colours)."""
-    for resource in resources(exe, RT_CURSOR):
+    for resource in resources(exe, RT_CURSOR).values():
         hotspot, dib = struct.unpack_from("<HH", resource), resource[4:]
         if hashlib.sha1(dib).hexdigest() != ARROW_SHA1:
             continue

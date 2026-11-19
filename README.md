@@ -37,8 +37,7 @@ Building the game requires these files from a licensed copy of the *Plants vs. Z
 | File | Resources it provides |
 | --- | --- |
 | `main.pak` | Images, animations, particles, fonts, sound effects, music and text |
-| `PlantsVsZombies.exe` | Resources built into the program, such as the mouse cursors |
-| `game.ico` | The app icon, exported from the main icon resource of `PlantsVsZombies.exe` |
+| `PlantsVsZombies.exe` | Resources built into the program: the mouse cursors and the app icon |
 
 Note that the files of 1.2.0.1073 also build, but in its `main.pak`, `properties/LawnStrings.txt` lacks part of the interface text and `images/acheesements_icons.png` lacks the Disco is Undead icon, so some text and images display incorrectly:
 

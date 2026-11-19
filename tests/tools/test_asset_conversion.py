@@ -1,3 +1,4 @@
+import io
 import json
 import struct
 import sys
@@ -13,6 +14,40 @@ from pvz.pak import extracted_pak, PAK_MAGIC, XOR_KEY
 from pvz.fonts import convert_font
 from pvz.images import convert_images
 from pvz.particles import build_particle, write_particle
+from pvz.pe import RT_GROUP_ICON, RT_ICON, icon
+
+
+def fake_exe(resources):
+    """A PE32 file holding only a resource section: {type: {ID or name: data}}, one language each."""
+    base, raw, section = 0x1000, 0x200, bytearray()
+
+    def directory(children):
+        start = len(section)
+        named = sum(isinstance(key, str) for key, _ in children)
+        section.extend(struct.pack('<IIHHHH', 0, 0, 0, 0, named, len(children) - named))
+        slots = [(len(section) + 8 * i, key, value) for i, (key, value) in enumerate(children)]
+        section.extend(bytes(8 * len(children)))
+        for slot, key, value in slots:
+            if isinstance(key, str):
+                name, key = key, 0x80000000 | len(section)
+                section.extend(struct.pack('<H', len(name)) + name.encode('utf-16-le'))
+            if isinstance(value, bytes):
+                entry = len(section)
+                section.extend(struct.pack('<IIII', base + entry + 16, len(value), 0, 0) + value)
+                struct.pack_into('<II', section, slot, key, entry)
+            else:
+                struct.pack_into('<II', section, slot, key, 0x80000000 | directory(value))
+        return start
+
+    directory([(kind, [(key, [(0x409, data)]) for key, data in entries.items()]) for kind, entries in resources.items()])
+    header = bytearray(raw)
+    struct.pack_into('<I', header, 0x3C, 0x40)
+    header[0x40:0x44] = b'PE\0\0'
+    struct.pack_into('<HH12xHH', header, 0x44, 0x14C, 1, 224, 0)
+    struct.pack_into('<H', header, 0x58, 0x10B)
+    struct.pack_into('<II', header, 0x58 + 96 + 2 * 8, base, len(section))
+    struct.pack_into('<8sIIII', header, 0x58 + 224, b'.rsrc', len(section), base, len(section), raw)
+    return bytes(header + section)
 
 
 class AssetConversionTests(unittest.TestCase):
@@ -132,6 +167,22 @@ SetDefaultPointSize 2;
             emitter = write_particle(source, Path(directory) / 'particle.json', 'pvz:icetrap', image_grids={})['emitters'][0]
             self.assertEqual((emitter['name'], emitter['sprite'], emitter['fullScreen']), ('IceFlash', 'pvz:whitepixel', True))
             self.assertEqual(emitter['particleRed']['nodes'], [{'time': 0, 'low': .5, 'high': .5}])
+
+    def test_an_exe_icon_group_becomes_an_ico_file(self):
+        # The group lists its images by RT_ICON resource ID; the .ico lists them by file offset.
+        frames = {}
+        for image_id, size in ((7, 16), (9, 32)):
+            png = io.BytesIO()
+            Image.new('RGBA', (size, size), (size, 0, 0, 255)).save(png, 'PNG')
+            frames[image_id] = png.getvalue()
+        group = struct.pack('<HHH', 0, 1, 2) + b''.join(
+            struct.pack('<BBBBHHIH', size, size, 0, 0, 1, 32, len(frames[image_id]), image_id)
+            for image_id, size in ((7, 16), (9, 32)))
+        exe = fake_exe({RT_ICON: frames, RT_GROUP_ICON: {'IDI_MAIN_ICON': group}})
+        ico = Image.open(io.BytesIO(icon(exe, 'IDI_MAIN_ICON')))
+        self.assertEqual(ico.ico.sizes(), {(16, 16), (32, 32)})
+        for size in (16, 32):
+            self.assertEqual(ico.ico.getimage((size, size)).convert('RGBA').getpixel((0, 0)), (size, 0, 0, 255))
 
 
 if __name__ == '__main__':

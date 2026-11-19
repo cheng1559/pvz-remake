@@ -37,8 +37,7 @@ PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam �
 | 文件 | 提供的资源 |
 | --- | --- |
 | `main.pak` | 图像、动画、粒子、字体、音效、音乐与文本 |
-| `PlantsVsZombies.exe` | 程序内置资源，如鼠标指针 |
-| `game.ico` | 应用图标，从 `PlantsVsZombies.exe` 的主图标资源导出 |
+| `PlantsVsZombies.exe` | 程序内置资源：鼠标指针与应用图标 |
 
 需要说明的是，使用 1.2.0.1073 的文件也可以完成构建，但其 `main.pak` 中的 `properties/LawnStrings.txt` 缺少部分界面文本，`images/acheesements_icons.png` 缺少"舞者精神"成就图标，因此部分文本和图像会显示异常，包括：
 

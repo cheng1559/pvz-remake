@@ -6,7 +6,7 @@ Directories are split by purpose. The root holds only this guide, the Node modul
 tools/
 ├── build/
 │   └── clean-native-assets.ts  # Clears old data/assets from the output directory before a native build (called by the Windows build commands)
-├── installer/                  # Windows installer: package-windows.ts compiles windows.iss with Inno Setup
+├── installer/                  # Installers: package-windows.ts compiles windows.iss with Inno Setup, package-macos.ts makes the macOS disk image
 ├── kernel/build.ts             # Compiles the C++ kernel to Wasm
 ├── mod/                        # Mod initialization, packing, validation, host module list generation and configuration reading
 │   ├── cli.ts
@@ -20,8 +20,7 @@ tools/
 │   └── licenses/               # Third-party licenses of the resource processing tools
 ├── local/                      # Git-ignored local resource pack generators and their packing interface package_resources.py
 ├── main.pak                    # Git-ignored: the original's resource package, the default input of build:content
-├── PlantsVsZombies.exe         # Git-ignored: the original program, from which the import extracts the mouse cursors
-└── game.ico                    # Git-ignored: the original's icon, the default input of build:icons
+└── PlantsVsZombies.exe         # Git-ignored: the original program; build:content extracts its mouse cursors and build:icons its icon
 ```
 
 Common entry points:
@@ -32,9 +31,9 @@ Common entry points:
 | Initialize, pack and validate a Mod | `npm run mod:init`, `npm run mod:pack`, `npm run mod:test` |
 | Regenerate the Mod host module list | `npm run mod:hosts` |
 | Check the Cocos preview's module mapping | `npm run check:preview` |
-| Package the Windows installer | `npm run package:windows` |
+| Package the Windows installer and the macOS disk image | `npm run package:windows`, `npm run package:macos` |
 | Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
-| Generate the web and native app icons from the original icon | `npm run build:icons -- --ico /path/to/game.ico` |
+| Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
 | iOS JS performance sampling | `npx tsx tools/profile/ios.ts ...` |
 | Tests of the resource conversion tools | `npm run test:tools` |
@@ -54,6 +53,7 @@ pvz/
 ├── particles.py             # Particle XML conversion
 ├── compiled_particles.py    # Decoding of the original's compiled particles
 ├── fonts.py                 # Bitmap fonts
+├── pe.py                    # Resources of the original program (PE resource directory) and its icon
 ├── cursors.py               # Extraction of the mouse cursors from the original program
 ├── strings.py               # The original's text
 ├── audio.py                 # Sound effect conversion
