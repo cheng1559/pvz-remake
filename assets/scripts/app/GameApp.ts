@@ -375,7 +375,7 @@ export class GameApp extends Component {
                     else await this.navigate(action === 'restart' ? 'restart' : 'main')
                 } else ui.dialog(this.node, {
                     width: 500, height: 300,
-                    title: ui.text('ADVENTURE_COMPLETE_HEADER'), message: ui.text('ADVENTURE_COMPLETE_BODY'),
+                    title: ui.text('ADVENTURE_THANKS_HEADER'), message: ui.text('ADVENTURE_THANKS_BODY'),
                     buttons: [
                         { text: 'GitHub', onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake') },
                         { text: ui.text('DIALOG_BUTTON_OK'), onClick: dialog => dialog.onConfirm() },

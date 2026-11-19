@@ -510,7 +510,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         await Promise.all([app.navigate(action), app.navigate(action)])
         assert.equal(completionDialogs.length, before + 1)
         const dialog: CompletionDialog = completionDialogs[before]
-        assert.equal(dialog.title, 'ADVENTURE_COMPLETE_HEADER')
+        assert.equal(dialog.title, 'ADVENTURE_THANKS_HEADER')
         assert.deepEqual(Array.from(dialog.buttons, button => button.text), ['GitHub', 'DIALOG_BUTTON_OK'])
         let closed = false
         const modal = { onConfirm() { closed = true } }
