@@ -26,6 +26,7 @@
         "build:macos:release": "cocos build --project . --platform mac --build-config build-configs/macos-release.json --no-interactive",
         "compile:macos:debug": "npm run build:macos:debug && cocos make --platform mac --dest build/mac",
         "compile:macos:release": "npm run build:macos:release && cocos make --platform mac --dest build/mac",
+        "package:macos": "tsx tools/installer/package-macos.ts",
         "build:ios:debug": "cocos build --project . --platform ios --build-config build-configs/ios-debug.json --no-interactive",
         "build:ios:release": "cocos build --project . --platform ios --build-config build-configs/ios-release.json --no-interactive",
         "compile:ios:debug": "npm run build:ios:debug && cocos make --platform ios --dest build/ios",
