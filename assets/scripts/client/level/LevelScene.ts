@@ -155,12 +155,16 @@ export class LevelScene extends Component {
         this.game.update(0)
         this.view.sync(this.game.render(), this.game.drainChanges(), this.game.drainEvents())
         this.view.setPaused(paused)
-        this.audio?.pauseSounds(paused)
         if (paused) {
             this.input?.suspend()
-            if (!keepMusic) this.audio?.pause()
+            // Board::Pause leaves the intro audio running under the pause dialog.
+            if (this.game.render().phase !== 'intro') {
+                this.audio?.pauseSounds(true)
+                if (!keepMusic) this.audio?.pause()
+            }
         } else {
             this.input?.resume()
+            this.audio?.pauseSounds(false)
             this.audio?.resume()
         }
     }

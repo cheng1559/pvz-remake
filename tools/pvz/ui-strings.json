@@ -53,6 +53,7 @@
   "DEBUG_REPICK_NO_BANK": "This level has no seed bank to choose again",
   "DEBUG_SWITCH_ON": "%s: on",
   "DEBUG_SWITCH_OFF": "%s: off",
+  "DEBUG_SWITCH_AUTOPAUSE": "Pause on focus loss",
   "DEBUG_SWITCH_HOTKEYS": "Hotkeys",
   "DEBUG_SWITCH_HAPTICS": "Haptics",
   "DEBUG_SWITCH_CURSOR": "Original cursors",

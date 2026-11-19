@@ -83,6 +83,13 @@ test('FPS and cursor commands persist their settings and work without an active 
     const shown = await run('/fps')
     assert.deepEqual([shown.ok, shown.advice], [true, { key: 'DEBUG_SWITCH_ON', args: ['DEBUG_SWITCH_FPS'] }])
     assert.equal(settings().fpsVisible, true)
+    assert.equal(settings().autoPauseEnabled, true)
+    assert.deepEqual((await run('/autopause')).advice, { key: 'DEBUG_SWITCH_OFF', args: ['DEBUG_SWITCH_AUTOPAUSE'] })
+    assert.equal(settings().autoPauseEnabled, false)
+    assert.equal((await run('/autopause on')).failure, 'syntax')
+    assert.deepEqual((await executeDebugCliCommand('/autopause', true, () => assert.fail())).advice,
+        { key: 'DEBUG_SWITCH_ON', args: ['DEBUG_SWITCH_AUTOPAUSE'] })
+    assert.equal(settings().autoPauseEnabled, true)
     assert.equal((await run('/fps true')).failure, 'syntax', 'a switch takes nothing')
     assert.equal(settings().fpsVisible, true)
     assert.deepEqual((await run('/fps')).advice, { key: 'DEBUG_SWITCH_OFF', args: ['DEBUG_SWITCH_FPS'] })

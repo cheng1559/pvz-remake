@@ -71,6 +71,7 @@ async function executeCommand(
             return debugSwitched(name, enabled)
         }
         case 'mobile': return debugSwitched(name, (GameDebugSettings.set('mobileEnabled', !GameDebugSettings.mobileEnabled), GameDebugSettings.mobileEnabled))
+        case 'autopause': return debugSwitched(name, GameDebugSettings.set('autoPauseEnabled', !GameDebugSettings.autoPauseEnabled))
         case 'hotkeys': return debugSwitched(name, (GameDebugSettings.set('hotkeysEnabled', !GameDebugSettings.hotkeysEnabled), GameDebugSettings.hotkeysEnabled))
         case 'haptics': return debugSwitched(name, (GameDebugSettings.set('hapticsEnabled', !GameDebugSettings.hapticsEnabled), GameDebugSettings.hapticsEnabled))
         case 'cursor': {

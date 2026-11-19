@@ -19,7 +19,7 @@ test('native music never ends by itself and jumps to its loop point, even when a
             json: async (kind: string, id: string) => kind === 'music' && id === 'pvz:choose_seeds' ? tune : undefined,
             audio: async (id: string) => ({ nativeUrl: `${id}.mp3` }),
         } },
-        '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
+        '@/client/sound/SoundSystem': { SoundSystem: { getMusicOutputVolume: () => 1, onMusicVolumeChange: () => () => {} } },
         '@/shared/content/music': musicContent,
     }
     const exports = loadScript('assets/scripts/client/music/MusicSystem.ts', (id: string) => modules[id] ?? {}, { console, jsb: { AudioEngine: engine } })
@@ -58,7 +58,7 @@ test('night burst switches on the next order, crossfades the melody, and restore
             json: async (kind: string, id: string) => kind === 'music' && id === 'pvz:night_moongrains' ? tune : undefined,
             audio: async (id: string) => ({ nativeUrl: `${id}.mp3` }),
         } },
-        '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
+        '@/client/sound/SoundSystem': { SoundSystem: { getMusicOutputVolume: () => 1, onMusicVolumeChange: () => () => {} } },
         '@/shared/content/music': musicContent,
         './MusicPlaybackSnapshot': playback,
     }

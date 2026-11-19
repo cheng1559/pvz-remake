@@ -39,7 +39,7 @@ export interface LevelController {
     hide(): void
     isRunning(): boolean
     isPaused(): boolean
-    canPause(): boolean
+    canPause(reason?: 'focusLoss'): boolean
     cancelCursor(): boolean
     isLevelIntro(): boolean
     /** A repick (`/repick`) is choosing the bank again, or its chooser still lifting out. */
@@ -303,8 +303,8 @@ export function createLevelController(
         isPaused() {
             return current?.root.isValid === true && current.scene.isPaused()
         },
-        canPause() {
-            return current?.root.isValid === true && current.view.canOpenMenu &&
+        canPause(reason) {
+            return current?.root.isValid === true && (reason === 'focusLoss' ? current.view.canPauseOnFocusLoss : current.view.canOpenMenu) &&
                 !current.scene.isPaused() && current.game.render().result === 'playing'
         },
         cancelCursor() {

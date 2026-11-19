@@ -28,6 +28,8 @@ export class UIDialog extends Component {
             pointer.canHover && this.dragOffset !== null && modal === this.node,
     }
 
+    static get isOpen(): boolean { return this.stack.length > 0 }
+
     static handleKey(event: EventKeyboard): boolean {
         if (UIInput.handleKey(event)) return true
         const dialog = this.stack[this.stack.length - 1]

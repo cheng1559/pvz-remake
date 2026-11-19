@@ -595,7 +595,7 @@ test('Grave Buster chewing follows board pause and a late load cannot outlive th
         const engine = {
             play2d() { heard.push('play'); return 1 },
             pause() { heard.push('pause') }, resume() { heard.push('resume') },
-            stop() { heard.push('stop') }, setFinishCallback() {},
+            stop() { heard.push('stop') }, setVolume() {}, setFinishCallback() {},
         }
         const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
             cc: { sys: { isNative: native }, AudioSource: { EventType: { ENDED: 'ended' } } },
@@ -624,13 +624,43 @@ test('Grave Buster chewing follows board pause and a late load cannot outlive th
     }
 })
 
+test('focus mute affects active and late sounds and restores the current volume without unpausing the board', async () => {
+    const volumes: number[] = [], changes: number[] = [], resumed: number[] = []
+    const engine = {
+        play2d(_url: string, _loop: boolean, value: number) { volumes.push(value); return volumes.length },
+        setVolume(_id: number, value: number) { changes.push(value) }, stop() {}, setFinishCallback() {},
+        pause() {}, resume(id: number) { resumed.push(id) },
+    }
+    const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
+        cc: { sys: { isNative: true } }, '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
+    }[id]), { jsb: { AudioEngine: engine } })
+    SoundSystem.load = async () => ({ nativeUrl: 'sample' })
+    SoundSystem.setSfxVolume(0.6)
+    await SoundSystem.play('hit')
+    const late = SoundSystem.play('dancer', { channel: 'dancer', pauseWithGame: true })
+    SoundSystem.setFocusMuted(true)
+    SoundSystem.pauseGameSounds(true)
+    await late
+    assert.deepEqual(volumes, [0.6, 0])
+    assert.deepEqual(changes, [0])
+    SoundSystem.setMusicVolume(0.5)
+    SoundSystem.setSfxVolume(0.3)
+    assert.deepEqual([SoundSystem.getSfxVolume(), SoundSystem.getMusicVolume(), SoundSystem.getMusicOutputVolume()], [0.3, 0.5, 0])
+    SoundSystem.setFocusMuted(false)
+    assert.deepEqual(changes.slice(-2), [0.3, 0.3])
+    assert.equal(SoundSystem.getMusicOutputVolume(), 0.5)
+    assert.deepEqual(resumed, [])
+    SoundSystem.pauseGameSounds(false)
+    assert.deepEqual(resumed, [2])
+})
+
 test('sound channels reserve during loading, keep or replace requests, and release on completion', async () => {
     const played: string[] = [], stopped: number[] = [], paused: number[] = [], resumed: number[] = []
     const ended = new Map<number, () => void>()
     const engine = {
         play2d(url: string) { played.push(url); return played.length },
         pause(id: number) { paused.push(id) }, resume(id: number) { resumed.push(id) },
-        stop(id: number) { stopped.push(id) }, setPitch() { return true },
+        stop(id: number) { stopped.push(id) }, setPitch() { return true }, setVolume() {},
         setFinishCallback(id: number, callback: () => void) { ended.set(id, callback) },
     }
     const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({

@@ -42,6 +42,10 @@ test('a level scene runs an injected intro and level through clock scaling, paus
         snapshot: async (flow: unknown) => ({ flow }),
     }, start, { onComplete() { complete++ } })
     try {
+        scene.pause()
+        assert.deepEqual([world.paused, musicPaused, soundsPaused], [true, false, false], 'intro pauses only its board')
+        scene.resume()
+        coinBanks = deltas.length = 0
         gameClock.setSpeed(2)
         scene.update(0.5)
         assert.equal(choosing, 1)

@@ -28,6 +28,7 @@ Opening the CLI pauses gameplay and global presentation time. Closing restores t
 | Rules | `/cooldown`, `/suncost`, `/plantinvincible`, `/cheatseed` |
 | Collection | `/collect {auto\|click\|move}`; auto and move collection handle ordinary drops only |
 | Achievements | `/achievement give {achievement}`, `/achievement reset [achievement]` (see below) |
+| Automatic pause | `/autopause` toggles pausing the board when the game loses focus. Enabled by default and saved on this device. Focus loss always mutes audio. |
 | Hotkeys | `/hotkeys`; `1`–`9` and `0` pick the matching slot of the seed bank or the conveyor, `F` picks up or puts back the shovel (holding a plant, it swaps straight to the shovel, as the number keys swap packets), `D` turns zero speed on and off, `R` runs `/repick` and, pressed again in the repick, is Let's Rock, and `S` and `C` turn `/suncost` and `/cooldown` the other way, as typing them would |
 | Haptics | `/haptics`, on by default, applies immediately and is saved locally |
 | Original cursors | `/cursor`, on by default, applies immediately and is saved locally |
@@ -64,7 +65,7 @@ Common examples:
 /goto main
 ```
 
-The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`) take no state: each turns its switch over and shows where it now stands as advice, such as "Recharge: off".
+The switches (the rules, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`) take no state: each turns its switch over and shows where it now stands as advice, such as "Recharge: off".
 
 `/haptics` turns all haptic feedback on or off immediately and saves the preference locally. Enabled by default.
 

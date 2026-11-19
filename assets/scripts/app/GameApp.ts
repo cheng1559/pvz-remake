@@ -70,6 +70,7 @@ export class GameApp extends Component {
     private awardStart: MenuAction = 'nextLevel'
     private fpsDisplay: FpsDisplay | null = null
     private removeErrorListeners?: () => void
+    private removeFocusListeners?: () => void
 
     private get canShowGameUI(): boolean {
         return !!this.node?.isValid && !modFaults.current
@@ -122,7 +123,7 @@ export class GameApp extends Component {
             ;(globalThis as typeof globalThis & { pvzTime?: typeof gameClock }).pvzTime = gameClock
             installLevelProbe(this.controller)
         }
-        game.on(Game.EVENT_HIDE, this.save, this)
+        this.listenForFocusChanges()
         // LawnApp::Shutdown saves the level when the window closes (close button, Alt+F4, Cmd+Q).
         game.on(Game.EVENT_CLOSE, this.save, this)
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
@@ -138,6 +139,61 @@ export class GameApp extends Component {
             initializeViewport()
             this.fpsDisplay = new FpsDisplay(this.node, ui)
         })
+    }
+
+    private listenForFocusChanges(): void {
+        const web = !sys.isNative && typeof document !== 'undefined' && typeof window !== 'undefined'
+        const bridge = sys.isNative ? (globalThis as typeof globalThis & {
+            jsb?: { windowFocused?: boolean, onWindowFocusChanged?: (focused: boolean) => void }
+        }).jsb : undefined
+        let hidden = web && document.hidden
+        let focused = web ? document.hasFocus() : bridge?.windowFocused ?? true
+        let active = true, savedOnLoss = false
+        const sync = () => {
+            const next = focused && !hidden
+            if (next === active) return
+            active = next
+            SoundSystem.setFocusMuted(!active)
+            if (active) { savedOnLoss = false; return }
+            this.spacePressed = false
+            if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading &&
+                !this.dialog && !this.debugCliOpen && !UIDialog.isOpen && this.controller?.canPause('focusLoss')) {
+                savedOnLoss = true
+                void this.openDialog('pause', 'focusLoss')
+            }
+        }
+        const blur = () => { focused = false; sync() }
+        const focus = () => { focused = true; sync() }
+        const hide = () => {
+            hidden = true
+            sync()
+            if (!savedOnLoss) { savedOnLoss = true; this.save() }
+        }
+        const show = () => {
+            hidden = false
+            if (web) focused = document.hasFocus()
+            sync()
+        }
+        const previous = bridge?.onWindowFocusChanged
+        const nativeFocus = (value: boolean) => { focused = value; sync(); previous?.(value) }
+        if (web) {
+            window.addEventListener('blur', blur)
+            window.addEventListener('focus', focus)
+        }
+        if (bridge) bridge.onWindowFocusChanged = nativeFocus
+        game.on(Game.EVENT_HIDE, hide)
+        game.on(Game.EVENT_SHOW, show)
+        sync()
+        this.removeFocusListeners = () => {
+            if (web) {
+                window.removeEventListener('blur', blur)
+                window.removeEventListener('focus', focus)
+            }
+            if (bridge?.onWindowFocusChanged === nativeFocus) bridge.onWindowFocusChanged = previous
+            game.off(Game.EVENT_HIDE, hide)
+            game.off(Game.EVENT_SHOW, show)
+            SoundSystem.setFocusMuted(false)
+        }
     }
 
     private listenForModFaults(): void {
@@ -356,14 +412,14 @@ export class GameApp extends Component {
      * Opens a menu dialog over the current page or level, which stays mounted and, for a level, paused. One is open at
      * a time: while it is, the board and the page under it take no input.
      */
-    private async openDialog(id: MenuDialogId): Promise<void> {
+    private async openDialog(id: MenuDialogId, reason?: 'focusLoss'): Promise<void> {
         const { controller } = this
         if (modFaults.current || !controller || this.dialog || this.loading) return
         const inLevel = LEVEL_DIALOGS.includes(id)
         if (inLevel && !controller.isRunning()) return
         const wasPaused = controller.isPaused()
         if (inLevel) controller.pause()
-        if (id === 'pause' && this.currentPage === null) void SoundSystem.play(SoundEffect.Pause)
+        if (id === 'pause' && reason !== 'focusLoss' && this.currentPage === null) void SoundSystem.play(SoundEffect.Pause)
         const levelIntro = controller.isLevelIntro()
         const entry: NonNullable<GameApp['dialog']> = { id }
         this.dialog = entry
@@ -669,7 +725,7 @@ export class GameApp extends Component {
         this.transitions?.dispose()
         this.save()
         this.removeErrorListeners?.()
-        game.off(Game.EVENT_HIDE, this.save, this)
+        this.removeFocusListeners?.()
         game.off(Game.EVENT_CLOSE, this.save, this)
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.off(Input.EventType.KEY_UP, this.onKeyUp, this)

@@ -103,6 +103,11 @@ export class LevelView {
     get introComplete(): boolean {
         return this.intro.complete
     }
+    /** CanPauseNow allows the opening pan until the chooser accepts input, and waits for Dave to leave. */
+    get canPauseOnFocusLoss(): boolean {
+        return !this.boardHud?.daveOut && !this.lastSnapshot?.dialog && !this.questionOpen &&
+            !(this.seedChooser?.active && this.seedChooser.acceptsInput)
+    }
     get canOpenMenu(): boolean { return this.introComplete || !!this.seedChooser?.active && this.seedChooser.choosing && this.intro.elapsedTicks >= SEED_CHOOSER_SLIDE.onEnd }
     /** The chooser's menu button stays drawn, though disabled, from its arrival until the board's menu takes over. */
     get menuVisible(): boolean { return this.introComplete || !!this.seedChooser && this.intro.elapsedTicks >= SEED_CHOOSER_SLIDE.onEnd }

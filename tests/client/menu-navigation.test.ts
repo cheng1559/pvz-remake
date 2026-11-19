@@ -523,6 +523,69 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     }
 })
 
+test('focus loss pauses once, hides silently, and regaining focus leaves the pause dialog open', async () => {
+    const listeners = new Map<string, () => void>()
+    const events = { on: (key: string, f: () => void) => listeners.set(key, f), off: (key: string) => listeners.delete(key) }
+    let focused = true, paused = false, saves = 0, dialogs = 0, eligible = true
+    const mute: boolean[] = []
+    const settings = { autoPauseEnabled: true }
+    const dialogState = { isOpen: false }
+    const modules: Record<string, unknown> = {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value }, sys: { isNative: false },
+            game: events, Game: { EVENT_HIDE: 'hide', EVENT_SHOW: 'show' } },
+        '@/client/screens/MenuPages': { LEVEL_DIALOGS },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
+        '@/client/ui/UIDialog': { UIDialog: dialogState },
+        '@/client/ui/UI': { UI: { load: async () => ({}) } },
+        '@/client/sound/SoundSystem': { SoundSystem: { setFocusMuted: (v: boolean) => mute.push(v), play() { assert.fail('unexpected pause sound') } } },
+        '@/client/dialogs/MenuDialog': { showMenuDialog() { dialogs++; return { node: {} } } },
+    }
+    const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => modules[id] ?? {}, {
+        window: { addEventListener: events.on, removeEventListener: events.off },
+        document: { hidden: false, hasFocus: () => focused },
+    })
+    const app = new GameApp()
+    app.node = { isValid: true }
+    app.controller = {
+        isRunning: () => true, isLevelIntro: () => false, isPaused: () => paused,
+        canPause: (reason: string) => reason === 'focusLoss' && eligible && !paused,
+        pause() { paused = true }, saveIfRunning: async () => { saves++ },
+    }
+    app.listenForFocusChanges()
+    try {
+        focused = false
+        listeners.get('blur')!()
+        assert.equal(paused, true, 'the board stops before any asynchronous UI load')
+        listeners.get('hide')!()
+        listeners.get('show')!()
+        assert.deepEqual(mute, [true], 'visible with the window still unfocused')
+        await setImmediate()
+        assert.equal(dialogs, 1)
+        assert.equal(saves, 1)
+        focused = true
+        listeners.get('focus')!()
+        assert.equal(paused, true)
+        assert.deepEqual(mute, [true, false])
+
+        paused = false
+        app.dialog = null
+        for (const skip of ['chooser', 'modal', 'disabled']) {
+            eligible = skip !== 'chooser'
+            dialogState.isOpen = skip === 'modal'
+            settings.autoPauseEnabled = skip !== 'disabled'
+            listeners.get('blur')!()
+            assert.equal(paused, false)
+            listeners.get('hide')!()
+            listeners.get('focus')!()
+            assert.equal(mute.at(-1), true, 'focus alone cannot unmute a hidden window')
+            listeners.get('show')!()
+        }
+        assert.equal(dialogs, 1)
+        assert.equal(saves, 4, 'hiding still saves once when auto-pause is skipped')
+    } finally { app.removeFocusListeners() }
+    assert.equal(listeners.size, 0)
+})
+
 test('a loading fault opens one base UI dialog and the manager can cancel or restart without saving', async () => {
     const steps: string[] = [], buttons: any[] = []
     const faultDialog = { node: { isValid: true }, onCancel() {}, onConfirm() {} }

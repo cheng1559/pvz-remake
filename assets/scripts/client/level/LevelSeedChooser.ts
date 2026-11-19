@@ -177,7 +177,7 @@ export class LevelSeedChooser {
         this.start = ui.button(this.buttons, { text: ui.text('LETS_ROCK_BUTTON'), skin: 'seed', font: 'yellow',
             color: Color.WHITE, disabledColor: new Color(64, 64, 64), x: 154, y: 545, width: 156, height: 42,
             rightClickTriggers: false, enabled: false, onClick: () => this.confirm() })
-        this.start.canInteract = () => this.canStart
+        this.start.canInteract = () => this.acceptsInput
         // LawnApp::CanShowAlmanac and CanShowStore show them; SeedChooserScreen::ButtonDepress ignores them while seeds fly.
         for (const [shown, key, x, open] of [[pages.almanac, 'ALMANAC_BUTTON', 560, () => this.onAlmanac()],
             [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
@@ -506,12 +506,12 @@ export class LevelSeedChooser {
     }
 
     /** Let's Rock answers once the intro has shown the chooser, while choosing, unpaused and with no warning open. */
-    private get canStart(): boolean {
+    get acceptsInput(): boolean {
         return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
     }
 
     private confirm(): void {
-        if (!this.start.interactable || !this.canStart) return
+        if (!this.start.interactable || !this.acceptsInput) return
         for (const choice of this.choices) { this.land(choice); choice.tooltip.hide() }
         const warnings = this.snapshot?.seedChooser?.warnings ?? []
         if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return }

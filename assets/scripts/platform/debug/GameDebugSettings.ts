@@ -17,6 +17,7 @@ type DebugSettings = {
     /** `/tilted`: a seed packet's picture half as large again (a zombie's twice) and leaning out of its packet. */
     tiltedSeedPackets: boolean
     mobileEnabled: boolean
+    autoPauseEnabled: boolean
     hotkeysEnabled: boolean
     hapticsEnabled: boolean
     originalCursorsEnabled: boolean
@@ -48,6 +49,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     hitboxesVisible: false,
     tiltedSeedPackets: false,
     mobileEnabled: sys.isMobile,
+    autoPauseEnabled: true,
     hotkeysEnabled: false,
     hapticsEnabled: true,
     originalCursorsEnabled: true,
@@ -69,7 +71,7 @@ const isBoolean = (value: unknown): value is boolean => typeof value === 'boolea
 const KEPT: { readonly [Key in keyof DebugSettings]?: (value: unknown) => value is DebugSettings[Key] } = {
     rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, cheatSeedsEnabled: isBoolean,
     fpsVisible: isBoolean, hitboxesVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
-    hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
+    autoPauseEnabled: isBoolean, hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
     collectMode: (value): value is DebugCollectMode => value === 'auto' || value === 'click' || value === 'move',
     sharpness: (value): value is number => typeof value === 'number' && value >= 0 && value <= 1,
 }

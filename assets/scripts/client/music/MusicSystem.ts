@@ -670,7 +670,7 @@ export class MusicSystem {
     }
 
     private static _applyVolumes() {
-        const masterVolume = SoundSystem.getMusicVolume()
+        const masterVolume = SoundSystem.getMusicOutputVolume()
         const fadeVolume = this._fadeOutDuration > 0 && this._fadeOutCounter > 0
             ? this._fadeOutCounter / this._fadeOutDuration
             : 1
@@ -708,7 +708,7 @@ export class MusicSystem {
 
         const url = clip.nativeUrl
         if (!url) return false
-        const audioId = player.play(url, true, this._stemVolume(stem) * SoundSystem.getMusicVolume())
+        const audioId = player.play(url, true, this._stemVolume(stem) * SoundSystem.getMusicOutputVolume())
         if (typeof audioId !== 'number' || audioId < 0) return false
 
         this._nativeAudioIds[stem] = audioId
