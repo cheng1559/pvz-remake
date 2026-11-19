@@ -1,0 +1,267 @@
+# Builds every platform from a licensed copy of the game, kept in a private repository, and publishes a Release for a
+# `v*` tag. Setup (repository settings):
+# - variable GAME_FILES_REPO: the private repository (owner/name) holding main.pak and PlantsVsZombies.exe (Steam GOTY
+#   1.2.0.1096) at its root;
+# - secret GAME_FILES_TOKEN: a fine-grained token with read access to that repository's contents;
+# - optional secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD: the
+#   Android release key; without them the APKs are signed with Cocos's public debug keystore.
+# Builds contain resources converted from the original game: artifacts are kept for a day, and only a tag publishes.
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # This run's converted resources and icons, handed from the content job to the platform jobs through the cache
+  # (unlike artifacts, caches are not downloadable by the public).
+  CONTENT_KEY: content-${{ github.run_id }}-${{ github.run_attempt }}
+  CONTENT_PATHS: |
+    assets/resources/base.zip
+    build-templates/web-mobile/game.ico
+    build-templates/web-mobile/icon-256.png
+    build-templates/web-mobile/apple-touch-icon.png
+    native/engine/android/res/mipmap-*/ic_launcher.png
+    native/engine/ios/Images.xcassets/AppIcon.appiconset/*.png
+    native/engine/mac/Assets.xcassets/AppIcon.appiconset/*.png
+    native/engine/mac/Icon.icns
+    native/engine/win64/res/game.ico
+
+jobs:
+  content:
+    name: Convert the game's resources
+    # The icon script needs macOS's iconutil for the macOS icon.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the game files
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.GAME_FILES_REPO }}
+          token: ${{ secrets.GAME_FILES_TOKEN }}
+          path: game-files
+
+      - name: Place the game files
+        run: cp game-files/main.pak game-files/PlantsVsZombies.exe tools/ && rm -rf game-files
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the converter's dependencies
+        run: |
+          brew install ffmpeg libopenmpt
+          python -m pip install pillow
+
+      - name: Convert resources and generate icons
+        run: |
+          npm ci
+          npm run build:content
+          npm run build:icons
+
+      - uses: actions/cache/save@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+
+  web:
+    name: Web
+    needs: content
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocos
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Build
+        run: |
+          npm ci
+          npm run build:web:release
+          # The build generates temp/'s Cocos declarations, which the client typecheck needs.
+          npx tsc --noEmit -p tsconfig.json
+          version=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          (cd build/web-mobile && zip -qr "$GITHUB_WORKSPACE/dist/pvz-remake-v$version-web.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: dist/*.zip
+          retention-days: 1
+
+  windows:
+    name: Windows
+    needs: content
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocos
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+      - name: Build and package
+        run: |
+          npm ci
+          npm run compile:windows:release
+          npm run package:windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.exe
+          retention-days: 1
+
+  macos:
+    name: macOS
+    needs: content
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocos
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Build and package
+        run: |
+          npm ci
+          npm run compile:macos:release
+          npm run package:macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+          retention-days: 1
+
+  ios:
+    name: iOS
+    needs: content
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocos
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - name: Build
+        run: |
+          npm ci
+          npm run compile:ios:release
+          version=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          cp build/ios/pvz-remake-mobile-unsigned.ipa "dist/pvz-remake-v$version-ios-unsigned.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist/*.ipa
+          retention-days: 1
+
+  android:
+    name: Android
+    needs: content
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-cocos
+      - uses: actions/cache/restore@v4
+        with:
+          key: ${{ env.CONTENT_KEY }}
+          path: ${{ env.CONTENT_PATHS }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install the NDK and CMake
+        run: |
+          # The NDK the project is built with locally; build.gradle asks for CMake 3.22.1.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;26.3.11579264" "cmake;3.22.1" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264" >> "$GITHUB_ENV"
+      - name: Use the release key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "No release key: the APKs are signed with Cocos's debug keystore."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          for config in build-configs/android-arm64-release.json build-configs/android-armv7-release.json; do
+            node -e "
+              const fs = require('fs'), file = process.argv[1], config = JSON.parse(fs.readFileSync(file, 'utf8'))
+              Object.assign(config.packages.android, {
+                useDebugKeystore: false,
+                keystorePath: process.env.RUNNER_TEMP + '/release.keystore',
+                keystorePassword: process.env.ANDROID_KEYSTORE_PASSWORD,
+                keystoreAlias: process.env.ANDROID_KEY_ALIAS,
+                keystoreAliasPassword: process.env.ANDROID_KEY_PASSWORD,
+              })
+              fs.writeFileSync(file, JSON.stringify(config, null, 4))
+            " "$config"
+          done
+      - name: Build
+        run: |
+          npm ci
+          npm run compile:android:arm64:release
+          npm run compile:android:armv7:release
+          version=$(node -p "require('./package.json').version")
+          mkdir -p dist
+          for abi in arm64 armv7; do
+            apk=$(find "build/android-$abi-release" -name '*.apk' -path '*release*' | head -1)
+            cp "$apk" "dist/pvz-remake-v$version-android-$abi.apk"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+          retention-days: 1
+
+  release:
+    name: Release
+    needs: [web, windows, macos, ios, android]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          draft: true

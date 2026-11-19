@@ -1,0 +1,83 @@
+# Server typecheck and tests, the resource tools' tests and the example Mod's check, on every push and pull request.
+# The tests read converted resources, so the job needs the game files (see build.yml for the GAME_FILES_REPO variable
+# and the GAME_FILES_TOKEN secret); pull requests from forks, which get no secrets, are skipped. The converted resources
+# are cached by the game files and the converter, so a run converts again only when either changes.
+# The client typecheck needs the Cocos toolchain's generated declarations and runs in build.yml's web job instead.
+name: Test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the game files
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.GAME_FILES_REPO }}
+          token: ${{ secrets.GAME_FILES_TOKEN }}
+          path: game-files
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install pillow
+
+      - name: Restore the converted resources
+        id: content
+        uses: actions/cache/restore@v4
+        with:
+          key: test-content-${{ hashFiles('game-files/main.pak', 'game-files/PlantsVsZombies.exe', 'tools/pvz/**', 'tools/mod/**', 'mods/pvz-base/**') }}
+          path: |
+            mods/pvz-base/assets
+            assets/resources/base.zip
+
+      - name: Convert the game's resources
+        if: steps.content.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq ffmpeg libopenmpt0
+          cp game-files/main.pak game-files/PlantsVsZombies.exe tools/
+          npm run build:content
+
+      - name: Save the converted resources
+        if: steps.content.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ steps.content.outputs.cache-primary-key }}
+          path: |
+            mods/pvz-base/assets
+            assets/resources/base.zip
+
+      - name: Server typecheck and tests
+        run: npm run test:server
+
+      - name: Resource tool tests
+        run: npm run test:tools
+
+      - name: Example Mod check
+        run: npm run mod:test -- example

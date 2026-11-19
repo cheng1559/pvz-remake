@@ -1,0 +1,27 @@
+name: Set up the Cocos toolchain
+description: Installs Node.js and the project's cocos-cli and cocos4 forks (dev/pvz-remake), and links the `cocos` command.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22.17.0
+        cache: npm
+
+    - name: Install cocos-cli with the cocos4 engine
+      shell: bash
+      run: |
+        # cocos-engine-external has paths longer than Windows' default limit.
+        git config --global core.longpaths true
+        cd "$RUNNER_TEMP"
+        git clone --depth 1 --branch dev/pvz-remake https://github.com/cheng1559/cocos-cli.git
+        cd cocos-cli
+        git clone --depth 1 --branch dev/pvz-remake https://github.com/cheng1559/cocos4.git packages/engine
+        git clone --depth 1 --branch v4.0.0-10 https://github.com/cocos/cocos-engine-external.git packages/engine/native/external
+        npm install -g node-gyp
+        npm run install:engine
+        npm install
+        npm run build
+        npm link
+        cocos --help > /dev/null
