@@ -92,6 +92,8 @@ export interface PlantPresentationDefinition {
     readonly muzzle?: { readonly effect: string; readonly x: number; readonly y: number }
     /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
     readonly layer?: RenderLayer
+    /** Added to the plant's position-based draw order on the board. */
+    readonly renderOffset?: number
     /**
      * Plant::DrawShadow: where its shadow lies, about its middle at `scale`; a plant without one (the grave buster) has
      * none. `phases`, for a `sunshroom` view: its scale while it is in one of its kind's phases, `[from, to]` going from
@@ -1085,6 +1087,7 @@ function parsePlant(value: unknown, name: string): PlantPresentationDefinition {
         }),
         muzzle: (value, name) => allFields<NonNullable<Plant['muzzle']>>(value, name, { effect: nonEmptyString, x: finite, y: finite }),
         layer,
+        renderOffset: integer,
         shadow: (value, name) => fields<NonNullable<Plant['shadow']>>(value, name, ['x', 'y'], {
             x: finite, y: finite, scale: positiveFinite,
             // Phases of its kind (PLANT_KIND_PHASES), as assertPresented checks against its gameplay definition.

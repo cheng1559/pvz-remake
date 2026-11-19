@@ -248,6 +248,7 @@
     "freeze": {"effect": "pvz:icetrap", "layer": "top"}
   },
   "pvz:lilypad": {
+    "renderOffset": -5,
     "visual": {"nameKey": "LILY_PAD"},
     "clips": {
       "body": {"reanimId": "pvz:lilypad", "x": 0, "y": -25},

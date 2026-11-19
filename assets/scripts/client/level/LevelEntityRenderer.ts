@@ -309,7 +309,8 @@ export class LevelEntityRenderer implements LevelStage {
      * its right; rolling bowling nuts draw on the projectile layer, in the row their view draws them with (drawnRow).
      */
     plantOrder(entity: Pick<PlantSnapshot, 'typeId' | 'row' | 'x'>): number {
-        return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', entity.row, plantRenderOffset(entity.x))
+        const look = this.content.presentation.plants[entity.typeId]
+        return renderOrder(look?.layer ?? 'plant', entity.row, plantRenderOffset(entity.x) + (look?.renderOffset ?? 0))
     }
 
     zombieOrder(row: number, typeId?: string): number {
