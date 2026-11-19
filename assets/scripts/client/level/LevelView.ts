@@ -66,15 +66,14 @@ export class LevelView {
     /** Builds a chooser for a level that opened none, the first time a repick asks for one. */
     private openSeedChooser?: (chooser: NonNullable<WorldSnapshot['seedChooser']>) => Promise<LevelSeedChooser>
     private openingSeedChooser = false
-    /** The animations a repick stopped, and whether it stands the level still. */
-    private readonly frozenComponents: Component[] = []
+    /** Only animations this view disabled are eligible to resume. */
+    private readonly heldAnimations = new Set<Component>()
     private standingStill = false
     private syncSeedChooserIntro = () => {}
     private pinScreen = () => {}
     /** How far the lawn sits right of its original gameplay position (wide viewports); the screen UI stays put. */
     private lawnShift = 0
     get worldShift(): number { return this.lawnShift }
-    private readonly pausedComponents: Component[] = []
     private presentationPaused = false
     private gameplayTick = 0
     private money?: number
@@ -460,29 +459,35 @@ export class LevelView {
         chooser.onAlmanac = () => this.onOpenAlmanac?.()
         chooser.onStore = () => this.onOpenStore?.()
         chooser.bind(this.seedChooserSend)
+        if (this.standingStill) this.syncAnimationPause()
     }
 
     /** A repick stands the level still as a pause does: everything but the chooser over it waits. */
     private standStill(still: boolean): void {
         if (still === this.standingStill) return
         this.standingStill = still
-        if (still) this.holdStill(this.frozenComponents, component => this.seedChooser?.holds(component.node) === true)
-        else LevelView.release(this.frozenComponents)
+        this.syncAnimationPause()
     }
 
-    /** Stops the level's animations, its Reanims and particles, but those `keep` lets go on; `held` takes the ones stopped. */
-    private holdStill(held: Component[], keep: (component: Component) => boolean): void {
+    private syncAnimationPause(): void {
+        const winner = this.presentationPaused ? this.gameOver.winnerId : undefined
+        const shouldHold = (component: Component) =>
+            (this.presentationPaused && (winner === undefined || !this.entityRenderer.runsDuringGameOver(winner, component))) ||
+            (this.standingStill && !this.seedChooser?.holds(component.node))
+        for (const component of this.heldAnimations) {
+            if (component.isValid && shouldHold(component)) continue
+            this.heldAnimations.delete(component)
+            if (component.isValid) component.enabled = true
+        }
+        if (!this.presentationPaused && !this.standingStill) return
         for (const component of this.root.getComponentsInChildren(Component)) {
-            if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer) && !keep(component)) {
-                held.push(component)
+            if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer) && shouldHold(component)) {
+                this.heldAnimations.add(component)
                 component.enabled = false
             }
         }
     }
 
-    private static release(held: Component[]): void {
-        for (const component of held.splice(0)) if (component.isValid) component.enabled = true
-    }
     /** Sends the player's Yes/No to a dialogue question (`answerDialog`). */
     bindDialogAnswer(send: (accept: boolean) => void): void { this.answerDialog = send }
 
@@ -542,11 +547,7 @@ export class LevelView {
         paused = paused || this.gameOver.active
         if (!paused && !this.presentationPaused) return
         this.presentationPaused = paused
-        if (paused) {
-            // The zombie that got in goes on into the house.
-            const winnerId = this.gameOver.winnerId
-            this.holdStill(this.pausedComponents, component => winnerId !== undefined && this.entityRenderer.runsDuringGameOver(winnerId, component))
-        } else LevelView.release(this.pausedComponents)
+        this.syncAnimationPause()
         const visit = (node: Node) => {
             if (paused) Tween.pauseAllByTarget(node)
             else Tween.resumeAllByTarget(node)

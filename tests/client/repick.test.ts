@@ -57,7 +57,10 @@ test('a repick stands the level still but its chooser, and attaching a chooser b
     const lawn = new ReanimPlayer(), arrow = new ParticlePlayer(), card = new ReanimPlayer(), other = new Component()
     const chooserNode = {}
     card.node = chooserNode
-    const view = new LevelView({ children: [], getComponentsInChildren: () => [lawn, arrow, card, other] })
+    const dormant = new ReanimPlayer()
+    dormant.enabled = false
+    const view = new LevelView({ children: [], getComponentsInChildren: () => [lawn, arrow, card, other, dormant] },
+        undefined, undefined, undefined, { active: false })
     const sent: unknown[] = []
     view.bindSeedChooser((command: unknown) => sent.push(command))
     let send: (command: unknown) => void = () => {}
@@ -67,6 +70,17 @@ test('a repick stands the level still but its chooser, and attaching a chooser b
     assert.deepEqual([lawn.enabled, arrow.enabled, card.enabled, other.enabled], [false, false, true, true])
     view.standStill(false)
     assert.deepEqual([lawn.enabled, arrow.enabled], [true, true])
+
+    // Opening the CLI pauses the level before /repick runs. Closing it should release only the chooser.
+    view.setPaused(true)
+    view.standStill(true)
+    view.setPaused(false)
+    assert.deepEqual([lawn.enabled, arrow.enabled, card.enabled], [false, false, true])
+    view.setPaused(true)
+    view.standStill(false)
+    assert.deepEqual([lawn.enabled, arrow.enabled, card.enabled], [false, false, false])
+    view.setPaused(false)
+    assert.deepEqual([lawn.enabled, arrow.enabled, card.enabled, dormant.enabled], [true, true, true, false])
 
     send({ type: 'confirmSeeds' })
     assert.deepEqual([view.seedChooser, sent], [chooser, [{ type: 'confirmSeeds' }]], 'a chooser a repick opens sends like the intro\'s')
