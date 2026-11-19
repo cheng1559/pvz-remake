@@ -121,8 +121,13 @@ export class LevelInputPresenter {
         this.game.command(packet.command)
     }
 
+    private get acceptsBoardInput(): boolean {
+        const modal = UIHoverManager.activeModalRoot
+        return this.enabled && !UIHoverManager.isInputBlocked && (!modal || modal === this.node || this.node.isChildOf(modal))
+    }
+
     private onTouchStart(event: EventTouch): void {
-        if (!this.enabled || !GameDebugSettings.isMobileMode()) return
+        if (!GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
         if (this.mobilePress) { event.propagationStopped = true; return }
         if (this.view.dialogReady) {
             this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
@@ -165,7 +170,7 @@ export class LevelInputPresenter {
         this.mobilePress = undefined
         this.view.setPointer()
         const snapshot = this.game.render()
-        if (!this.canUseCursor(snapshot)) return
+        if (!this.acceptsBoardInput || !this.canUseCursor(snapshot)) return
         this.collectAt(press.point.x, press.point.y, false)
         if (snapshot.cursor.mode === 'none') return
         event.propagationStopped = true
@@ -177,7 +182,7 @@ export class LevelInputPresenter {
     }
 
     private onMouseDown(event: EventMouse): void {
-        if (!this.enabled || GameDebugSettings.isMobileMode()) return
+        if (GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
         if (this.view.dialogReady) { this.game.command({ type: 'advanceDialog' }); return }
         if (event.getButton() === 2) {
             this.cancelPlanting()
@@ -190,6 +195,13 @@ export class LevelInputPresenter {
         if (!this.enabled || (event instanceof EventMouse
             ? GameDebugSettings.isMobileMode()
             : !GameDebugSettings.isMobileMode())) return
+        if (!this.acceptsBoardInput) {
+            if (this.mobilePress) {
+                this.mobilePress = undefined
+                this.view.setPointer()
+            }
+            return
+        }
         const point = this.boardPixel(event)
         if (GameDebugSettings.isMobileMode()) {
             const press = this.mobilePress
@@ -294,8 +306,7 @@ export class LevelInputPresenter {
     }
 
     private onKeyDown(event: EventKeyboard): void {
-        const modal = UIHoverManager.activeModalRoot
-        if (!this.enabled || UIHoverManager.isInputBlocked || modal && modal !== this.node && !this.node.isChildOf(modal)) return
+        if (!this.acceptsBoardInput) return
         if (this.view.dialogReady && (event.keyCode === KeyCode.SPACE || event.keyCode === KeyCode.ENTER)) {
             this.game.command({ type: 'advanceDialog' })
             return

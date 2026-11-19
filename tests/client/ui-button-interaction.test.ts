@@ -155,6 +155,35 @@ function setup() {
 
 
 
+test("a mobile tap answers Dave's seed-slot offer before the lawn can advance his dialogue", () => {
+    const ui = setup()
+    ui.setMobile()
+    const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
+    const board = new ui.Node(), dialog = new ui.Node()
+    ui.root.addChild(board)
+    board.addChild(dialog)
+    const yes = ui.makeButton(10, dialog), no = ui.makeButton(140, dialog)
+    const answers: boolean[] = [], commands: string[] = []
+    yes.button.onClick = () => answers.push(true)
+    no.button.onClick = () => answers.push(false)
+    const presenter = new LevelInputPresenter(board, { command: (cmd: { type: string }) => commands.push(cmd.type) }, {
+        dialogReady: true, bindSeedPackets: () => [], bindTools: () => [], bindMenu: () => ({}), resetCursor() {},
+    })
+    try {
+        presenter.start()
+        ui.hover.beginModalBlock(dialog)
+        for (const target of [yes.node, no.node]) {
+            ui.dispatch(target, ui.events.TOUCH_START, target.x + 20)
+            ui.dispatch(target, ui.events.TOUCH_END, target.x + 20)
+        }
+        assert.deepEqual(answers, [true, false])
+        assert.deepEqual(commands, [])
+        ui.hover.endModalBlock(dialog)
+        ui.dispatch(board, ui.events.TOUCH_START, 270)
+        assert.deepEqual(commands, ['advanceDialog'])
+    } finally { presenter.destroy(); ui.cleanup() }
+})
+
 test('level seeds keep independent affordability and cooldowns, and placement uses the configured board', () => {
     const ui = setup()
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
