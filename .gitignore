@@ -33,6 +33,7 @@ native/engine/mac/Assets.xcassets/AppIcon.appiconset/*.png
 !native/engine/ios/
 native/engine/ios/*
 !native/engine/ios/Info.plist
+!native/engine/ios/AppDelegate.mm
 !native/engine/ios/ViewController.mm
 !native/engine/ios/Images.xcassets/
 native/engine/ios/Images.xcassets/AppIcon.appiconset/*.png
