@@ -77,7 +77,7 @@ export class MowingProjectile extends Projectile {
         this.chompCounter = CHOMP_ACTIVE_TICKS
         const events = world.resources.get(EventQueueResource)
         if (!isFlattenableZombie(zombie)) {
-            emitServerEvent(events, 'zombiePuffed', { mowerId: this.id, zombieId: entity, x: position.x, y: position.y, row: position.row })
+            emitServerEvent(events, 'zombiePuffed', { mowerId: this.id, zombieId: entity, typeId: zombie.typeId, x: position.x, y: position.y, row: position.row })
             for (const part of ['head', 'arm'] as const) {
                 const has = part === 'head' ? 'hasHead' : 'hasArm'
                 if (!zombie[has]) continue

@@ -30,7 +30,7 @@ const iceReleased: StageEvent = (stage, event) => {
     if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof typeId !== 'string') return
     const look = stage.content.presentation.iceTrap, zombie = kind === 'zombie', mirrored = event.data.mirrored === true
     const [releaseX, releaseY] = (zombie ? look.zombie : look.plant).releaseAt
-    const order = (zombie ? stage.zombieOrder(row) : stage.plantOrder({ typeId, row, x })) + 1
+    const order = (zombie ? stage.zombieOrder(row, typeId) : stage.plantOrder({ typeId, row, x })) + 1
     stage.particle(look.release, x + mirrorX(releaseX, zombie ? ZOMBIE_WIDTH : PLANT_WIDTH, mirrored), y + releaseY, order, undefined, mirrored)
 }
 
@@ -58,7 +58,7 @@ const mindControlled: StageEvent = (stage, event, world) => {
     void SoundSystem.play(SoundEffect.MindControlled)
     const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
     const plant = zombie ? undefined : world.plants.find(candidate => candidate.entityId === event.data.entityId)
-    if (zombie) stage.particle('pvz:mindcontrol', zombie.x + 60, zombie.y + 40, stage.zombieOrder(zombie.row) + 1)
+    if (zombie) stage.particle('pvz:mindcontrol', zombie.x + 60, zombie.y + 40, stage.zombieOrder(zombie.row, zombie.typeId) + 1)
     else if (plant) stage.particle('pvz:mindcontrol', plant.x + 40, plant.y + 40, stage.plantOrder(plant) + 1)
 }
 

@@ -330,6 +330,8 @@ export interface DancePresentation {
 
 export interface ZombiePresentationDefinition {
     readonly nameKey: string
+    /** Added to the row's default zombie draw order. */
+    readonly renderOffset?: number
     /** The view that draws it (ZombieViewRegistry), where it has one of its own. */
     readonly view?: string
     /** Its view's own settings, which that view (a Mod's) reads and checks itself: kept as written. */
@@ -1141,6 +1143,7 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
     })
     const zombie = fields<Zombie>(value, name, ['nameKey', 'clips', 'shadow', 'parts', 'damagedArmSprite', 'drops'], {
         nameKey: nonEmptyString,
+        renderOffset: integer,
         view: nonEmptyString,
         viewConfig,
         clips: layerClips,

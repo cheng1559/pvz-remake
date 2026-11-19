@@ -111,8 +111,8 @@ export interface LevelStage {
      * Plant::CalcRenderOrder.
      */
     plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x'>): number
-    /** A zombie's draw order in a row. */
-    zombieOrder(row: number): number
+    /** The row's zombie draw order, including the type's configured offset when supplied. */
+    zombieOrder(row: number, typeId?: string): number
     /** A projectile's draw order in a row, by its type's layer (a row's mower's too, by the projectile it runs as). */
     projectileOrder(typeId: string, row: number): number
     /** A thing of a cell's draw order in a row, by its type's layer and offset. */

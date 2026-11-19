@@ -278,7 +278,7 @@ export class LevelEntityRenderer implements LevelStage {
                 const plant = entity as unknown as PlantSnapshot
                 return this.plantOrder({ ...plant, row: this.view(plant.entityId, PlantView)?.drawnRow(plant) ?? plant.row })
             }
-            case 'zombie': return this.zombieOrder(entity.row)
+            case 'zombie': return this.zombieOrder(entity.row, entity.typeId)
             case 'projectile': case 'mower': return this.projectileOrder(entity.typeId, entity.row)
             case 'gridItem': return this.gridItemOrder(entity.typeId, entity.row)
             default: return undefined
@@ -312,8 +312,9 @@ export class LevelEntityRenderer implements LevelStage {
         return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', entity.row, plantRenderOffset(entity.x))
     }
 
-    zombieOrder(row: number): number {
-        return renderOrder('zombie', row, ZOMBIE_RENDER_OFFSET)
+    zombieOrder(row: number, typeId?: string): number {
+        const offset = typeId === undefined ? undefined : this.content.presentation.zombies[typeId]?.renderOffset
+        return renderOrder('zombie', row, ZOMBIE_RENDER_OFFSET + (offset ?? 0))
     }
 
     projectileOrder(typeId: string, row: number): number {

@@ -327,6 +327,7 @@
   },
   "pvz:dancer": {
     "view": "dancer",
+    "renderOffset": 4,
     "packet": {"x": 1, "y": 2, "scale": 0.3, "clip": "moonwalk"},
     "portrait": {"x": 24, "y": 14.9, "scale": 0.5, "clip": "moonwalk"},
     "held": {"x": 20, "y": 42, "scale": 0.8},

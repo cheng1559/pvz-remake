@@ -222,7 +222,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         for (const mark of steps.marks) {
             if (!passedMark(clip, last.time, body.time, mark.at)) continue
             stage.particle(steps.effect, Math.trunc(zombie.x) + mirrorX(mark.x, ZOMBIE_WIDTH, mirrored), Math.trunc(zombie.y) + mark.y,
-                stage.zombieOrder(zombie.row) - 1, undefined, mirrored)
+                stage.zombieOrder(zombie.row, zombie.typeId) - 1, undefined, mirrored)
         }
     }
 
@@ -721,7 +721,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         const at = view.dropPosition(stage.layer, armor.track, armor.offset)
         // One above the zombie; one facing right sheds its armor the way it faces.
-        stage.spawnParticle(stage.zombieOrder(zombie.row) + 1, { id: armor.effect, mirrored: zombie.team === 'plants', ...at })
+        stage.spawnParticle(stage.zombieOrder(zombie.row, zombie.typeId) + 1, { id: armor.effect, mirrored: zombie.team === 'plants', ...at })
     }
 
     /** Zombie::DropHead, DropArm and DropFlag: the part flies off from where it is on the body, with its sounds. */
@@ -736,7 +736,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         // part's flight for a mind-controlled zombie.)
         const mirrored = zombie.team === 'plants', tint = entityTint(!!zombie.mindControlled, isCold(zombie))
         // One above the zombie, or one under it (the dancer's head).
-        stage.spawnParticle(stage.zombieOrder(zombie.row) + (drop.behind ? -1 : 1), {
+        stage.spawnParticle(stage.zombieOrder(zombie.row, typeId) + (drop.behind ? -1 : 1), {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
             ...view.dropPosition(stage.layer, drop.track, drop.offset),
             // The pole vaulter's own head and a bare hand are swapped in.
@@ -756,18 +756,19 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      * drawn. One that walked right crumbles flipped and 60 further right. The zombie is gone by then.
      */
     static readonly charred: StageEvent = (stage, event) => {
-        const { x, y, row, rate, entityId } = event.data
+        const { x, y, row, rate, entityId, typeId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
         const mirrored = event.data.team === 'plants'
-        ZombieView.remains(stage, 'CharredZombie', 'pvz:charred', x + (mirrored ? CHARRED_MIRRORED_SHIFT : 0), y, stage.zombieOrder(row), entityId, rate, mirrored)
+        const order = stage.zombieOrder(row, typeof typeId === 'string' ? typeId : undefined)
+        ZombieView.remains(stage, 'CharredZombie', 'pvz:charred', x + (mirrored ? CHARRED_MIRRORED_SHIFT : 0), y, order, entityId, rate, mirrored)
     }
 
     /** Zombie::MowDown for a zombie that is not flattened: REANIM_PUFF two above it and the mower's cloud one above, with the splat. */
     static readonly puffed: StageEvent = (stage, event) => {
-        const { x, y, row, zombieId } = event.data
+        const { x, y, row, zombieId, typeId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof zombieId !== 'number') return
         void SoundSystem.play(SoundEffect.Splat, { foley: true })
-        const order = stage.zombieOrder(row)
+        const order = stage.zombieOrder(row, typeof typeId === 'string' ? typeId : undefined)
         stage.particle('pvz:mowercloud', x + 110, y, order + 1)
         ZombieView.remains(stage, 'MowerPuff', 'pvz:puff', x, y, order + 2, zombieId, 1, false)
     }

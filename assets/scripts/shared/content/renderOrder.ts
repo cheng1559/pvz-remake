@@ -41,7 +41,7 @@ export function plantRenderOffset(x: number): number {
     return 5 - Math.trunc(x) + 800
 }
 
-/** Zombie::ZombieInitialize's offset for every zombie so far (`aRenderOffset = 4`). */
+/** Zombie::ZombieInitialize's default offset within the row. */
 export const ZOMBIE_RENDER_OFFSET = 4
 
 /** Shadows lie on the ground under every row's plants and zombies (RENDER_ITEM_ZOMBIE_SHADOW, _PROJECTILE_SHADOW). */
