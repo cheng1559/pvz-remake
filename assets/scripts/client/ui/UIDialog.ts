@@ -59,6 +59,8 @@ export class UIDialog extends Component {
         UIDialog.stack.push(this)
         UIHoverManager.beginModalBlock(this.node)
         UIHoverManager.registerClient(this.dragHover)
+        this.node.on(Node.EventType.SIZE_CHANGED, this.fitPanel, this)
+        this.fitPanel()
         this.content.on(Node.EventType.TOUCH_START, this.startDrag, this)
         this.content.on(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
         this.content.on(Node.EventType.TOUCH_END, this.endDrag, this)
@@ -71,6 +73,7 @@ export class UIDialog extends Component {
         this.dragOffset = null
         UIHoverManager.unregisterClient(this.dragHover)
         UIHoverManager.endModalBlock(this.node)
+        this.node.off(Node.EventType.SIZE_CHANGED, this.fitPanel, this)
         this.content.off(Node.EventType.TOUCH_START, this.startDrag, this)
         this.content.off(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
         this.content.off(Node.EventType.TOUCH_END, this.endDrag, this)
@@ -94,6 +97,16 @@ export class UIDialog extends Component {
     private moveDrag(event: EventTouch): void {
         if (!this.dragOffset) return
         const point = this.localPoint(event).subtract(this.dragOffset)
+        this.setPanelPosition(point.x, point.y)
+        event.propagationStopped = true
+    }
+
+    private fitPanel(): void {
+        const { x, y } = this.content.position
+        this.setPanelPosition(x, y)
+    }
+
+    private setPanelPosition(x: number, y: number): void {
         const size = this.content.getComponent(UITransform)!.contentSize
         const bounds = this.node.getComponent(UITransform)!.contentSize
         const halfWidth = bounds.width / 2 + 8, halfHeight = bounds.height / 2 + 8
@@ -105,10 +118,9 @@ export class UIDialog extends Component {
         const from = this.content.position
         const place = (to: number, at: number) => GameDebugSettings.highResolutionEnabled ? to : at + Math.round(to - at)
         this.content.setPosition(
-            place(clamp(point.x, -halfWidth, halfWidth - size.width), from.x),
-            place(clamp(point.y, size.height - halfHeight, halfHeight), from.y),
+            place(clamp(x, -halfWidth, halfWidth - size.width), from.x),
+            place(clamp(y, size.height - halfHeight, halfHeight), from.y),
         )
-        event.propagationStopped = true
     }
 
     private endDrag(): void {
