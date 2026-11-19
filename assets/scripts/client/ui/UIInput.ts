@@ -52,6 +52,7 @@ export interface UIInputOptions {
     onCancel?: () => void
     onKey?: (key: string, shift: boolean) => boolean
     completion?: (value: string) => string
+    onCompletionTap?: () => void
 }
 
 /** Cocos owns text entry/IME/clipboard; the game draws its original bitmap text and selection. */
@@ -140,6 +141,8 @@ export class UIInput extends Component {
     private focusRequested = false
     private dragging = false
     private touchId: number | null = null
+    private tappedSuffix = ''
+    private suffixBeforeBlur = ''
     private interactive = true
     private lastPress = { time: 0, x: 0, y: 0 }
     onChange: (value: string) => void = () => {}
@@ -267,6 +270,7 @@ export class UIInput extends Component {
         this.element = null
         this.ended()
         this.native?.blur()
+        this.suffixBeforeBlur = ''
         if (restoreGameFocus) game.canvas?.focus({ preventScroll: true })
     }
 
@@ -386,11 +390,16 @@ export class UIInput extends Component {
 
     private submit(): void { if (this.focused && this.available()) this.onSubmit(this.value) }
     private ended(): void {
+        // The platform editor can blur before Cocos dispatches the same press to the field.
+        if (this.focused && this.options.onCompletionTap && GameDebugSettings.isMobileMode()) {
+            this.suffixBeforeBlur = this.completionText.text
+        }
         const box = nativeInputBox()
         if (box?.onInputBoxKey === this.nativeKey) box.onInputBoxKey = undefined
         if (UIInput.active === this) UIInput.active = null
         this.focused = this.dragging = false
         this.touchId = null
+        this.tappedSuffix = ''
         if (this.text) this.draw()
     }
 
@@ -398,7 +407,8 @@ export class UIInput extends Component {
         if (this.focused && !this.node.getComponent(UITransform)!.hitTest(event.getLocation(), event.windowId)) this.blur()
     }
     private mouseDown(event: EventMouse): void {
-        if (!GameDebugSettings.isMobileMode() && event.getButton() === EventMouse.BUTTON_LEFT) this.press(event)
+        if (event.getButton() !== EventMouse.BUTTON_LEFT || this.touchId !== null) return
+        if (!GameDebugSettings.isMobileMode() || (!sys.isMobile && this.options.onCompletionTap)) this.press(event)
     }
     private touchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode()) return
@@ -408,10 +418,13 @@ export class UIInput extends Component {
     private press(event: PointerEvent): void {
         if (!this.available()) return
         event.propagationStopped = true
+        const suffix = this.options.onCompletionTap && (this.focused ? this.completionText.text : this.suffixBeforeBlur)
+        this.suffixBeforeBlur = ''
         // A tap that WebKit handles focuses the field on its click (see installNativeTaps).
         if (UIInput.tapTarget !== this || !('touch' in event)) this.focus()
+        this.tappedSuffix = suffix && GameDebugSettings.isMobileMode() && suffix === this.completionText.text && this.overCompletion(event) ? suffix : ''
         const point = event.getUILocation(), now = Date.now()
-        const double = this.anchor === this.caret && now - this.lastPress.time <= 500
+        const double = !this.tappedSuffix && this.anchor === this.caret && now - this.lastPress.time <= 500
             && (point.x - this.lastPress.x) ** 2 + (point.y - this.lastPress.y) ** 2 <= 36
         this.lastPress = { time: now, x: point.x, y: point.y }
         this.dragging = !double
@@ -420,20 +433,39 @@ export class UIInput extends Component {
     }
     private move(event: PointerEvent): void {
         if (!this.dragging || !this.matches(event)) return
+        if (this.tappedSuffix) {
+            const p = event.getUILocation()
+            if ((p.x - this.lastPress.x) ** 2 + (p.y - this.lastPress.y) ** 2 > 36) this.tappedSuffix = ''
+        }
         this.caret = this.indexAt(event)
         this.syncSelection()
         this.draw()
     }
     private release(event: PointerEvent): void {
         if (event instanceof EventMouse && event.getButton() !== EventMouse.BUTTON_LEFT) return
-        if (this.matches(event)) { this.dragging = false; this.touchId = null }
+        if (!this.matches(event)) return
+        const accept = this.tappedSuffix && (event.type === Node.EventType.TOUCH_END || event.type === Node.EventType.MOUSE_UP) && this.available() &&
+            this.tappedSuffix === this.completionText.text && this.overCompletion(event)
+        this.dragging = false
+        this.touchId = null
+        this.tappedSuffix = ''
+        if (accept) this.options.onCompletionTap?.()
     }
     private matches(event: PointerEvent): boolean {
-        return GameDebugSettings.isMobileMode() ? 'touch' in event && event.touch?.getID() === this.touchId : event instanceof EventMouse
+        return event instanceof EventMouse ? this.touchId === null : 'touch' in event && event.touch?.getID() === this.touchId
+    }
+    private localX(event: PointerEvent): number {
+        const p = event.getUILocation()
+        return this.area.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(p.x, p.y)).x
+    }
+    private overCompletion(event: PointerEvent): boolean {
+        if (!this.options.onCompletionTap || !this.focused || this.hasSelection || this.caret !== this.content.length ||
+            !this.completionText.text || !this.area.getComponent(UITransform)!.hitTest(event.getLocation(), event.windowId)) return false
+        const x = this.localX(event) - this.completionText.node.position.x
+        return x >= 0 && x < FontMetricsUtil.measureTextWidth(this.font.config, this.completionText.text)
     }
     private indexAt(event: PointerEvent): number {
-        const p = event.getUILocation()
-        const x = this.area.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(p.x, p.y)).x - 4 + this.scroll
+        const x = this.localX(event) - 4 + this.scroll
         let index = 0, previous = 0
         for (const char of this.content) {
             const end = index + char.length, width = this.measure(end)
@@ -464,6 +496,7 @@ export class UIInput extends Component {
     }
 
     protected update(dt: number): void {
+        this.suffixBeforeBlur = ''
         if (this.focused && !this.available()) { this.blur(); return }
         if (!this.focused) return
         this.readSelection()

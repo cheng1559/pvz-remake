@@ -2,7 +2,7 @@
 
 In Debug and Release builds, press `/` or double-tap the bottom-right 100 CSS pixel corner in mobile mode. The CLI is unavailable during startup.
 
-The previous controls are preserved: Tab cycles completions of commands and installed content, Up/Down recalls the last 64 commands, Enter executes, and Escape/Cancel closes. The slash is optional. Names ignore case, and entity names also ignore spaces, underscores and hyphens. Grid positions are one-based. Explicit positions can use any board row, whatever rows the level has active; an omitted zombie row still follows the level's spawn-row selection.
+The previous controls are preserved: Tab cycles completions of commands and installed content. In mobile mode, tap the faded command or name suffix to fill it in and keep typing. Argument placeholders stay as hints. Up/Down recalls the last 64 commands, Enter executes, and Escape/Cancel closes. The slash is optional. Names ignore case, and entity names also ignore spaces, underscores and hyphens. Grid positions are one-based. Explicit positions can use any board row, whatever rows the level has active; an omitted zombie row still follows the level's spawn-row selection.
 
 Opening the CLI pauses gameplay and global presentation time. Closing restores the previous pause state while preserving any new `/gamespeed` setting. Input, commands and closing the CLI all work at zero speed. Syntax errors flash red and keep the dialog open; condition failures close it and show the reason.
 

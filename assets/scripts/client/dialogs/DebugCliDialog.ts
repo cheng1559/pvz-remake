@@ -35,6 +35,7 @@ class DebugCliDialog extends Component {
             value: '/', x: 40, y: height - 159, width: width - 90, height: 36, maxLength: 120,
             filter: value => value.replace(/[^\x20-\x7e]/g, ''),
             completion: value => getDebugCliSuffix(value, this.catalog),
+            onCompletionTap: () => this.complete(true),
             onKey: key => this.key(key),
             onChange: value => {
                 this.historyIndex = -1
@@ -48,21 +49,25 @@ class DebugCliDialog extends Component {
         this.field.focus()
     }
 
+    private complete(previewOnly: boolean): void {
+        const value = this.field.value
+        if (this.busy || this.field.hasSelection || this.field.cursorPosition !== value.length) return
+        if (previewOnly || this.candidates[this.candidateIndex] !== value) {
+            this.candidates = getDebugCliCompletions(value, this.catalog, !previewOnly)
+            this.candidateIndex = -1
+        }
+        if (!this.candidates.length || (previewOnly && this.candidates[0].length <= value.length)) return
+        this.candidateIndex = (this.candidateIndex + 1) % this.candidates.length
+        this.field.value = this.candidates[this.candidateIndex]
+        this.historyIndex = -1
+    }
+
     private key(key: string): boolean {
         if (this.busy) return true
         if (key !== 'Tab') this.candidates = []
         const value = this.field.value
         if (key === 'Tab') {
-            if (this.field.hasSelection || this.field.cursorPosition !== value.length) return true
-            if (this.candidates[this.candidateIndex] !== value || !this.candidates.length) {
-                this.candidates = getDebugCliCompletions(value, this.catalog, true)
-                this.candidateIndex = -1
-            }
-            if (this.candidates.length) {
-                this.candidateIndex = (this.candidateIndex + 1) % this.candidates.length
-                this.field.value = this.candidates[this.candidateIndex]
-                this.historyIndex = -1
-            }
+            this.complete(false)
             return true
         }
         if (key !== 'ArrowUp' && key !== 'ArrowDown') return false

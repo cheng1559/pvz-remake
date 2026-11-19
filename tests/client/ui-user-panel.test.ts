@@ -5,6 +5,7 @@ import { loadScript } from '../loadScript'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { GAME_SAVE_KEY } from '@/shared/menu'
+import * as debugCli from '@/shared/debug/DebugCli'
 
 function load(path: string, modules: Record<string, unknown>, globals: Record<string, unknown> = {}) {
     return loadScript(`assets/scripts/${path}.ts`, (id: string) => modules[id] ?? {}, { console, ...globals })
@@ -274,6 +275,79 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     assert.equal(field.hasFocus, false)
     assert.equal(blurs, 2)
     assert.equal(UIInput.handleKey({ keyCode: 32 }), false, 'the top modal receives keys after the field loses focus')
+})
+
+test('a mobile tap on a visible CLI suggestion completes the token and keeps editing', () => {
+    const cc = { Component: class {}, Color: class {}, EventMouse: class { static BUTTON_LEFT = 0; getButton() { return 0 } },
+        Vec3: class { constructor(readonly x: number, readonly y: number) {} }, sys: { isMobile: false },
+        Node: { EventType: { TOUCH_END: 'end', MOUSE_UP: 'mouse-up' } }, _decorator: { ccclass: () => (value: unknown) => value } }
+    const modules = { cc, '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => true } },
+        '@/client/font': { FontMetricsUtil: { measureTextWidth: (_font: unknown, text: string) => text.length * 8, hasGlyph: () => true } },
+        '@/shared/debug/DebugCli': debugCli, '@/client/sound/SoundSystem': { SoundEffect: {}, SoundSystem: { play() {} } } }
+    const { UIInput } = load('client/ui/UIInput', modules)
+    const field = new UIInput()
+    field.font = { config: {} }
+    field.native = {}
+    field.available = () => true
+    field.focus = () => { field.focused = true; field.draw() }
+    field.text = {}
+    field.area = { getComponent: () => ({
+        hitTest: ({ x }: { x: number }) => x >= 0 && x <= 200, convertToNodeSpaceAR: (p: unknown) => p,
+    }) }
+    field.completionText = { text: '', node: { position: { x: 0 } } }
+    field.draw = () => {
+        field.completionText.text = field.hasFocus ? field.options.completion(field.value) : ''
+        field.completionText.node.position.x = 4 + field.value.length * 8
+    }
+    const dialog = { node: { addComponent: (Cli: any) => new Cli() }, content: { getComponent: () => ({ width: 500, height: 300 }) },
+        result: new Promise(() => {}) }
+    const ui = { dialog: () => dialog, text: (key: string) => key, input(_parent: unknown, options: any) {
+        field.options = options
+        return field
+    } }
+    const { showDebugCliDialog } = load('client/dialogs/DebugCliDialog', modules)
+    void showDebugCliDialog({}, ui, () => assert.fail('completion submitted the command'), { plants: ['pvz:peashooter'] })
+    const touch = (x: number, type = 'end') => ({
+        type, touch: { getID: () => 1 }, getUILocation: () => ({ x, y: 0 }), getLocation: () => ({ x, y: 0 }),
+    })
+    const tapPreview = (type = 'end') => {
+        const x = field.completionText.node.position.x + 2
+        field.touchStart(touch(x))
+        field.release(touch(x, type))
+    }
+    field.value = '/zom'
+    tapPreview('cancel')
+    assert.equal(field.value, '/zom')
+    field.touchStart(touch(160))
+    field.release(touch(160))
+    assert.equal(field.value, '/zom', 'blank space after the suggestion is outside the tap target')
+    const x = field.completionText.node.position.x + 2
+    field.touchStart(touch(x))
+    field.move(touch(x + 10))
+    field.release(touch(x))
+    assert.equal(field.value, '/zom')
+    // Desktop mousedown blurs the editor before Cocos synthesizes touch-start from the same click.
+    field.ended()
+    assert.equal(field.completionText.text, '')
+    field.touchStart(touch(x))
+    field.release(touch(x))
+    assert.equal(field.value, '/zombie')
+    tapPreview()
+    assert.equal(field.value, '/zombie', 'argument placeholders are hints')
+    field.value = '/plant pvz:pea'
+    // A desktop with touch hardware can also deliver just the mouse events.
+    const point = { x: field.completionText.node.position.x + 2, y: 0 }
+    const mouse = Object.assign(new cc.EventMouse(), { getLocation: () => point, getUILocation: () => point, type: 'mouse-up' })
+    field.ended()
+    field.mouseDown(mouse)
+    field.release(mouse)
+    assert.deepEqual([field.native.string, field.hasFocus, field.cursorPosition], ['/plant pvz:peashooter', true, field.value.length])
+    field.value = '/c'
+    const candidates = debugCli.getDebugCliCompletions('/c', undefined, true)
+    field.options.onKey('Tab', false)
+    assert.equal(field.value, candidates[0])
+    field.options.onKey('Tab', false)
+    assert.equal(field.value, candidates[1])
 })
 
 test('native input keeps its caret and text through completion and repeated submission', () => {
