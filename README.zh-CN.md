@@ -267,7 +267,7 @@ export function register({ host, assets }) {
 | `/restart` | 重新开始当前关卡 |
 | `/reload`、`/quit` | 重新载入游戏、退出游戏 |
 
-另有三个测试关卡，不覆盖冒险存档：`pvz:teams-demo`（阵营演示）、`pvz:stress-test`（40 株植物对 160 只僵尸的压力测试）、`pvz:seed-chooser-test`（选卡测试）。
+另有三个测试关卡，不覆盖冒险存档：`pvz:teams-demo`（阵营演示）、`pvz:stress-test`（40 株植物对 1023 只僵尸的压力测试）、`pvz:seed-chooser-test`（选卡测试）。
 
 **战斗流程**
 

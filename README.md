@@ -267,7 +267,7 @@ Switches take no argument: each run turns the switch over and shows its new stat
 | `/restart` | Restarts the current level |
 | `/reload`, `/quit` | Reloads or quits the game |
 
-Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the teams demo), `pvz:stress-test` (40 plants against 160 zombies) and `pvz:seed-chooser-test` (the seed chooser).
+Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the teams demo), `pvz:stress-test` (40 plants against 1023 zombies) and `pvz:seed-chooser-test` (the seed chooser).
 
 **Combat**
 
