@@ -179,6 +179,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
                     player.node.setScale(scale, scale, 1)
                 },
                 basePose: (clip, track) => this.basePose(clip, track),
+                holdsStill: !!stage,
             })
             // Plant::DoBlink hides the eyes under the blink, for as long as it is shown.
             const blinking = this.shown(PLANT_BLINK_LAYER, plant) !== undefined

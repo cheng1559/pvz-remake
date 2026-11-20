@@ -1046,6 +1046,20 @@ test('a frame of the same time leaves a layer where it has played on to, and the
     assert.deepEqual(player.calls, [['play', 12], ['seek', 0.26]], 'the next tick sets it right')
 })
 
+test('on the board, a tick that leaves a layer at its time stops it there, and the tick that moves it plays it on from there', () => {
+    // The plants of an intro (Plant::Update leaves them still) or of a repick: ticks come, their times do not move.
+    // Played on, each plant ran ahead through the whole intro and jumped back to its first pose as play began.
+    const { player, layers } = bodyLayer()
+    const clip = { reanimId: 'pvz:sunflower' }
+    const show = (time: number) => layers.show(() => ({ key: 'body', clip, time, rate: 12 }), { blend: () => 0, place() {}, holdsStill: true })
+    show(3)
+    show(3)
+    show(3)
+    assert.deepEqual(player.calls, [['play', 12], ['fps', 0]], 'held where it played on to, without being set back')
+    show(3.12)
+    assert.deepEqual(player.calls, [['play', 12], ['fps', 0], ['fps', 12], ['seek', 0.26]], 'the tick that moves it plays it on, set right')
+})
+
 test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {
     // The base's handlers are the views' statics: any function stands in for them here.
     const statics = new Proxy({}, { get: () => () => {} })
