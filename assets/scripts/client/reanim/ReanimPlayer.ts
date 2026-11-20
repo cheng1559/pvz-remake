@@ -267,10 +267,15 @@ export class ReanimPlayer extends Component {
         return this.frames.get(spriteId)
     }
 
-    /** Replace poses/timing while keeping track nodes, attached UI and playback state. */
+    /**
+     * Replace poses/timing while keeping track nodes, attached UI and playback state. A player at the end of its poses
+     * (a clip that has finished and holds) stays at the end of the new ones, however long they are; any other keeps
+     * its time, within them.
+     */
     replaceAnimation(value: unknown): void {
         const data = parseReanim(value)
-        if (data.id !== this.requireData().id || data.tracks.length !== this.views.size ||
+        const previous = this.requireData()
+        if (data.id !== previous.id || data.tracks.length !== this.views.size ||
             data.tracks.some(track => !this.views.has(track.id))) {
             throw new Error('replacement reanim must retain its ID and tracks')
         }
@@ -282,7 +287,7 @@ export class ReanimPlayer extends Component {
         this.data = data
         for (const track of data.tracks) this.views.get(track.id)!.track = track
         this.drawingStale = true
-        this.timeSeconds = Math.min(this.timeSeconds, data.durationSeconds)
+        this.timeSeconds = this.timeSeconds >= previous.durationSeconds ? data.durationSeconds : Math.min(this.timeSeconds, data.durationSeconds)
         this.applyPose()
     }
 

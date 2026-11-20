@@ -790,6 +790,30 @@ test('a player changes to another clip of its body in place: its batches stay, a
     assert.deepEqual([[...player.views.values()], [...player.blendFromPoses.keys()].sort(), player.blendDuration], [views, ['arm', 'head'], 0.1])
 })
 
+test('a replaced animation keeps a finished player at its end, and a running one where it was', () => {
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, isValid: () => true, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/content/reanim': { parseReanim: (json: unknown) => json, sampleReanimTrack: () => null },
+        './ReanimAssets': {},
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
+    })
+    const poses = (durationSeconds: number) => ({ id: 'pvz:cloud', durationSeconds, tracks: [{ id: 'cloud', keyframes: [] }] })
+    const player = Object.assign(Object.create(ReanimPlayer.prototype), {
+        data: poses(10), views: new Map([['cloud', { track: null, visible: true }]]), frames: new Map(),
+        timeSeconds: 10, drawingStale: false, applyPose() {},
+    })
+    // A widescreen cloud that finished its flight across a narrow window, holding its blank last pose: widened, it
+    // stays finished instead of reappearing mid-sky, still.
+    player.replaceAnimation(poses(14))
+    assert.equal(player.timeSeconds, 14)
+    player.timeSeconds = 6
+    player.replaceAnimation(poses(8))
+    assert.equal(player.timeSeconds, 6, 'one still flying keeps its time')
+    player.timeSeconds = 7.5
+    player.replaceAnimation(poses(5))
+    assert.equal(player.timeSeconds, 5, 'past the end of shorter poses, it is at their end')
+})
+
 test('a stopped player driven by seek takes its blend on by itself, staying where it is in its clip', () => {
     const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
         cc: { Component: class {}, isValid: () => true, _decorator: { ccclass: () => (value: unknown) => value } },
