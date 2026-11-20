@@ -2,25 +2,32 @@
   <h1>PvZ Remake</h1>
   <p>基于 COCOS 4 和 TypeScript 的《植物大战僵尸》冒险模式重制项目</p>
 
+  <p><b>
+    <a href="https://plants-vs-zombies.cc">🎮 在线游玩</a> ·
+    <a href="https://github.com/cheng1559/pvz-remake/releases">📦 下载</a> ·
+    <a href="#模组系统">🧩 模组</a> ·
+    <a href="docs">📖 文档</a> ·
+    <a href="README.md">🌐 English</a>
+  </b></p>
+
   <p>
-    <a href="README.md"><img alt="Language: English" src="https://img.shields.io/badge/lang-English-blue"></a>
+    <a href="https://github.com/cheng1559/pvz-remake/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/cheng1559/pvz-remake?style=flat&label=stars&color=yellow"></a>
+    <a href="https://space.bilibili.com/3494365624273288"><img alt="Bilibili: 金色初华犬" src="https://img.shields.io/badge/Bilibili-%E9%87%91%E8%89%B2%E5%88%9D%E5%8D%8E%E7%8A%AC-00a1d6"></a>
     <a href="https://github.com/cheng1559/cocos4/tree/dev/pvz-remake"><img alt="COCOS 4 引擎分支" src="https://img.shields.io/badge/engine-COCOS%204-55c2e1"></a>
     <img alt="TypeScript" src="https://img.shields.io/badge/code-TypeScript-3178c6">
-    <img alt="Status" src="https://img.shields.io/badge/status-early%20playable-7cc576">
-    <a href="https://space.bilibili.com/3494365624273288"><img alt="Bilibili: 金色初华犬" src="https://img.shields.io/badge/Bilibili-%E9%87%91%E8%89%B2%E5%88%9D%E5%8D%8E%E7%8A%AC-00a1d6"></a>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
   </p>
 
   <img src="docs/images/header.png" alt="PvZ Remake" width="100%">
 </div>
 
-## 项目简介
+## 🌻 项目简介
 
 PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam 年度版 1.2.0.1096 为还原基准，使用 TypeScript 与 Cocos 4 开发，可在浏览器、Windows、macOS、Android 和 iOS 上运行。项目旨在基于现代技术栈重构并扩展原版：为玩家提供跨平台、更稳定的游玩体验，为社区提供更便捷、更规范的二次开发途径。
 
 当前版本为 v0.2.0，已完成冒险模式白天与黑夜共 20 个关卡。在还原原版玩法的同时，项目修正了原版中部分表现与逻辑问题，并加入了阵营系统、调试指令和模组支持，详见下文。
 
-## 如何游玩
+## 🎮 如何游玩
 
 ### 在线游玩
 
@@ -49,9 +56,9 @@ PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam �
 - "舞者精神"的成就图标为空白；
 - 启用汉化资源包后，上述文本仍无法显示中文。
 
-运行导入命令后，构建工具会转换资源并生成基础内容包；生成应用图标需要另行运行图标命令。完整步骤见[开发与构建](#开发与构建)。
+运行导入命令后，构建工具会转换资源并生成基础内容包；生成应用图标需要另行运行图标命令。完整步骤见[开发与构建](#-开发与构建)。
 
-## 游戏截图
+## 🖼️ 游戏截图
 
 ### 本体
 
@@ -163,36 +170,85 @@ PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam �
   </tr>
 </table>
 
-## 项目架构
+## ✨ 新增功能
 
-### 客户端/服务端
+### 模组系统
 
-游戏采用客户端/服务端分离的架构。单机游玩时，两者运行在同一进程中，通过消息通信：
+模组是可以安装到游戏中的扩展包。基础游戏本身也是一个模组，和其他模组使用相同的格式与加载方式，所以模组可以修改游戏的任何部分。常见的模组有这几类：
 
-- **服务端**负责全部玩法规则，包括植物、僵尸、子弹、波次、阳光与胜负判定。战斗以固定步长推进，每秒 100 步，与原版的逻辑帧率一致。
-- **客户端**负责输入、画面、动画、粒子、音效和界面。它不直接修改游戏状态，而是把玩家的操作（选卡、种植、收集阳光等）作为命令发给服务端，再根据服务端返回的状态快照和事件绘制画面。两次逻辑步之间的画面由客户端插值生成，因此在高刷新率显示器上依然平滑。
+- **资源替换**：高清化、更换美术风格、翻译成其他语言、替换音乐；
+- **数值调整**：修改植物和僵尸的属性、关卡的波次与出怪、商店价格等；
+- **新增内容**：加入新的植物、僵尸、子弹、关卡和成就；
+- **玩法改动**：修改种植、收集等规则，或加入新的关卡规则和界面。
 
-关卡存档由服务端状态（含随机数状态）和客户端的表现状态两部分组成，读档后战斗能从中断处精确继续。规则集中在服务端，也为后续的联机模式提供了基础。
+多个模组可以同时启用并互相叠加。例如 HD 包和汉化包一起使用时，汉化包只替换带文字的图片，其余图片仍来自 HD 包。模组也可以依赖其他模组，或为其他模组提供翻译。模组记录的数据会随关卡存档一起保存。
 
-```mermaid
-flowchart LR
-    Input[玩家输入] --> Client[客户端]
-    Client -- 命令 --> Server[服务端<br/>每秒 100 步]
-    Server -- 状态快照与事件 --> Client
-    Client --> Output[画面与音效]
+#### 示例模组
+
+| 模组 | 内容 |
+| --- | --- |
+| [宽屏拓展](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0) | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
+| [宽屏版背景音乐](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0) | 以 PvZ 宽屏版的配乐替换游戏音乐 |
+| [江南 PvZ2 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0) | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
+| [汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0) | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
+| [HD 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0) | 全部图像 2 倍、位图字体 4 倍的高清资源 |
+| [HD 汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0) | 高清资源与简体中文的合并包，可单独使用 |
+| [扩展按钮资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0) | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
+
+#### 运行机制
+
+- **统一的包格式**：所有扩展都以模组形式提供，基础游戏本身也是一个内置包（ID 为 `pvz`）。资源包只包含资源，不需要脚本；脚本模组可以同时包含服务端脚本（玩法）和客户端脚本（表现）。
+- **加载顺序**：依赖的模组先加载。多个模组提供同一资源时，管理器列表中位置靠前的优先。
+- **命名空间**：模组新增的资源和定义必须使用自己的命名空间（如 `widescreen:background1`）。替换已有定义时需在 `overrides` 中显式声明，同一定义只能被一个模组替换。
+- **文本**：全部文本合并在一张表中。模组可以改写任何已有文本，新增文本需带命名空间。翻译包只需列出要改写的条目，也可以翻译其他模组的文本。
+- **加载校验**：加载时检查内容是否完整，例如每个植物和僵尸是否都有对应的外观，每个关卡奖励是否都有图片。不完整的模组直接加载失败，不会等到进入关卡才报错。
+- **错误恢复**：运行中模组出错时会弹出错误对话框，可以直接从中打开模组管理器禁用出错的模组，然后重启。
+- **存储**：网页版存放在 IndexedDB 中，原生版存放在应用数据目录的 `mods/` 中。每个玩家档案单独保存自己安装的模组、版本、启用状态和顺序；内容相同的 ZIP 在同一设备上只保存一份。
+
+#### 使用方式
+
+1. 在主菜单点击"选项"，再点击"模组"，打开模组管理器；也可以执行 `/mod` 打开。
+2. 点击"导入"选择 ZIP 文件，可一次选择多个。
+3. 勾选要启用的模组，用箭头调整顺序。
+4. 点击"应用"并确认重启。游戏会先保存当前关卡，在下次启动时完成安装、卸载和启用。
+
+取消会丢弃本次的导入和排序。只调整未启用模组的顺序时无需重启。切换玩家档案时，如果对方启用的模组不同，游戏会提示重启；新建档案时可选择复制当前档案的模组。
+
+#### 开发说明
+
+每个模组的根目录包含两个文件：
+
+- `manifest.json`：模组的 ID、版本、依赖，以及脚本入口（如有）；
+- `content.json`：玩法定义、表现定义和资源的索引。
+
+```sh
+npm run mod:init -- my-mod          # 创建模组模板
+npm run mod:pack -- mods/my-mod     # 编译并打包为 ZIP，输出到 dist/mods/
+npm run mod:test -- my-mod          # 打包后检查服务端注册是否正常
 ```
 
-### 数据驱动
+模组可以通过以下方式扩展游戏，设计参考了 Minecraft 模组生态中的 Fabric API 与 Mixin：
 
-植物、僵尸、子弹、种子、关卡与波次、商店、成就等内容均以 JSON 数据定义，分为玩法定义与表现定义两类：前者描述数值和规则，后者描述动画、位置与音效。调整数值或新增内容通常只需修改数据，无需改动代码。
+- **数据定义**：用 JSON 新增植物、僵尸、子弹、种子、关卡、商店物品和成就，或替换已有定义。
+- **注册接口**（类似 Fabric API）：脚本入口 `register({ host, assets })` 通过 `host.get()` 取得游戏模块，向注册表添加新的植物、僵尸和子弹类型，以及对应的视图、调试指令、成就触发条件、关卡规则和教程脚本。新类型继承基础游戏的类，在定义中通过 `kind` 引用。
+- **方法包装**（类似 Mixin）：`host.around()` 可以包装服务端的规则函数，在原有逻辑前后加入处理或替换其结果；游戏内部的调用同样经过包装。
 
-基础游戏本身也是一个内容包（`pvz-base`），与模组使用相同的格式和加载流程。模组可以按 ID 覆盖基础定义，也可以加入新的定义；需要新行为时，模组可以注册自己的植物或僵尸类型，并在数据中引用。
+```ts
+export function register({ host, assets }) {
+    // 注册新的植物类型
+    const registry = host.get('gameplay/registry')
+    const { Shooter } = host.get('server/plants/Shooter')
+    registry.plants.register(assets.id, 'example:rapid_pea', regenerating(Shooter))
 
-美术、动画、粒子、字体、音效与文本均在构建时从正版游戏资源转换而来，项目仓库不包含原版素材。
+    // 包装种植规则
+    const { planting } = host.get('server/seeds/planting')
+    host.around(planting, 'seedAvailability', function (next, session, seedId, ...rest) {
+        return next(session, seedId, ...rest)
+    })
+}
+```
 
-详见[架构](docs/ARCHITECTURE.zh-CN.md)。
-
-## 新增功能
+示例模组 [Mod Lab](mods/example/README.zh-CN.md) 演示了新植物与僵尸类型、实体数据与存档、关卡修改、资源替换、自定义视图、双端指令和菜单扩展。完整开发说明见[模组](docs/MODS.zh-CN.md)。
 
 ### 调试指令
 
@@ -322,87 +378,36 @@ flowchart LR
 
 完整规则见[阵营与迷糊菇](docs/TEAMS.zh-CN.md)。
 
-### 模组系统
+## 🏗️ 项目架构
 
-模组是可以安装到游戏中的扩展包。基础游戏本身也是一个模组，和其他模组使用相同的格式与加载方式，所以模组可以修改游戏的任何部分。常见的模组有这几类：
+### 客户端/服务端
 
-- **资源替换**：高清化、更换美术风格、翻译成其他语言、替换音乐；
-- **数值调整**：修改植物和僵尸的属性、关卡的波次与出怪、商店价格等；
-- **新增内容**：加入新的植物、僵尸、子弹、关卡和成就；
-- **玩法改动**：修改种植、收集等规则，或加入新的关卡规则和界面。
+游戏采用客户端/服务端分离的架构。单机游玩时，两者运行在同一进程中，通过消息通信：
 
-多个模组可以同时启用并互相叠加。例如 HD 包和汉化包一起使用时，汉化包只替换带文字的图片，其余图片仍来自 HD 包。模组也可以依赖其他模组，或为其他模组提供翻译。模组记录的数据会随关卡存档一起保存。
+- **服务端**负责全部玩法规则，包括植物、僵尸、子弹、波次、阳光与胜负判定。战斗以固定步长推进，每秒 100 步，与原版的逻辑帧率一致。
+- **客户端**负责输入、画面、动画、粒子、音效和界面。它不直接修改游戏状态，而是把玩家的操作（选卡、种植、收集阳光等）作为命令发给服务端，再根据服务端返回的状态快照和事件绘制画面。两次逻辑步之间的画面由客户端插值生成，因此在高刷新率显示器上依然平滑。
 
-#### 运行机制
+关卡存档由服务端状态（含随机数状态）和客户端的表现状态两部分组成，读档后战斗能从中断处精确继续。规则集中在服务端，也为后续的联机模式提供了基础。
 
-- **统一的包格式**：所有扩展都以模组形式提供，基础游戏本身也是一个内置包（ID 为 `pvz`）。资源包只包含资源，不需要脚本；脚本模组可以同时包含服务端脚本（玩法）和客户端脚本（表现）。
-- **加载顺序**：依赖的模组先加载。多个模组提供同一资源时，管理器列表中位置靠前的优先。
-- **命名空间**：模组新增的资源和定义必须使用自己的命名空间（如 `widescreen:background1`）。替换已有定义时需在 `overrides` 中显式声明，同一定义只能被一个模组替换。
-- **文本**：全部文本合并在一张表中。模组可以改写任何已有文本，新增文本需带命名空间。翻译包只需列出要改写的条目，也可以翻译其他模组的文本。
-- **加载校验**：加载时检查内容是否完整，例如每个植物和僵尸是否都有对应的外观，每个关卡奖励是否都有图片。不完整的模组直接加载失败，不会等到进入关卡才报错。
-- **错误恢复**：运行中模组出错时会弹出错误对话框，可以直接从中打开模组管理器禁用出错的模组，然后重启。
-- **存储**：网页版存放在 IndexedDB 中，原生版存放在应用数据目录的 `mods/` 中。每个玩家档案单独保存自己安装的模组、版本、启用状态和顺序；内容相同的 ZIP 在同一设备上只保存一份。
-
-#### 使用方式
-
-1. 在主菜单点击"选项"，再点击"模组"，打开模组管理器；也可以执行 `/mod` 打开。
-2. 点击"导入"选择 ZIP 文件，可一次选择多个。
-3. 勾选要启用的模组，用箭头调整顺序。
-4. 点击"应用"并确认重启。游戏会先保存当前关卡，在下次启动时完成安装、卸载和启用。
-
-取消会丢弃本次的导入和排序。只调整未启用模组的顺序时无需重启。切换玩家档案时，如果对方启用的模组不同，游戏会提示重启；新建档案时可选择复制当前档案的模组。
-
-#### 示例模组
-
-每个模组都有单独的发布，其中提供 ZIP 文件、安装方法以及内容来源。
-
-| 模组 | 内容 |
-| --- | --- |
-| [宽屏拓展](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0)（`widescreen`） | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
-| [宽屏版背景音乐](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0)（`hd-bgm`） | 以 PvZ 宽屏版的配乐替换游戏音乐 |
-| [江南 PvZ2 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0)（`jiangnan-pvz2`） | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
-| [汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0)（`zh-cn`） | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
-| [HD 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0)（`hd`） | 全部图像 2 倍、位图字体 4 倍的高清资源 |
-| [HD 汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0)（`zh-cn-hd`） | 高清资源与简体中文的合并包，可单独使用 |
-| [扩展按钮资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0)（`dlc-buttons`） | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
-
-#### 开发说明
-
-每个模组的根目录包含两个文件：
-
-- `manifest.json`：模组的 ID、版本、依赖，以及脚本入口（如有）；
-- `content.json`：玩法定义、表现定义和资源的索引。
-
-```sh
-npm run mod:init -- my-mod          # 创建模组模板
-npm run mod:pack -- mods/my-mod     # 编译并打包为 ZIP，输出到 dist/mods/
-npm run mod:test -- my-mod          # 打包后检查服务端注册是否正常
+```mermaid
+flowchart LR
+    Input[玩家输入] --> Client[客户端]
+    Client -- 命令 --> Server[服务端<br/>每秒 100 步]
+    Server -- 状态快照与事件 --> Client
+    Client --> Output[画面与音效]
 ```
 
-模组可以通过以下方式扩展游戏，设计参考了 Minecraft 模组生态中的 Fabric API 与 Mixin：
+### 数据驱动
 
-- **数据定义**：用 JSON 新增植物、僵尸、子弹、种子、关卡、商店物品和成就，或替换已有定义。
-- **注册接口**（类似 Fabric API）：脚本入口 `register({ host, assets })` 通过 `host.get()` 取得游戏模块，向注册表添加新的植物、僵尸和子弹类型，以及对应的视图、调试指令、成就触发条件、关卡规则和教程脚本。新类型继承基础游戏的类，在定义中通过 `kind` 引用。
-- **方法包装**（类似 Mixin）：`host.around()` 可以包装服务端的规则函数，在原有逻辑前后加入处理或替换其结果；游戏内部的调用同样经过包装。
+植物、僵尸、子弹、种子、关卡与波次、商店、成就等内容均以 JSON 数据定义，分为玩法定义与表现定义两类：前者描述数值和规则，后者描述动画、位置与音效。调整数值或新增内容通常只需修改数据，无需改动代码。
 
-```ts
-export function register({ host, assets }) {
-    // 注册新的植物类型
-    const registry = host.get('gameplay/registry')
-    const { Shooter } = host.get('server/plants/Shooter')
-    registry.plants.register(assets.id, 'example:rapid_pea', regenerating(Shooter))
+基础游戏本身也是一个内容包（`pvz-base`），与模组使用相同的格式和加载流程。模组可以按 ID 覆盖基础定义，也可以加入新的定义；需要新行为时，模组可以注册自己的植物或僵尸类型，并在数据中引用。
 
-    // 包装种植规则
-    const { planting } = host.get('server/seeds/planting')
-    host.around(planting, 'seedAvailability', function (next, session, seedId, ...rest) {
-        return next(session, seedId, ...rest)
-    })
-}
-```
+美术、动画、粒子、字体、音效与文本均在构建时从正版游戏资源转换而来，项目仓库不包含原版素材。
 
-示例模组 [Mod Lab](mods/example/README.zh-CN.md) 演示了新植物与僵尸类型、实体数据与存档、关卡修改、资源替换、自定义视图、双端指令和菜单扩展。完整开发说明见[模组](docs/MODS.zh-CN.md)。
+详见[架构](docs/ARCHITECTURE.zh-CN.md)。
 
-## 开发与构建
+## 🛠️ 开发与构建
 
 ### 环境准备
 
@@ -468,7 +473,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 
 完整说明见[开发](docs/DEVELOPMENT.zh-CN.md)。
 
-## 问题修复
+## 🐛 问题修复
 
 以下问题存在于原版 1.2.0.1096 中，本项目已修正。表现层问题只影响画面和声音，不改变游戏结果；逻辑层问题会影响游戏的进行或结果。
 
@@ -492,7 +497,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 5. 修复打僵尸模式中，最后一组僵尸出现时墓碑已全部被咬咬碑吃掉、场上也没有僵尸，导致奖励不掉落、关卡无法结束的问题。
 6. 修复拖动或缩放窗口时游戏停止运行的问题。
 
-## 开发计划
+## 🗺️ 开发计划
 
 已发布版本列出实际包含的内容，计划中的版本可能会调整。
 
@@ -587,7 +592,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 - 原版遍历顺序
 - Linux 等平台适配
 
-## 鸣谢
+## 🙏 鸣谢
 
 - 感谢 Quality of the Lawn 的反编译工作，为查证原版行为提供了可读的代码参考。[PvZ-Quality-of-the-Lawn-Decompile](https://github.com/Electr0Gunner/PvZ-Quality-of-the-Lawn-Decompile)
 - 感谢 PvZ-Portable 项目，其移植源码帮助我们理解关卡流程、植物行为和僵尸状态。[PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable)
@@ -598,12 +603,12 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 - 宽屏拓展的白天草坪、商店背景和右侧草丛取自《植物大战僵尸》Android TV 版（1.1.5）。
 - 感谢宝开游戏创作《植物大战僵尸》。
 
-## 免责声明
+## ⚠️ 免责声明
 
 PvZ Remake 是基于 PC 原版《植物大战僵尸》制作的非官方同人重制项目。开发者独立于 Electronic Arts（EA）和 PopCap 运营本项目，并对项目内容负责。原版《植物大战僵尸》的游戏素材、著作权及商标归 Electronic Arts Inc. 所有。MIT 许可证适用于本项目的原创源码。
 
 EA 的政策要求模组免费提供，仅供非商业用途。对于 PC 原版这类付费游戏，模组必须要求玩家使用正版游戏，且分发时须排除原版游戏文件。在本地构建 PvZ Remake 时，请从自己持有的正版游戏中导入资源。[EA《植物大战僵尸》模组政策（英文）](https://help.ea.com/en/articles/plants-vs-zombies/mod-policy/)
 
-## 开源协议
+## 📄 开源协议
 
 本项目源码采用 [MIT 许可证](LICENSE)。
