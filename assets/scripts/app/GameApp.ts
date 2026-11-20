@@ -149,10 +149,12 @@ export class GameApp extends Component {
         let focused = web ? document.hasFocus() : bridge?.windowFocused ?? true
         let active = true, savedOnLoss = false
         const sync = () => {
+            // A hidden game mutes. A visible one that lost focus mutes only with auto-pause on: with it off, the game
+            // goes on behind other windows and stays audible.
+            SoundSystem.setFocusMuted(hidden || (!focused && GameDebugSettings.autoPauseEnabled))
             const next = focused && !hidden
             if (next === active) return
             active = next
-            SoundSystem.setFocusMuted(!active)
             if (active) { savedOnLoss = false; return }
             this.spacePressed = false
             if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading &&

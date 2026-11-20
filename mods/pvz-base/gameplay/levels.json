@@ -29,14 +29,14 @@
       {"seedId":"pvz:sunflower","row":3,"column":0}, {"seedId":"pvz:peashooter","row":3,"column":1}, {"seedId":"pvz:repeater","row":3,"column":2}, {"seedId":"pvz:snowpea","row":3,"column":3}, {"seedId":"pvz:peashooter","row":3,"column":4}, {"seedId":"pvz:repeater","row":3,"column":5}, {"seedId":"pvz:snowpea","row":3,"column":6}, {"seedId":"pvz:wallnut","row":3,"column":7},
       {"seedId":"pvz:sunflower","row":4,"column":0}, {"seedId":"pvz:peashooter","row":4,"column":1}, {"seedId":"pvz:repeater","row":4,"column":2}, {"seedId":"pvz:snowpea","row":4,"column":3}, {"seedId":"pvz:peashooter","row":4,"column":4}, {"seedId":"pvz:repeater","row":4,"column":5}, {"seedId":"pvz:snowpea","row":4,"column":6}, {"seedId":"pvz:wallnut","row":4,"column":7}
     ],
-    "firstWaveTicks": 1200,
+    "firstWaveTicks": 1,
     "zombiePool": [
       {"id": "pvz:normal", "weight": 5},
       {"id": "pvz:conehead", "points": 1, "weight": 3},
       {"id": "pvz:buckethead", "points": 1, "weight": 2},
       {"id": "pvz:pole_vaulter", "points": 1, "weight": 1, "firstWave": 1}
     ],
-    "waves": [{"zombies": [], "points": 160}, {"zombies": [], "points": 1}],
+    "waves": [{"zombies": [], "points": 1023}, {"zombies": [], "points": 1}],
     "award": {"kind": "seed", "id": "pvz:repeater"}
   },
   "pvz:seed-chooser-test": {

@@ -136,12 +136,14 @@ export class LayerPlayers {
     /**
      * Each layer on what it shows and at its time; a layer with nothing to show, or hidden, is not drawn. A layer started
      * on a clip blends from the pose it had over `blend` seconds, and one not on a part is placed by `place` (`first`: it
-     * is the bottom layer). `basePose`: the pose a clip says its part is attached from, where it says.
+     * is the bottom layer). `basePose`: the pose a clip says its part is attached from, where it says. `holdsStill`: it
+     * is shown each tick (on the board), so a time that has not moved stops it where it has played on to.
      */
     show(shown: (name: string) => LayerShown | undefined, options: {
         blend(name: string, clip: ClientAnimationClip, first: boolean): number
         place(name: string, player: ReanimPlayer, clip: ClientAnimationClip, first: boolean): void
         basePose?(clip: ClientAnimationClip, track: string): ReanimKeyframe | undefined
+        holdsStill?: boolean
     }): void {
         // The layers under the one being shown, with the tracks each draws.
         const below: [string, ReanimPlayer, readonly string[]][] = []
@@ -183,11 +185,14 @@ export class LayerPlayers {
                 const playback = layerPlayback(what, player, what.time + layer.offset)
                 // It plays on between two times it is shown, and is set right by each, at the rate it now goes at (a frozen
                 // one's 0, a chilled one's half). A frame of the same time (input or a pause between two ticks) leaves it
-                // where it has played on to: set back, every layer would twitch with the game clock stopped.
+                // where it has played on to: set back, every layer would twitch with the game clock stopped. Shown each
+                // tick, it also stops there: the server is holding it (Plant::Update leaves the plants of an intro still,
+                // and a repick stands the level still), and played on, it would jump back at the tick that moves it.
                 if (what.hidden) { if (layer.shown) player.hide() }
                 else if (!layer.shown) player.play({ ...playback, hideOnFinish: false })
                 else {
-                    if (player.playbackFps !== playback.fps) player.setFps(playback.fps)
+                    const fps = options.holdsStill && what.time === layer.time ? 0 : playback.fps
+                    if (player.playbackFps !== fps) player.setFps(fps)
                     if (what.time !== layer.time) player.seek(playback.timeSeconds)
                 }
             }

@@ -88,7 +88,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | Level | Content |
 | --- | --- |
 | `pvz:teams-demo` | A temporary level that grants no achievements. Day lawn, 1000 sun and a fixed bank of 8 cards. On the left, every row has the plants' side's Sunflower and a shooter ready. Columns 7–9 on the right hold 9 zombies' side plants facing left (Peashooter, Repeater, Snow Pea, Wall-nut, Chomper, Potato Mine, Explode-o-nut). The two sides attack each other while 4 waves of zombies (Zombie, Conehead, Buckethead; the last is a flag wave) come from the right through the zombies' side plants. Put down a plants' side zombie there with `/zombie normal 3 1 plants`. See [Teams and the Hypno-shroom](TEAMS.md). |
-| `pvz:stress-test` | A temporary level that grants no achievements. Day lawn and 9990 sun, with 40 plants already placed (8 in each row) and 160 zombies spawned after 12 seconds. `/nextwave` spawns them early. `/perf plants` and `/perf zombies` turn plant or zombie drawing off, and on again, to isolate rendering. |
+| `pvz:stress-test` | A temporary level that grants no achievements. Day lawn and 9990 sun, with 40 plants already placed (8 in each row) and 1023 zombies spawned as play begins. `/perf plants` and `/perf zombies` turn plant or zombie drawing off, and on again, to isolate rendering. |
 | `pvz:seed-chooser-test` | A level on the day lawn with 50 sun and 3 waves that grants no achievements. It has no fixed bank, so its bank starts by the original's rule: the seed chooser opens when the player owns more seeds than the bank has slots (6, plus any bought), and confirming starts the level; otherwise the bank holds every owned seed. It is not temporary: it replaces the level save, and winning it awards the Repeater and moves Adventure on to level 1-10 if it was not already past it. |
 
 ### Speed, waves and results
@@ -311,7 +311,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 
 #### Focus, haptics, controls, full screen and volume
 
-- `/autopause`: when the window loses focus or is hidden, a level that can pause opens the pause menu (not while a menu page, a dialog or the console is open). Losing focus always mutes the audio, whether this switch is on or off. It is on by default and saved locally.
+- `/autopause`: when the window loses focus or is hidden, a level that can pause opens the pause menu (not while a menu page, a dialog or the console is open), and the audio is muted. Off, the game neither pauses nor mutes when another window takes the focus; it still mutes while hidden (another tab, a minimized window, an app in the background). It is on by default and saved locally.
 - `/haptics` turns all haptic feedback on or off immediately. It is on by default and saved locally.
 - `/mobile` switches mobile mode. In mobile mode the board ignores the mouse and takes touches: press a seed packet or the shovel, drag it onto the lawn and release it there; dragging across sun and coins collects them. See [Touch](UI.md#touch) in UI. It is on by default on mobile devices and off elsewhere, and it lasts for the session only.
 - `/fullscreen` switches full screen, saved in the game settings like the full-screen option in Options. Native mobile apps are always full screen ("Windowed mode is unavailable on mobile"), and a browser without full-screen support reports "Full screen is unavailable".

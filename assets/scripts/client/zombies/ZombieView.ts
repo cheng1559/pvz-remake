@@ -524,6 +524,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
                 const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
                 if (player.node.parent === this.root) this.place(player.node, at.x ?? 0, at.y ?? 0)
             },
+            holdsStill: board,
         })
         if (changed) {
             this.bodyClip = body(zombie).clip
