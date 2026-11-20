@@ -456,7 +456,7 @@ npm run preview:debug     # start the preview, http://localhost:9527 by default
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build |
 | Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
-| macOS | `npm run compile:macos:release`, then `npm run package:macos` | The disk image `dist/pvz-remake-v{version}-macos-universal.dmg`; macOS only |
+| macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package; use `android:armv7` for 32-bit devices |
 | iOS | `npm run compile:ios:release` | An unsigned IPA to sign yourself; macOS only |
 

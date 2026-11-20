@@ -175,7 +175,7 @@ npm run build:web:debug
 | --- | --- | --- |
 | 网页 | `npm run build:web:release` | `build/web-mobile/` 中的 Web 构建 |
 | Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{version}-windows-x64-setup.exe`；打包需要 Inno Setup 6 |
-| macOS | `npm run compile:macos:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{version}-macos-universal.dmg`；仅能在 macOS 上构建 |
+| macOS | `npm run compile:macos:arm64:release` 和 `compile:macos:x64:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{version}-macos-arm64.dmg`（Apple 芯片）和 `-macos-x64.dmg`（Intel）；仅能在 macOS 上构建 |
 | Android | `npm run compile:android:arm64:release` | `build/android-arm64-release/` 中的 arm64 安装包；32 位设备使用 `compile:android:armv7:release`，输出到 `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | 未签名的 IPA `build/ios/pvz-remake-mobile-unsigned.ipa`，需要自行签名；仅能在 macOS 上构建 |
 
@@ -203,13 +203,15 @@ npm run build:web:debug
 
 在装有 Xcode 命令行工具的 macOS 上：
 
-1. `npm run compile:macos:release` 构建 `build/mac/proj/Release/Plants vs. Zombies.app`，这是同时包含 arm64 与 x86_64 的版本，要求 macOS 12.0 及以上。
-2. `npm run package:macos`（`tools/installer/package-macos.ts`）把它打包为 `dist/pvz-remake-v{version}-macos-universal.dmg`。文件名中的架构部分：Cocos 生成的 arm64 + x86_64 版本为 `universal`，单一架构的版本为 `arm64` 或 `x64`。
+1. `npm run compile:macos:arm64:release` 和 `npm run compile:macos:x64:release` 先清除构建目录中的旧资源和应用（见[原生构建输出](#原生构建输出)），再构建并编译出 `Plants vs. Zombies.app`，分别位于 `build/mac-arm64-release/proj/Release/` 和 `build/mac-x64-release/proj/Release/`，要求 macOS 12.0 及以上。`cocos make` 编译哪个架构，由 `build-configs/macos-arm64-release.json` 和 `macos-x64-release.json` 中 `packages.mac` 的 `archs` 指定。调试版本 `npm run compile:macos:debug` 仍同时包含 arm64 与 x86_64，位于 `build/mac/`。
+2. `npm run package:macos`（`tools/installer/package-macos.ts`）把它们分别打包为 `dist/pvz-remake-v{version}-macos-arm64.dmg` 和 `dist/pvz-remake-v{version}-macos-x64.dmg`。`npm run package:macos -- arm64`（或 `-- x64`）只打包一个。
 
 打包前：
 
 - `native/engine/mac/Info.plist` 中的版本号（`CFBundleShortVersionString`）必须与 `package.json` 中的一致，修改一致后需重新构建；
 - 先推出所有名为"Plants vs. Zombies"的已挂载卷（如之前打开的磁盘映像），否则 Finder 会去布置那个卷的窗口。
+
+打包前会先检查所有构建，再生成映像。以下情况会报错：缺少构建；构建中含有其他架构的代码；构建中带有游戏不会加载的资源包（不在其 `src/settings.json` 的 `projectBundles` 中），这是之前的构建遗留下来的。
 
 签名：
 
@@ -220,6 +222,7 @@ npm run build:web:debug
 
 - 窗口背景为 `tools/installer/dmg-background.png`（660 × 400 点，按 144 dpi 绘制），也可以用 `DMG_BACKGROUND` 指定其他文件。缺少该文件时映像没有背景。
 - Finder 会布置窗口，放入应用和指向"应用程序"文件夹的链接，卷图标使用应用的图标。
+- 映像中的可执行文件会去除符号，约小三分之一；构建目录中的那份保留符号，方便调试。
 
 相关脚本见 `tools/installer/`。
 
@@ -235,13 +238,16 @@ npm run build:web:debug
 - arm64 iPhone Release 版本（要求 iOS 15.0 及以上）不需要开发者团队。
 - Cocos 会检查 ZIP 的完整性，并在旁边写入 `.ipa.sha256` 校验文件。
 - 中间产物 `.app` 保留在 `build/ios/proj/Release-iphoneos/` 下。
+- 该命令会先清除构建目录中的旧资源和应用（见[原生构建输出](#原生构建输出)）。
+- Xcode 会在签名前去除 Release 可执行文件的符号（约小三分之一，见 `native/engine/ios/CMakeLists.txt`），所以配置了开发者团队的签名版本依然有效。
 
 ### 原生构建输出
 
 原生构建会保留输出目录，而构建工具不会用新文件覆盖已存在的原始资源。同一 UUID 下内容会变化的文件，如每次打包基础内容都会变化的 `assets/resources/base.zip`，会一直保持首次构建时的内容；新代码遇到旧内容，游戏就无法启动。
 
-- Windows 的构建命令会先通过 `tools/build/clean-native-assets.ts` 清除 `build/windows/data/assets`。
-- macOS、iOS 和 Android 的命令不会清除。重新打包 `base.zip` 后，请先用同样的方式清除对应构建目录中的资源再构建，如 `npx tsx tools/build/clean-native-assets.ts build/mac`。
+- Windows、macOS 和 iOS 的构建命令会先通过 `tools/build/clean-native-assets.ts` 清除构建目录中的 `data/assets`。
+- Xcode 构建会把每个资源复制进应用，但不会删除工程中已不再列出的资源，所以该脚本也会删除构建目录 `proj/<配置>/` 下的应用，下次构建时重新生成。
+- Android 的命令不会清除。重新打包 `base.zip` 后，请先用同样的方式清除对应构建目录中的资源再构建，如 `npx tsx tools/build/clean-native-assets.ts build/android-arm64-release`。
 
 ## 性能分析
 

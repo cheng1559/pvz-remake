@@ -7,8 +7,8 @@
 ```text
 tools/
 ├── build/
-│   └── clean-native-assets.ts  # 原生构建前清除输出目录中旧的 data/assets（由 Windows 构建命令调用）
-├── installer/                  # 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss，package-macos.ts 生成 macOS 磁盘映像
+│   └── clean-native-assets.ts  # 原生构建前清除输出目录中旧的 data/assets 和 Xcode 已构建的应用（由 Windows、macOS 和 iOS 构建命令调用）
+├── installer/                  # 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss，package-macos.ts 生成各架构的 macOS 磁盘映像
 ├── kernel/build.ts             # 把 C++ 内核编译为 Wasm
 ├── mod/                        # 模组的初始化、打包、校验、宿主模块列表生成与配置读取
 │   ├── cli.ts

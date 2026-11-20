@@ -456,7 +456,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 | --- | --- | --- |
 | 网页 | `npm run build:web:release` | Web 构建 |
 | Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{版本}-windows-x64-setup.exe`；打包需要 Inno Setup 6 |
-| macOS | `npm run compile:macos:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{版本}-macos-universal.dmg`；仅能在 macOS 上构建 |
+| macOS | `npm run compile:macos:arm64:release` 和 `compile:macos:x64:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{版本}-macos-arm64.dmg`（Apple 芯片）和 `-macos-x64.dmg`（Intel）；仅能在 macOS 上构建 |
 | Android | `npm run compile:android:arm64:release` | arm64 安装包；32 位设备使用 `android:armv7` |
 | iOS | `npm run compile:ios:release` | 未签名的 IPA，需要自行签名；仅能在 macOS 上构建 |
 

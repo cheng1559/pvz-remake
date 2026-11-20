@@ -7,8 +7,8 @@ Directories are split by purpose. The root holds only this guide, the Node modul
 ```text
 tools/
 ├── build/
-│   └── clean-native-assets.ts  # Clears old data/assets from the output directory before a native build (called by the Windows build commands)
-├── installer/                  # Installers: package-windows.ts compiles windows.iss with Inno Setup, package-macos.ts makes the macOS disk image
+│   └── clean-native-assets.ts  # Clears old data/assets, and the built Xcode apps, from the output directory before a native build (called by the Windows, macOS and iOS build commands)
+├── installer/                  # Installers: package-windows.ts compiles windows.iss with Inno Setup, package-macos.ts makes a macOS disk image per architecture
 ├── kernel/build.ts             # Compiles the C++ kernel to Wasm
 ├── mod/                        # Mod initialization, packing, validation, host module list generation and configuration reading
 │   ├── cli.ts

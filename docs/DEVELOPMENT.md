@@ -175,7 +175,7 @@ npm run build:web:debug
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build in `build/web-mobile/` |
 | Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
-| macOS | `npm run compile:macos:release`, then `npm run package:macos` | The disk image `dist/pvz-remake-v{version}-macos-universal.dmg`; macOS only |
+| macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package in `build/android-arm64-release/`; `compile:android:armv7:release` builds for 32-bit devices into `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | The unsigned IPA `build/ios/pvz-remake-mobile-unsigned.ipa` to sign yourself; macOS only |
 
@@ -203,13 +203,15 @@ The installer:
 
 On macOS, with the Xcode command line tools:
 
-1. `npm run compile:macos:release` builds `build/mac/proj/Release/Plants vs. Zombies.app`, an arm64 and x86_64 build for macOS 12.0 or later.
-2. `npm run package:macos` (`tools/installer/package-macos.ts`) packs it into `dist/pvz-remake-v{version}-macos-universal.dmg`. The architecture part of the name is `universal` for the arm64 and x86_64 build Cocos makes, and `arm64` or `x64` for a single-architecture build.
+1. `npm run compile:macos:arm64:release` and `npm run compile:macos:x64:release` clear the build's old assets and apps (see [Native build output](#native-build-output)), build, and compile `Plants vs. Zombies.app` for macOS 12.0 or later under `build/mac-arm64-release/proj/Release/` and `build/mac-x64-release/proj/Release/`. The `archs` of `packages.mac` in `build-configs/macos-arm64-release.json` and `macos-x64-release.json` names the architecture `cocos make` compiles. The debug build, `npm run compile:macos:debug`, stays an arm64 and x86_64 build under `build/mac/`.
+2. `npm run package:macos` (`tools/installer/package-macos.ts`) packs them into `dist/pvz-remake-v{version}-macos-arm64.dmg` and `dist/pvz-remake-v{version}-macos-x64.dmg`. `npm run package:macos -- arm64` (or `-- x64`) packs one.
 
 Before packaging:
 
 - the version in `native/engine/mac/Info.plist` (`CFBundleShortVersionString`) must match the one in `package.json`; rebuild after making them match;
 - eject any mounted volume named "Plants vs. Zombies", such as an earlier disk image, because Finder would lay out that volume instead.
+
+Packaging checks every build before making any image, and fails if a build is missing, holds code for another architecture, or carries an asset bundle that the game does not load (`projectBundles` in its `src/settings.json`), which is left from an earlier build.
 
 Signing:
 
@@ -220,6 +222,7 @@ The disk image:
 
 - The window's background is `tools/installer/dmg-background.png` (660 × 400 points, drawn at 144 dpi), or the file named by `DMG_BACKGROUND`. Without it the image has no background.
 - Finder lays out the window with the app and a link to Applications, and the volume shows the app's icon.
+- The image's copy of the executable is stripped of symbols, about a third of its size; the build's own copy keeps them for debugging.
 
 See `tools/installer/` for the scripts.
 
@@ -235,13 +238,16 @@ On macOS with Xcode, `npm run compile:ios:release` exports the current resources
 - The arm64 iPhone Release build, for iOS 15.0 or later, requires no developer team.
 - Cocos checks the ZIP's integrity and writes a `.ipa.sha256` checksum file next to it.
 - The intermediate `.app` remains under `build/ios/proj/Release-iphoneos/`.
+- The command clears the build's old assets and apps first (see [Native build output](#native-build-output)).
+- Xcode strips the Release executable of its symbols, about a third of its size, before signing it (`native/engine/ios/CMakeLists.txt`), so a build signed with a developer team stays valid.
 
 ### Native build output
 
 A native build keeps its output folder, and the builder never copies a raw asset over one that is already there. A file that changes under the same UUID, as `assets/resources/base.zip` does every time the base content is packed, would stay as it was first built; the new code then meets old content and the game does not start.
 
-- The Windows build commands clear `build/windows/data/assets` first, through `tools/build/clean-native-assets.ts`.
-- The macOS, iOS and Android commands do not. After repacking `base.zip`, clear their build's assets the same way, for example `npx tsx tools/build/clean-native-assets.ts build/mac`, before building again.
+- The Windows, macOS and iOS build commands clear `data/assets` in their build folder first, through `tools/build/clean-native-assets.ts`.
+- An Xcode build copies each asset into the app but never removes one that the project no longer lists, so the script also removes the apps under the build's `proj/<configuration>/`, and the next build makes them afresh.
+- The Android commands do not clear anything. After repacking `base.zip`, clear their build's assets the same way, for example `npx tsx tools/build/clean-native-assets.ts build/android-arm64-release`, before building again.
 
 ## Profiling
 
