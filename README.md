@@ -200,7 +200,7 @@ A built-in debug console tests levels, changes the game's state and switches dis
 
 The leading slash is optional and names ignore case. Tab completes commands and installed content names, and the Up and Down keys recall the last 64 commands. Rows, columns and seed slots count from 1. A malformed argument flashes the input red and keeps it open; an unmet condition (such as not being in a level) closes the console and shows the reason.
 
-Switches take no argument: each run turns the switch over and shows its new state on screen. Settings marked "saved" persist across restarts on the device.
+Switches take no argument: each run turns the switch over and shows its new state on screen. Switches and settings are kept on the device across restarts, except `/mobile`, `/perf` and `/gamespeed`, which last for the session, and `/fullscreen`, `/music` and `/sfx`, which are the settings in Options.
 
 **Pages and levels**
 
@@ -254,25 +254,25 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | --- | --- |
 | `/cooldown` | Turns seed recharge on or off |
 | `/suncost` | Turns sun cost on or off |
-| `/plantinvincible` | Turns plant invincibility on or off: plants take no damage but can still be chilled and frozen (saved) |
-| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds (saved) |
+| `/plantinvincible` | Turns plant invincibility on or off: plants take no damage but can still be chilled and frozen |
+| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds |
 | `/collect {auto\|click\|move}` | Collects sun and coins automatically, by clicking or by moving the pointer over them |
 
 **Display and device**
 
 | Command | Effect |
 | --- | --- |
-| `/fps` | Shows the frame rate (saved) |
+| `/fps` | Shows the frame rate |
 | `/hitboxes` | Shows hitboxes |
-| `/highresolution` | Renders at the window's own pixels, sharper than the original (saved) |
-| `/sharpness {0-1}` | Sets the edge sharpness of enlarged pixels, 0.5 by default (saved) |
-| `/tilted` | Enlarges and tilts the pictures in seed packets (saved) |
-| `/cursor` | Switches between the original mouse cursors and the system's (saved) |
+| `/highresolution` | Renders at the window's own pixels, sharper than the original |
+| `/sharpness {0-1}` | Sets the edge sharpness of enlarged pixels, 0.5 by default |
+| `/tilted` | Enlarges and tilts the pictures in seed packets |
+| `/cursor` | Switches between the original mouse cursors and the system's |
 | `/hotkeys` | Turns keyboard hotkeys on or off; see below |
-| `/autopause` | Turns pausing on focus loss on or off; losing focus always mutes (saved) |
-| `/haptics` | Turns touch haptics on or off (saved) |
+| `/autopause` | Turns pausing on focus loss on or off; losing focus always mutes |
+| `/haptics` | Turns touch haptics on or off |
 | `/mobile`, `/fullscreen` | Switches mobile mode or full screen |
-| `/resize` | Lets the desktop window be resized freely; off, it keeps a height of 600 and its width follows its aspect (saved, off by default) |
+| `/resize` | Lets the desktop window be resized freely; off, it keeps a height of 600 and its width follows its aspect (off by default) |
 | `/music {0-100}`, `/sfx {0-100}` | Sets the music or sound effect volume |
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | Turns off drawing or processing of a part, for performance checks |
 | `/mod` | Opens the Mod manager |
