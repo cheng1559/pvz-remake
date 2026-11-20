@@ -47,10 +47,13 @@ def _normalize_image_name(path: Path) -> str:
 
 
 def _find_font_image(basedir: Path, image_name: str) -> Path | None:
+    """The image file a descriptor names, ignoring case: descriptors keep the original spelling (`BrianneTod32`),
+    while the PAK import lowercases every file name."""
+    files = {path.name.lower(): path for path in basedir.iterdir() if path.is_file()}
     for prefix in ['_', '']:
         for ext in ['.png', '.gif']:
-            candidate = basedir / (prefix + image_name + ext)
-            if candidate.exists():
+            candidate = files.get((prefix + image_name + ext).lower())
+            if candidate is not None:
                 return candidate
     return None
 
@@ -634,11 +637,17 @@ def _build_font(input_path: Path) -> tuple[PvZFontParser, dict]:
 
     for layer in parser.layers:
         image_name = layer['image']
-        if image_name and _find_font_image(parser.basedir, image_name) is None:
+        if not image_name:
+            continue
+        found = _find_font_image(parser.basedir, image_name)
+        if found is None:
             fallback = input_path.stem
-            if _find_font_image(parser.basedir, fallback) is not None:
+            found = _find_font_image(parser.basedir, fallback)
+            if found is not None:
                 print(f"[font] Using descriptor image fallback: {image_name} -> {fallback}")
-                layer['image'] = fallback
+        if found is not None:
+            # The layer takes the found file's own name, so the JSON and the atlas file agree on any file system.
+            layer['image'] = found.with_suffix('').name
 
     return parser, parser.to_json()
 

@@ -107,6 +107,40 @@ SetDefaultPointSize 2;
             self.assertEqual(first, outputs())
             self.assertEqual([name for name, _ in first], ["testfont.json", "testfont_atlas.png"])
 
+    def test_font_layers_find_their_images_whatever_the_case(self):
+        # The PAK import lowercases file names; descriptors keep the original spelling, and an outline layer has an
+        # image of its own.
+        descriptor = """
+Define CharList ('A');
+Define WidthList (2);
+Define RectList ((0, 0, 2, 2));
+Define OffsetList ((0, 0));
+CreateLayer Outline;
+LayerSetImage Outline 'TestFontOutline';
+LayerSetCharWidths Outline CharList WidthList;
+LayerSetImageMap Outline CharList RectList;
+LayerSetCharOffsets Outline CharList OffsetList;
+CreateLayer Main;
+LayerSetImage Main 'TestFont';
+LayerSetCharWidths Main CharList WidthList;
+LayerSetImageMap Main CharList RectList;
+LayerSetCharOffsets Main CharList OffsetList;
+SetDefaultPointSize 2;
+"""
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "testfont.txt"
+            source.write_text(descriptor, encoding="utf-8")
+            Image.new("RGBA", (2, 2), (255, 255, 255, 255)).save(root / "testfont.png")
+            Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(root / "testfontoutline.png")
+            output = root / "output"
+            convert_font(source, output)
+
+            layers = json.loads((output / "testfont.json").read_text(encoding="utf-8"))["layers"]
+            self.assertEqual([layer["image"] for layer in layers], ["testfontoutline_atlas", "testfont_atlas"])
+            self.assertEqual(sorted(path.name for path in output.glob("*.png")),
+                             ["testfont_atlas.png", "testfontoutline_atlas.png"])
+
     def test_images_merge_alpha_and_skip_the_companion_mask(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
