@@ -1,3 +1,5 @@
+[简体中文](README.zh-CN.md)
+
 # Development Scripts
 
 Directories are split by purpose. The root holds only this guide, the Node module configuration `package.json`, and the original's inputs, which Git ignores and you supply yourself:

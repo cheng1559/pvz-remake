@@ -10,6 +10,8 @@
     <a href="https://space.bilibili.com/3494365624273288"><img alt="Bilibili: 金色初华犬" src="https://img.shields.io/badge/Bilibili-%E9%87%91%E8%89%B2%E5%88%9D%E5%8D%8E%E7%8A%AC-00a1d6"></a>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
   </p>
+
+  <img src="docs/images/header.png" alt="PvZ Remake" width="100%">
 </div>
 
 ## 项目简介
@@ -188,7 +190,7 @@ flowchart LR
 
 美术、动画、粒子、字体、音效与文本均在构建时从正版游戏资源转换而来，项目仓库不包含原版素材。
 
-详见[架构说明](docs/ARCHITECTURE.md)。
+详见[架构](docs/ARCHITECTURE.zh-CN.md)。
 
 ## 新增功能
 
@@ -276,7 +278,7 @@ flowchart LR
 
 开启热键后：`1`–`9` 和 `0` 选取对应卡槽或传送带上的卡片，`F` 拿起或放回铁铲，`D` 切换定格，`R` 执行 `/repick`（重新选卡时再按一次即开始战斗），`S` 和 `C` 分别切换阳光消耗和冷却。
 
-完整说明见[调试指令文档](docs/DEBUG_CLI.md)。
+完整说明见[调试指令](docs/DEBUG_CLI.zh-CN.md)。
 
 ### 阵营系统
 
@@ -317,7 +319,7 @@ flowchart LR
 
 通过 `/level pvz:teams-demo` 可进入阵营演示关：右侧预置 9 株僵尸方植物，与玩家的植物互相攻击，同时有 4 波僵尸从右侧进攻。
 
-完整规则见[阵营说明](docs/TEAMS.md)。
+完整规则见[阵营与迷糊菇](docs/TEAMS.zh-CN.md)。
 
 ### 模组系统
 
@@ -394,7 +396,7 @@ export function register({ host, assets }) {
 }
 ```
 
-示例模组 [Mod Lab](mods/example/README.md) 演示了新植物与僵尸类型、实体数据与存档、关卡修改、资源替换、自定义视图、双端指令和菜单扩展。完整开发说明见[模组文档](docs/MODS.md)。
+示例模组 [Mod Lab](mods/example/README.zh-CN.md) 演示了新植物与僵尸类型、实体数据与存档、关卡修改、资源替换、自定义视图、双端指令和菜单扩展。完整开发说明见[模组](docs/MODS.zh-CN.md)。
 
 ## 开发与构建
 
@@ -460,7 +462,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 
 把命令中的 `release` 换成 `debug` 即可构建调试版本。Windows 安装包只能从 Release 版本打包。
 
-完整说明见[开发文档](docs/DEVELOPMENT.md)。
+完整说明见[开发](docs/DEVELOPMENT.zh-CN.md)。
 
 ## 问题修复
 

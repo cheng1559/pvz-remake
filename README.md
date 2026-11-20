@@ -10,6 +10,8 @@
     <a href="https://space.bilibili.com/3494365624273288"><img alt="Bilibili: 金色初华犬" src="https://img.shields.io/badge/Bilibili-%E9%87%91%E8%89%B2%E5%88%9D%E5%8D%8E%E7%8A%AC-00a1d6"></a>
     <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
   </p>
+
+  <img src="docs/images/header.png" alt="PvZ Remake" width="100%">
 </div>
 
 ## Overview
@@ -317,7 +319,7 @@ Only units controlled by a Hypno-shroom turn purple; units placed on the other s
 
 `/level pvz:teams-demo` opens the teams demo: nine zombies' side plants on the right fight the player's plants while four waves of zombies come from the right.
 
-See [Teams](docs/TEAMS.md) for the full rules.
+See [Teams and the Hypno-shroom](docs/TEAMS.md) for the full rules.
 
 ### Mods
 

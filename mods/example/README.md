@@ -1,3 +1,5 @@
+[简体中文](README.zh-CN.md)
+
 # Mod Lab
 
 The repository maintains only this one sample. It demonstrates the whole extension flow, from configuration and resources to scripts on both sides, and includes a playable test level. It depends on no other Mod and needs neither changes to the base game nor the Cocos editor. Its textures and prompt sound are small resources made for the sample.
@@ -56,4 +58,4 @@ The original's resources still come from the base package. Rapid Pea's body and 
 - `host.dispose()` undoes the method wrappers; this sample also wraps that method to destroy the button and dialog it created. Entity views are destroyed with the host's entity nodes; when registration fails, the loader rolls the registries back. Normal enabling and disabling restarts the game to load the complete set of Mods.
 - Saves support only the current Mod version and content hash. The sample does not convert old saves.
 
-To extend further, add more views and gameplay the same way. See the [Mod guide](../../docs/MODS.md) for the font, music and prefab formats and the list of host modules; prefabs still have engine import requirements. The manifest's `dependencies` declares dependencies on other Mods' IDs and versions; this sample stays self-contained.
+To extend further, add more views and gameplay the same way. See [Mods](../../docs/MODS.md) for the font, music and prefab formats and the list of host modules; prefabs still have engine import requirements. The manifest's `dependencies` declares dependencies on other Mods' IDs and versions; this sample stays self-contained.
