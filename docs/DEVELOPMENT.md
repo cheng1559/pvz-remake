@@ -184,6 +184,18 @@ npm run build:web:debug
 - `{version}` is the `version` in `package.json`.
 - Web validation does not establish native compilation or device validation, and a successful native build does not establish device validation.
 
+### Web
+
+1. `npm run build:web:release` writes the web build to `build/web-mobile/`, which any static host can serve.
+2. Cloudflare Pages takes no file over 25 MiB, so `npm run package:pages` (`tools/installer/pages.ts`) stages the build for it in `dist/pages/`:
+   - the base archive is written as 16 MiB parts named by their hash, and the built game's `.zip` downloader fetches and joins them;
+   - the engine `cc.js` is staged again under a name with its hash, because `_headers` lets browsers keep `/cocos-js/*` for a year.
+
+   It records the parts and the archive's hash in `dist/pages.json`. Staging fails when the build does not have exactly one `.zip` downloader to change, as can happen after a change to the base archive's loading or to the minifier.
+3. `npm run verify:pages -- <deployment URL>` checks a deployment: its entry files and engine are the staged ones, and its downloader joins the parts into the archive that was staged.
+
+A `v*` tag deploys the staged build from CI (`.github/workflows/build.yml`), after the other platforms build: first to a preview deployment, which is checked, then to production on the Pages project `pvz-remake`, which serves plants-vs-zombies.cc. The repository needs the secrets `CLOUDFLARE_API_TOKEN`, a token with Cloudflare Pages edit permission, and `CLOUDFLARE_ACCOUNT_ID`.
+
 ### Windows
 
 1. `npm run compile:windows:release` clears the build's old assets (see [Native build output](#native-build-output)), builds, and compiles `build/windows/proj/Release/pvz-remake.exe`.

@@ -184,6 +184,18 @@ npm run build:web:debug
 - `{version}` 为 `package.json` 中的 `version`。
 - 网页版的验证不代表原生版本能够编译或已在设备上验证；原生构建成功也不代表已在设备上验证。
 
+### 网页
+
+1. `npm run build:web:release` 把 Web 构建写入 `build/web-mobile/`，可以用任何静态托管服务提供。
+2. Cloudflare Pages 不接受超过 25 MiB 的文件，因此 `npm run package:pages`（`tools/installer/pages.ts`）在 `dist/pages/` 中为它准备一份构建：
+   - 基础内容包按 16 MiB 拆成多个分片，以各自的哈希命名，构建出的游戏的 `.zip` 下载器会下载这些分片并拼接起来；
+   - 引擎 `cc.js` 以带哈希的文件名再保存一份，因为 `_headers` 允许浏览器把 `/cocos-js/*` 缓存一年。
+
+   分片和基础内容包的哈希记录在 `dist/pages.json` 中。构建中找不到唯一一处可修改的 `.zip` 下载器时会报错，例如修改了基础内容包的加载方式或代码压缩工具之后。
+3. `npm run verify:pages -- <部署地址>` 检查一次部署：入口文件和引擎与准备好的文件一致，且部署中的下载器能把分片拼接成原来的基础内容包。
+
+推送 `v*` 标签时，CI（`.github/workflows/build.yml`）会在其他平台构建完成后部署这份构建：先部署为预览并检查，再部署到 Pages 项目 `pvz-remake` 的正式环境，即 plants-vs-zombies.cc。仓库需要配置密钥 `CLOUDFLARE_API_TOKEN`（具有 Cloudflare Pages 编辑权限的令牌）和 `CLOUDFLARE_ACCOUNT_ID`。
+
 ### Windows
 
 1. `npm run compile:windows:release` 先清除构建目录中的旧资源（见[原生构建输出](#原生构建输出)），再构建并编译出 `build/windows/proj/Release/pvz-remake.exe`。
