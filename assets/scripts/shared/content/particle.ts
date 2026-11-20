@@ -1,0 +1,244 @@
+import { exact, finiteInRange, integerInRange } from '@/shared/validate'
+import { isQualifiedId } from '@/shared/mod/index'
+
+export const PARTICLE_STEP_SECONDS = 0.01
+
+export interface ParticleTrackNode {
+    time: number
+    low: number
+    high: number
+    curve?: ParticleTrackCurve
+    distribution?: ParticleTrackCurve
+}
+
+export interface ParticleTrack {
+    nodes: ParticleTrackNode[]
+}
+
+export type ParticleTrackCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'fast-in-out' | 'bounce'
+
+export type ParticleFieldType =
+    | 'friction'
+    | 'acceleration'
+    | 'attractor'
+    | 'max-velocity'
+    | 'velocity'
+    | 'position'
+    | 'system-position'
+    | 'ground-constraint'
+    | 'shake'
+    | 'circle'
+    | 'away'
+    | 'unknown'
+
+export interface ParticleField {
+    type: ParticleFieldType
+    x: ParticleTrack
+    y: ParticleTrack
+}
+
+export interface ParticleEmitter {
+    sprite: string
+    name?: string
+    emitterType: string
+    additive: boolean
+    columns: number
+    rows: number
+    firstFrame: number
+    frameCount: number
+    randomLaunchSpin: boolean
+    alignLaunchSpin: boolean
+    particleLoops: boolean
+    systemLoops: boolean
+    randomStartTime: boolean
+    particlesDontFollow: boolean
+    /** TodEmitterDefinition::mAnimated: the frames play once over each particle's life. */
+    animated: boolean
+    /**
+     * PARTICLE_FULLSCREEN: each particle fills the screen in its color, wherever it is and whatever its size (the
+     * original's FillRect over the board; the ice-shroom's and the doom-shroom's flash, on IMAGE_WHITEPIXEL).
+     */
+    fullScreen: boolean
+    systemDuration?: ParticleTrack
+    /** Frames per 100 ticks of a looping frame animation (TodParticle mAnimationTimeValue); overrides `animated`. */
+    animationRate?: ParticleTrack
+    spawnRate: ParticleTrack
+    spawnMinActive: ParticleTrack
+    spawnMaxActive: ParticleTrack
+    spawnMaxLaunched: ParticleTrack
+    emitterOffsetX: ParticleTrack
+    emitterOffsetY: ParticleTrack
+    emitterRadius: ParticleTrack
+    emitterBoxX: ParticleTrack
+    emitterBoxY: ParticleTrack
+    emitterSkewX: ParticleTrack
+    emitterSkewY: ParticleTrack
+    emitterPath: ParticleTrack
+    particleDuration: ParticleTrack
+    launchSpeed: ParticleTrack
+    launchAngle: ParticleTrack
+    systemRed: ParticleTrack
+    systemGreen: ParticleTrack
+    systemBlue: ParticleTrack
+    systemAlpha: ParticleTrack
+    systemBrightness: ParticleTrack
+    particleRed: ParticleTrack
+    particleGreen: ParticleTrack
+    particleBlue: ParticleTrack
+    particleAlpha: ParticleTrack
+    particleBrightness: ParticleTrack
+    particleSpinAngle: ParticleTrack
+    particleSpinSpeed: ParticleTrack
+    particleScale: ParticleTrack
+    particleStretch: ParticleTrack
+    collisionReflect: ParticleTrack
+    collisionSpin: ParticleTrack
+    /** TodParticle's ClipTop, ClipBottom, ClipLeft and ClipRight: how much of its cel each side cuts off, 0 to 1. */
+    clipTop: ParticleTrack
+    clipBottom: ParticleTrack
+    clipLeft: ParticleTrack
+    clipRight: ParticleTrack
+    fields: ParticleField[]
+    systemFields: ParticleField[]
+}
+
+export interface Particle {
+    schemaVersion: 3
+    id: string
+    emitters: ParticleEmitter[]
+}
+
+const constant = (value: number): ParticleTrack => ({
+    nodes: [{ time: 0, low: value, high: value }],
+})
+
+const DEFAULT_EMITTER: Omit<ParticleEmitter, 'sprite'> = {
+    emitterType: 'circle',
+    additive: false,
+    columns: 1,
+    rows: 1,
+    firstFrame: 0,
+    frameCount: 1,
+    randomLaunchSpin: false,
+    alignLaunchSpin: false,
+    particleLoops: false,
+    systemLoops: false,
+    randomStartTime: false,
+    particlesDontFollow: false,
+    animated: false,
+    fullScreen: false,
+    spawnRate: constant(0),
+    spawnMinActive: constant(-1),
+    spawnMaxActive: constant(-1),
+    spawnMaxLaunched: constant(-1),
+    emitterOffsetX: constant(0),
+    emitterOffsetY: constant(0),
+    emitterRadius: constant(0),
+    emitterBoxX: constant(0),
+    emitterBoxY: constant(0),
+    emitterSkewX: constant(0),
+    emitterSkewY: constant(0),
+    emitterPath: constant(0),
+    particleDuration: constant(100),
+    launchSpeed: constant(0),
+    launchAngle: constant(0),
+    systemRed: constant(1),
+    systemGreen: constant(1),
+    systemBlue: constant(1),
+    systemAlpha: constant(1),
+    systemBrightness: constant(1),
+    particleRed: constant(1),
+    particleGreen: constant(1),
+    particleBlue: constant(1),
+    particleAlpha: constant(1),
+    particleBrightness: constant(1),
+    particleSpinAngle: constant(0),
+    particleSpinSpeed: constant(0),
+    particleScale: constant(1),
+    particleStretch: constant(1),
+    collisionReflect: constant(0),
+    collisionSpin: constant(0),
+    clipTop: constant(0),
+    clipBottom: constant(0),
+    clipLeft: constant(0),
+    clipRight: constant(0),
+    fields: [],
+    systemFields: [],
+}
+
+
+const CURVES = ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'fast-in-out', 'bounce']
+const FIELD_TYPES = ['friction', 'acceleration', 'attractor', 'max-velocity', 'velocity', 'position', 'system-position', 'ground-constraint', 'shake', 'circle', 'away', 'unknown']
+const EMITTER_TYPES = ['circle', 'circlepath', 'circleevenspacing', 'box', 'boxpath']
+
+/** One full particle format. Duration and velocity tracks use the original 100 Hz tick units. */
+export function parseParticle(value: unknown): Particle {
+    const source = exact(value, ['schemaVersion', 'id', 'emitters'], 'particle')
+    if (source.schemaVersion !== 3) throw new Error('particle.schemaVersion must be 3')
+    if (!isQualifiedId(source.id)) throw new Error('particle.id must be a qualified ID')
+    if (!Array.isArray(source.emitters) || source.emitters.length > 128) throw new Error('particle.emitters must be an array of at most 128 emitters')
+    return { schemaVersion: 3, id: source.id, emitters: source.emitters.map(parseEmitter) }
+}
+
+function parseEmitter(value: unknown, index: number): ParticleEmitter {
+    const name = `particle.emitters[${index}]`
+    const source = exact(value, ['sprite'], name, [...Object.keys(DEFAULT_EMITTER), 'name', 'systemDuration', 'animationRate'])
+    if (!isQualifiedId(source.sprite)) throw new Error(`${name}.sprite must be a qualified ID`)
+    const emitter = { ...DEFAULT_EMITTER, sprite: source.sprite } as ParticleEmitter
+    if (source.name !== undefined) {
+        if (typeof source.name !== 'string') throw new Error(`${name}.name must be a string`)
+        emitter.name = source.name
+    }
+    if (source.emitterType !== undefined) {
+        if (!EMITTER_TYPES.includes(source.emitterType as string)) throw new Error(`${name}.emitterType is invalid`)
+        emitter.emitterType = source.emitterType as string
+    }
+    for (const key of ['columns', 'rows', 'frameCount', 'firstFrame'] as const) {
+        if (source[key] !== undefined) emitter[key] = integerInRange(source[key], key === 'firstFrame' ? 0 : 1, 4096, `${name}.${key}`)
+    }
+    if (emitter.columns * emitter.rows > 4096 || emitter.firstFrame + emitter.frameCount > emitter.columns * emitter.rows) {
+        throw new Error(`${name} frames exceed its sprite grid`)
+    }
+    for (const key of Object.keys(DEFAULT_EMITTER) as Array<keyof typeof DEFAULT_EMITTER>) {
+        const fallback = DEFAULT_EMITTER[key]
+        if (typeof fallback === 'boolean' && source[key] !== undefined) {
+            if (typeof source[key] !== 'boolean') throw new Error(`${name}.${key} must be boolean`)
+            ;(emitter as any)[key] = source[key]
+        } else if (fallback && typeof fallback === 'object' && 'nodes' in fallback && source[key] !== undefined) {
+            const limit = key.startsWith('spawn') && key !== 'spawnRate' ? 4096 : 1_000_000
+            const track = parseTrack(source[key], `${name}.${key}`, limit)
+            // RenderParticle asserts a clip within its cel.
+            if (key.startsWith('clip') && track.nodes.some(node => Math.min(node.low, node.high) < 0 || Math.max(node.low, node.high) > 1)) {
+                throw new Error(`${name}.${key} must be from 0 to 1`)
+            }
+            ;(emitter as any)[key] = track
+        }
+    }
+    emitter.systemDuration = source.systemDuration === undefined ? emitter.particleDuration : parseTrack(source.systemDuration, `${name}.systemDuration`)
+    if (source.animationRate !== undefined) emitter.animationRate = parseTrack(source.animationRate, `${name}.animationRate`)
+    emitter.fields = parseFields(source.fields ?? [], `${name}.fields`)
+    emitter.systemFields = parseFields(source.systemFields ?? [], `${name}.systemFields`)
+    return emitter
+}
+
+function parseFields(value: unknown, name: string): ParticleField[] {
+    if (!Array.isArray(value) || value.length > 128) throw new Error(`${name} must be an array of at most 128 fields`)
+    return value.map((value, index) => {
+        const source = exact(value, ['type', 'x', 'y'], `${name}[${index}]`)
+        if (!FIELD_TYPES.includes(source.type as string)) throw new Error(`${name}[${index}].type is invalid`)
+        return { type: source.type as ParticleFieldType, x: parseTrack(source.x, `${name}[${index}].x`), y: parseTrack(source.y, `${name}[${index}].y`) }
+    })
+}
+
+function parseTrack(value: unknown, name: string, limit = 1_000_000): ParticleTrack {
+    const source = exact(value, ['nodes'], name)
+    if (!Array.isArray(source.nodes) || source.nodes.length === 0 || source.nodes.length > 4096) throw new Error(`${name}.nodes must be non-empty and bounded`)
+    return { nodes: source.nodes.map((value, index) => {
+        const label = `${name}.nodes[${index}]`, node = exact(value, ['time', 'low', 'high'], label, ['curve', 'distribution'])
+        const time = finiteInRange(node.time, -1_000_000, 1_000_000, `${label}.time`), low = finiteInRange(node.low, -limit, limit, `${label}.low`), high = finiteInRange(node.high, -limit, limit, `${label}.high`)
+        if (node.curve !== undefined && !CURVES.includes(node.curve as string)) throw new Error(`${label}.curve is invalid`)
+        if (node.distribution !== undefined && !CURVES.includes(node.distribution as string)) throw new Error(`${label}.distribution is invalid`)
+        return { time, low, high, ...(node.curve === undefined ? {} : { curve: node.curve as ParticleTrackCurve }),
+            ...(node.distribution === undefined ? {} : { distribution: node.distribution as ParticleTrackCurve }) }
+    }) }
+}

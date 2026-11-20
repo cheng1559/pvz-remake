@@ -1,0 +1,84 @@
+import { easeInOutCurve } from '@/shared/content/animation'
+import { BlockInputEvents, Node, tween, type Tween } from 'cc'
+import { uiNode } from '@/client/view/uiNode'
+import { startGameTween } from '@/core/GameTween'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
+
+type CommitPage = () => void | Promise<void>
+
+/** Locks input only while preparing/committing a page or sliding achievements. */
+export class ScreenTransition {
+    private readonly cover: Node
+    private animation: Tween<{ progress: number }> | null = null
+    private completeAnimation: (() => void) | null = null
+    private disposed = false
+    private blocking = false
+
+    constructor(parent: Node) {
+        const cover = uiNode({
+            name: 'ScreenTransition', parent, viewport: true,
+            active: false,
+        })
+        cover.node.addComponent(BlockInputEvents)
+        this.cover = cover.node
+    }
+
+    async run(prepare: () => Promise<CommitPage>): Promise<void> {
+        if (this.disposed) return
+        this.cover.setSiblingIndex(this.cover.parent!.children.length - 1)
+        this.cover.active = true
+        this.blocking = true
+        UIHoverManager.beginInputBlock()
+        try {
+            const commit = await prepare()
+            if (this.disposed) return
+            await commit()
+        } finally {
+            if (!this.disposed) this.cover.active = false
+            this.releaseInput()
+        }
+    }
+
+    async slide(previous: Node, next: Node, direction: 'up' | 'down'): Promise<void> {
+        const showing = direction === 'up'
+        const selector = showing ? previous : next
+        const achievements = showing ? next : previous
+        await this.animate(0.75, progress => {
+            if (!selector.isValid || !achievements.isValid) return
+            const offset = 600 * easeInOutCurve(progress)
+            selector.setPosition(0, showing ? offset : 600 - offset)
+            // One pixel of overlap matches the original and avoids a seam between the pages.
+            achievements.setPosition(0, showing ? -599 + offset : 1 - offset)
+        })
+    }
+
+    dispose(): void {
+        if (this.disposed) return
+        this.disposed = true
+        this.animation?.stop()
+        this.completeAnimation?.()
+        this.cover.destroy()
+        this.releaseInput()
+    }
+
+    private releaseInput(): void {
+        if (this.blocking) UIHoverManager.endInputBlock()
+        this.blocking = false
+    }
+
+    private animate(seconds: number, update: (progress: number) => void): Promise<void> {
+        if (this.disposed) return Promise.resolve()
+        update(0)
+        return new Promise(resolve => {
+            const progress = { progress: 0 }
+            this.completeAnimation = () => {
+                this.animation = null
+                this.completeAnimation = null
+                resolve()
+            }
+            this.animation = startGameTween(this.cover, tween(progress).to(seconds, { progress: 1 }, {
+                onUpdate: () => update(progress.progress),
+            }).call(() => this.completeAnimation?.()))
+        })
+    }
+}

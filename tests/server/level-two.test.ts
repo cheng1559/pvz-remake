@@ -1,0 +1,165 @@
+import type { World } from '@/server/state/World'
+import { getAvailableSun } from '@/server/items/items'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { readGameplaySource } from '../../tools/mod/content'
+import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
+
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
+const start: StartSessionPacket = {
+    protocolVersion: 1, sequence: 1, type: 'startSession', levelId: 'pvz:adventure-1-2',
+    randomSeed: 12345, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-2'), mods: [],
+}
+
+function game() {
+    const server = new IntegratedGameServer(definitions, levels)
+    server.start(start)
+    runCommand(server, { type: 'completeIntro' })
+    return server
+}
+
+test('1-2 starts with three rows and Sunflower teaching, and production resumes deterministically', () => {
+    const server = game()
+    const initial = server.snapshot()
+    assert.equal(initial.sun, 50)
+    assert.deepEqual(initial.mowers.map(mower => mower.row), [1, 2, 3])
+    assert.deepEqual(initial.seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:sunflower'])
+    assert.equal(initial.tutorial.step, 'pick-sunflower')
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:sunflower' }), undefined)
+    assert.equal(server.snapshot().tutorial.step, 'plant-sunflower')
+    assert.equal(runCommand(server, { type: 'placePlant', row: 0, column: 0 }), 'row-not-active')
+    assert.equal(runCommand(server, { type: 'placePlant', row: 1, column: 0 }), undefined)
+    assert.equal(server.snapshot().sun, 0)
+    assert.equal(server.snapshot().tutorial.step, 'refresh-sunflower')
+    const saved = server.save()
+    const producer = saved.plants.find(plant => plant.typeId === 'pvz:sunflower')!
+    const readyAtTick = Number(producer.readyAtTick)
+    assert.ok(readyAtTick >= 300 && readyAtTick <= 1250)
+    const produceTicks = () => Number(server.snapshot().plants.find(plant => plant.typeId === 'pvz:sunflower')!.own?.produceTicks)
+    assert.equal(produceTicks(), readyAtTick - server.snapshot().gameplayTick, 'the snapshot carries the launch counter')
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.start({ ...start, save: saved as unknown as JsonValue })
+    let produced = false
+    for (let tick = 1; tick <= readyAtTick + 2; tick++) {
+        assert.deepEqual(restored.tick(), server.tick())
+        const events = server.drainEvents()
+        assert.deepEqual(restored.drainEvents(), events)
+        if (events.some(event => event.type === 'sunProduced')) {
+            produced = true
+            assert.ok(produceTicks() >= 2350, 'producing restarts the countdown')
+        }
+    }
+    assert.equal(produced, true)
+    assert.equal(server.snapshot().projectiles.length, 0, 'a producer does not use shooter logic')
+    const sun = server.save().items.find(item => item.accelerationY === 0.09)!
+    assert.ok(sun.scale > 0.4)
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: sun.position!.x + 1, y: sun.position!.y + 1 }), undefined)
+    assert.equal(getAvailableSun((server as unknown as { requireSession(): { world: World } }).requireSession().world, definitions), 25)
+})
+
+
+
+test('/nextflag announces the flag wave 750 ticks ahead; repeating it ends the countdown', () => {
+    const debug = (server: IntegratedGameServer, command: string) => {
+        server.enqueueDebugCommand(1, command)
+        server.processBoundaryCommands()
+        return server.drainCommandResults()[0].debug
+    }
+    const server = game()
+    server.drainEvents()
+    assert.equal(debug(server, '/nextflag')?.ok, true)
+    assert.deepEqual(server.drainEvents().map(event => event.type), ['hugeWave'])
+    assert.equal(server.snapshot().zombies.length, 0)
+    // The previous wave is gone and due for an early wave, which must not cut the countdown short.
+    const save = server.save()
+    Object.assign(save.wave, { zombieIds: [], accelerateAtTick: save.gameplayTick })
+    server.start({ ...start, save: save as unknown as JsonValue })
+    server.drainEvents()
+    const timeline = new Map<string, number>(), comings: unknown[] = [], bursts: unknown[] = []
+    for (let tick = 1; !server.snapshot().zombies.length; tick++) {
+        server.tick()
+        for (const event of server.drainEvents()) {
+            if (!timeline.has(event.type)) timeline.set(event.type, tick)
+            if (event.type === 'nextWaveComing') comings.push(event.data)
+            if (event.type === 'musicBurst') bursts.push([tick, event.data])
+        }
+    }
+    assert.deepEqual(['hugeWaveSound', 'finalWave', 'nextWaveComing', 'zombieSpawned'].map(type => timeline.get(type)), [25, 750, 750, 751])
+    assert.deepEqual(bursts, [[50, { countdown: 700 }], [350, { countdown: 400 }]], 'the night tune bursts at 700, the others at 400')
+    assert.deepEqual(comings, [{ siren: true }], 'Board::NextWaveComing sounds the siren once, as the huge wave countdown ends')
+
+    const skipped = game()
+    debug(skipped, '/nextflag')
+    for (let tick = 0; tick < 100; tick++) skipped.tick()
+    skipped.drainEvents()
+    assert.equal(debug(skipped, '/nextflag')?.ok, true)
+    assert.equal(skipped.snapshot().zombies.length, 5, 'Board::KeyChar ends a running huge wave countdown')
+    const events = skipped.drainEvents()
+    assert.ok(events.some(event => event.type === 'finalWave'))
+    assert.deepEqual(events.filter(event => event.type === 'nextWaveComing').map(event => event.data), [{ siren: true }])
+})
+
+test('Board::NextWaveComing comes once a wave, 5 ticks before it, with the awooga before the first', () => {
+    const packet = { ...start, levelId: 'pvz:adventure-1-3', firstAdventure: false, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-3') }
+    const server = new IntegratedGameServer(definitions, levels)
+    server.start(packet)
+    runCommand(server, { type: 'completeIntro' })
+    server.drainEvents()
+    const comings: Array<[number, unknown]> = [], spawned = new Map<number, number>()
+    let restoreAt = -1
+    for (let tick = 1; tick <= 6000 && spawned.size < 2; tick++) {
+        server.tick()
+        for (const event of server.drainEvents()) {
+            if (event.type === 'nextWaveComing') { comings.push([tick, event.data]); if (restoreAt < 0) restoreAt = tick + 2 }
+            if (event.type === 'zombieSpawned' && !spawned.has(Number(event.data.wave))) spawned.set(Number(event.data.wave), tick)
+        }
+        // A game saved and restored before the announced wave comes does not announce it again.
+        if (tick === restoreAt) server.start({ ...packet, save: server.save() as unknown as JsonValue })
+    }
+    assert.equal(spawned.size, 2)
+    assert.deepEqual(comings, [[spawned.get(0)! - 5, { first: true }], [spawned.get(1)! - 5, {}]])
+})
+
+test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb', () => {
+    const server = game()
+    const rows = new Set<number>()
+    for (let index = 0; index < 6; index++) {
+        const save = server.save()
+        save.zombies = []
+        save.wave.zombieIds = []
+        save.wave.nextWaveAtTick = save.gameplayTick + 1
+        server.start({ ...start, save: save as unknown as JsonValue })
+        server.drainEvents()
+        server.tick()
+        if (index === 5) {
+            assert.equal(server.snapshot().wave.index, 5)
+            assert.ok(server.drainEvents().some(event => event.type === 'hugeWave'))
+            const restored = new IntegratedGameServer(definitions, levels)
+            restored.start({ ...start, save: server.save() as unknown as JsonValue })
+            while (server.snapshot().wave.index === 5) {
+                assert.deepEqual(restored.tick(), server.tick())
+                assert.deepEqual(restored.drainEvents(), server.drainEvents())
+            }
+            assert.equal(server.snapshot().zombies.length, 5)
+            assert.equal(server.snapshot().zombies.filter(zombie => zombie.typeId === 'pvz:flag').length, 1)
+        }
+        assert.equal(server.snapshot().wave.index, index + 1)
+        for (const zombie of server.snapshot().zombies) rows.add(zombie.row)
+    }
+    assert.deepEqual([...rows].sort(), [1, 2, 3])
+    const save = server.save()
+    for (const zombie of save.zombies) zombie.health = 0
+    server.start({ ...start, save: save as unknown as JsonValue })
+    server.tick()
+    server.tick()
+    const reward = server.snapshot().items.find(item => item.typeId === LEVEL_AWARD)!
+    assert.ok(reward)
+    assert.equal(runCommand(server, { type: 'collectItemAt', x: reward.x + 1, y: reward.y + 1 }), undefined)
+    assert.equal(server.snapshot().result, 'won')
+})

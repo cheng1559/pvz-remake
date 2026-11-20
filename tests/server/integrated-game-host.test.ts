@@ -1,0 +1,216 @@
+import { withFixedBanks } from '../fixedBankLevels'
+import { readGameplaySource } from '../../tools/mod/content'
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import { IntegratedGameHost } from '@/server/session/IntegratedGameHost'
+import { IntegratedGameClient } from '@/client/game/IntegratedGameClient'
+import { modErrorOwner, ownedModError } from '@/shared/mod/ModHost'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import { LocalGameChannel } from '@/shared/channel/index'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import type { ClientPacket, StartSessionPacket } from '@/shared/protocol/index'
+
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
+const startPacket: StartSessionPacket = {
+    protocolVersion: 1,
+    sequence: 1,
+    type: 'startSession',
+    levelId: 'pvz:adventure-1-1',
+    randomSeed: 1,
+    initialMoney: 0,
+    firstAdventure: false,
+    mods: [],
+}
+
+function setup() {
+    const channel = new LocalGameChannel()
+    const server = new IntegratedGameServer(definitions, levels)
+    return { channel, host: new IntegratedGameHost(server, channel) }
+}
+
+function send(channel: LocalGameChannel, packet: ClientPacket): void {
+    channel.sendToServer(packet)
+}
+
+test('integrated host processes FIFO commands, acknowledgements, pause, resume, and stop', () => {
+    const { channel, host } = setup()
+    send(channel, startPacket)
+    send(channel, {
+        protocolVersion: 1, sequence: 2, type: 'command',
+        command: { type: 'completeIntro' },
+    })
+    send(channel, {
+        protocolVersion: 1, sequence: 3, type: 'command',
+        command: { type: 'selectSeed', seedId: 'pvz:peashooter' },
+    })
+    send(channel, {
+        protocolVersion: 1, sequence: 4, type: 'command',
+        command: { type: 'placePlant', row: 2, column: 0 },
+    })
+    host.update(0.01)
+
+    const started = channel.drainClientPackets()
+    assert.deepEqual(started.map(packet => packet.type), ['sessionStarted', 'frame'])
+    assert.deepEqual(started.map(packet =>
+        'acknowledgedSequence' in packet ? packet.acknowledgedSequence : -1), [1, 4])
+    assert.equal(started[1].type === 'frame' && started[1].snapshot.plants.length, 1)
+    // The first wave is ZOMBIE_COUNTDOWN_FIRST_WAVE away, even on a level replayed without its tutorial.
+    assert.deepEqual(started[1].type === 'frame' && started[1].events.map(event => event.type), ['plantPlaced'])
+
+    send(channel, {
+        protocolVersion: 1, sequence: 5, type: 'command',
+        command: { type: 'placePlant', row: 2, column: 1 },
+    })
+    send(channel, {
+        protocolVersion: 1, sequence: 5, type: 'command', command: { type: 'clearCursor' },
+    })
+    host.update(0.01)
+    const rejected = channel.drainClientPackets()
+    assert.deepEqual(rejected.map(packet => packet.type === 'commandRejected'
+        ? [packet.sequence, packet.code]
+        : [packet.type]), [
+        [5, 'sequence-out-of-order'],
+        [5, 'no-seed-selected'],
+        ['frame'],
+    ])
+
+    send(channel, {
+        protocolVersion: 1, sequence: 6, type: 'command', command: { type: 'pause' },
+    })
+    host.update(0.005)
+    const paused = channel.drainClientPackets()
+    assert.equal(paused.length, 1)
+    assert.equal(paused[0].type === 'frame' && paused[0].snapshot.paused, true)
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [])
+
+    send(channel, {
+        protocolVersion: 1, sequence: 7, type: 'command', command: { type: 'resume' },
+    })
+    host.update(0.015)
+    const resumed = channel.drainClientPackets()
+    assert.deepEqual(resumed.map(packet => packet.type), ['frame', 'frame'])
+    assert.deepEqual(resumed.map(packet => packet.type === 'frame' ? packet.serverTick : -1), [5, 6])
+
+    send(channel, { protocolVersion: 1, sequence: 8, type: 'requestSave' })
+    send(channel, { protocolVersion: 1, sequence: 9, type: 'requestSave' })
+    host.update(0)
+    const saved = channel.drainClientPackets()
+    assert.deepEqual(saved.map(packet => packet.type), ['frame', 'saveReady', 'saveReady'])
+    assert.equal(saved[0].type === 'frame' && saved[0].serverTick, 6)
+    assert.equal(saved[1].type === 'saveReady' &&
+        (saved[1].save as { schemaVersion: number }).schemaVersion, 5)
+    assert.deepEqual(saved.slice(1).map(packet =>
+        packet.type === 'saveReady' ? packet.acknowledgedSequence : -1), [8, 9])
+
+    send(channel, { protocolVersion: 1, sequence: 10, type: 'stopSession' })
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [{
+        protocolVersion: 1,
+        type: 'sessionStopped',
+        acknowledgedSequence: 10,
+    }])
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [])
+})
+
+test('a pause keeps the part of a tick the picture has reached, and the game goes on from it', () => {
+    const { channel, host } = setup()
+    send(channel, startPacket)
+    send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+    host.update(0.014)
+    const near = (value: number, expected: number) => Math.abs(value - expected) < 1e-9
+    assert.ok(near(host.interpolationAlpha, 0.4), `${host.interpolationAlpha}`)
+    send(channel, { protocolVersion: 1, sequence: 3, type: 'command', command: { type: 'pause' } })
+    host.update(0)
+    host.update(1)
+    assert.ok(near(host.interpolationAlpha, 0.4), 'the picture stands where it is through the pause')
+    send(channel, { protocolVersion: 1, sequence: 4, type: 'command', command: { type: 'resume' } })
+    host.update(0)
+    assert.ok(near(host.interpolationAlpha, 0.4), 'and resumes from there')
+    channel.drainClientPackets()
+    host.update(0.006)
+    assert.deepEqual(channel.drainClientPackets().map(packet => packet.type), ['frame'], 'the rest of the tick')
+    assert.ok(near(host.interpolationAlpha, 0))
+})
+
+test('integrated host fatally stops before an oversized catch-up', () => {
+    const { channel, host } = setup()
+    send(channel, startPacket)
+    host.update(10.01)
+    const packets = channel.drainClientPackets()
+    assert.deepEqual(packets.map(packet => packet.type), ['sessionStarted', 'fatalServerError'])
+    assert.equal(packets[1].type === 'fatalServerError' && packets[1].code, 'tick-limit-exceeded')
+    assert.equal(packets[0].type === 'sessionStarted' && packets[0].snapshot.tick, 0)
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [])
+})
+
+test('a fatal server exception propagates to the client with its Mod attribution', () => {
+    const channel = new LocalGameChannel()
+    const server = new IntegratedGameServer(definitions, levels)
+    const host = new IntegratedGameHost(server, channel)
+    const client = new IntegratedGameClient(channel)
+    send(channel, startPacket)
+    host.update(0)
+    client.update()
+    server.step = () => { throw ownedModError('broken-rule', new Error('rule failed')) }
+    host.update(0.01)
+    assert.throws(() => client.update(), error => error instanceof Error && error.message === 'rule failed' && modErrorOwner(error) === 'broken-rule')
+    host.update(1)
+    assert.deepEqual(channel.drainClientPackets(), [])
+})
+
+test('a catch-up update sends the last two frames with every event and matches single steps', () => {
+    function run(updates: number[]) {
+        const channel = new LocalGameChannel()
+        const server = new IntegratedGameServer(definitions, levels)
+        const host = new IntegratedGameHost(server, channel, true)
+        send(channel, { ...startPacket, levelId: 'pvz:stress-test' })
+        send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+        send(channel, { protocolVersion: 1, sequence: 3, type: 'debugCommand', command: '/nextwave', args: null })
+        host.update(0.01)
+        channel.drainClientPackets()
+        const frames = updates.flatMap(dt => { host.update(dt); return channel.drainClientPackets() })
+            .flatMap(packet => packet.type === 'frame' ? [packet] : [])
+        return { frames, save: server.save() }
+    }
+    const batched = run([5]), stepped = run(Array(500).fill(0.01))
+    assert.equal(batched.frames.length, 2)
+    assert.deepEqual(batched.frames.map(frame => frame.snapshot), stepped.frames.slice(-2).map(frame => frame.snapshot))
+    const events = (frames: typeof batched.frames) => frames.flatMap(frame => frame.events)
+    assert.ok(events(stepped.frames).length > 0)
+    assert.deepEqual(events(batched.frames), events(stepped.frames))
+    assert.deepEqual(batched.save, stepped.save)
+})
+
+test('frames are handed to the client without copying yet share nothing with server state', () => {
+    function run(tamper: boolean) {
+        const channel = new LocalGameChannel()
+        const server = new IntegratedGameServer(definitions, levels)
+        const host = new IntegratedGameHost(server, channel, true)
+        send(channel, { ...startPacket, levelId: 'pvz:stress-test' })
+        send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+        send(channel, { protocolVersion: 1, sequence: 3, type: 'debugCommand', command: '/nextwave', args: null })
+        const damage = (value: unknown): void => {
+            if (Array.isArray(value)) { value.forEach(damage); value.push(null); return }
+            if (!value || typeof value !== 'object') return
+            const object = value as Record<string, unknown>
+            for (const key of Object.keys(object)) {
+                if (typeof object[key] === 'number') object[key] = -999
+                else if (typeof object[key] === 'string') object[key] = 'tampered'
+                else damage(object[key])
+            }
+        }
+        for (let i = 0; i < 300; i++) {
+            host.update(0.01)
+            const packets = channel.drainClientPackets()
+            if (tamper) for (const packet of packets) if (packet.type === 'frame') { damage(packet.snapshot); damage(packet.events) }
+        }
+        return server.save()
+    }
+    assert.deepEqual(run(true), run(false))
+})

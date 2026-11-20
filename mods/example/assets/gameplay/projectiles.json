@@ -1,0 +1,6 @@
+{
+  "example:pea": {
+    "damage": 30,
+    "hitbox": { "x": -15, "y": 0, "width": 55, "height": 40 }
+  }
+}

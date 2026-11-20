@@ -1,0 +1,301 @@
+import { type AchievementEntry, type AchievementView, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
+import type { GameplayDefinitions, GameplayLevels, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
+import type { AlmanacCatalog } from './almanacCatalog'
+import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
+import { createGameSettingsStore } from './gameSettingsStore'
+import { createProfileStore, type PlayerProfile } from './profileStore'
+import type { StoreCatalog } from './storeCatalog'
+
+function userView(profile: PlayerProfile | null): UserView | null {
+    if (!profile) return null
+    const finished = profile.finishedAdventure > 0
+    const collected = (entry: UnlockedEntry) => finished || profile.unlocks.includes(entry)
+    return {
+        id: profile.id, name: profile.name, adventureLevel: profile.adventureLevel, finishedAdventure: profile.finishedAdventure,
+        // GameSelector::SyncProfile and LawnApp::CanShowAlmanac/CanShowStore/CanShowZenGarden: the original opens the
+        // almanac, store and garden from the level after the one that drops the almanac, the car keys and the watering
+        // can; here the collected award records it.
+        unlocks: {
+            minigames: finished || profile.hasUnlockedMinigames,
+            puzzle: finished || profile.hasUnlockedPuzzleMode,
+            survival: finished || profile.hasUnlockedSurvivalMode,
+            almanac: collected('almanac'),
+            store: collected('store') || profile.hasSeenUpsell,
+            garden: collected('garden'),
+        },
+        allTrophies: hasAllTrophies(profile.challengeRecords),
+    }
+}
+
+/** The gameplay data the menu applies: the starting seeds, the coin cap, the seeds' costs and recharges, and the achievements. */
+export type MenuGameplaySettings = Pick<GameplayDefinitions, 'seedBank' | 'economy' | 'seeds' | 'achievements'>
+
+export class MenuService {
+    private readonly profiles
+    private readonly settings
+    /** The achievements the last completed level's award page lists (AwardScreen::mAchievementItems). */
+    private awardAchievements: AchievementEntry[] = []
+
+    constructor(
+        storage: MenuStorage,
+        private readonly now = Date.now,
+        private readonly getLevel: () => LevelDefinition | null = () => null,
+        private readonly canCompleteLevel: () => boolean = () => false,
+        private readonly catalog?: StoreCatalog,
+        private readonly almanac?: AlmanacCatalog,
+        private readonly gameplay?: MenuGameplaySettings,
+        private readonly levels?: GameplayLevels,
+    ) {
+        this.profiles = createProfileStore(storage)
+        this.settings = createGameSettingsStore(storage)
+    }
+
+    handle(request: MenuRequest): MenuResponse {
+        switch (request.method) {
+            case 'getCurrentUser': return userView(this.profiles.loadCurrentProfile())
+            case 'listUsers': return {
+                current: userView(this.profiles.loadCurrentProfile()),
+                users: this.profiles.loadProfiles().map(({ id, name }) => ({ id, name })),
+            }
+            case 'createUser': return this.saveName(request.args.name)
+            case 'renameUser': return this.saveName(request.args.name, request.args.id)
+            case 'selectUser': {
+                const user = this.profiles.loadProfileById(request.args.id)
+                return user ? { ok: true, user: userView(user) } : { ok: false, code: 'notFound' }
+            }
+            case 'deleteUser': {
+                const user = this.profiles.loadProfiles().find(user => user.id === request.args.id)
+                if (!user || !this.profiles.deleteProfile(user.name)) return { ok: false, code: 'notFound' }
+                return { ok: true, user: userView(this.profiles.getCurrentProfile()) }
+            }
+            case 'getStore': return this.store()
+            case 'purchase': return this.purchase(request.args)
+            case 'getSettings': return this.settings.load()
+            case 'updateSettings': return this.settings.update({
+                // Accept only public preference fields, never arbitrary storage/version changes.
+                ...(request.args.patch.musicVolume !== undefined && { musicVolume: request.args.patch.musicVolume }),
+                ...(request.args.patch.sfxVolume !== undefined && { sfxVolume: request.args.patch.sfxVolume }),
+                ...(request.args.patch.fullScreen !== undefined && { fullScreen: request.args.patch.fullScreen }),
+            })
+            case 'getChallenges': {
+                const definitions = CHALLENGES[request.args.page]
+                if (!definitions) throw new Error('Unknown challenge page')
+                const records = this.profiles.getCurrentProfile()?.challengeRecords ?? []
+                const items = definitions.map(item => ({
+                    key: item.key, ...(item.endless !== undefined && { endless: item.endless }),
+                    record: records[item.record] ?? 0,
+                    completed: challengeCompleted(item, records),
+                }))
+                return { items, total: items.filter(item => !item.endless).length, completed: items.filter(item => item.completed).length }
+            }
+            case 'getAlmanac': {
+                const profile = this.profiles.getCurrentProfile()
+                return this.almanacCatalog.view(profile, this.ownedSeeds(profile), this.gameplaySettings.seeds, request.args.cheatSeeds === true)
+            }
+            case 'getAchievements': return this.achievements()
+            case 'earnAchievement': {
+                // ReportAchievement::GiveAchievement: earned once; shown only when the level announced it.
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Achievements require a player profile')
+                const { id, shown } = request.args
+                if (!Object.hasOwn(this.gameplaySettings.achievements, id)) throw new Error(`Unknown achievement: ${id}`)
+                if (profile.earnedAchievements.includes(id)) return { earned: false }
+                profile.earnedAchievements.push(id)
+                if (shown) profile.shownAchievements.push(id)
+                this.profiles.saveProfile(profile)
+                return { earned: true }
+            }
+            case 'resetAchievements': {
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Achievements require a player profile')
+                const { id } = request.args
+                if (id !== undefined && !Object.hasOwn(this.gameplaySettings.achievements, id)) throw new Error(`Unknown achievement: ${id}`)
+                const kept = (ids: string[]) => id === undefined ? [] : ids.filter(entry => entry !== id)
+                profile.earnedAchievements = kept(profile.earnedAchievements)
+                profile.shownAchievements = kept(profile.shownAchievements)
+                this.profiles.saveProfile(profile)
+                return this.achievements()
+            }
+            case 'getAdventure': {
+                const profile = this.profiles.loadCurrentProfile()
+                if (!profile) throw new Error('Adventure requires a player profile')
+                let levelId = 'pvz:adventure-1-1'
+                const levels = this.levels?.levels
+                if (!levels?.[levelId]) throw new Error('The first adventure level is not installed')
+                let level = levels[levelId]
+                const visited = new Set([levelId])
+                while (level.adventureIndex < profile.adventureLevel && level.nextLevel && !visited.has(level.nextLevel)) {
+                    levelId = level.nextLevel
+                    visited.add(levelId)
+                    level = levels[levelId]
+                }
+                return { levelId, adventureIndex: level.adventureIndex }
+            }
+            case 'completeLevel': {
+                if (!this.canCompleteLevel()) throw new Error('Cannot complete a level before winning')
+                // Checks the award before the profile changes.
+                this.award()
+                const profile = this.profiles.loadCurrentProfile()
+                if (!profile) throw new Error('Level completion requires a player profile')
+                const level = this.getLevel()!
+                profile.adventureLevel = Math.max(profile.adventureLevel, level.adventureIndex + 1)
+                // The award seed is the player's from now on (the seed packet the level dropped).
+                if (level.award.kind === 'seed' && !profile.seeds.includes(level.award.id)) profile.seeds.push(level.award.id)
+                if (level.award.kind === 'unlock' && level.award.unlocks && !profile.unlocks.includes(level.award.unlocks)) profile.unlocks.push(level.award.unlocks)
+                // AwardScreen::AwardScreen lists every earned achievement not shown yet and marks them shown.
+                const unshown = profile.earnedAchievements.filter(id => !profile.shownAchievements.includes(id))
+                profile.shownAchievements.push(...unshown)
+                this.awardAchievements = this.achievementEntries().filter(entry => unshown.includes(entry.id))
+                this.profiles.saveProfile(profile)
+                return this.award()
+            }
+            case 'getAward': return this.award()
+            case 'getPurse': return this.purse()
+            case 'setCoins': {
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Coins require a player profile')
+                profile.coins = this.validCoins(request.args.coins)
+                this.profiles.saveProfile(profile)
+                return this.purse()
+            }
+            case 'recordPacketUpgradeOffer': {
+                // CutScene::CrazyDaveDialogDone: the price, the purchase or refusal and the save happen together.
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Seed-slot upgrades require a player profile')
+                const upgrade = this.packetUpgrade, coins = this.validCoins(request.args.coins)
+                if (request.args.accepted) {
+                    if (this.storeCatalog.itemState(upgrade, profile, this.now()) !== 'available') throw new Error('The seed-slot upgrade is not for sale')
+                    if (coins !== profile.coins - this.storeCatalog.itemCost(upgrade, profile)) throw new Error('The seed-slot upgrade was not paid for')
+                    profile.purchases[upgrade.id] = (profile.purchases[upgrade.id] ?? 0) + 1
+                } else profile.declinedPacketUpgrades++
+                profile.coins = coins
+                this.profiles.saveProfile(profile)
+                return this.purse()
+            }
+            default: throw new Error('Unknown menu API method')
+        }
+    }
+
+    private achievementEntries(): AchievementEntry[] {
+        return Object.entries(this.gameplaySettings.achievements).map(([id, { titleKey, descriptionKey, icon }]) => ({
+            id, titleKey, descriptionKey, icon: { ...icon },
+        }))
+    }
+
+    private achievements(): AchievementView {
+        const earned = this.profiles.getCurrentProfile()?.earnedAchievements ?? []
+        const items = this.achievementEntries().map(entry => ({ ...entry, earned: earned.includes(entry.id) }))
+        return { items, total: items.length, completed: items.filter(item => item.earned).length }
+    }
+
+    private award(): AwardView {
+        // AwardScreen hides the main menu button while the player's level, already advanced past this one, is at most 3.
+        const level = this.getLevel()
+        if (!level) throw new Error('Award requires a loaded level')
+        if (level.award.kind === 'note') return {
+            kind: 'note', id: level.award.id, titleKey: level.award.titleKey,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: true, achievements: this.awardAchievements,
+        }
+        if (level.award.kind === 'tool' || level.award.kind === 'unlock') return {
+            kind: level.award.kind, id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
+            achievements: this.awardAchievements,
+            titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
+            ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
+        }
+        const seed = this.gameplaySettings.seeds[level.award.id]
+        if (seed?.kind !== 'plant') throw new Error(`Unknown plant award: ${level.award.id}`)
+        return {
+            kind: 'seed', titleKey: 'NEW_PLANT',
+            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3, achievements: this.awardAchievements,
+            seed: level.award.id, cost: seed.sunCost,
+        }
+    }
+
+    private saveName(value: string, id?: number): UserResult {
+        if (typeof value !== 'string') return { ok: false, code: 'invalidName' }
+        const name = value.replace(/ +/g, ' ').trim()
+        if (!name) return { ok: false, code: 'emptyName' }
+        if (name.length > 12 || !/^[a-zA-Z0-9 ]+$/.test(name)) return { ok: false, code: 'invalidName' }
+        if (id !== undefined) {
+            const user = this.profiles.loadProfiles().find(user => user.id === id)
+            if (!user) return { ok: false, code: 'notFound' }
+            if (!this.profiles.renameProfile(user.name, name)) return { ok: false, code: 'duplicateName' }
+            return { ok: true, user: userView(this.profiles.getCurrentProfile()) }
+        }
+        const user = this.profiles.createProfile(name)
+        return user ? { ok: true, user: userView(user) } : { ok: false, code: 'duplicateName' }
+    }
+
+    /** The seed-slot upgrade, the store's one item with that effect (checked as the store is read). */
+    private get packetUpgrade() {
+        return this.storeCatalog.items.find(item => item.effect === 'seedSlots')!
+    }
+
+    private purse(): PurseView {
+        const profile = this.profiles.getCurrentProfile()
+        if (!profile) throw new Error('Coins require a player profile')
+        const upgrade = this.packetUpgrade, owned = profile.purchases[upgrade.id] ?? 0
+        const next = { ...profile, purchases: { ...profile.purchases, [upgrade.id]: owned + 1 } }
+        return {
+            coins: profile.coins, packetUpgrades: owned, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile),
+            nextPacketUpgradeCost: this.storeCatalog.itemCost(upgrade, next), declinedPacketUpgrades: profile.declinedPacketUpgrades,
+            ownedSeeds: this.ownedSeeds(profile),
+        }
+    }
+
+    private store(): StoreView {
+        const { storePages, itemCost, itemState, itemDetails } = this.storeCatalog
+        const profile = this.profiles.getCurrentProfile()
+        if (!profile) throw new Error('Store requires a player profile')
+        return {
+            userId: profile.id, playerName: profile.name, coins: profile.coins, finishedAdventure: profile.finishedAdventure > 0,
+            pages: storePages(profile).map(page => ({ id: page.id, items: page.items.map((item): StoreItemView => ({
+                id: item.id, place: item.place,
+                ...(item.purchase.kind === 'seed' && { seed: item.purchase.id }),
+                cost: itemCost(item, profile), affordable: profile.coins >= itemCost(item, profile), state: itemState(item, profile, this.now()),
+                ...itemDetails(item, profile),
+            })) })),
+        }
+    }
+
+    private purchase(args: { userId: number, itemId: string, expectedCost: number }) {
+        const { storePages, itemState, itemCost, purchaseItem, purchaseEffect } = this.storeCatalog
+        const profile = this.profiles.getCurrentProfile()
+        if (!profile || profile.id !== args.userId) return { ok: false as const, code: 'profileChanged' as const }
+        const item = this.storeCatalog.item(args.itemId)
+        const reject = (code: 'notAvailable' | 'insufficientFunds' | 'priceChanged') => ({ ok: false as const, code, store: this.store() })
+        if (!item || !storePages(profile).some(page => page.items.includes(item)) || itemState(item, profile, this.now()) !== 'available') return reject('notAvailable')
+        if (itemCost(item, profile) !== args.expectedCost) return reject('priceChanged')
+        if (!purchaseItem(item, profile, this.now())) return reject('insufficientFunds')
+        this.profiles.saveProfile(profile)
+        return {
+            ok: true as const, store: this.store(),
+            ...purchaseEffect(item, profile),
+        }
+    }
+
+    /** LawnApp::HasSeedType: the starting seeds and the ones the profile collected or bought. */
+    private ownedSeeds(profile: PlayerProfile | null): string[] {
+        return [...new Set([...this.gameplaySettings.seedBank.startingSeeds, ...profile?.seeds ?? []])]
+    }
+
+    private validCoins(coins: number): number {
+        if (!Number.isSafeInteger(coins) || coins < 0 || coins > this.gameplaySettings.economy.maxMoney) throw new Error('Invalid coins')
+        return coins
+    }
+
+    private get gameplaySettings(): MenuGameplaySettings {
+        if (!this.gameplay) throw new Error('Gameplay settings are not loaded')
+        return this.gameplay
+    }
+
+    private get almanacCatalog(): AlmanacCatalog {
+        if (!this.almanac) throw new Error('Almanac catalog is not loaded')
+        return this.almanac
+    }
+
+    private get storeCatalog(): StoreCatalog {
+        if (!this.catalog) throw new Error('Store catalog is not loaded')
+        return this.catalog
+    }
+}

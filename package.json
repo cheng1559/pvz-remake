@@ -1,8 +1,59 @@
 {
-  "name": "pvz-remake",
-  "uuid": "9814cd28-be9a-426e-9590-3aae15254ff3",
-  "license": "MIT",
-  "creator": {
-    "version": "3.8.8"
-  }
+    "name": "pvz-remake",
+    "type": "3d",
+    "version": "0.2.0",
+    "uuid": "9814cd28-be9a-426e-9590-3aae15254ff3",
+    "creator": {
+        "version": "4.0.0-alpha.35"
+    },
+    "scripts": {
+        "build:content": "python3 -m tools.pvz",
+        "build:kernel": "tsx tools/kernel/build.ts",
+        "build:icons": "python3 -m tools.resources.icons",
+        "mod:init": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts init",
+        "mod:test": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts test",
+        "mod:pack": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts pack",
+        "mod:hosts": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts hosts",
+        "typecheck:server": "tsc -p tsconfig.server.json",
+        "test:server": "npm run typecheck:server && tsx --tsconfig tsconfig.server.json --test \"tests/**/*.test.ts\"",
+        "test:tools": "python3 -m unittest discover -s tests/tools",
+        "preview:debug": "cocos preview --project .",
+        "preview:release": "cocos preview --project . --no-debug",
+        "check:preview": "tsx tools/preview/check-imports.ts",
+        "build:web:debug": "cocos build --project . --platform web-mobile --build-config build-configs/debug.json --no-interactive",
+        "build:web:release": "cocos build --project . --platform web-mobile --build-config build-configs/release.json --no-interactive",
+        "build:macos:debug": "tsx tools/build/clean-native-assets.ts build/mac && cocos build --project . --platform mac --build-config build-configs/macos-debug.json --no-interactive",
+        "build:macos:arm64:release": "tsx tools/build/clean-native-assets.ts build/mac-arm64-release && cocos build --project . --platform mac --build-config build-configs/macos-arm64-release.json --no-interactive",
+        "build:macos:x64:release": "tsx tools/build/clean-native-assets.ts build/mac-x64-release && cocos build --project . --platform mac --build-config build-configs/macos-x64-release.json --no-interactive",
+        "compile:macos:debug": "npm run build:macos:debug && cocos make --platform mac --dest build/mac",
+        "compile:macos:arm64:release": "npm run build:macos:arm64:release && cocos make --platform mac --dest build/mac-arm64-release",
+        "compile:macos:x64:release": "npm run build:macos:x64:release && cocos make --platform mac --dest build/mac-x64-release",
+        "package:macos": "tsx tools/installer/package-macos.ts",
+        "build:ios:debug": "tsx tools/build/clean-native-assets.ts build/ios && cocos build --project . --platform ios --build-config build-configs/ios-debug.json --no-interactive",
+        "build:ios:release": "tsx tools/build/clean-native-assets.ts build/ios && cocos build --project . --platform ios --build-config build-configs/ios-release.json --no-interactive",
+        "compile:ios:debug": "npm run build:ios:debug && cocos make --platform ios --dest build/ios",
+        "compile:ios:release": "npm run build:ios:release && cocos make --platform ios --dest build/ios",
+        "build:windows:debug": "tsx tools/build/clean-native-assets.ts build/windows && cocos build --project . --platform windows --build-config build-configs/debug.json --no-interactive",
+        "build:windows:release": "tsx tools/build/clean-native-assets.ts build/windows && cocos build --project . --platform windows --build-config build-configs/release.json --no-interactive",
+        "compile:windows:debug": "npm run build:windows:debug && cocos make --platform windows --dest build/windows",
+        "compile:windows:release": "npm run build:windows:release && cocos make --platform windows --dest build/windows",
+        "package:windows": "tsx tools/installer/package-windows.ts",
+        "build:android:arm64:debug": "cocos build --project . --platform android --build-config build-configs/android-arm64-debug.json --no-interactive",
+        "build:android:arm64:release": "cocos build --project . --platform android --build-config build-configs/android-arm64-release.json --no-interactive",
+        "compile:android:arm64:debug": "npm run build:android:arm64:debug && cocos make --platform android --dest build/android-arm64-debug",
+        "compile:android:arm64:release": "npm run build:android:arm64:release && cocos make --platform android --dest build/android-arm64-release",
+        "build:android:armv7:debug": "cocos build --project . --platform android --build-config build-configs/android-armv7-debug.json --no-interactive",
+        "build:android:armv7:release": "cocos build --project . --platform android --build-config build-configs/android-armv7-release.json --no-interactive",
+        "compile:android:armv7:debug": "npm run build:android:armv7:debug && cocos make --platform android --dest build/android-armv7-debug",
+        "compile:android:armv7:release": "npm run build:android:armv7:release && cocos make --platform android --dest build/android-armv7-release"
+    },
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^22.20.1",
+        "tsx": "^4.23.1",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "fflate": "0.8.3"
+    }
 }

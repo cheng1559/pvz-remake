@@ -1,0 +1,434 @@
+import { GAME_SAVE_KEY, type MenuStorage, PLAYER_MODS_PREFIX } from '@/shared/menu'
+import type { ZenGardenPlant } from '@/shared/content/gameplay'
+import { isQualifiedId } from '@/shared/mod'
+
+const PROFILE_VERSION = 1
+const PROFILE_REGISTRY_KEY = 'pvz-remake:profiles:registry'
+const PROFILE_DATA_KEY_PREFIX = 'pvz-remake:profiles:'
+const DEFAULT_PROFILE_NAME = 'Player'
+const MAX_PROFILES = 200
+const CHALLENGE_RECORD_COUNT = 100
+
+/** A potted plant in its spot of its garden. */
+export interface PersistedPottedPlant extends ZenGardenPlant {
+    x: number
+    y: number
+}
+
+export interface PlayerProfile {
+    version: number
+    id: number
+    name: string
+    useSeq: number
+    adventureLevel: number
+    coins: number
+    finishedAdventure: number
+    challengeRecords: number[]
+    /** PlayerInfo::mPurchases: what each store item's purchases left, by the item's ID (none for one never bought). */
+    purchases: Record<string, number>
+    /**
+     * The seeds the player owns beyond the starting ones (LawnApp::HasSeedType): level awards add theirs when the level
+     * is won, and the store adds the plants it sells.
+     */
+    seeds: string[]
+    /** The main menu entries collected awards unlocked (`unlocks` of a level's unlock award). */
+    unlocks: string[]
+    playTimeActivePlayer: number
+    playTimeInactivePlayer: number
+    hasUsedCheatKeys: boolean
+    hasWokenStinky: boolean
+    /** PlayerInfo::mDidntPurchasePacketUpgrade: Crazy Dave stops offering the seed-slot upgrade after two refusals. */
+    declinedPacketUpgrades: number
+    lastStinkyChocolateTime: number
+    stinkyPosX: number
+    stinkyPosY: number
+    hasUnlockedMinigames: boolean
+    hasUnlockedPuzzleMode: boolean
+    hasNewMiniGame: boolean
+    hasNewScaryPotter: boolean
+    hasNewIZombie: boolean
+    hasNewSurvival: boolean
+    hasUnlockedSurvivalMode: boolean
+    needsMessageOnGameSelector: boolean
+    needsMagicTacoReward: boolean
+    hasSeenStinky: boolean
+    hasSeenUpsell: boolean
+    placeholderPlayerStats: number
+    numPottedPlants: number
+    pottedPlants: PersistedPottedPlant[]
+    /** The achievements earned, and those of them already shown (in the level or an award list), by ID. */
+    earnedAchievements: string[]
+    shownAchievements: string[]
+}
+
+export interface PlayerProfileSummary {
+    id: number
+    name: string
+    useSeq: number
+}
+
+export interface ProfileRegistry {
+    version: number
+    currentProfileId: number | null
+    nextProfileId: number
+    nextProfileUseSeq: number
+    summaries: PlayerProfileSummary[]
+}
+
+
+/** The backend owns profile validation and persistence; the app supplies its storage adapter. */
+export function createProfileStore(storage: MenuStorage) {
+    const getStorage = () => storage
+    const deleteProfileSaves = (profileId: number) => {
+        // The client's per-player Mod list goes too; unused archives are removed at startup.
+        const prefixes = [`${GAME_SAVE_KEY}:${profileId}:`, `${PLAYER_MODS_PREFIX}${profileId}:`]
+        for (let i = storage.length - 1; i >= 0; i--) {
+            const key = storage.key(i)
+            if (key && prefixes.some(prefix => key.startsWith(prefix))) storage.removeItem(key)
+        }
+    }
+    function makeProfileKey(id: number) {
+        return `${PROFILE_DATA_KEY_PREFIX}${id}`
+    }
+
+    function createArray<T>(length: number, value: T): T[] {
+        return Array.from({ length }, () => value)
+    }
+
+    function ids(value: unknown): string[] {
+        return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
+    }
+
+    function purchases(value: unknown): Record<string, number> {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+        return Object.fromEntries(Object.entries(value).flatMap(([id, count]) => isQualifiedId(id) && Number(count) ? [[id, Number(count)]] : []))
+    }
+
+    function cloneProfile(profile: PlayerProfile): PlayerProfile {
+        return {
+            ...profile,
+            challengeRecords: [...profile.challengeRecords],
+            purchases: { ...profile.purchases },
+            seeds: [...profile.seeds],
+            unlocks: [...profile.unlocks],
+            pottedPlants: profile.pottedPlants.map((plant) => ({ ...plant })),
+            earnedAchievements: [...profile.earnedAchievements],
+            shownAchievements: [...profile.shownAchievements],
+        }
+    }
+
+    function normalizeProfileSummary(summary: Partial<PlayerProfileSummary>): PlayerProfileSummary {
+        return {
+            id: Number(summary.id ?? 0),
+            name: typeof summary.name === 'string' && summary.name.length > 0 ? summary.name : DEFAULT_PROFILE_NAME,
+            useSeq: Number(summary.useSeq ?? 0),
+        }
+    }
+
+    function defaultProfile(id: number, name: string, useSeq: number): PlayerProfile {
+        return {
+            version: PROFILE_VERSION,
+            id,
+            name,
+            useSeq,
+            adventureLevel: 1,
+            coins: 0,
+            finishedAdventure: 0,
+            challengeRecords: createArray(CHALLENGE_RECORD_COUNT, 0),
+            purchases: {},
+            seeds: [],
+            unlocks: [],
+            playTimeActivePlayer: 0,
+            playTimeInactivePlayer: 0,
+            hasUsedCheatKeys: false,
+            hasWokenStinky: false,
+            declinedPacketUpgrades: 0,
+            lastStinkyChocolateTime: 0,
+            stinkyPosX: 0,
+            stinkyPosY: 0,
+            hasUnlockedMinigames: false,
+            hasUnlockedPuzzleMode: false,
+            hasNewMiniGame: false,
+            hasNewScaryPotter: false,
+            hasNewIZombie: false,
+            hasNewSurvival: false,
+            hasUnlockedSurvivalMode: false,
+            needsMessageOnGameSelector: false,
+            needsMagicTacoReward: false,
+            hasSeenStinky: false,
+            hasSeenUpsell: false,
+            placeholderPlayerStats: 0,
+            numPottedPlants: 0,
+            pottedPlants: [],
+            earnedAchievements: [],
+            shownAchievements: [],
+        }
+    }
+
+    function normalizeProfile(raw: Partial<PlayerProfile>, fallbackId: number, fallbackName: string, fallbackUseSeq: number): PlayerProfile {
+        const profile = defaultProfile(fallbackId, fallbackName, fallbackUseSeq)
+        profile.version = PROFILE_VERSION
+        profile.id = Number(raw.id ?? fallbackId)
+        profile.name = typeof raw.name === 'string' && raw.name.length > 0 ? raw.name : fallbackName
+        profile.useSeq = Number(raw.useSeq ?? fallbackUseSeq)
+        profile.adventureLevel = Math.max(1, Math.floor(Number(raw.adventureLevel ?? 1) || 1))
+        profile.coins = Math.max(0, Math.floor(Number(raw.coins ?? 0) || 0))
+        profile.finishedAdventure = Math.max(0, Math.floor(Number(raw.finishedAdventure ?? 0) || 0))
+        profile.challengeRecords = [
+            ...createArray(CHALLENGE_RECORD_COUNT, 0).map((_, index) => Number(raw.challengeRecords?.[index] ?? 0) || 0),
+        ]
+        profile.purchases = purchases(raw.purchases)
+        profile.seeds = ids(raw.seeds)
+        profile.unlocks = ids(raw.unlocks)
+        profile.playTimeActivePlayer = Number(raw.playTimeActivePlayer ?? 0) || 0
+        profile.playTimeInactivePlayer = Number(raw.playTimeInactivePlayer ?? 0) || 0
+        profile.hasUsedCheatKeys = !!raw.hasUsedCheatKeys
+        profile.hasWokenStinky = !!raw.hasWokenStinky
+        profile.declinedPacketUpgrades = Number.isSafeInteger(raw.declinedPacketUpgrades) && Number(raw.declinedPacketUpgrades) > 0 ? Number(raw.declinedPacketUpgrades) : 0
+        profile.lastStinkyChocolateTime = Number(raw.lastStinkyChocolateTime ?? 0) || 0
+        profile.stinkyPosX = Number(raw.stinkyPosX ?? 0) || 0
+        profile.stinkyPosY = Number(raw.stinkyPosY ?? 0) || 0
+        profile.hasUnlockedMinigames = !!raw.hasUnlockedMinigames
+        profile.hasUnlockedPuzzleMode = !!raw.hasUnlockedPuzzleMode
+        profile.hasNewMiniGame = !!raw.hasNewMiniGame
+        profile.hasNewScaryPotter = !!raw.hasNewScaryPotter
+        profile.hasNewIZombie = !!raw.hasNewIZombie
+        profile.hasNewSurvival = !!raw.hasNewSurvival
+        profile.hasUnlockedSurvivalMode = !!raw.hasUnlockedSurvivalMode
+        profile.needsMessageOnGameSelector = !!raw.needsMessageOnGameSelector
+        profile.needsMagicTacoReward = !!raw.needsMagicTacoReward
+        profile.hasSeenStinky = !!raw.hasSeenStinky
+        profile.hasSeenUpsell = !!raw.hasSeenUpsell
+        profile.placeholderPlayerStats = Number(raw.placeholderPlayerStats ?? 0) || 0
+        profile.numPottedPlants = Math.max(0, Math.floor(Number(raw.numPottedPlants ?? 0) || 0))
+        profile.pottedPlants = Array.isArray(raw.pottedPlants)
+            ? raw.pottedPlants.slice(0, profile.numPottedPlants).map((plant) => ({
+                plant: String(plant?.plant ?? 'pvz:peashooter'),
+                whichZenGarden: String(plant?.whichZenGarden ?? 'main'),
+                x: Number(plant?.x ?? 0) || 0,
+                y: Number(plant?.y ?? 0) || 0,
+                facing: plant?.facing === 'left' ? 'left' : 'right',
+                lastWateredTime: Number(plant?.lastWateredTime ?? 0) || 0,
+                drawVariation: String(plant?.drawVariation ?? 'normal'),
+                plantAge: String(plant?.plantAge ?? 'sprout'),
+                timesFed: Number(plant?.timesFed ?? 0) || 0,
+                feedingsPerGrow: Number(plant?.feedingsPerGrow ?? 0) || 0,
+                plantNeed: String(plant?.plantNeed ?? 'none'),
+                lastNeedFulfilledTime: Number(plant?.lastNeedFulfilledTime ?? 0) || 0,
+                lastFertilizedTime: Number(plant?.lastFertilizedTime ?? 0) || 0,
+                lastChocolateTime: Number(plant?.lastChocolateTime ?? 0) || 0,
+            }))
+            : []
+        profile.earnedAchievements = ids(raw.earnedAchievements)
+        profile.shownAchievements = ids(raw.shownAchievements).filter(id => profile.earnedAchievements.includes(id))
+        return profile
+    }
+
+    function defaultRegistry(): ProfileRegistry {
+        return {
+            version: PROFILE_VERSION,
+            currentProfileId: null,
+            nextProfileId: 1,
+            nextProfileUseSeq: 1,
+            summaries: [],
+        }
+    }
+
+    function readRegistry(): ProfileRegistry {
+        const raw = getStorage().getItem(PROFILE_REGISTRY_KEY)
+        if (!raw) return defaultRegistry()
+
+        try {
+            const parsed = JSON.parse(raw) as Partial<ProfileRegistry>
+            if (parsed.version !== PROFILE_VERSION) return defaultRegistry()
+            const summaries = Array.isArray(parsed.summaries)
+                ? parsed.summaries.map((summary) => normalizeProfileSummary(summary))
+                : []
+            return {
+                version: PROFILE_VERSION,
+                currentProfileId: parsed.currentProfileId == null ? null : Number(parsed.currentProfileId) || null,
+                nextProfileId: Math.max(1, Number(parsed.nextProfileId ?? 1) || 1),
+                nextProfileUseSeq: Math.max(1, Number(parsed.nextProfileUseSeq ?? 1) || 1),
+                summaries: summaries.sort((a, b) => a.name.localeCompare(b.name)),
+            }
+        } catch {
+            return defaultRegistry()
+        }
+    }
+
+    function writeRegistry(registry: ProfileRegistry) {
+        getStorage().setItem(PROFILE_REGISTRY_KEY, JSON.stringify(registry))
+    }
+
+    function readProfile(id: number): PlayerProfile | null {
+        const raw = getStorage().getItem(makeProfileKey(id))
+        if (!raw) return null
+
+        try {
+            const parsed = JSON.parse(raw) as Partial<PlayerProfile>
+            return normalizeProfile(parsed, id, DEFAULT_PROFILE_NAME, 0)
+        } catch {
+            return null
+        }
+    }
+
+    function writeProfile(profile: PlayerProfile) {
+        getStorage().setItem(makeProfileKey(profile.id), JSON.stringify(profile))
+    }
+
+    function touchProfile(profile: PlayerProfile) {
+        const registry = readRegistry()
+        const touched = cloneProfile(profile)
+        touched.useSeq = registry.nextProfileUseSeq++
+        syncRegistryEntry(registry, touched)
+        writeProfile(touched)
+        writeRegistry(registry)
+        return touched
+    }
+
+    function syncRegistryEntry(registry: ProfileRegistry, profile: PlayerProfile) {
+        const summary = normalizeProfileSummary(profile)
+        const index = registry.summaries.findIndex((entry) => entry.id === summary.id)
+        if (index >= 0) {
+            registry.summaries[index] = summary
+        } else {
+            registry.summaries.push(summary)
+        }
+        registry.summaries.sort((a, b) => a.name.localeCompare(b.name))
+        registry.currentProfileId = profile.id
+        registry.nextProfileId = Math.max(registry.nextProfileId, profile.id + 1)
+        registry.nextProfileUseSeq = Math.max(registry.nextProfileUseSeq, profile.useSeq + 1)
+    }
+
+    function pruneProfiles(registry: ProfileRegistry) {
+        while (registry.summaries.length > MAX_PROFILES) {
+            let oldest = registry.summaries[0]
+            for (const summary of registry.summaries) {
+                if (summary.useSeq < oldest.useSeq) oldest = summary
+            }
+            deleteProfileSaves(oldest.id)
+            getStorage().removeItem(makeProfileKey(oldest.id))
+            registry.summaries = registry.summaries.filter((entry) => entry.id !== oldest.id)
+            if (registry.currentProfileId === oldest.id) {
+                registry.currentProfileId = registry.summaries[0]?.id ?? null
+            }
+        }
+    }
+
+    function removeMissingProfilesFromRegistry(registry: ProfileRegistry) {
+        const summaries = registry.summaries.filter((summary) => readProfile(summary.id) != null)
+        if (summaries.length === registry.summaries.length) return false
+
+        registry.summaries = summaries
+        if (
+            registry.currentProfileId != null &&
+            !registry.summaries.some((summary) => summary.id === registry.currentProfileId)
+        ) {
+            registry.currentProfileId = registry.summaries[0]?.id ?? null
+        }
+        return true
+    }
+
+    class ProfileStore {
+        static loadProfiles(): PlayerProfileSummary[] {
+            return [...readRegistry().summaries]
+        }
+
+        static loadProfileById(id: number): PlayerProfile | null {
+            const registry = readRegistry()
+            const summary = registry.summaries.find((entry) => entry.id === id)
+            if (!summary) return null
+            const profile = readProfile(id)
+            return profile ? touchProfile(profile) : null
+        }
+
+        static getCurrentProfile(): PlayerProfile | null {
+            const registry = readRegistry()
+            const profile =
+                (registry.currentProfileId != null ? readProfile(registry.currentProfileId) : null) ??
+                (registry.summaries[0] ? readProfile(registry.summaries[0].id) : null)
+            return profile ? cloneProfile(profile) : null
+        }
+
+        static loadCurrentProfile(): PlayerProfile | null {
+            const registry = readRegistry()
+            const existing =
+                (registry.currentProfileId != null ? readProfile(registry.currentProfileId) : null) ??
+                (registry.summaries[0] ? readProfile(registry.summaries[0].id) : null)
+            if (existing) {
+                return touchProfile(existing)
+            }
+
+            if (removeMissingProfilesFromRegistry(registry)) {
+                writeRegistry(registry)
+                const recovered =
+                    (registry.currentProfileId != null ? readProfile(registry.currentProfileId) : null) ??
+                    (registry.summaries[0] ? readProfile(registry.summaries[0].id) : null)
+                if (recovered) return touchProfile(recovered)
+            }
+
+            return null
+        }
+
+        static createProfile(name: string): PlayerProfile | null {
+            const registry = readRegistry()
+            const profileName = name || DEFAULT_PROFILE_NAME
+            const existing = registry.summaries.find((entry) => entry.name.toLowerCase() === profileName.toLowerCase())
+            if (existing) return null
+
+            const profile = defaultProfile(registry.nextProfileId, profileName, registry.nextProfileUseSeq)
+            syncRegistryEntry(registry, profile)
+            writeProfile(profile)
+            pruneProfiles(registry)
+            writeRegistry(registry)
+            return cloneProfile(profile)
+        }
+
+        static saveProfile(profile: PlayerProfile) {
+            const registry = readRegistry()
+            const normalized = normalizeProfile(profile, profile.id, profile.name, profile.useSeq)
+            syncRegistryEntry(registry, normalized)
+            writeProfile(normalized)
+            pruneProfiles(registry)
+            writeRegistry(registry)
+            return cloneProfile(normalized)
+        }
+
+        static renameProfile(oldName: string, newName: string) {
+            const registry = readRegistry()
+            const summary = registry.summaries.find((entry) => entry.name.toLowerCase() === oldName.toLowerCase())
+            if (!summary) return false
+            const duplicate = registry.summaries.find((entry) => entry.name.toLowerCase() === newName.toLowerCase())
+            if (duplicate && duplicate.id !== summary.id) return false
+
+            summary.name = newName
+            const profile = readProfile(summary.id)
+            if (profile) {
+                profile.name = newName
+                writeProfile(profile)
+            }
+            registry.summaries.sort((a, b) => a.name.localeCompare(b.name))
+            writeRegistry(registry)
+            return true
+        }
+
+        static deleteProfile(name: string) {
+            const registry = readRegistry()
+            const summary = registry.summaries.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
+            if (!summary) return false
+
+            deleteProfileSaves(summary.id)
+            getStorage().removeItem(makeProfileKey(summary.id))
+            registry.summaries = registry.summaries.filter((entry) => entry.id !== summary.id)
+            if (registry.currentProfileId === summary.id) {
+                registry.currentProfileId = registry.summaries[0]?.id ?? null
+            }
+            writeRegistry(registry)
+            return true
+        }
+    }
+
+    return ProfileStore
+}
+
+export type ProfileStore = ReturnType<typeof createProfileStore>

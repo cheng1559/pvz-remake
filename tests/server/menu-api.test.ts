@@ -1,0 +1,389 @@
+import { readBaseContent } from '../../tools/mod/content'
+import { readGameplaySource } from '../../tools/mod/content'
+import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
+import assert from 'node:assert/strict'
+import { readFileSync, readdirSync } from 'node:fs'
+import test from 'node:test'
+import { MenuApi } from '@/client/api/MenuApi'
+import { createLocalMenuTransport } from '@/app/LocalMenuApi'
+import { createProfileStore } from '@/server/menu/profileStore'
+import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
+import { createStoreCatalog } from '@/server/menu/storeCatalog'
+import { SFX_VOLUME_SCALE, type MenuStorage } from '@/shared/menu'
+import { parseGameplayDefinitions, type GameplayLevels, type LevelDefinition } from '@/shared/content/gameplay'
+
+function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () => boolean) {
+    const data = new Map<string, string>()
+    const storage: MenuStorage = {
+        getItem: key => data.get(key) ?? null,
+        setItem: (key, value) => { data.set(key, value) },
+        removeItem: key => { data.delete(key) },
+        key: index => [...data.keys()][index] ?? null,
+        get length() { return data.size },
+    }
+    const profiles = createProfileStore(storage)
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
+    const reconnect = (levels: GameplayLevels = readGameplaySource('levels')) => new MenuApi(createLocalMenuTransport(
+        storage, getLevel, canCompleteLevel, createStoreCatalog(definitions), createAlmanacCatalog(definitions), definitions, levels))
+    return { data, storage, profiles, api: reconnect(), reconnect }
+}
+
+test('shop rules, tiers and purchase effects follow the store table, for a Mod\'s item as for the base\'s', async () => {
+    const upgrade = readGameplaySource('definitions').store['pvz:packet-upgrade']
+    // A Mod sells its own seed-slot upgrade in the base's place, and moves the base's off the store.
+    const { definitions } = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
+        store: { 'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001] } },
+        overrides: { store: { 'pvz:packet-upgrade': { page: 'test:page', place: 0, cost: 1, message: 1, purchase: { kind: 'set', value: 1 } } } },
+        storePages: { 'test:page': { completed: true } },
+    } }])
+    const { storage, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.coins = 10000
+    profiles.saveProfile(profile)
+    const api = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, createStoreCatalog(definitions)))
+    const store = await api.getStore()
+    assert.deepEqual(store.pages.map(page => page.id), ['pvz:slot-upgrades'], 'a page shows by its own rule')
+    const item = store.pages[0].items.find(item => item.id === 'test:upgrade')!
+    assert.equal(item.place, 0)
+    assert.equal(item.cost, 123)
+    assert.equal(item.message, 9000)
+    assert.equal(item.seedSlots, 7, 'the bank\'s 6 slots and one more')
+    const result = await api.purchase(profile.id, 'test:upgrade', 123)
+    assert.equal(result.ok, true)
+    if (!result.ok) return
+    assert.equal(result.effect, 'seedSlots')
+    assert.equal(result.seedSlots, 7)
+    assert.deepEqual(profiles.getCurrentProfile()!.purchases, { 'test:upgrade': 1 }, 'the profile counts purchases by item ID')
+    assert.equal(result.store.coins, 9877)
+    assert.equal(result.store.pages[0].items.find(item => item.id === 'test:upgrade')!.message, 9001)
+})
+
+test('user APIs validate names on the backend, preserve IDs and old saves, and isolate deletion', async () => {
+    const { api, data, storage } = fixture()
+    assert.equal(await api.getCurrentUser(), null)
+    assert.deepEqual(await api.createUser('  '), { ok: false, code: 'emptyName' })
+    assert.deepEqual(await api.createUser('invalid!'), { ok: false, code: 'invalidName' })
+    assert.deepEqual(await api.createUser('1234567890123'), { ok: false, code: 'invalidName' })
+    const alice = await api.createUser('  Alice  ')
+    assert.equal(alice.ok, true)
+    if (!alice.ok || !alice.user) return assert.fail('Alice must exist')
+    const aliceId = alice.user.id
+    assert.equal(alice.user.name, 'Alice')
+    assert.equal('purchases' in alice.user, false, 'the UI gets a user view, not a writable profile')
+    assert.deepEqual(await api.createUser('aLiCe'), { ok: false, code: 'duplicateName' })
+    const bob = await api.createUser('Bob')
+    if (!bob.ok || !bob.user) return assert.fail('Bob must exist')
+    data.set(`pvz-remake:game-save-v2:${aliceId}:adventure`, 'Alice save')
+    data.set(`pvz-remake:game-save-v2:${bob.user.id}:adventure:temp`, 'Bob temp')
+    assert.equal((await api.renameUser(bob.user.id, '  Bob   Two ')).ok, true)
+    assert.equal((await api.getCurrentUser())?.name, 'Bob Two')
+    assert.equal((await api.getCurrentUser())?.id, bob.user.id)
+    assert.equal((await api.renameUser(bob.user.id, 'alice')).ok, false)
+    assert.equal((await api.deleteUser(bob.user.id)).ok, true)
+    assert.equal(data.get(`pvz-remake:game-save-v2:${aliceId}:adventure`), 'Alice save')
+    assert.equal([...data.keys()].some(key => key.includes(`:${bob.user!.id}:`)), false)
+    const reloaded = new MenuApi(createLocalMenuTransport(storage))
+    assert.equal((await reloaded.getCurrentUser())?.id, aliceId)
+})
+
+test('shop APIs own prices, availability and charging; copied UI data cannot alter the catalog', async () => {
+    const { profiles, api } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.coins = 2000
+    profiles.saveProfile(profile)
+    const offer = await api.getStore()
+    assert.equal(offer.pages.length, 1)
+    const item = offer.pages[0].items.find(item => item.id === 'pvz:gatlingpea')!
+    assert.deepEqual([item.place, item.seed], [4, 'pvz:gatlingpea'])
+    const slots = offer.pages[0].items.find(item => item.id === 'pvz:packet-upgrade')!
+    assert.equal(slots.seedSlots, 7)
+    assert.equal(offer.finishedAdventure, false)
+    item.cost = 0
+    offer.coins = 999999
+    assert.equal((await api.getStore()).coins, 2000)
+    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 'pvz:gatlingpea')!.cost, 500)
+    assert.deepEqual((await api.purchase(profile.id, 'pvz:gatlingpea', 0)).ok, false)
+    assert.equal((await api.purchase(profile.id, 'pvz:tree-of-wisdom', 1000)).ok, false, 'a locked shop page cannot be purchased through the API')
+    const results = await Promise.all([api.purchase(profile.id, 'pvz:gatlingpea', 500), api.purchase(profile.id, 'pvz:gatlingpea', 500)])
+    assert.equal(results.filter(result => result.ok).length, 1)
+    assert.equal((await api.getStore()).coins, 1500)
+    assert.deepEqual(profiles.getCurrentProfile()!.seeds, ['pvz:gatlingpea'])
+    assert.equal((await api.purchase(profile.id, 'pvz:packet-upgrade', 75)).ok, true)
+    assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 'pvz:packet-upgrade')!.seedSlots, 8)
+    const stale = await api.purchase(profile.id, 'pvz:packet-upgrade', 75)
+    assert.equal(stale.ok, false)
+    if (stale.ok === false) assert.equal(stale.code, 'priceChanged')
+    const before = (await api.getStore()).coins
+    await api.createUser('Bob')
+    assert.deepEqual(await api.purchase(profile.id, 'pvz:twinsunflower', 500), { ok: false, code: 'profileChanged' })
+    const bob = (await api.getCurrentUser())!
+    const insufficient = await api.purchase(bob.id, 'pvz:gatlingpea', 500)
+    assert.equal(insufficient.ok, false)
+    if (insufficient.ok === false) assert.equal(insufficient.code, 'insufficientFunds')
+    assert.equal((await api.getStore()).coins, 0)
+    await api.selectUser(profile.id)
+    assert.equal((await api.getStore()).coins, before)
+    const completed = profiles.getCurrentProfile()!
+    completed.finishedAdventure = 1
+    profiles.saveProfile(completed)
+    const finished = await api.getStore()
+    assert.deepEqual([finished.finishedAdventure, finished.pages.map(page => page.id)],
+        [true, ['pvz:slot-upgrades', 'pvz:plant-upgrades', 'pvz:zen-garden-1', 'pvz:zen-garden-2']], 'every page, in their order')
+    const marigold = finished.pages[2].items.find(item => item.id === 'pvz:potted-marigold-1')!
+    assert.deepEqual([marigold.place, marigold.seed, marigold.state], [0, undefined, 'available'])
+})
+
+test('settings, challenge progress and almanac data are supplied by the backend and survive reconnect', async () => {
+    const { api, profiles, storage } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.challengeRecords[15] = 1
+    profiles.saveProfile(profile)
+    const settings = await api.updateSettings({ musicVolume: 9, sfxVolume: 9, fullScreen: true })
+    assert.equal(settings.musicVolume, 1)
+    assert.equal(settings.sfxVolume, SFX_VOLUME_SCALE)
+    assert.equal((await new MenuApi(createLocalMenuTransport(storage)).getSettings()).fullScreen, true)
+    const challenges = await api.getChallenges('minigames')
+    assert.equal(challenges.completed, 1)
+    assert.equal(challenges.total, 20)
+    assert.equal(challenges.items[0].completed, true)
+    const almanac = await api.getAlmanac()
+    assert.deepEqual(almanac.plants.map(plant => plant.seed), ['pvz:peashooter'], 'a new player has only the peashooter')
+    almanac.plants[0].cost = -100
+    assert.equal((await api.getAlmanac()).plants[0].cost, 100)
+})
+
+test('the almanac shows the plants the player has and the zombies met so far', async () => {
+    const { api, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    const almanac = async (changes: { adventureLevel?: number, finishedAdventure?: number, seeds?: string[] }) => {
+        profiles.saveProfile({ ...profile, ...changes })
+        const view = await api.getAlmanac()
+        const zombie = (id: string) => view.zombies.find(zombie => zombie.zombie === id)!
+        return { plants: view.plants.map(plant => plant.place), zombie: (id: string) => [zombie(id).shown, zombie(id).described] }
+    }
+    // After 2-4 the player has collected the plants through the Grave Buster and has met every zombie up to the screen door.
+    const collected = ['sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster']
+    const level15 = await almanac({ adventureLevel: 15, seeds: collected.map(name => `pvz:${name}`) })
+    assert.deepEqual(level15.plants, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    assert.deepEqual((await almanac({ adventureLevel: 15, seeds: [] })).plants, [0], 'the plants come from the owned seeds, not the level')
+    assert.deepEqual(level15.zombie('pvz:screendoor'), [true, true])
+    // A zombie shows on its debut level but is described only after it.
+    assert.deepEqual((await almanac({ adventureLevel: 12 })).zombie('pvz:screendoor'), [false, false])
+    assert.deepEqual((await almanac({ adventureLevel: 13 })).zombie('pvz:screendoor'), [true, false])
+    // A bought store plant is an owned seed too.
+    const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, seeds: ['pvz:hypnoshroom', 'pvz:imitater'] })
+    assert.deepEqual(finished.plants, [0, 12], 'an owned seed that is not installed (the Imitater) is left out')
+    assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.place === 12),
+        { seed: 'pvz:hypnoshroom', place: 12, cost: 75, refreshTime: 3000 }, "place, cost and recharge are the seed definition's")
+    assert.deepEqual(finished.zombie('pvz:screendoor'), [true, true], 'a finished adventure has met them all')
+    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.place === 0)!.zombie, 'pvz:normal', 'a window names the zombie it shows')
+})
+
+test('achievement entries keep the original order and expose only the active user’s unlocks', async () => {
+    const { api, profiles } = fixture()
+    const empty = await api.getAchievements()
+    assert.equal(empty.total, 21)
+    assert.equal(empty.completed, 0)
+    const profile = profiles.createProfile('Alice')!
+    profile.earnedAchievements.push('pvz:spudow')
+    profiles.saveProfile(profile)
+    const view = await api.getAchievements()
+    assert.equal(view.completed, 1)
+    assert.equal(view.items[0].titleKey, 'ACHIEVEMENT_HOME_SECURITY_TITLE')
+    assert.equal(view.items[20].titleKey, 'ACHIEVEMENT_DISCO_IS_UNDEAD_TITLE')
+    assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), ['pvz:spudow'])
+    const strings = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.json['pvz:strings']}`, 'utf8'))
+    for (const [index, item] of view.items.entries()) {
+        assert.deepEqual(item.icon, { sprite: 'pvz:acheesements_icons', index })
+        assert.ok(strings[item.titleKey])
+        assert.ok(strings[item.descriptionKey])
+    }
+    view.items[1].earned = true
+    assert.equal((await api.getAchievements()).items[1].earned, false)
+    await api.createUser('Bob')
+    assert.equal((await api.getAchievements()).completed, 0)
+})
+
+test('earned achievements are saved once and the next award page lists the unshown ones', async () => {
+    const levels = readGameplaySource('levels') as GameplayLevels
+    const { api, profiles } = fixture(() => levels.levels['pvz:adventure-1-1'], () => true)
+    await api.createUser('Alice')
+    assert.deepEqual(await api.earnAchievement('pvz:sunny-days', true), { earned: true })
+    assert.deepEqual(await api.earnAchievement('pvz:sunny-days', false), { earned: false })
+    await api.earnAchievement('pvz:good-morning', false)
+    await api.earnAchievement('pvz:home-security', false)
+    await assert.rejects(api.earnAchievement('pvz:unknown', false), /Unknown achievement/)
+    // Announced in the level, so only the other two wait for the award page, in screen order.
+    const award = await api.completeLevel()
+    assert.deepEqual(award.achievements.map(entry => entry.id), ['pvz:home-security', 'pvz:good-morning'])
+    assert.deepEqual((await api.getAward()).achievements, award.achievements, 'the award page reads the same list')
+    assert.deepEqual((await api.completeLevel()).achievements, [], 'each achievement is listed once')
+    assert.deepEqual(profiles.getCurrentProfile()!.shownAchievements.sort(), ['pvz:good-morning', 'pvz:home-security', 'pvz:sunny-days'])
+    assert.equal((await api.resetAchievements('pvz:good-morning')).completed, 2)
+    assert.equal((await api.resetAchievements()).completed, 0)
+    assert.deepEqual(profiles.getCurrentProfile()!.shownAchievements, [])
+})
+
+test('award API resolves the loaded level reward and packet cost instead of choosing a plant in the UI', async () => {
+    const levels = readGameplaySource('levels') as GameplayLevels
+    let level: LevelDefinition | null = levels.levels['pvz:adventure-1-1']
+    const { api } = fixture(() => level)
+    const award = await api.getAward()
+    assert.deepEqual(award, {
+        kind: 'seed', titleKey: 'NEW_PLANT',
+        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
+        seed: 'pvz:sunflower', cost: 50,
+    })
+    award.seed = 'pvz:repeater'
+    assert.equal((await api.getAward()).seed, 'pvz:sunflower', 'the returned view cannot change the reward')
+    // The packet shows the seed's own cost; a seed that is not installed has no award to show.
+    level = { ...level, award: { kind: 'seed', id: 'pvz:hypnoshroom' } }
+    assert.deepEqual(await api.getAward(), {
+        kind: 'seed', titleKey: 'NEW_PLANT',
+        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
+        seed: 'pvz:hypnoshroom', cost: 75,
+    })
+    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
+    await assert.rejects(api.getAward(), /Unknown plant award/)
+    level = levels.levels['pvz:adventure-2-4']
+    assert.deepEqual(await api.getAward(), {
+        kind: 'unlock', id: 'pvz:almanac', nextLevelId: 'pvz:adventure-2-5', showMainMenu: true, achievements: [],
+        titleKey: 'FOUND_SUBURBAN_ALMANAC', nameKey: 'SUBURBAN_ALMANAC', descriptionKey: 'SUBURBAN_ALMANAC_DESCRIPTION',
+        opens: { page: 'almanac', buttonKey: 'VIEW_ALMANAC_BUTTON' },
+    })
+    level = null
+    await assert.rejects(api.getAward(), /loaded level/)
+})
+
+test('winning advances the current profile once and exposes the next installed level', async () => {
+    const levels = readGameplaySource('levels') as GameplayLevels
+    let level = levels.levels['pvz:adventure-1-1']
+    let won = false
+    const { api, reconnect, profiles } = fixture(() => level, () => won)
+    await api.createUser('Alice')
+    assert.deepEqual(await api.getAdventure(), { levelId: 'pvz:adventure-1-1', adventureIndex: 1 })
+    await assert.rejects(api.completeLevel(), /before winning/)
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 1)
+    won = true
+    assert.equal((await api.completeLevel()).nextLevelId, 'pvz:adventure-1-2')
+    await api.completeLevel()
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 2)
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: 'pvz:adventure-1-2', adventureIndex: 2 })
+    level = levels.levels['pvz:adventure-1-2']
+    const award = await api.completeLevel()
+    assert.equal(award.seed, 'pvz:cherrybomb')
+    assert.equal(award.nextLevelId, 'pvz:adventure-1-3')
+    assert.equal(award.showMainMenu, false, 'AwardScreen hides the menu button up to player level 3')
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 3)
+    level = levels.levels['pvz:adventure-1-3']
+    const nut = await api.completeLevel()
+    assert.equal(nut.kind, 'seed')
+    assert.equal(nut.seed, 'pvz:wallnut')
+    assert.equal(nut.nextLevelId, 'pvz:adventure-1-4')
+    assert.equal(nut.showMainMenu, true, 'after 1-3 the player is on level 4, so the menu button shows')
+    level = levels.levels['pvz:adventure-1-4']
+    const shovel = await api.completeLevel()
+    assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
+        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true, achievements: [] })
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
+    for (const [index, kind, seed] of [[5, 'seed', 'pvz:potatomine'], [6, 'seed', 'pvz:snowpea'], [7, 'seed', 'pvz:chomper'], [8, 'seed', 'pvz:repeater'], [9, 'note', undefined], [10, 'seed', 'pvz:puffshroom']] as const) {
+        level = levels.levels[`pvz:adventure-1-${index}`]
+        const award = await api.completeLevel()
+        assert.equal(award.kind, kind)
+        assert.equal(award.seed, seed)
+        assert.equal(award.nextLevelId, index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1')
+        const reconnected = reconnect(levels)
+        assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
+        assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1', adventureIndex: index + 1 })
+    }
+    for (const [index, kind, seed, next] of [[1, 'seed', 'pvz:sunshroom', 'pvz:adventure-2-2'], [2, 'seed', 'pvz:fumeshroom', 'pvz:adventure-2-3'],
+        [3, 'seed', 'pvz:gravebuster', 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 'pvz:hypnoshroom', 'pvz:adventure-2-6'],
+        [6, 'seed', 'pvz:scaredyshroom', 'pvz:adventure-2-7'], [7, 'seed', 'pvz:iceshroom', 'pvz:adventure-2-8'], [8, 'seed', 'pvz:doomshroom', 'pvz:adventure-2-9'],
+        [9, 'note', undefined, 'pvz:adventure-2-10'], [10, 'seed', 'pvz:lilypad', null]] as const) {
+        level = levels.levels[`pvz:adventure-2-${index}`]
+        const award = await api.completeLevel()
+        assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])
+        if (award.kind === 'note') assert.equal(award.id, 'pvz:zombie-note-2')
+        assert.equal((await api.getCurrentUser())!.adventureLevel, 11 + index)
+    }
+    assert.deepEqual([...profiles.getCurrentProfile()!.unlocks], ['almanac'], '2-4 drops the almanac')
+    assert.equal((await api.getCurrentUser())!.unlocks.almanac, true)
+    // Each won level adds its award seed to the profile once, after the starting peashooter.
+    const owned = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea', 'pvz:chomper',
+        'pvz:repeater', 'pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom', 'pvz:scaredyshroom', 'pvz:iceshroom',
+        'pvz:doomshroom', 'pvz:lilypad']
+    assert.deepEqual((await api.getPurse()).ownedSeeds, owned)
+    await api.selectUser((await api.getCurrentUser())!.id)
+    assert.equal((await api.getAlmanac()).plants.find(card => card.seed === 'pvz:lilypad')?.cost, 25)
+    await api.completeLevel()
+    assert.deepEqual((await api.getPurse()).ownedSeeds, owned, 'winning a level again adds nothing')
+    // The same profile at 21 reaches 3-1 only once that level is connected to the mainline.
+    const next = 'pvz:adventure-3-1'
+    levels.levels[next] = { ...level, adventureIndex: 21 }
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: 'pvz:adventure-2-10', adventureIndex: 20 })
+    levels.levels['pvz:adventure-2-10'] = { ...level, nextLevel: next }
+    assert.deepEqual(await reconnect(levels).getAdventure(), { levelId: next, adventureIndex: 21 })
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 21)
+})
+
+test("Crazy Dave's seed-slot offer saves the upgrade or a refusal together with the level's coins", async () => {
+    const { api, profiles } = fixture()
+    await api.createUser('Alice')
+    await api.setCoins(80)
+    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0, ownedSeeds: ['pvz:peashooter'] })
+    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1, ownedSeeds: ['pvz:peashooter'] })
+    assert.equal(profiles.getCurrentProfile()!.declinedPacketUpgrades, 1, 'the refusal count is saved')
+    await assert.rejects(api.recordPacketUpgradeOffer(true, 81), /not paid for/, 'a purchase must take the price')
+    assert.equal((await api.getPurse()).packetUpgrades, 0)
+    const bought = await api.recordPacketUpgradeOffer(true, 6)
+    assert.deepEqual([bought.coins, bought.packetUpgrades, bought.packetUpgradeCost, bought.nextPacketUpgradeCost], [6, 1, 500, 2000])
+    assert.equal(profiles.getCurrentProfile()!.coins, 6, 'the coins and the upgrade are saved at once')
+    assert.equal((await api.setCoins(5)).coins, 5)
+    // An open store re-reads the purse once it changes.
+    const seen: number[] = []
+    const stop = api.onPurseChanged(() => { void api.getPurse().then(purse => seen.push(purse.coins)) })
+    await api.setCoins(42)
+    await api.recordPacketUpgradeOffer(false, 42)
+    stop()
+    await api.setCoins(7)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.deepEqual(seen, [42, 42])
+})
+
+test('menu data and business rules stay behind the API without Cocos or frontend imports', () => {
+    for (const directory of ['assets/scripts/server/menu', 'assets/scripts/shared/menu']) {
+        for (const file of readdirSync(directory).filter(file => file.endsWith('.ts'))) {
+            const source = readFileSync(`${directory}/${file}`, 'utf8')
+            assert.doesNotMatch(source, /from ['"](?:cc(?:\/[^'"]*)?|@\/(?:client|app)\/[^'"]*)['"]/, file)
+        }
+    }
+    for (const file of readdirSync('assets/scripts/client/screens').filter(file => file.endsWith('.ts'))) {
+        const source = readFileSync(`assets/scripts/client/screens/${file}`, 'utf8')
+        assert.doesNotMatch(source, /localStorage|from ['"][^'"]*(?:server\/|persistence\/|StoreCatalog|AlmanacCatalog)/, file)
+    }
+})
+
+test('the main menu unlocks modes, the almanac, store and garden, and the gold trophy from the player’s progress', async () => {
+    const { api, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.adventureLevel = 45
+    profile.hasUnlockedPuzzleMode = true
+    profiles.saveProfile(profile)
+    assert.deepEqual((await api.getCurrentUser())!.unlocks,
+        { minigames: false, puzzle: true, survival: false, almanac: false, store: false, garden: false }, 'the entries follow collected awards, not the level')
+    profile.unlocks = ['almanac', 'store']
+    profiles.saveProfile(profile)
+    assert.deepEqual((await api.getCurrentUser())!.unlocks,
+        { minigames: false, puzzle: true, survival: false, almanac: true, store: true, garden: false })
+    profile.finishedAdventure = 1
+    profiles.saveProfile(profile)
+    const finished = (await api.getCurrentUser())!
+    assert.ok(Object.values(finished.unlocks).every(Boolean), 'a finished Adventure unlocks everything')
+    assert.equal(finished.allTrophies, false)
+    // 20 mini-games, 18 puzzles (not the endless ones) and 10 survivals: 5 flags on normal, 10 on hard.
+    for (let record = 0; record < 10; record++) profile.challengeRecords[record] = record < 5 ? 5 : 10
+    for (let record = 15; record < 35; record++) profile.challengeRecords[record] = 1
+    for (let record = 50; record < 70; record++) if (record % 10 !== 9) profile.challengeRecords[record] = 1
+    profiles.saveProfile(profile)
+    assert.equal((await api.getCurrentUser())!.allTrophies, true)
+})

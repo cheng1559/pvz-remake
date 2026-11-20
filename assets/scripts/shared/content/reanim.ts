@@ -1,0 +1,229 @@
+import { nonEmptyString, finite, positiveFinite } from '@/shared/validate'
+import { isQualifiedId } from '@/shared/mod/index'
+import { kernel, KEY } from '@/shared/kernel/index'
+
+export type ReanimInterpolation = 'linear' | 'step'
+
+export interface ReanimKeyframe {
+    timeSeconds: number
+    x: number
+    y: number
+    scaleX: number
+    scaleY: number
+    skewX: number
+    skewY: number
+    alpha: number
+    sprite: string | null
+    interpolation: ReanimInterpolation
+}
+
+export interface ReanimTrack {
+    id: string
+    zIndex: number
+    keyframes: ReanimKeyframe[]
+}
+
+export interface Reanim {
+    schemaVersion: 3
+    id: string
+    /** The frames a second it was made at (the Reanim's <fps>): what a rate in frames a second plays it by. */
+    fps: number
+    durationSeconds: number
+    tracks: ReanimTrack[]
+}
+
+/** Keyframes in the kernel's layout: time, x, y, scaleX, scaleY, skewX, skewY, alpha, step, sprite slot. */
+export function packKeyframes(frames: readonly ReanimKeyframe[], keys: Float64Array, offset: number, slot: (frame: ReanimKeyframe) => number): void {
+    frames.forEach((frame, index) => keys.set([frame.timeSeconds, frame.x, frame.y, frame.scaleX, frame.scaleY, frame.skewX,
+        frame.skewY, frame.alpha, frame.interpolation === 'step' ? 1 : 0, slot(frame)], (offset + index) * KEY))
+}
+
+// Keyed by the keyframe list, so replacing a track's keyframes repacks them.
+const packedTracks = new WeakMap<readonly ReanimKeyframe[], Float64Array>()
+let samplePose: Float64Array | undefined
+
+/** The track's pose at a time; between linear keyframes a new keyframe, otherwise the keyframe reached. */
+export function sampleReanimTrack(track: ReanimTrack, timeSeconds: number): ReanimKeyframe | null {
+    const frames = track.keyframes, drawing = kernel()
+    let keys = packedTracks.get(frames)
+    if (!keys) {
+        keys = drawing.f64(frames.length * KEY)
+        packKeyframes(frames, keys, 0, () => -1)
+        packedTracks.set(frames, keys)
+    }
+    const pose = samplePose ??= drawing.f64(7)
+    const index = drawing.sample(keys, 0, frames.length, timeSeconds, pose)
+    if (index < 0) return null
+    const left = frames[index]
+    if (index + 1 >= frames.length || left.interpolation === 'step') return left
+    return {
+        timeSeconds,
+        x: pose[0], y: pose[1], scaleX: pose[2], scaleY: pose[3], skewX: pose[4], skewY: pose[5], alpha: pose[6],
+        sprite: left.sprite,
+        interpolation: left.interpolation,
+    }
+}
+
+export function attachReanimPose(
+    pose: ReanimKeyframe,
+    parentPose: ReanimKeyframe,
+    parentBasePose: ReanimKeyframe,
+): ReanimKeyframe {
+    const attached = multiplyMatrix(attachmentMatrix(parentPose, parentBasePose), poseMatrix(pose))
+    const determinant = attached.a * attached.d - attached.b * attached.c
+    const scaleX = Math.hypot(attached.a, attached.b)
+    let scaleY = Math.hypot(attached.c, attached.d)
+    let skewY = -Math.atan2(-attached.c, attached.d) * 180 / Math.PI
+    if (determinant < 0) {
+        scaleY = -scaleY
+        skewY += 180
+    }
+    // Every attached track every frame (a shooter's head on its stem): built field by field, without a spread.
+    return {
+        timeSeconds: pose.timeSeconds,
+        x: attached.tx,
+        y: -attached.ty,
+        scaleX,
+        scaleY,
+        skewX: -Math.atan2(attached.b, attached.a) * 180 / Math.PI,
+        skewY,
+        alpha: pose.alpha,
+        sprite: pose.sprite,
+        interpolation: pose.interpolation,
+    }
+}
+
+export function parseReanim(value: unknown): Reanim {
+    const source = exactObject(value, ['schemaVersion', 'id', 'fps', 'durationSeconds', 'tracks'], 'reanim')
+    if (source.schemaVersion !== 3) throw new Error('reanim.schemaVersion must be 3')
+    if (!isQualifiedId(source.id)) throw new Error('reanim.id must be a qualified ID')
+    const fps = positiveFinite(source.fps, 'reanim.fps')
+
+    const durationSeconds = positiveFinite(source.durationSeconds, 'reanim.durationSeconds')
+    if (!Array.isArray(source.tracks) || source.tracks.length === 0) {
+        throw new Error('reanim.tracks must be a non-empty array')
+    }
+
+    const ids = new Set<string>()
+    const tracks = source.tracks.map((track, index) => {
+        const name = `reanim.tracks[${index}]`
+        const record = exactObject(track, ['id', 'zIndex', 'keyframes'], name)
+        const id = nonEmptyString(record.id, `${name}.id`)
+        if (ids.has(id)) throw new Error(`duplicate reanim track: ${id}`)
+        ids.add(id)
+        if (!Number.isSafeInteger(record.zIndex)) throw new Error(`${name}.zIndex must be a safe integer`)
+        if (!Array.isArray(record.keyframes) || record.keyframes.length === 0) {
+            throw new Error(`${name}.keyframes must be a non-empty array`)
+        }
+
+        let previousTime = -1
+        const keyframes = record.keyframes.map((keyframe, keyframeIndex) => {
+            const keyframeName = `${name}.keyframes[${keyframeIndex}]`
+            const frame = exactObject(
+                keyframe,
+                [
+                    'timeSeconds', 'x', 'y', 'scaleX', 'scaleY', 'skewX', 'skewY',
+                    'alpha', 'sprite', 'interpolation',
+                ],
+                keyframeName,
+            )
+            const timeSeconds = finite(frame.timeSeconds, `${keyframeName}.timeSeconds`)
+            if (timeSeconds < 0 || timeSeconds > durationSeconds || timeSeconds <= previousTime) {
+                throw new Error(`${keyframeName}.timeSeconds must increase within the animation duration`)
+            }
+            previousTime = timeSeconds
+            const alpha = finite(frame.alpha, `${keyframeName}.alpha`)
+            if (alpha < 0 || alpha > 1) throw new Error(`${keyframeName}.alpha must be between 0 and 1`)
+            if (frame.sprite !== null && !isQualifiedId(frame.sprite)) {
+                throw new Error(`${keyframeName}.sprite must be null or a qualified ID`)
+            }
+            if (frame.interpolation !== 'linear' && frame.interpolation !== 'step') {
+                throw new Error(`${keyframeName}.interpolation must be linear or step`)
+            }
+
+            return {
+                timeSeconds,
+                x: finite(frame.x, `${keyframeName}.x`),
+                y: finite(frame.y, `${keyframeName}.y`),
+                scaleX: finite(frame.scaleX, `${keyframeName}.scaleX`),
+                scaleY: finite(frame.scaleY, `${keyframeName}.scaleY`),
+                skewX: finite(frame.skewX, `${keyframeName}.skewX`),
+                skewY: finite(frame.skewY, `${keyframeName}.skewY`),
+                alpha,
+                sprite: frame.sprite,
+                interpolation: frame.interpolation,
+            } as ReanimKeyframe
+        })
+
+        return { id, zIndex: record.zIndex as number, keyframes }
+    })
+
+    return { schemaVersion: 3, id: source.id, fps, durationSeconds, tracks } as Reanim
+}
+
+function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error(`${name} must be an object`)
+    }
+    const record = value as Record<string, unknown>
+    const expected = new Set(keys)
+    for (const key of Object.keys(record)) {
+        if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`)
+    }
+    for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(record, key)) throw new Error(`${name}.${key} is required`)
+    }
+    return record
+}
+
+/** The parent's movement since its base pose, applied before an attached pose. */
+export function attachmentMatrix(parentPose: ReanimKeyframe, parentBasePose: ReanimKeyframe): PoseMatrix {
+    return multiplyMatrix(poseMatrix(parentPose), invertMatrix(poseMatrix(parentBasePose)))
+}
+
+/** Pose transform in drawing coordinates: x' = a * u + c * v + tx, y' = b * u + d * v + ty. */
+export interface PoseMatrix {
+    a: number
+    b: number
+    c: number
+    d: number
+    tx: number
+    ty: number
+}
+
+function poseMatrix(pose: ReanimKeyframe): PoseMatrix {
+    const skewX = -pose.skewX * Math.PI / 180
+    const skewY = -pose.skewY * Math.PI / 180
+    return {
+        a: pose.scaleX * Math.cos(skewX),
+        b: pose.scaleX * Math.sin(skewX),
+        c: -pose.scaleY * Math.sin(skewY),
+        d: pose.scaleY * Math.cos(skewY),
+        tx: pose.x,
+        ty: -pose.y,
+    }
+}
+
+function invertMatrix(matrix: PoseMatrix): PoseMatrix {
+    const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+    if (Math.abs(determinant) < 1e-8) throw new Error('cannot attach to a singular reanim pose')
+    return {
+        a: matrix.d / determinant,
+        b: -matrix.b / determinant,
+        c: -matrix.c / determinant,
+        d: matrix.a / determinant,
+        tx: (matrix.c * matrix.ty - matrix.d * matrix.tx) / determinant,
+        ty: (matrix.b * matrix.tx - matrix.a * matrix.ty) / determinant,
+    }
+}
+
+function multiplyMatrix(left: PoseMatrix, right: PoseMatrix): PoseMatrix {
+    return {
+        a: left.a * right.a + left.c * right.b,
+        b: left.b * right.a + left.d * right.b,
+        c: left.a * right.c + left.c * right.d,
+        d: left.b * right.c + left.d * right.d,
+        tx: left.a * right.tx + left.c * right.ty + left.tx,
+        ty: left.b * right.tx + left.d * right.ty + left.ty,
+    }
+}

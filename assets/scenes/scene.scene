@@ -215,7 +215,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "UIController",
+    "_name": "GameApp",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": {
@@ -293,7 +293,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "uiRoot": null,
     "_id": "bfLGyhRqFHKquoy7CSSwKy"
   },
   {

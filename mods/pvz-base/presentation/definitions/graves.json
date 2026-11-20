@@ -1,0 +1,4 @@
+{
+  "rise": {"particle": "pvz:zombierise", "sounds": [{"audio": "pvz:gravestone_rumble", "foley": true, "pitchRange": 10}]},
+  "zombie": {"depth": 200, "riseTicks": 50, "clip": {"x": -200, "y": -78, "width": 520, "bottom": 113, "settleTicks": 40}}
+}

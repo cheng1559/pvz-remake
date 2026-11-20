@@ -1,0 +1,10 @@
+{
+    "debug": true,
+    "useSplashScreen": false,
+    "outputName": "android-arm64-debug",
+    "packages": {
+        "android": {
+            "appABIs": ["arm64-v8a"]
+        }
+    }
+}

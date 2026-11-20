@@ -1,0 +1,4 @@
+{
+  "pvz:grave": {"view": "grave", "layer": "graveStone", "offset": 3, "cell": [-4, -9], "packet": {"scale": 0.38, "offsetX": 8, "offsetY": 13}},
+  "pvz:crater": {"view": "crater", "layer": "ground", "offset": 1, "cell": [-8, 40], "packet": {"scale": 0.46, "offsetX": 4, "offsetY": 17}}
+}

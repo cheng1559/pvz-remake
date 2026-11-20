@@ -24,131 +24,103 @@
  THE SOFTWARE.
  ****************************************************************************/
 #include "Game.h"
-#include "PvzNativeBridge.h"
-#include "platform/interfaces/modules/ISystemWindow.h"
-#include "storage/local-storage/LocalStorage.h"
+#include "bindings/jswrapper/SeApi.h"
 
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
-#include <shlobj.h>
-#include <windows.h>
-
-#include <string>
-#elif CC_PLATFORM == CC_PLATFORM_MACOS
-#include <cstdlib>
-#endif
-
-#ifndef PVZ_APP_DISPLAY_NAME
-#define PVZ_APP_DISPLAY_NAME "Plants vs. Zombies"
-#endif
+bool registerPvzKernel(se::Object* global);
 
 #ifndef SCRIPT_XXTEAKEY
 #define SCRIPT_XXTEAKEY "";
 #endif
 
-namespace {
-constexpr const char* SETTINGS_KEY = "pvz-remake:settings:options";
-constexpr int DEFAULT_WINDOW_WIDTH = 800;
-constexpr int DEFAULT_WINDOW_HEIGHT = 600;
-
-ccstd::string startupLocalStoragePath() {
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
-  wchar_t fullPath[MAX_PATH + 1] = {};
-  const DWORD length = GetModuleFileNameW(nullptr, fullPath, MAX_PATH);
-  if (length == 0 || length >= MAX_PATH) return "";
-
-  std::wstring path;
-  wchar_t* baseName = wcsrchr(fullPath, L'\\');
-  if (baseName) {
-    wchar_t appDataPath[MAX_PATH + 1] = {};
-    if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, appDataPath))) {
-      path = appDataPath;
-      path += baseName;
-
-      const auto extension = path.rfind(L".");
-      if (extension != std::wstring::npos) path = path.substr(0, extension);
-      path += L"\\";
-      if (FAILED(SHCreateDirectoryExW(nullptr, path.c_str(), nullptr))) path.clear();
-    }
-  }
-
-  if (path.empty()) {
-    path = fullPath;
-    path = path.substr(0, path.rfind(L"\\") + 1);
-  }
-
-  char sqlitePath[(MAX_PATH + 1) * 4] = {};
-  const int sqlitePathLength = WideCharToMultiByte(
-      CP_UTF8, 0, path.c_str(), -1, sqlitePath, sizeof(sqlitePath), nullptr, nullptr);
-  if (sqlitePathLength <= 0) return "";
-
-  return ccstd::string(sqlitePath) + "jsb.sqlite";
-#elif CC_PLATFORM == CC_PLATFORM_MACOS
-  const char* home = std::getenv("HOME");
-  if (!home || !home[0]) return "";
-  return ccstd::string(home) + "/Documents/jsb.sqlite";
-#else
-  return "";
-#endif
-}
-
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
-void centerStartupWindow(int width, int height, int* x, int* y) {
-  RECT workArea = {};
-  if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0)) return;
-
-  RECT windowRect = {0, 0, width, height};
-  AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX), FALSE);
-
-  const int windowWidth = windowRect.right - windowRect.left;
-  const int windowHeight = windowRect.bottom - windowRect.top;
-  *x = workArea.left + ((workArea.right - workArea.left) - windowWidth) / 2;
-  *y = workArea.top + ((workArea.bottom - workArea.top) - windowHeight) / 2;
-}
-#endif
-
-bool isStartupFullScreenEnabled() {
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS || CC_PLATFORM == CC_PLATFORM_MACOS
-  const ccstd::string storagePath = startupLocalStoragePath();
-  if (storagePath.empty()) return false;
+#define PVZ_REMEMBER_WINDOW 1
+#include <SDL2/SDL.h>
+#include <cstdio>
+#include "platform/FileUtils.h"
+#include "platform/interfaces/modules/ISystemWindow.h"
 
-  localStorageInit(storagePath);
+namespace {
+// Like the original's PreferredX/PreferredY registry values; the remake's window can also be resized.
+struct WindowPlacement {
+  int x{0}, y{0}, width{0}, height{0};
+};
+WindowPlacement placement; // The last normal placement this run.
+bool placementChanged{false};
 
-  ccstd::string settings;
-  return localStorageGetItem(SETTINGS_KEY, &settings) &&
-         settings.find("\"fullScreen\":true") != ccstd::string::npos;
-#else
+ccstd::string placementFile(cc::FileUtils *files) { return files->getWritablePath() + "window.txt"; }
+
+/** The saved placement, if its top edge is still on a display: monitors can change between runs. */
+bool loadPlacement(WindowPlacement &saved) {
+  // The window is created before Engine::init makes FileUtils; createFileUtils() returns that same instance later.
+  cc::FileUtils *files = cc::createFileUtils();
+  const auto text = files->getStringFromFile(placementFile(files));
+  if (std::sscanf(text.c_str(), "%d %d %d %d", &saved.x, &saved.y, &saved.width, &saved.height) != 4 ||
+      saved.width <= 0 || saved.height <= 0) {
+    return false;
+  }
+  const SDL_Point top{saved.x + saved.width / 2, saved.y};
+  for (int display = 0; display < SDL_GetNumVideoDisplays(); ++display) {
+    SDL_Rect bounds;
+    if (SDL_GetDisplayUsableBounds(display, &bounds) == 0 && SDL_PointInRect(&top, &bounds)) return true;
+  }
   return false;
-#endif
 }
-}  // namespace
+
+/** Follows moves and resizes in memory; fullscreen, maximized and minimized windows keep the last normal placement. */
+int SDLCALL trackPlacement(void * /*userData*/, SDL_Event *event) {
+  if (event->type != SDL_WINDOWEVENT || event->window.windowID != cc::ISystemWindow::mainWindowId ||
+      (event->window.event != SDL_WINDOWEVENT_MOVED && event->window.event != SDL_WINDOWEVENT_SIZE_CHANGED)) {
+    return 0;
+  }
+  SDL_Window *window = SDL_GetWindowFromID(event->window.windowID);
+  if (!window || (SDL_GetWindowFlags(window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MAXIMIZED | SDL_WINDOW_MINIMIZED))) {
+    return 0;
+  }
+  SDL_GetWindowPosition(window, &placement.x, &placement.y);
+  SDL_GetWindowSize(window, &placement.width, &placement.height);
+  placementChanged = true;
+  return 0;
+}
+
+/** Written on close (the window's close button, in-game quit, or Cmd+Q, which macOS turns into a close event). */
+void savePlacement() {
+  // The engine may already have released FileUtils when the app is destroyed.
+  cc::FileUtils *files = cc::FileUtils::getInstance();
+  if (!placementChanged || !files) return;
+  placementChanged = false;
+  char text[64];
+  std::snprintf(text, sizeof(text), "%d %d %d %d", placement.x, placement.y, placement.width, placement.height);
+  files->writeStringToFile(text, placementFile(files));
+}
+} // namespace
+#endif
 
 Game::Game() = default;
 
+#if PVZ_REMEMBER_WINDOW
+Game::~Game() {
+  SDL_DelEventWatch(trackPlacement, nullptr);
+  savePlacement(); // In case the app ends without a close event.
+}
+#else
+Game::~Game() = default;
+#endif
+
 int Game::init() {
-  _windowInfo.title = PVZ_APP_DISPLAY_NAME;
-  // configurate window size
-  // _windowInfo.height = 600;
-  // _windowInfo.width  = 800;
-
-  _windowInfo.width = _windowInfo.width == -1 ? DEFAULT_WINDOW_WIDTH : _windowInfo.width;
-  _windowInfo.height = _windowInfo.height == -1 ? DEFAULT_WINDOW_HEIGHT : _windowInfo.height;
-
-  if (isStartupFullScreenEnabled()) {
-    _windowInfo.flags = cc::ISystemWindow::CC_WINDOW_SHOWN |
-                        cc::ISystemWindow::CC_WINDOW_INPUT_FOCUS |
-                        cc::ISystemWindow::CC_WINDOW_FULLSCREEN_DESKTOP;
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
-    _windowInfo.flags |= cc::ISystemWindow::CC_WINDOW_RESIZABLE;
-#endif
-  } else {
-    _windowInfo.flags = cc::ISystemWindow::CC_WINDOW_SHOWN |
-                        cc::ISystemWindow::CC_WINDOW_INPUT_FOCUS;
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
-    centerStartupWindow(_windowInfo.width, _windowInfo.height, &_windowInfo.x, &_windowInfo.y);
-#endif
+  _windowInfo.title = "Plants vs. Zombies";
+#if PVZ_REMEMBER_WINDOW
+  // Reopen where the window was last left; otherwise the engine centres an 800x600 window.
+  WindowPlacement saved;
+  if (loadPlacement(saved)) {
+    _windowInfo.x = saved.x;
+    _windowInfo.y = saved.y;
+    _windowInfo.width = saved.width;
+    _windowInfo.height = saved.height;
   }
+  SDL_AddEventWatch(trackPlacement, nullptr);
+#endif
 
-#if CC_DEBUG
+#if CC_DEBUG || defined(PVZ_JS_PROFILE)
   _debuggerInfo.enabled = true;
 #else
   _debuggerInfo.enabled = false;
@@ -159,9 +131,9 @@ int Game::init() {
 
   _xxteaKey = SCRIPT_XXTEAKEY;
 
-  RegisterPvzNativeBindings();
+  se::ScriptEngine::getInstance()->addPermanentRegisterCallback(registerPvzKernel);
+
   BaseGame::init();
-  ApplyPvzWindowStyle();
   return 0;
 }
 
@@ -169,6 +141,11 @@ void Game::onPause() { BaseGame::onPause(); }
 
 void Game::onResume() { BaseGame::onResume(); }
 
-void Game::onClose() { BaseGame::onClose(); }
+void Game::onClose() {
+#if PVZ_REMEMBER_WINDOW
+  savePlacement();
+#endif
+  BaseGame::onClose();
+}
 
 CC_REGISTER_APPLICATION(Game);

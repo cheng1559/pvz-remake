@@ -1,0 +1,66 @@
+import { readGameplaySource } from '../../tools/mod/content'
+import assert from 'node:assert/strict'
+import test from 'node:test'
+
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import type { GameCommand, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
+import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
+
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
+const start: StartSessionPacket = {
+    protocolVersion: 1,
+    sequence: 1,
+    type: 'startSession',
+    levelId: 'pvz:adventure-1-1',
+    randomSeed: 12345,
+    initialMoney: 0,
+    firstAdventure: true,
+    ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-1'),
+    mods: [],
+}
+
+test('headless 1-1 reaches the same win for the same seed and commands', () => {
+    const first = new IntegratedGameServer(definitions, levels)
+    const second = new IntegratedGameServer(definitions, levels)
+    first.start(start)
+    second.start(start)
+
+    const command = (value: GameCommand) => {
+        assert.equal(runCommand(first, value), runCommand(second, value))
+    }
+    command({ type: 'completeIntro' })
+    command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
+    command({ type: 'placePlant', row: 2, column: 0 })
+
+    let snapshot: WorldSnapshot = first.snapshot()
+    let secondPlanted = false
+    let awardDroppedBeforeWin = false
+    while (snapshot.result === 'playing' && snapshot.tick < 30000) {
+        for (const item of snapshot.items) {
+            if (item.typeId === LEVEL_AWARD) {
+                awardDroppedBeforeWin = true
+                assert.doesNotThrow(() => new IntegratedGameServer(definitions, levels).start({
+                    ...start,
+                    save: JSON.parse(JSON.stringify(first.save())),
+                }))
+            }
+            command({ type: 'collectItemAt', x: item.x + 1, y: item.y + 1 })
+        }
+        if (!secondPlanted && snapshot.sun >= 100 && snapshot.seedPackets[0]!.ready) {
+            command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
+            command({ type: 'placePlant', row: 2, column: 1 })
+            secondPlanted = true
+        }
+        snapshot = first.tick()
+        second.tick()
+    }
+
+    assert.equal(secondPlanted, true)
+    assert.equal(awardDroppedBeforeWin, true)
+    assert.equal(snapshot.result, 'won')
+    assert.deepEqual(second.snapshot(), snapshot)
+})

@@ -1,0 +1,5 @@
+Mod Lab: plant a Pulse Beacon to earn sun.
+/example:hello - client command and custom sound
+/example:charge 3 1 - charge one example plant for 300 ticks
+/level example:testing - playground with custom seeds and zombies
+Save during a charge, reload, and verify that the remaining time continues.

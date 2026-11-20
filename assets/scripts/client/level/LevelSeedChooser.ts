@@ -1,0 +1,530 @@
+import { modResources } from '@/client/content/ModResources'
+import { Color, EventMouse, Node, UITransform, type EventTouch, SpriteFrame } from 'cc'
+import { SeedPacketView } from '@/client/hud/SeedPacketView'
+import { packetSubject } from '@/client/plants/definitions'
+import { UIButton } from '@/client/ui/UIButton'
+import type { UITooltip } from '@/client/ui/UITooltip'
+import type { UI } from '@/client/ui/UI'
+import { uiNode } from '@/client/view/uiNode'
+import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
+import { animateCurve } from '@/shared/content/animation'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
+import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
+import { CHOOSER_PLACES, FIVE_ROW_PLACES, type GameplayDefinitions } from '@/shared/content/gameplay'
+import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/chooserPages'
+import { packetTeam } from '@/shared/content/teams'
+import type { LoadedContent } from './LevelView'
+import { seedPacketX } from './LevelGeometry'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+
+/** A card in the chooser grid: an offered seed, on its side, at a grid place (8 columns in reading order from 0). */
+export interface ChooserCard extends ChooserEntry {
+    place: number
+}
+
+interface Choice extends ChooserEntry {
+    key: string
+    view: SeedPacketView
+    shadow: SeedPacketView
+    button: UIButton
+    tooltip: UITooltip
+    /** Where it waits in the grid; none while the grid does not show it. */
+    home?: { x: number, y: number }
+    slot: number
+    motion?: { fromX: number, fromY: number, x: number, y: number, start: number, end: number }
+    /** SeedNotRecommendedToPick: grayed while it waits in the chooser. */
+    notRecommended: boolean
+    grayed?: boolean
+}
+
+/**
+ * CutScene's TimeSeedChoserSlideOnStart, SlideOnEnd, SlideOffStart and SlideOffEnd, in ticks of the intro: the seed
+ * chooser drops in over 400-425, is there to choose from 425, and lifts out over 450-475; a repick goes by them too.
+ */
+export const SEED_CHOOSER_SLIDE = { onStart: 400, onEnd: 425, offStart: 450, offEnd: 475 } as const
+
+/** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
+export class LevelSeedChooser {
+    readonly previewTooltipSurface: Node
+    /** SeedChooserScreen's Almanac and Store buttons; the app opens the page over the paused level. */
+    onAlmanac: () => void = () => {}
+    onStore: () => void = () => {}
+    /**
+     * Mods: a card goes back from the bank while the grid does not show it. Showing it now (showCards) lets it fly to
+     * its place; otherwise it just leaves the bank.
+     */
+    onCardHidden: (card: ChooserEntry) => void = () => {}
+    readonly definitions: GameplayDefinitions
+    /**
+     * `(Previous page)` and `(Next page)`: (Debug Play)'s yellow words where the DLC puts its arrows beside Let's Rock,
+     * shown while `/cheatseed` gives the chooser more than one page. Mods may restyle them; the turning stays here.
+     */
+    readonly pageTurners: Array<{ readonly button: UIButton, readonly step: number }> = []
+    /** `/cheatseed`'s pages (chooserPages), or the catalog grid alone, and the one shown. */
+    private pages: ChooserPage[] = []
+    private page = 0
+    /** What the pages were laid out from: a chooser that a later repick opens again may offer other cards. */
+    private offerKey = ''
+    /** The mouse wheel while the chooser is out turns its pages. */
+    private readonly pageWheel = new WheelPageTurner(step => this.turnPage(step))
+    private snapshot?: WorldSnapshot
+    private send: (command: GameCommand) => void = () => {}
+    private age = 0
+    private introTick = 0
+    /**
+     * A repick in play (`/repick`): the chooser's own ticks on the intro's timeline, dropping in and lifting
+     * out (SEED_CHOOSER_SLIDE) while the camera stays where it is, the bank sliding with it;
+     * undefined until the first repick.
+     */
+    repickTick?: number
+    private bankShift = 0
+    private bankRise = 0
+    private repickFinished = false
+    /** The almanac and store buttons, which a repick leaves out. */
+    private readonly pageButtons: UIButton[] = []
+    private warningOpen = false
+    private readonly panel: Node
+    private readonly edge: Node
+    private readonly cards: Node
+    private readonly flying: Node
+    /**
+     * The pictures of the resting cards, over their backgrounds (SeedPacketViewArgs.iconLayer), so a tilted picture
+     * standing out of its packet is not hidden by a neighbour. A chosen card's shadow left in the grid draws its
+     * picture with them; a card in flight draws whole, its picture on it.
+     */
+    private readonly cardIcons: Node
+    private readonly buttons: Node
+    private readonly choices: Choice[] = []
+    /** Builds a card's views; for the offered cards, and for one the bank holds that nothing offers (sync). */
+    private readonly addChoice: (card: ChooserEntry) => Choice
+    private readonly start: UIButton
+    private readonly emptySlots: Node[] = []
+    private slots: number
+    private readonly silhouette: SpriteFrame
+    private readonly gridShadows: Node
+    private gridSilhouettes: Node[] = []
+
+    static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
+        notRecommended: (seedId: string) => string | undefined = () => undefined,
+        pages: { almanac?: boolean, store?: boolean } = {}, entries: readonly ChooserEntry[] = [], cheatSeeds = false): Promise<LevelSeedChooser> {
+        const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(id => modResources.sprite(id)))
+        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended, pages, entries, cheatSeeds)
+    }
+
+    private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
+        notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
+        entries: readonly ChooserEntry[] = [], cheatSeeds = false) {
+        this.definitions = content.definitions
+        this.slots = slots
+        this.silhouette = silhouette
+        this.previewTooltipSurface = uiNode({ name: 'ZombiePreviewTooltips', parent, active: false,
+            position: { x: background.originalSize.width }, anchor: { x: 0, y: 1 },
+            size: { width: 800 - background.originalSize.width, height: 600 } }).node
+        fitViewport(this.previewTooltipSurface, size => {
+            // HUD's origin stays at (-400, 300); start at the left-anchored chooser edge and extend to the visible right edge.
+            const left = background.originalSize.width - uiAreaInset()
+            this.previewTooltipSurface.setPosition(left, size.height / 2 - 300)
+            this.previewTooltipSurface.getComponent(UITransform)!.setContentSize(Math.max(1, 400 + size.width / 2 - left), size.height)
+        })
+        // The chooser hugs the left screen edge together with the seed bank, keeping their relative position.
+        this.edge = uiAreaEdge(parent, 'left')
+        this.panel = uiNode({ name: 'SeedChooser', parent: this.edge, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
+        ui.image(this.panel, background, { y: 87 })
+        ui.label(this.panel, { text: ui.text('CHOOSE_YOUR_PLANTS'), font: 'yellow', color: Color.WHITE, x: 229, y: 110, baseline: true, align: 'center' })
+        const shadows = uiNode({ name: 'ChooserShadows', parent: this.panel }).node
+        this.cards = uiNode({ name: 'ChooserCards', parent: this.edge, active: false }).node
+        this.cardIcons = uiNode({ name: 'ChooserCardIcons', parent: this.edge }).node
+        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.edge, active: false }).node
+        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
+        this.gridShadows = uiNode({ name: 'GridSilhouettes', parent: shadows }).node
+        this.addEmptySlots()
+        // A card's two views, its grid shadow and the card itself, with its tooltip and button.
+        this.addChoice = (card: ChooserEntry): Choice => {
+            const seed = content.definitions.seeds[card.seedId]
+            const args = { definitions: content.presentation, name: `Choose-${cardKey(card)}`, parent: this.cards, layer: parent.layer,
+                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost }
+            const views = [new SeedPacketView({ ...args, name: `ChosenShadow-${cardKey(card)}`, parent: shadows, iconLayer: this.cardIcons }),
+                new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
+            let tooltipOptions: Parameters<UI['tooltip']>[1]
+            let warning: string | undefined
+            const subject = packetSubject(content.presentation, seed)
+            for (const view of views) view.setSeed(subject.plant, seed.sunCost, subject.zombie, subject.gridItem)
+            if (subject.tooltipKey === undefined) tooltipOptions = { text: ui.text(subject.nameKey), gap: 0 }
+            else {
+                warning = card.team === undefined ? notRecommended(card.seedId) : undefined
+                tooltipOptions = { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0,
+                    ...(warning ? { warning: ui.text(warning) } : {}) }
+            }
+            const [shadow, view] = views
+            // A card of the other side from its seed's own faces the other way, as it does in the bank.
+            if (packetTeam(seed, card.team)) for (const packet of views) packet.setMirrored(true)
+            shadow.applyColor(new Color(55, 55, 55))
+            shadow.node.active = false
+            view.node.setSiblingIndex(slots)
+            view.node.active = false
+            const tooltip = ui.tooltip(view.node, tooltipOptions)
+            const button = view.node.addComponent(UIButton)
+            button.hapticsEnabled = false
+            button.clickOnPress = true
+            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
+            const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1, notRecommended: warning !== undefined }
+            button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
+            this.choices.push(choice)
+            return choice
+        }
+        this.start = ui.button(this.buttons, { text: ui.text('LETS_ROCK_BUTTON'), skin: 'seed', font: 'yellow',
+            color: Color.WHITE, disabledColor: new Color(64, 64, 64), x: 154, y: 545, width: 156, height: 42,
+            rightClickTriggers: false, enabled: false, onClick: () => this.confirm() })
+        this.start.canInteract = () => this.acceptsInput
+        // LawnApp::CanShowAlmanac and CanShowStore show them; SeedChooserScreen::ButtonDepress ignores them while seeds fly.
+        for (const [shown, key, x, open] of [[pages.almanac, 'ALMANAC_BUTTON', 560, () => this.onAlmanac()],
+            [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
+            if (!shown) continue
+            const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
+            this.pageButtons.push(button)
+            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen && !this.inFlight
+        }
+        // SeedChooserScreen's (Debug Play): no image (IMAGE_BLANK), FONT_BRIANNETOD12 in (255, 240, 0), lit (200, 200, 255),
+        // its label moving 1px down-right while pressed; at the DLC's arrows 107 and 108, Resize(20, 545, 77, 46) and
+        // Resize(373, 545, 77, 46). Pressing taps, as the chooser's other buttons do.
+        for (const [name, key, x, step] of [['PreviousPage', 'SEED_CHOOSER_PREVIOUS_PAGE', 20, -1], ['NextPage', 'SEED_CHOOSER_NEXT_PAGE', 373, 1]] as const) {
+            const button = ui.button(this.buttons, { skin: 'text', text: ui.text(key), font: 'small', color: new Color(255, 240, 0),
+                hoverColor: new Color(200, 200, 255), x, y: 545, width: 77, height: 46, pressOffset: [1, 1], pressSound: SoundEffect.Tap,
+                rightClickTriggers: false, onClick: () => this.turnPage(step) })
+            button.node.name = name
+            button.canInteract = () => this.canTurnPage
+            this.pageTurners.push({ button, step })
+        }
+        const pointerDown = (event: EventMouse | EventTouch) => {
+            if (!this.panel.active || !this.choosing || this.introTick < SEED_CHOOSER_SLIDE.onEnd || this.snapshot?.paused || UIHoverManager.isModalBlocked) return
+            if (event instanceof EventMouse && (GameDebugSettings.isMobileMode() || ![0, 2].includes(event.getButton()))) return
+            if (!(event instanceof EventMouse) && !GameDebugSettings.isMobileMode()) return
+            // Original MouseDown lands every flight before hit testing, including clicks on another card.
+            for (const choice of this.choices) this.land(choice)
+            const choice = this.choices.find(choice => choice.view.node.activeInHierarchy &&
+                choice.view.node.getComponent(UITransform)!.hitTest(event.getLocation(), event.windowId))
+            if (choice) { this.pick(choice); event.propagationStopped = true }
+        }
+        // The mouse wheel while the chooser is out turns its pages.
+        const wheel = (event: EventMouse) => { if (this.panel.active) this.pageWheel.wheel(event, this.canTurnPage) }
+        // HUD is above the seed bank. Listening on it would turn it into a hit target covering the bank. The level's root
+        // is under everything, so listening there takes no click from anything else: a node with any mouse listener
+        // takes every mouse press over it (NodeEventProcessor._handleMouseDown), whatever it listens for.
+        inputRoot.on(Node.EventType.MOUSE_DOWN, pointerDown, this, true)
+        inputRoot.on(Node.EventType.TOUCH_START, pointerDown, this, true)
+        inputRoot.on(Node.EventType.MOUSE_WHEEL, wheel, this, true)
+        this.panel.once(Node.EventType.NODE_DESTROYED, () => {
+            inputRoot.off(Node.EventType.MOUSE_DOWN, pointerDown, this, true)
+            inputRoot.off(Node.EventType.TOUCH_START, pointerDown, this, true)
+            inputRoot.off(Node.EventType.MOUSE_WHEEL, wheel, this, true)
+        })
+        this.layOut(cheatSeeds, available, entries)
+    }
+
+    /**
+     * Lays the pages out from the offer: the catalog grid alone, or `/cheatseed`'s pages (chooserPages), each card on
+     * them with its views, and shows the first. A chooser that a later repick opens again takes a changed offer up here,
+     * as `/cheatseed` changes the grid too (every seed there, owned or not).
+     */
+    private layOut(cheatSeeds: boolean, available: readonly string[], entries: readonly ChooserEntry[]): void {
+        const key = JSON.stringify([cheatSeeds, available, entries])
+        if (key === this.offerKey) return
+        this.offerKey = key
+        // The pictures in the order of their cards, each drawn over the earlier ones (SeedChooserScreen::Draw goes through
+        // the seed types in turn), so a picture standing out of its packet shows over the card before it.
+        for (const card of [...available.map(seedId => ({ seedId }) as ChooserEntry), ...entries]) {
+            if (!this.choices.some(choice => choice.key === cardKey(card))) this.addChoice(card).view.raiseIcon()
+        }
+        // SeedChooserScreen::GetSeedPositionInChooser: a seed keeps its own place in the catalog, so one not unlocked
+        // yet leaves its place empty (a silhouette) instead of the later seeds moving up.
+        const pages = chooserPages(this.definitions, available)
+        this.pages = cheatSeeds ? pages : pages.slice(0, 1)
+        for (const { button } of this.pageTurners) button.node.active = this.pages.length > 1
+        this.showPage(0)
+    }
+
+    /** Turns to the next page (`step` 1) or the one before (-1), round from either end. */
+    turnPage(step: number): void {
+        if (this.pages.length > 1) this.showPage((this.page + step + this.pages.length) % this.pages.length)
+    }
+
+    /** SeedChooserScreen::ButtonDepress takes the chooser's buttons only while choosing, with no warning open or seed flying. */
+    get canTurnPage(): boolean {
+        return this.pages.length > 1 && !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd
+            && !this.warningOpen && !this.inFlight
+    }
+
+    private showPage(index: number): void {
+        this.page = index
+        const { cards, catalog } = this.pages[index]
+        // A page at catalog places fills its grid with silhouettes, as its empty places are seeds not unlocked yet; one
+        // whose cards come one after another draws them only up to its last card.
+        this.showCards(cards, catalog ? undefined : pagePlaces(cards))
+    }
+
+    /**
+     * Shows these cards in the grid, each at its place, with silhouettes on the places left empty (SeedChooserScreen::
+     * Draw); five rows, or six once a card sits at 40-47 (Has7Rows). `places` limits the silhouettes to the first that
+     * many places (a page of its own that need not fill the grid); the whole grid by default. Cards in the bank stay
+     * there; a card waiting in the grid that is not listed is put away.
+     */
+    showCards(cards: readonly ChooserCard[], places?: number): void {
+        const homes = new Map(cards.map(card => {
+            const seed = this.definitions.seeds[card.seedId], team = seed && packetTeam(seed, card.team)
+            return [cardKey({ seedId: card.seedId, ...(team ? { team } : {}) }), card.place]
+        }))
+        const sixRows = cards.some(card => card.place >= FIVE_ROW_PLACES)
+        const grid = (index: number) => ({ x: index % 8 * 53 + 22, y: Math.floor(index / 8) * (sixRows ? 70 : 73) + (sixRows ? 123 : 128) })
+        for (const node of this.gridSilhouettes) node.destroy()
+        const taken = new Set(cards.map(card => card.place))
+        this.gridSilhouettes = []
+        for (let index = 0; index < Math.min(places ?? Infinity, sixRows ? CHOOSER_PLACES : FIVE_ROW_PLACES); index++) {
+            if (!taken.has(index)) this.gridSilhouettes.push(this.ui.image(this.gridShadows, this.silhouette, grid(index)).node)
+        }
+        for (const choice of this.choices) {
+            const place = homes.get(choice.key)
+            choice.home = place === undefined ? undefined : grid(place)
+            if (choice.home) choice.shadow.node.setPosition(choice.home.x, -choice.home.y)
+            choice.tooltip.hide()
+        }
+        this.syncIntro(this.introTick)
+        UIHoverManager.refreshHoverStates()
+    }
+
+    /** Until the first snapshot the chooser is choosing; a bank that went back to being dealt after a repick is not. */
+    get choosing(): boolean { return this.snapshot ? this.snapshot.seedChooser?.choosing === true : true }
+    get active(): boolean { return this.panel.active }
+    private get inFlight(): boolean { return this.choices.some(choice => !!choice.motion) }
+
+    bind(send: (command: GameCommand) => void): void { this.send = send }
+
+    /** A seed-slot upgrade bought in the intro adds an empty slot; the bank squeezes its packets to fit. */
+    setSlots(slots: number): void {
+        if (slots <= this.slots) return
+        this.slots = slots
+        this.addEmptySlots()
+        for (const choice of this.choices) if (choice.slot >= 0 && !choice.motion) {
+            const destination = this.slotPosition(choice.slot)
+            choice.view.node.setPosition(destination.x, -destination.y)
+        }
+    }
+
+    private addEmptySlots(): void {
+        for (let index = this.emptySlots.length; index < this.slots; index++) {
+            const node = this.ui.image(this.cards, this.silhouette).node
+            // Empty slots stay under the cards, in slot order.
+            node.setSiblingIndex(index)
+            this.emptySlots.push(node)
+        }
+        this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
+    }
+
+    /** Board::GetSeedPacketPositionX, 8px below the bank's top, from where the bank stands now. */
+    private slotPosition(slot: number): { x: number, y: number } {
+        return { x: seedPacketX(slot, this.slots) + this.bankShift, y: 8 - this.bankRise }
+    }
+
+    /**
+     * How far the bank stands right of its choosing place (SEED_BANK_OFFSET_X), while a repick slides it there and back,
+     * and how far above its place (`rise`), while one brings a hidden bank down: the cards resting in it and its empty
+     * slots ride along (SeedChooserScreen::GetSeedPositionInBank reads mSeedBank->mX and mY).
+     */
+    setBankShift(shift: number, rise = 0): void {
+        if (shift === this.bankShift && rise === this.bankRise) return
+        this.bankShift = shift
+        this.bankRise = rise
+        for (const choice of this.choices) if (choice.slot >= 0 && !choice.motion) {
+            const destination = this.slotPosition(choice.slot)
+            choice.view.node.setPosition(destination.x, -destination.y)
+        }
+        this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
+    }
+
+    /** Whether the node is the chooser's: its panel, cards and buttons, and the preview zombies' tooltips. */
+    holds(node: Node): boolean {
+        return node.isChildOf(this.edge) || node.isChildOf(this.previewTooltipSurface)
+    }
+
+    placeBefore(node: Node): void {
+        this.edge.setSiblingIndex(node.getSiblingIndex())
+    }
+
+    /** Presses Let's Rock from the keyboard, as a click on it would; whether it could be pressed. */
+    pressStart(): boolean {
+        return this.start.trigger()
+    }
+
+    /** Puts `node`, the chooser's sibling, right under it: over everything else, below the chooser's cards. */
+    placeUnder(node: Node): void {
+        const from = node.getSiblingIndex(), to = this.edge.getSiblingIndex()
+        // setSiblingIndex takes the node out before putting it back in.
+        node.setSiblingIndex(from < to ? to - 1 : to)
+    }
+
+    sync(snapshot: WorldSnapshot): void {
+        const before = this.snapshot
+        this.snapshot = snapshot
+        const offer = snapshot.seedChooser
+        if (offer) this.layOut(offer.cheatSeeds === true, offer.availableSeeds, offer.entries ?? [])
+        // A repick drops the chooser in from the top again, its cards straight in their places.
+        const repick = snapshot.seedChooser?.repick === true
+        if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= SEED_CHOOSER_SLIDE.offStart)) {
+            this.repickTick = SEED_CHOOSER_SLIDE.onStart
+            this.repickFinished = false
+            this.syncIntro(SEED_CHOOSER_SLIDE.onStart)
+        }
+        for (const button of this.pageButtons) button.node.active = !repick
+        // The bank may hold a card nothing offers: one /seed put in, or a saved one whose Mod is gone. It shows in its slot
+        // and can go back, but has no place in the grid, so going back it leaves the chooser (as the server lets it).
+        snapshot.seedPackets.forEach((packet, slot) => {
+            if (!packet || this.choices.some(choice => choice.key === cardKey(packet))) return
+            const choice = this.addChoice({ seedId: packet.seedId, ...(packet.team ? { team: packet.team } : {}) })
+            const { x, y } = this.slotPosition(slot)
+            choice.slot = slot
+            choice.view.node.setPosition(x, -y)
+            choice.view.raiseIcon()
+        })
+        for (const choice of this.choices) {
+            const slot = snapshot.seedPackets.findIndex(packet => packet?.seedId === choice.seedId && packet.team === choice.team)
+            if (slot !== choice.slot) {
+                const oldSlot = choice.slot
+                choice.slot = slot
+                // A card going back to a place the grid does not show: a Mod may show it first. Showing it places the
+                // waiting cards, so the card starts its flight from where it was.
+                if (slot < 0 && !choice.home) {
+                    const position = choice.view.node.position.clone()
+                    this.onCardHidden({ seedId: choice.seedId, ...(choice.team ? { team: choice.team } : {}) })
+                    choice.view.node.setPosition(position)
+                }
+                const destination = slot < 0 ? choice.home : this.slotPosition(slot)
+                if (!destination) { this.land(choice); choice.view.node.active = false; continue }
+                if (before && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && snapshot.seedChooser?.choosing) {
+                    this.move(choice, destination, slot >= 0 && oldSlot >= 0 ? 15 : 25)
+                } else choice.view.node.setPosition(destination.x, -destination.y)
+            }
+        }
+        // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while the bank is full; a dialog or the
+        // intro only keeps it from being pressed (canInteract), as GameButton::IsMouseOver does.
+        // `/cheatseed` starts with any cards chosen, the slots left over empty.
+        const chosen = snapshot.seedPackets.length
+        this.start.interactable = !!offer && (chosen === offer.slots || offer.cheatSeeds === true && chosen > 0)
+        this.syncPlaceholders()
+    }
+
+    update(dt: number): void {
+        this.age += dt * 100
+        // A repick holds the chooser down while choosing and lifts it out after Let's Rock; once the bank is back in its
+        // place the level goes on.
+        if (this.repickTick !== undefined && this.repickTick < SEED_CHOOSER_SLIDE.offEnd) {
+            this.repickTick = this.snapshot?.seedChooser?.repick && this.choosing ? Math.min(SEED_CHOOSER_SLIDE.onEnd, this.repickTick + dt * 100)
+                : Math.min(SEED_CHOOSER_SLIDE.offEnd, Math.max(SEED_CHOOSER_SLIDE.offStart, this.repickTick) + dt * 100)
+        }
+        if (this.repickTick === SEED_CHOOSER_SLIDE.offEnd && this.snapshot?.seedChooser?.repick && !this.choosing && !this.repickFinished) {
+            this.repickFinished = true
+            this.send({ type: 'finishRepick' })
+        }
+        for (const choice of this.choices) {
+            const motion = choice.motion
+            if (!motion) continue
+            choice.view.node.setPosition(animateCurve(motion.start, motion.end, this.age, motion.fromX, motion.x, 'ease-in-out'),
+                -animateCurve(motion.start, motion.end, this.age, motion.fromY, motion.y, 'ease-in-out'))
+            if (this.age >= motion.end) this.land(choice)
+        }
+        if (!this.inFlight && !UIHoverManager.isModalBlocked) for (const choice of this.choices) {
+            if (choice.button.isHovering) choice.tooltip.show()
+        }
+    }
+
+    syncIntro(tick: number): void {
+        // A pointer already resting on Let's Rock lights it once the chooser has arrived.
+        if (this.introTick < SEED_CHOOSER_SLIDE.onEnd && tick >= SEED_CHOOSER_SLIDE.onEnd) UIHoverManager.refreshHoverStates()
+        this.introTick = tick
+        // The intro's preview zombies are not there for a repick.
+        this.previewTooltipSurface.active = tick === SEED_CHOOSER_SLIDE.onEnd && this.choosing && !this.snapshot?.paused && !this.snapshot?.seedChooser?.repick
+        this.panel.active = tick >= SEED_CHOOSER_SLIDE.onStart && tick < SEED_CHOOSER_SLIDE.offEnd
+        this.cards.active = this.panel.active
+        this.flying.active = this.panel.active
+        this.buttons.active = this.panel.active
+        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
+        this.panel.setPosition(0, y)
+        this.buttons.setPosition(0, y)
+        for (const choice of this.choices) {
+            // A card waiting in the grid shows only while the grid lists it.
+            choice.view.node.active = this.panel.active && (choice.slot < 0 ? !!choice.home || !!choice.motion : this.choosing)
+            if (choice.slot < 0 && !choice.motion && choice.home) choice.view.node.setPosition(choice.home.x, y - choice.home.y)
+            // SeedChooserScreen::Draw grays not-recommended packets to 115 only while they sit in the chooser.
+            const grayed = choice.notRecommended && choice.slot < 0 && !choice.motion
+            if (grayed !== (choice.grayed ?? false)) {
+                choice.grayed = grayed
+                choice.view.applyColor(grayed ? new Color(115, 115, 115) : Color.WHITE)
+            }
+        }
+        this.syncPlaceholders()
+        if (!this.panel.active) for (const choice of this.choices) choice.tooltip.hide()
+    }
+
+    private syncPlaceholders(): void {
+        for (const choice of this.choices) choice.shadow.node.active = !!choice.home && (choice.slot >= 0 || !!choice.motion)
+        this.emptySlots.forEach((node, index) => {
+            node.active = this.panel.active && this.choosing && !this.choices.some(choice => choice.slot === index && !choice.motion)
+        })
+    }
+
+    private pick(choice: Choice): void {
+        for (const candidate of this.choices) this.land(candidate)
+        if (choice.slot < 0 && this.snapshot!.seedPackets.length >= this.snapshot!.seedChooser!.slots) return
+        for (const candidate of this.choices) candidate.tooltip.hide()
+        void SoundSystem.play(SoundEffect.Tap)
+        this.send({ type: 'chooseSeed', seedId: choice.seedId, ...(choice.team ? { team: choice.team } : {}) })
+    }
+
+    private move(choice: Choice, destination: { x: number, y: number }, duration: number): void {
+        choice.view.node.setParent(this.flying)
+        choice.view.setIconLayer(undefined)
+        const position = choice.view.node.position
+        choice.motion = { fromX: position.x, fromY: -position.y, ...destination, start: this.age, end: this.age + duration }
+        // Preserve chooser order, as in the original draw loop, rather than click/reparent order.
+        this.choices.filter(candidate => candidate.motion).forEach((candidate, index) => candidate.view.node.setSiblingIndex(index))
+        choice.tooltip.hide()
+    }
+
+    private land(choice: Choice): void {
+        if (!choice.motion) return
+        choice.view.node.setPosition(choice.motion.x, -choice.motion.y)
+        choice.motion = undefined
+        choice.view.node.setParent(this.cards)
+        choice.view.setIconLayer(this.cardIcons)
+        this.syncPlaceholders()
+        // The cards and their pictures in reading order, each over the one before it, as SeedChooserScreen::Draw and
+        // SeedBank::Draw go left to right.
+        this.choices.filter(candidate => !candidate.motion)
+            .sort((a, b) => b.view.node.position.y - a.view.node.position.y || a.view.node.position.x - b.view.node.position.x)
+            .forEach((candidate, index) => { candidate.view.node.setSiblingIndex(this.emptySlots.length + index); candidate.view.raiseIcon() })
+        UIHoverManager.refreshHoverStates()
+    }
+
+    /** Let's Rock answers once the intro has shown the chooser, while choosing, unpaused and with no warning open. */
+    get acceptsInput(): boolean {
+        return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
+    }
+
+    private confirm(): void {
+        if (!this.start.interactable || !this.acceptsInput) return
+        for (const choice of this.choices) { this.land(choice); choice.tooltip.hide() }
+        const warnings = this.snapshot?.seedChooser?.warnings ?? []
+        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return }
+        this.warningOpen = true
+        // DisplayRepickWarningDialog: each warning in turn; any repick stops the start.
+        void (async () => {
+            for (const warning of warnings) {
+                const confirmed = await this.ui.dialog(this.edge.parent!, { title: this.ui.text('DIALOG_WARNING'), message: this.ui.text(warning),
+                    confirmText: this.ui.text('DIALOG_BUTTON_YES'), cancelText: this.ui.text('REPICK_BUTTON') }).result
+                if (!confirmed || !this.panel.isValid) { this.warningOpen = false; return }
+            }
+            this.warningOpen = false
+            this.send({ type: 'confirmSeeds' })
+        })()
+    }
+}

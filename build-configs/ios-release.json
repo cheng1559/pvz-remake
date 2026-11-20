@@ -1,0 +1,12 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "useSplashScreen": false,
+    "packages": {
+        "ios": {
+            "targetVersion": "15.0",
+            "skipUpdateXcodeProject": false,
+            "osTarget": { "iphoneos": true, "simulator": false }
+        }
+    }
+}

@@ -1,0 +1,13 @@
+<fps>10</fps>
+<track>
+  <name>back</name>
+  <t><x>-4</x><i>IMAGE_REANIM_PHASE2_CHECKER</i></t>
+  <t><y>2</y></t>
+  <t><f>-1</f></t>
+</track>
+<track>
+  <name>face</name>
+  <t><x>1</x><sx>0.5</sx><sy>0.75</sy><kx>5</kx><ky>6</ky><a>0.8</a><i>IMAGE_REANIM_PHASE2_CHECKER</i></t>
+  <t><x>3</x></t>
+  <t><f>0</f><y>4</y></t>
+</track>

@@ -1,0 +1,366 @@
+{
+  "pvz:bowling-wallnut": {
+    "kind": "bowlingnut",
+    "unfreezable": true,
+    "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+    "bowling": {"attack": {"x": 0, "width": 60}, "bouncedBreaks": ["door"]},
+    "animation": {
+      "clips": {
+        "body": {"frames": 13, "fps": [12, 18], "ground": [-44.8, -27.6, -8.9, 11.3, 31.5, 50.2, 67.4, 84.6, 103.4, 123.6, 143.8, 162.5, 179.8]},
+        "blinkTwitch": {"frames": 5, "fps": 15, "once": true},
+        "blinkTwice": {"frames": 7, "fps": 15, "once": true},
+        "blinkThrice": {"frames": 11, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body"},
+      "blink": {"clip": {"blinkTwitch": 1, "blinkTwice": 6, "blinkThrice": 3}, "ticks": {"min": 1000, "max": 1999}}
+    }
+  },
+  "pvz:bowling-explodenut": {
+    "kind": "bowlingnut",
+    "unfreezable": true,
+    "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+    "bowling": {"attack": {"x": 0, "width": 60}},
+    "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
+    "animation": {"from": "pvz:bowling-wallnut"}
+  },
+  "pvz:sunflower": {
+    "kind": "producer",
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "producer": {"item": "pvz:sun", "cadenceTicks": 2500, "initialDelayTicks": {"min": 300, "max": 1250}},
+    "animation": {
+      "clips": {
+        "body": {"frames": 25, "fps": [10, 15]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:peashooter": {
+    "kind": "shooter",
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
+      "windupTicks": 33,
+      "shotsPerBurst": 1,
+      "burstIntervalTicks": 0,
+      "projectile": "pvz:pea",
+      "offset": {"x": 36.5, "y": -13},
+      "anchor": {"layer": "body", "track": "anim_stem"}
+    },
+    "animation": {
+      "clips": {
+        "body": {"frames": 25, "fps": [15, 20], "tracks": {"anim_stem": [[37.6, 48.7], [38.0, 47.0], [38.3, 45.5], [38.6, 43.8], [39.1, 43.5], [39.6, 43.1], [40.0, 42.8], [41.1, 43.1], [42.1, 43.5], [43.2, 43.8], [44.6, 44.6], [46.0, 45.5], [47.4, 46.3], [46.0, 45.5], [44.6, 44.6], [43.2, 43.8], [42.1, 43.5], [41.1, 43.1], [40.0, 42.8], [39.6, 43.1], [39.1, 43.5], [38.6, 43.8], [38.3, 45.5], [38.0, 47.0], [37.6, 48.7]]}},
+        "idleHead": {"frames": 25, "sync": "body"},
+        "shootHead": {"frames": 25, "fps": 35, "next": "idleHead"},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "head": "idleHead"},
+      "fire": {"head": "shootHead"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:repeater": {
+    "kind": "shooter",
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
+      "windupTicks": 26,
+      "shotsPerBurst": 2,
+      "burstIntervalTicks": 26,
+      "projectile": "pvz:pea",
+      "offset": {"x": 36.5, "y": -13},
+      "anchor": {"layer": "body", "track": "anim_stem"}
+    },
+    "animation": {
+      "clips": {
+        "body": {"frames": 25, "fps": [15, 20], "tracks": {"anim_stem": [[37.6, 48.7], [38.0, 47.0], [38.3, 45.5], [38.6, 43.8], [39.1, 43.5], [39.6, 43.1], [40.0, 42.8], [41.1, 43.1], [42.1, 43.5], [43.2, 43.8], [44.6, 44.6], [46.0, 45.5], [47.4, 46.3], [46.0, 45.5], [44.6, 44.6], [43.2, 43.8], [42.1, 43.5], [41.1, 43.1], [40.0, 42.8], [39.6, 43.1], [39.1, 43.5], [38.6, 43.8], [38.3, 45.5], [38.0, 47.0], [37.6, 48.7]]}},
+        "idleHead": {"frames": 25, "sync": "body"},
+        "shootHead": {"frames": 25, "fps": 45, "next": "idleHead"},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "head": "idleHead"},
+      "fire": {"head": "shootHead"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:cherrybomb": {
+    "kind": "fuse",
+    "unfreezable": true,
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "fuse": {"ticks": 100, "explosion": {"offset": {"x": 40, "y": 40}, "radius": 115, "rowRange": 1, "damage": 1800, "burn": true}},
+    "animation": {
+      "clips": {"explode": {"frames": 14, "fps": [10, 15], "hold": true}, "idle": {"frames": 13, "fps": [10, 15]}},
+      "layers": {"body": "explode"},
+      "offBoard": {"layers": {"body": "idle"}}
+    }
+  },
+  "pvz:wallnut": {
+    "kind": "wallnut",
+    "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "animation": {
+      "clips": {
+        "body": {"frames": 17, "fps": [10, 15], "chewed": true},
+        "blinkTwitch": {"frames": 5, "fps": 15, "once": true},
+        "blinkTwice": {"frames": 7, "fps": 15, "once": true},
+        "blinkThrice": {"frames": 11, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body"},
+      "blink": {"clip": {"blinkTwitch": 1, "blinkTwice": 6, "blinkThrice": 3}, "ticks": {"min": 1000, "max": 1999}}
+    }
+  },
+  "pvz:potatomine": {
+    "kind": "potatomine",
+    "low": true,
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "mine": {
+      "armingTicks": 1500,
+      "riseTicks": 106,
+      "attack": {"x": 0, "y": 0, "width": 55, "height": 80},
+      "explosion": {"offset": {"x": 20, "y": 40}, "radius": 60, "rowRange": 0, "damage": 1800, "burn": false},
+      "targeting": {"eatingExtraRange": 30, "insetKey": "pvz:mine", "plantReach": 40}
+    },
+    "animation": {
+      "clips": {
+        "buried": {"frames": 1, "fps": 12},
+        "rise": {"frames": 19, "fps": 18, "hold": true},
+        "armed": {"frames": 11, "fps": [12, 15]},
+        "glow": {"frames": 10, "sync": "body"},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "buried", "light": null},
+      "phases": {"rising": {"body": "rise"}, "armed": {"body": "armed", "light": "glow"}},
+      "offBoard": {"phase": "armed", "layers": {"light": null}},
+      "blink": {"clip": "blink", "phases": ["armed"], "first": {"min": 400, "max": 4399}}
+    }
+  },
+  "pvz:snowpea": {
+    "kind": "shooter",
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
+      "windupTicks": 33,
+      "shotsPerBurst": 1,
+      "burstIntervalTicks": 0,
+      "projectile": "pvz:snow_pea",
+      "offset": {"x": 36.5, "y": -13},
+      "anchor": {"layer": "body", "track": "anim_stem"}
+    },
+    "animation": {
+      "clips": {
+        "body": {"frames": 25, "fps": [15, 20], "tracks": {"anim_stem": [[37.6, 48.7], [38.0, 47.0], [38.3, 45.5], [38.6, 43.8], [39.1, 43.5], [39.6, 43.1], [40.0, 42.8], [41.1, 43.1], [42.1, 43.5], [43.2, 43.8], [44.6, 44.6], [46.0, 45.5], [47.4, 46.3], [46.0, 45.5], [44.6, 44.6], [43.2, 43.8], [42.1, 43.5], [41.1, 43.1], [40.0, 42.8], [39.6, 43.1], [39.1, 43.5], [38.6, 43.8], [38.3, 45.5], [38.0, 47.0], [37.6, 48.7]]}},
+        "idleHead": {"frames": 25, "sync": "body"},
+        "shootHead": {"frames": 25, "fps": 35, "next": "idleHead"},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "head": "idleHead"},
+      "fire": {"head": "shootHead"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:chomper": {
+    "kind": "chomper",
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "chomper": {
+      "attack": {"x": 80, "y": 0, "width": 40, "height": 80},
+      "biteDelayTicks": 70,
+      "biteTicks": 105,
+      "digestTicks": 4000,
+      "swallowTicks": 234,
+      "targeting": {"eatingExtraRange": 60}
+    },
+    "animation": {
+      "clips": {
+        "idle": {"frames": 25, "fps": [10, 15]},
+        "ready": {"frames": 25, "fps": 12},
+        "bite": {"frames": 25, "fps": 24, "hold": true},
+        "chew": {"frames": 16, "fps": 15},
+        "swallow": {"frames": 28, "fps": 12, "hold": true}
+      },
+      "layers": {"body": "idle"},
+      "phases": {"biting": {"body": "bite"}, "digesting": {"body": "chew"}, "swallowing": {"body": "swallow"}, "ready": {"body": "ready"}}
+    }
+  },
+  "pvz:explodenut": {
+    "kind": "wallnut",
+    "maxHealth": 4000,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
+    "animation": {"from": "pvz:wallnut"}
+  },
+  "pvz:puffshroom": {
+    "kind": "shooter",
+    "low": true,
+    "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": {"id": "pvz:spore", "lifetimeTicks": 75}, "offset": {"x": 52.5, "y": 60}, "range": 230},
+    "nocturnal": true,
+    "animation": {
+      "clips": {
+        "body": {"frames": 17, "fps": [10, 15]},
+        "shoot": {"frames": 13, "fps": 35, "next": "body"},
+        "sleep": {"frames": 17, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "fire": {"body": "shoot"},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:sunshroom": {
+    "kind": "sunshroom",
+    "low": true,
+    "plantingOffset": {"min": {"x": -5, "y": -5}, "max": {"x": 4, "y": 4}}, "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "producer": {"item": "pvz:sun", "cadenceTicks": 2500, "initialDelayTicks": {"min": 300, "max": 1250}, "growth": {"ticks": 12000, "growingTicks": 100, "smallItem": "pvz:smallsun"}},
+    "nocturnal": true,
+    "animation": {
+      "clips": {
+        "small": {"frames": 12, "fps": [10, 15]},
+        "grow": {"frames": 12, "fps": 12, "hold": true},
+        "body": {"frames": 12, "fps": [12, 15]},
+        "sleep": {"frames": 10, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "small", "sleeping": null},
+      "phases": {"growing": {"body": "grow"}, "big": {"body": "body"}},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "offBoard": {"phase": "big"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:fumeshroom": {
+    "kind": "shooter",
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 50, "shotsPerBurst": 1, "burstIntervalTicks": 0, "area": {"damage": 20, "hitsShieldAndBody": true}, "offset": {"x": 85, "y": 31}, "range": 340},
+    "nocturnal": true,
+    "animation": {
+      "clips": {
+        "body": {"frames": 17, "fps": [10, 15]},
+        "shoot": {"frames": 30, "fps": 35, "next": "body"},
+        "sleep": {"frames": 17, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "fire": {"body": "shoot"},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:gravebuster": {
+    "kind": "gravebuster",
+    "unfreezable": true,
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "graveBuster": {"landTicks": {"min": 47, "max": 70}, "eatTicks": 400},
+    "animation": {
+      "clips": {
+        "land": {"frames": 7, "fit": true, "fps": [10, 15], "hold": true},
+        "body": {"frames": 28, "fps": 12}
+      },
+      "layers": {"body": "land"},
+      "phases": {"eating": {"body": "body"}},
+      "offBoard": {"layers": {"body": "body"}}
+    }
+  },
+  "pvz:hypnoshroom": {
+    "kind": "hypnoshroom",
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "nocturnal": true,
+    "mindControl": true,
+    "animation": {
+      "clips": {
+        "body": {"frames": 20, "fps": [10, 15]},
+        "sleep": {"frames": 20, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"}
+    }
+  },
+  "pvz:scaredyshroom": {
+    "kind": "scaredyshroom",
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 25, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 41.5, "y": 41}},
+    "fright": {"center": {"x": 0, "y": 20}, "radius": 120, "rowRange": 1, "lowerTicks": 130, "raiseTicks": {"min": 84, "max": 143}},
+    "nocturnal": true,
+    "animation": {
+      "clips": {
+        "body": {"frames": 16, "fps": [10, 15]},
+        "shoot": {"frames": 15, "fps": 35, "next": "body"},
+        "scared": {"frames": 13, "fps": 10, "hold": true},
+        "scaredIdle": {"frames": 11, "fps": 10},
+        "grow": {"frames": 10, "fit": true, "fps": [7, 12], "hold": true},
+        "sleep": {"frames": 16, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "fire": {"body": "shoot"},
+      "phases": {"calm": {"body": "body"}, "lowering": {"body": "scared"}, "scared": {"body": "scaredIdle"}, "raising": {"body": "grow"}},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:iceshroom": {
+    "kind": "fuse",
+    "unfreezable": true,
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "nocturnal": true,
+    "fuse": {"ticks": 100, "freeze": {"ticks": {"min": 400, "max": 600}, "coldTicks": {"min": 300, "max": 400}, "chillTicks": 2000, "damage": 20, "boardTicks": 300}},
+    "animation": {
+      "clips": {
+        "body": {"frames": 17, "fps": [10, 15]},
+        "sleep": {"frames": 17, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
+        "blink": {"frames": 3, "fps": 15, "once": true}
+      },
+      "layers": {"body": "body", "sleeping": null},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:lilypad": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "animation": {
+      "clips": {"body": {"frames": 1, "fps": [10, 15]}, "blink": {"frames": 3, "fps": 15, "once": true}},
+      "layers": {"body": "body"},
+      "blink": {"clip": "blink"}
+    }
+  },
+  "pvz:doomshroom": {
+    "kind": "fuse",
+    "unfreezable": true,
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "nocturnal": true,
+    "fuse": {
+      "ticks": 100,
+      "explosion": {"offset": {"x": 40, "y": 40}, "radius": 250, "rowRange": 3, "damage": 1800, "burn": true},
+      "crater": {"ticks": 18000}
+    },
+    "animation": {
+      "clips": {
+        "explode": {"frames": 33, "fps": 23, "hold": true},
+        "idle": {"frames": 20, "fps": [10, 15]},
+        "sleep": {"frames": 25, "fps": [10, 15]},
+        "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]}
+      },
+      "layers": {"body": "idle", "sleeping": null},
+      "phases": {"fuse": {"body": "explode"}},
+      "asleep": {"body": "sleep", "sleeping": "sleeping"}
+    }
+  }
+}

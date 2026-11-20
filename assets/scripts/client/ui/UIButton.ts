@@ -1,0 +1,379 @@
+import { _decorator, Button, Component, EventMouse, input, Input, Node, UITransform, Vec3, type EventTouch, type Vec2 } from 'cc'
+import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
+
+const { ccclass } = _decorator
+export type UIButtonState = 'normal' | 'hover' | 'pressed' | 'disabled'
+/** Pixels from the button's top-left corner; x points right, y points down. */
+export type UIButtonPolygon = readonly (readonly [number, number])[]
+
+@ccclass('PvZUIButton')
+export class UIButton extends Component {
+    private static readonly instances = new Set<UIButton>()
+    private static active: UIButton | null = null
+    private static captureRoot: Node | null = null
+    private static mobileSlide: { id: number, windowId: number, pointer: UIHoverPointer, modal: Node | null } | null = null
+    private static readonly hoverClient = {
+        clearHover: () => {
+            UIButton.mobileSlide = null
+            UIButton.active?.cancelPress()
+            for (const button of UIButton.instances) button.setHover(false)
+        },
+        refreshHover: (pointer: UIHoverPointer, modal: Node | null) => UIButton.refreshHover(pointer, modal),
+        handleTouch: (event: EventTouch) => UIButton.handleTouch(event),
+    }
+
+    /** The action: on release inside, or on press with clickOnPress. */
+    onClick: () => void = () => {}
+    /** Played when the button is pressed, before its action. */
+    pressSound: SoundEffect | null = null
+    onHoverEnter?: () => void
+    onHoverChange?: (hovering: boolean) => void
+    onStateChange?: (state: UIButtonState) => void
+    setText: (text: string) => void = () => {}
+    rightClickTriggers = true
+    rightClickPressesVisual = true
+    releaseToNormalOnPressOut = false
+    refreshHoverOnEnable = true
+    /** Click on mouse or touch press, without capturing the pointer or emitting a release click. */
+    clickOnPress = false
+    /** Follow the finger and activate on release; disable for controls with their own drag gesture. */
+    touchSlide = true
+    changeCursor = true
+    hapticsEnabled = true
+    /** Temporary input gate; keeps the normal appearance when blocked. */
+    canInteract: () => boolean = () => true
+    polygon: UIButtonPolygon = []
+    private interactive = true
+    private pressed = false
+    private hovering = false
+    private pressVisual = false
+    private mouseButton: number | null = null
+    private touchId: number | null = null
+    private state: UIButtonState = 'normal'
+    private restoreHitTest?: () => void
+
+    get interactable(): boolean { return this.interactive }
+    set interactable(value: boolean) {
+        if (this.interactive === value) return
+        this.interactive = value
+        this.cancelPress()
+        this.setHover(false)
+        if (!value || this.refreshHoverOnEnable) UIHoverManager.refreshHoverStates()
+    }
+    get isPressed(): boolean { return this.pressed }
+    get isHovering(): boolean { return this.hovering }
+    static get hasActivePress(): boolean { return this.active !== null || this.mobileSlide !== null }
+
+    onEnable(): void {
+        this.installHitTest()
+        UIButton.instances.add(this)
+        UIHoverManager.registerClient(UIButton.hoverClient)
+        this.listen(true)
+        this.applyState(this.interactable ? 'normal' : 'disabled')
+        if (this.refreshHoverOnEnable) UIHoverManager.refreshHoverStates()
+    }
+
+    onDisable(): void {
+        UIButton.instances.delete(this)
+        if (this.hovering) UIButton.mobileSlide = null
+        this.cancelPress()
+        this.setHover(false)
+        this.listen(false)
+        this.restoreHitTest?.()
+        this.restoreHitTest = undefined
+        if (UIButton.instances.size === 0) UIHoverManager.unregisterClient(UIButton.hoverClient)
+        UIHoverManager.refreshHoverStates()
+    }
+
+    private listen(enabled: boolean): void {
+        const method = enabled ? 'on' : 'off'
+        for (const [event, handler] of [
+            [Node.EventType.MOUSE_DOWN, this.mouseDown], [Node.EventType.MOUSE_UP, this.mouseUp],
+            [Node.EventType.MOUSE_MOVE, this.mouseMove], [Node.EventType.MOUSE_ENTER, this.mouseMove],
+            [Node.EventType.MOUSE_LEAVE, this.mouseMove],
+            [Node.EventType.TOUCH_START, this.touchStart], [Node.EventType.TOUCH_MOVE, this.touchMove],
+            [Node.EventType.TOUCH_END, this.touchEnd], [Node.EventType.TOUCH_CANCEL, this.touchCancel],
+        ] as const) this.node[method](event, handler, this)
+    }
+
+    private static refreshHover(pointer: UIHoverPointer, modal: Node | null, initialTouch = false): boolean {
+        if (this.mobileSlide) {
+            const top = this.topButton(this.mobileSlide.pointer, modal)
+            const target = top?.interactable && top.touchSlide && !top.clickOnPress ? top : null
+            if (this.active !== target) {
+                this.active?.cancelPress()
+                target?.beginPress(true, !initialTouch)
+            }
+            return false
+        }
+        const active = this.active
+        if (active) {
+            if (!active.available(modal)) active.cancelPress()
+            else {
+                for (const button of this.instances) if (button !== active) button.setHover(false)
+                if (pointer.canHover) active.movePress(active.hit(pointer))
+                return pointer.canHover && active.hovering && active.changeCursor
+            }
+        }
+        const top = pointer.canHover ? this.topButton(pointer, modal) : null
+        for (const button of this.instances) button.setHover(button === top && button.interactable)
+        return !!top?.interactable && top.changeCursor
+    }
+
+    /** The topmost available button under a screen point, as touches resolve it. */
+    static at(location: Vec2, windowId: number): UIButton | null {
+        return this.topButton({ location, windowId }, UIHoverManager.activeModalRoot)
+    }
+
+    private static topButton(pointer: Pick<UIHoverPointer, 'location' | 'windowId'>, modal: Node | null): UIButton | null {
+        let top: UIButton | null = null
+        for (const button of this.instances) {
+            if (button.available(modal, false) && button.hit(pointer) && (!top || this.above(button.node, top.node))) top = button
+        }
+        return top
+    }
+
+    private static handleTouch(event: EventTouch): void {
+        if (!GameDebugSettings.isMobileMode() || UIHoverManager.isInputBlocked) return
+        const id = event.touch!.getID(), modal = UIHoverManager.activeModalRoot
+        const pointer: UIHoverPointer = { location: event.touch!.getLocation(), uiLocation: event.getUILocation(), windowId: event.windowId, canHover: false }
+        if (event.type === Node.EventType.TOUCH_START) {
+            if (this.active || this.mobileSlide) return
+            this.mobileSlide = { id, windowId: event.windowId, pointer, modal }
+            this.refreshHover(pointer, modal, true)
+            UIHoverManager.refreshHoverStates()
+            return
+        }
+        const slide = this.mobileSlide
+        if (!slide || slide.id !== id || slide.windowId !== event.windowId) return
+        event.propagationStopped = true
+        slide.pointer = pointer
+        if (slide.modal !== modal) { this.mobileSlide = null; UIHoverManager.refreshHoverStates(); return }
+        this.refreshHover(pointer, modal)
+        if (event.type === Node.EventType.TOUCH_MOVE) return
+        // Cocos changes END to CANCEL outside the original node; the event code keeps the actual system event.
+        const released = event.type === Node.EventType.TOUCH_END || event.getEventCode() === Node.EventType.TOUCH_END
+        const button = this.topButton(pointer, modal)
+        this.mobileSlide = null
+        if (released && button?.available() && button.touchSlide && !button.clickOnPress) {
+            if (this.active === button) button.finishPress(true, event, false)
+        } else this.active?.cancelPress()
+        UIHoverManager.refreshHoverStates()
+    }
+
+    private static above(a: Node, b: Node): boolean {
+        const path = (node: Node) => {
+            const nodes: Node[] = []
+            for (let current: Node | null = node; current; current = current.parent) nodes.unshift(current)
+            return nodes
+        }
+        const left = path(a), right = path(b)
+        for (let i = 0; i < Math.min(left.length, right.length); i++) {
+            if (left[i] !== right[i]) return left[i].getSiblingIndex() > right[i].getSiblingIndex()
+        }
+        return left.length > right.length
+    }
+
+    private available(modal = UIHoverManager.activeModalRoot, requireInteractive = true): boolean {
+        return this.enabledInHierarchy && this.node.activeInHierarchy && (!requireInteractive || this.interactable)
+            && this.canInteract() && !UIHoverManager.isInputBlocked && (!modal || this.node === modal || this.node.isChildOf(modal))
+    }
+
+    private hit(pointer: Pick<UIHoverPointer, 'location' | 'windowId'>): boolean {
+        return this.node.getComponent(UITransform)!.hitTest(pointer.location, pointer.windowId)
+    }
+
+    private setHover(inside: boolean, emit = true): void {
+        const entered = inside && !this.hovering
+        const changed = inside !== this.hovering
+        this.hovering = inside
+        if (!this.pressed) this.applyState(!this.interactable ? 'disabled' : inside ? 'hover' : 'normal')
+        if (changed) this.onHoverChange?.(inside)
+        if (entered && this.hapticsEnabled) Haptics.play()
+        if (entered && emit) this.onHoverEnter?.()
+    }
+
+    private applyState(state: UIButtonState): void {
+        if (this.state === state) return
+        this.state = state
+        this.onStateChange?.(state)
+    }
+
+    private beginPress(visual: boolean, sliding = false): void {
+        this.pressed = true
+        this.pressVisual = visual
+        UIButton.active = this
+        this.setHover(true, sliding)
+        this.applyState(visual ? 'pressed' : 'hover')
+        if (!sliding) this.playPressSound()
+        UIHoverManager.refreshHoverStates()
+    }
+
+    private movePress(inside: boolean): void {
+        this.setHover(inside)
+        this.applyState(inside ? this.pressVisual ? 'pressed' : 'hover'
+            : this.pressVisual && !this.releaseToNormalOnPressOut ? 'hover' : 'normal')
+    }
+
+    private cancelPress(clearHover = true): void {
+        if (UIButton.active === this) {
+            UIButton.active = null
+            UIButton.capture(false)
+        }
+        this.pressed = false
+        this.pressVisual = false
+        this.mouseButton = this.touchId = null
+        if (clearHover) this.setHover(false, false)
+    }
+
+    private finishPress(inside: boolean, event: EventMouse | EventTouch, canHover: boolean): void {
+        this.cancelPress(false)
+        this.setHover(canHover && inside, false)
+        event.propagationStopped = true
+        if (inside && this.available()) this.click(event)
+        UIHoverManager.refreshHoverStates()
+    }
+
+    /** A key standing in for a press: the click and its sound, when the button could be pressed now; whether it was. */
+    trigger(): boolean {
+        if (!this.available()) return false
+        this.playPressSound()
+        this.node.emit(Button.EventType.CLICK, this)
+        this.onClick()
+        return true
+    }
+
+    private playPressSound(): void {
+        if (this.pressSound !== null) void SoundSystem.play(this.pressSound)
+    }
+
+    private click(event: EventMouse | EventTouch): void {
+        this.node.emit(Button.EventType.CLICK, this, event)
+        this.onClick()
+    }
+
+    private mouseDown(event: EventMouse): void {
+        if (GameDebugSettings.isMobileMode() || !this.available() || UIButton.active) return
+        if (!this.rightClickTriggers && event.getButton() !== EventMouse.BUTTON_LEFT) return
+        event.propagationStopped = true
+        UIHoverManager.rememberMouseEvent(event, false)
+        if (this.clickOnPress) { this.setHover(true, false); this.playPressSound(); this.click(event); return }
+        this.mouseButton = event.getButton()
+        this.beginPress(this.mouseButton === EventMouse.BUTTON_LEFT || this.rightClickPressesVisual)
+        if (UIButton.active === this) UIButton.capture(true)
+    }
+
+    private mouseMove(event: EventMouse): void {
+        if (!GameDebugSettings.isMobileMode()) UIHoverManager.rememberMouseEvent(event)
+    }
+
+    private mouseUp(event: EventMouse): void {
+        if (this.mouseButton === null || event.getButton() !== this.mouseButton) return
+        UIHoverManager.rememberMouseEvent(event, false)
+        const inside = this.hit({ location: event.getLocation(), windowId: event.windowId })
+        this.finishPress(inside, event, true)
+    }
+
+    private static capture(enabled: boolean): void {
+        if (this.captureRoot) {
+            this.captureRoot.off(Node.EventType.MOUSE_MOVE, this.captureMove, this, true)
+            this.captureRoot.off(Node.EventType.MOUSE_UP, this.captureUp, this, true)
+            this.captureRoot = null
+        }
+        input.off(Input.EventType.MOUSE_MOVE, this.captureMove, this)
+        input.off(Input.EventType.MOUSE_UP, this.captureUp, this)
+        if (!enabled || !this.active) return
+        let root: Node | null = null
+        for (let current: Node | null = this.active.node; current; current = current.parent) {
+            if (current.getComponent(UITransform)) root = current
+        }
+        if (!root) return
+        this.captureRoot = root
+        root.on(Node.EventType.MOUSE_MOVE, this.captureMove, this, true)
+        root.on(Node.EventType.MOUSE_UP, this.captureUp, this, true)
+        input.on(Input.EventType.MOUSE_MOVE, this.captureMove, this)
+        input.on(Input.EventType.MOUSE_UP, this.captureUp, this)
+    }
+
+    private static captureMove(event: EventMouse): void { UIHoverManager.rememberMouseEvent(event) }
+    private static captureUp(event: EventMouse): void { this.active?.mouseUp(event) }
+
+    private touchStart(event: EventTouch): void {
+        if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.hasActivePress) return
+        event.propagationStopped = true
+        if (this.clickOnPress) {
+            // The touch is not tracked, so nothing would clear a hover that outlived the press.
+            this.setHover(true, false)
+            this.playPressSound()
+            this.click(event)
+            this.setHover(false, false)
+            return
+        }
+        if (this.touchSlide) { UIButton.handleTouch(event); return }
+        this.touchId = event.touch!.getID()
+        this.beginPress(true)
+    }
+
+    private touchMove(event: EventTouch): void {
+        if (this.touchId === null || event.touch!.getID() !== this.touchId) return
+        event.propagationStopped = true
+        this.movePress(this.hit({ location: event.touch!.getLocation(), windowId: event.windowId }))
+    }
+
+    private touchEnd(event: EventTouch): void {
+        if (this.touchId === null || event.touch!.getID() !== this.touchId) return
+        this.finishPress(this.hit({ location: event.touch!.getLocation(), windowId: event.windowId }), event, false)
+    }
+
+    private touchCancel(event: EventTouch): void {
+        if (this.touchId === null || event.touch!.getID() !== this.touchId) return
+        this.cancelPress()
+        UIHoverManager.refreshHoverStates()
+    }
+
+    private installHitTest(): void {
+        const transform = this.node.getComponent(UITransform)!
+        const original = transform.hitTest
+        const world = new Vec3()
+        const local = new Vec3()
+        // Hook native hit testing so empty corners also pass through during hover and touch dispatch.
+        const hitTest: UITransform['hitTest'] = (point, windowId = 0) => {
+            if (!original.call(transform, point, windowId)) return false
+            if (this.polygon.length < 3) return true
+            for (const camera of this.node.scene.renderScene?.cameras ?? []) {
+                if (!(camera.visibility & this.node.layer) || camera.systemWindowId !== windowId) continue
+                // As UITransform.hitTest: a camera of a texture takes the window's point only where its texture is presented over it.
+                if (!UITransform.windowToCameraScreen(camera, world.set(point.x, point.y, 0), world)) continue
+                camera.screenToWorld(world, world)
+                transform.convertToNodeSpaceAR(world, local)
+                const x = local.x + transform.anchorX * transform.width
+                const y = (1 - transform.anchorY) * transform.height - local.y
+                if (this.containsPoint(x, y)) return true
+            }
+            return false
+        }
+        transform.hitTest = hitTest
+        this.restoreHitTest = () => {
+            if (transform.hitTest === hitTest) transform.hitTest = original
+        }
+    }
+
+    private containsPoint(x: number, y: number): boolean {
+        let inside = false
+        const points = this.polygon
+        for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+            const [xi, yi] = points[i]
+            const [xj, yj] = points[j]
+            // Include edges, including horizontal edges and vertices.
+            const cross = (x - xi) * (yj - yi) - (y - yi) * (xj - xi)
+            if (Math.abs(cross) < 1e-6 && x >= Math.min(xi, xj) && x <= Math.max(xi, xj)
+                && y >= Math.min(yi, yj) && y <= Math.max(yi, yj)) return true
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+        }
+        return inside
+    }
+
+}

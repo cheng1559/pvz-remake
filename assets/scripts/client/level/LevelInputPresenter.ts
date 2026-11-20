@@ -1,0 +1,358 @@
+import type { ToolButton } from './LevelBoardHud'
+import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, UITransform, type Vec2, Vec3 } from 'cc'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { gameClock } from '@/core/GameClock'
+import { uiNode } from '@/client/view/uiNode'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
+import { boardCell, plantingCell } from './LevelGeometry'
+import { itemAt } from '@/shared/content/gameplay'
+import type { LevelGame } from './LevelGame'
+import { LevelView } from './LevelView'
+import { UIButton } from '@/client/ui/UIButton'
+import { levelStandsStill, type WorldSnapshot } from '@/shared/protocol'
+
+const WIDTH = 800
+const HEIGHT = 600
+const MOBILE_SWIPE_STEP = 24
+
+interface MobilePress {
+    id: number
+    point: { x: number, y: number }
+    location: Vec2
+    windowId: number
+    source?: Node
+    leftSource: boolean
+    cancelInside: boolean
+}
+
+export class LevelInputPresenter {
+    private enabled = false
+    private started = false
+    private previousSpeed = 1
+    private readonly buttons: UIButton[] = []
+    private seedButtons: UIButton[] = []
+    private toolButtons: ToolButton[] = []
+    private mobilePress?: MobilePress
+
+    constructor(
+        private readonly node: Node,
+        private readonly game: LevelGame,
+        private readonly view: LevelView,
+        private readonly onMenu: () => void = () => {},
+    ) {}
+
+    start(): void {
+        if (this.started) {
+            this.resume()
+            return
+        }
+        this.started = true
+        this.enabled = true
+        this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this, true)
+        this.node.on(Node.EventType.TOUCH_MOVE, this.onPointerMove, this, true)
+        this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this, true)
+        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this, true)
+        this.node.on(Node.EventType.MOUSE_DOWN, this.onMouseDown, this)
+        this.node.on(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
+        this.node.on(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
+        input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
+        input.on(Input.EventType.KEY_PRESSING, this.onKeyPressing, this)
+        this.seedButtons = this.view.bindSeedPackets(index => this.selectSeedPacket(index))
+        this.toolButtons = this.view.bindTools(id => this.selectTool(id))
+        for (const button of [...this.seedButtons, ...this.toolButtons.map(entry => entry.button)]) button.hapticsEnabled = false
+        const menu = this.view.bindMenu(() => {
+            if (!this.enabled || !this.view.canOpenMenu) return
+            if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
+            else this.onMenu()
+        })
+        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu)
+        for (const button of this.buttons) {
+            button.canInteract = () => {
+                if (!this.enabled || button === menu && !this.view.canOpenMenu) return false
+                const snapshot = this.game.render()
+                return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
+            }
+        }
+    }
+
+    destroy(): void {
+        this.enabled = false
+        this.mobilePress = undefined
+        this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this, true)
+        this.node.off(Node.EventType.TOUCH_MOVE, this.onPointerMove, this, true)
+        this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this, true)
+        this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this, true)
+        this.node.off(Node.EventType.MOUSE_DOWN, this.onMouseDown, this)
+        this.node.off(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
+        this.node.off(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
+        input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
+        input.off(Input.EventType.KEY_PRESSING, this.onKeyPressing, this)
+        for (const button of this.buttons) if (button.isValid) button.enabled = false
+        this.view.resetCursor()
+    }
+
+    suspend(): void {
+        this.enabled = false
+        this.mobilePress = undefined
+        for (const button of this.buttons) if (button.isValid) button.enabled = false
+        this.view.setPointer()
+        this.view.resetCursor()
+    }
+
+    resume(): void {
+        if (this.started && this.node.isValid) {
+            this.enabled = true
+            for (const button of this.buttons) if (button.isValid) button.enabled = true
+        }
+    }
+
+    private selectSeedPacket(index: number, replace = false): void {
+        if (!this.enabled || !this.view.introComplete) return
+        const snapshot = this.game.render()
+        if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        const packet = this.view.seedPacketAt(snapshot, index)
+        if (!packet) return
+        if (snapshot.cursor.mode !== 'none' && (!replace || packet.selected)) {
+            this.cancelPlanting()
+            return
+        }
+        this.view.audio.seedPacketSelected(packet.availability)
+        this.game.command(packet.command)
+    }
+
+    private get acceptsBoardInput(): boolean {
+        const modal = UIHoverManager.activeModalRoot
+        return this.enabled && !UIHoverManager.isInputBlocked && (!modal || modal === this.node || this.node.isChildOf(modal))
+    }
+
+    private onTouchStart(event: EventTouch): void {
+        if (!GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
+        if (this.mobilePress) { event.propagationStopped = true; return }
+        if (this.view.dialogReady) {
+            this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
+        }
+        const snapshot = this.game.render()
+        if (levelStandsStill(snapshot) || snapshot.result !== 'playing') return
+        const location = event.getLocation()
+        const hit = (button: UIButton) => button.node.activeInHierarchy && button.interactable &&
+            button.node.getComponent(UITransform)!.hitTest(location, event.windowId)
+        const index = this.seedButtons.findIndex(hit)
+        const tool = this.toolButtons.find(entry => hit(entry.button))
+        if (!tool && !this.canUseCursor(snapshot)) return
+        const packet = this.view.seedPacketAt(snapshot, index)
+        const held = snapshot.cursor.mode !== 'none'
+        // Other buttons (Menu, a Mod's controls) keep their normal capture when no plant is held.
+        if (!held && !tool && index < 0 && UIButton.at(location, event.windowId)?.interactable) return
+        const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
+        if (packet && (!held || pickable)) {
+            // Selection replaces the server's held packet atomically; a queued clear is not visible here yet.
+            this.selectSeedPacket(index, true)
+        }
+        if (tool && !held) this.selectTool(tool.toolId)
+        const press = this.mobilePress = {
+            id: event.touch!.getID(), point: this.boardPixel(event), location, windowId: event.windowId,
+            source: packet ? this.seedButtons[index].node : tool?.button.node,
+            leftSource: !packet && !tool, cancelInside: held && !pickable,
+        }
+        this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
+        if (!held && !packet && !tool && !this.collectAt(press.point.x, press.point.y)) this.boardClick(press.point, true)
+        event.propagationStopped = true
+    }
+
+    private mobilePressReady(press: MobilePress): boolean {
+        return !press.source || !press.source.getComponent(UITransform)!.hitTest(press.location, press.windowId)
+    }
+
+    private onTouchEnd(event: EventTouch): void {
+        const press = this.mobilePress
+        if (!this.enabled || !GameDebugSettings.isMobileMode() || !press || event.touch!.getID() !== press.id) return
+        this.mobilePress = undefined
+        this.view.setPointer()
+        const snapshot = this.game.render()
+        if (!this.acceptsBoardInput || !this.canUseCursor(snapshot)) return
+        this.collectAt(press.point.x, press.point.y, false)
+        if (snapshot.cursor.mode === 'none') return
+        event.propagationStopped = true
+        // Native cancellation can have a different end position; resolve at the last tracked point, as before.
+        if (this.mobilePressReady(press)) {
+            this.useCursor(press.point)
+            if (this.game.render().cursor.mode !== 'none') this.game.command({ type: 'clearCursor' })
+        } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
+    }
+
+    private onMouseDown(event: EventMouse): void {
+        if (GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
+        if (this.view.dialogReady) { this.game.command({ type: 'advanceDialog' }); return }
+        if (event.getButton() === 2) {
+            this.cancelPlanting()
+            return
+        }
+        if (event.getButton() === 0) this.onPointer(event)
+    }
+
+    private onPointerMove(event: EventTouch | EventMouse): void {
+        if (!this.enabled || (event instanceof EventMouse
+            ? GameDebugSettings.isMobileMode()
+            : !GameDebugSettings.isMobileMode())) return
+        if (!this.acceptsBoardInput) {
+            if (this.mobilePress) {
+                this.mobilePress = undefined
+                this.view.setPointer()
+            }
+            return
+        }
+        const point = this.boardPixel(event)
+        if (GameDebugSettings.isMobileMode()) {
+            const press = this.mobilePress
+            if (!press || (event as EventTouch).touch!.getID() !== press.id) return
+            const snapshot = this.game.render()
+            if (!this.canUseCursor(snapshot)) {
+                this.mobilePress = undefined
+                this.view.setPointer()
+                return
+            }
+            const previous = press.point
+            press.point = point
+            press.location = event.getLocation()
+            press.windowId = event.windowId
+            const ready = this.mobilePressReady(press)
+            press.leftSource ||= ready
+            this.view.setPointer(ready ? point : undefined)
+            const steps = Math.max(1, Math.ceil(Math.hypot(point.x - previous.x, point.y - previous.y) / MOBILE_SWIPE_STEP))
+            for (let step = 0; step <= steps; step++) {
+                this.collectAt(previous.x + (point.x - previous.x) * step / steps,
+                    previous.y + (point.y - previous.y) * step / steps, false)
+            }
+            return
+        }
+        this.view.setPointer(point)
+        const snapshot = this.game.render()
+        if (snapshot.debug?.collect === 'move'
+            && snapshot.result === 'playing' && snapshot.cursor.mode === 'none') this.collectAt(point.x, point.y, false)
+    }
+
+    private onPointerLeave(event: EventMouse): void {
+        if (!this.enabled || GameDebugSettings.isMobileMode()) return
+        // Changing the hovered child also emits leave events inside the board.
+        const { x, y } = this.boardPixel(event)
+        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) return
+        this.view.setPointer()
+    }
+
+    private onPointer(event: EventTouch | EventMouse): void {
+        const { x, y } = this.boardPixel(event)
+        this.view.setPointer({ x, y })
+        const snapshot = this.game.render()
+        if (!this.canUseCursor(snapshot)) return
+        if (snapshot.cursor.mode !== 'none') this.useCursor({ x, y })
+        else if (!this.collectAt(x, y)) this.boardClick({ x, y }, false)
+    }
+
+    /** Challenge::MouseDown: a click that hits nothing else, while nothing is held, goes to the level rule (the mallet). */
+    private boardClick(point: { x: number; y: number }, touch: boolean): void {
+        const snapshot = this.game.render()
+        if (!this.view.rule?.click || !this.canUseCursor(snapshot) || snapshot.phase !== 'gameplay' || snapshot.cursor.mode !== 'none') return
+        if (!this.view.rule.click(snapshot, point, touch)) return
+        this.game.command({ type: 'boardClick', x: Math.max(0, Math.round(point.x)), y: Math.max(0, Math.round(point.y)) })
+    }
+
+    /** Like the number keys, a replacing selection swaps a held plant for the tool; the same tool again puts it back. */
+    private selectTool(toolId: string, replace = false): void {
+        if (!this.enabled) return
+        const cursor = this.game.render().cursor
+        if (cursor.mode !== 'none' && (!replace || cursor.mode === 'tool' && cursor.toolId === toolId)) { this.cancelPlanting(); return }
+        this.game.command({ type: 'selectTool', toolId })
+        // A touch move can arrive before the next frame; confirm selection at the input boundary.
+        this.game.update(0)
+    }
+
+    private canUseCursor(snapshot: WorldSnapshot): boolean {
+        return !levelStandsStill(snapshot) && snapshot.result === 'playing' &&
+            (snapshot.phase === 'gameplay' && this.view.introComplete || snapshot.cursor.mode === 'tool')
+    }
+
+    private useCursor(point: { x: number; y: number }): void {
+        if (this.game.render().cursor.mode === 'tool') {
+            const { row, column, inBounds } = boardCell(this.view.board, point.x, point.y)
+            if (inBounds) this.game.command({ type: 'useToolAt', row, column })
+            else this.cancelPlanting()
+        } else this.placePlant(point)
+    }
+
+    private placePlant({ x, y: pointerY }: { x: number, y: number }): void {
+        const board = this.view.board
+        const cursor = this.game.render().cursor
+        // Board::PlantingPixelToGridY picks some seeds' cells from below the pointer.
+        const y = pointerY + (cursor.mode === 'seed' ? this.view.pointerOffsetY(cursor.seedId) : 0)
+        const cell = plantingCell(board, x, y)
+        if (cell) this.game.command({ type: 'placePlant', ...cell })
+        else this.cancelPlanting()
+    }
+
+    /**
+     * Collects the item under (x, y), if there is one: the server finds it again and collects it; this frame's items
+     * only say whether the press is the item's, not the board's.
+     */
+    private collectAt(x: number, y: number, includeAward = true): boolean {
+        const item = itemAt(this.game.render().items, this.game.definitions.items, this.view.level, x, y, includeAward)
+        if (item) this.game.command({ type: 'collectItemAt', x, y, ...(includeAward ? {} : { award: false as const }) })
+        return item !== undefined
+    }
+
+    private onKeyPressing(event: EventKeyboard): void {
+        // Only dialogue consumes system key repeats; board shortcuts remain single-press actions.
+        if (this.view.dialogReady && (event.keyCode === KeyCode.SPACE || event.keyCode === KeyCode.ENTER)) this.onKeyDown(event)
+    }
+
+    private onKeyDown(event: EventKeyboard): void {
+        if (!this.acceptsBoardInput) return
+        if (this.view.dialogReady && (event.keyCode === KeyCode.SPACE || event.keyCode === KeyCode.ENTER)) {
+            this.game.command({ type: 'advanceDialog' })
+            return
+        }
+        if (!GameDebugSettings.hotkeysEnabled) return
+        // KeyCode's letters are their capitals' character codes.
+        const tool = this.toolButtons.find(entry => entry.hotkey !== undefined && entry.hotkey.charCodeAt(0) === event.keyCode)
+        if (tool) {
+            if (tool.button.node.activeInHierarchy && tool.button.interactable) this.selectTool(tool.toolId, true)
+            return
+        }
+        if (!this.view.introComplete) return
+        const packetIndex = event.keyCode === KeyCode.DIGIT_0 ? 9 : event.keyCode - KeyCode.DIGIT_1
+        if (packetIndex >= 0 && packetIndex < 10) {
+            const snapshot = this.game.render()
+            if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+            this.selectSeedPacket(packetIndex, true)
+        }
+        else if (event.keyCode === KeyCode.KEY_D) {
+            if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }
+            else gameClock.setSpeed(this.previousSpeed)
+        }
+        // `/repick`, which says itself when the level has no bank to choose again; in a repick, its Let's Rock.
+        else if (event.keyCode === KeyCode.KEY_R) {
+            if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
+            else this.game.debugCommand?.('/repick')
+        }
+        // `/suncost` and `/cooldown`, run as the CLI runs them: the preference kept for later levels, the advice shown.
+        else if (event.keyCode === KeyCode.KEY_S || event.keyCode === KeyCode.KEY_C) {
+            const game = this.game
+            if (!game.debugCommand) return
+            void executeDebugCliCommand(event.keyCode === KeyCode.KEY_S ? '/suncost' : '/cooldown', true, command => game.debugCommand!(command))
+                .then(result => { if (result.ok && result.advice) this.view.showAdvice(result.advice) })
+                .catch(error => console.error('[LevelInput] Switch failed', error))
+        }
+    }
+
+    private cancelPlanting(): void {
+        if (this.game.render().cursor.mode === 'none') return
+        this.game.command({ type: 'clearCursor' })
+        this.view.audio.plantingCancelled()
+    }
+
+    private boardPixel(event: EventTouch | EventMouse): { x: number, y: number } {
+        const ui = event.getUILocation()
+        const local = uiNode({ node: this.node }).transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y))
+        return { x: local.x + WIDTH / 2 - this.view.worldShift, y: HEIGHT / 2 - local.y }
+    }
+}

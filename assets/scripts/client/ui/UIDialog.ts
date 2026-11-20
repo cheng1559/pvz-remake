@@ -1,0 +1,130 @@
+import { _decorator, Component, EventTouch, KeyCode, Node, UITransform, Vec3, type EventKeyboard } from 'cc'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { UIInput } from './UIInput'
+
+const { ccclass } = _decorator
+
+@ccclass('PvZUIDialog')
+export class UIDialog extends Component {
+    private static readonly stack: UIDialog[] = []
+    content!: Node
+    draggable = true
+    clickSound: SoundEffect | null = null
+    onConfirm: () => void = () => this.close(true)
+    onCancel: () => void = () => this.close(false)
+    onClose?: (confirmed: boolean) => void
+    onKeyDown?: (event: EventKeyboard) => boolean
+    private resolve!: (confirmed: boolean) => void
+    readonly result = new Promise<boolean>(resolve => { this.resolve = resolve })
+    private closed = false
+    private dragOffset: Vec3 | null = null
+    get isDragging(): boolean { return this.dragOffset !== null }
+    private readonly dragHover = {
+        cursor: 'grabbing' as const,
+        clearHover: () => { this.dragOffset = null },
+        refreshHover: (pointer: UIHoverPointer, modal: Node | null) =>
+            pointer.canHover && this.dragOffset !== null && modal === this.node,
+    }
+
+    static get isOpen(): boolean { return this.stack.length > 0 }
+
+    static handleKey(event: EventKeyboard): boolean {
+        if (UIInput.handleKey(event)) return true
+        const dialog = this.stack[this.stack.length - 1]
+        if (!dialog) return false
+        event.propagationStopped = true
+        if (dialog.onKeyDown?.(event)) return true
+        if (event.keyCode === KeyCode.ESCAPE) {
+            if (dialog.clickSound !== null) void SoundSystem.play(dialog.clickSound)
+            dialog.onCancel()
+        } else if (event.keyCode === KeyCode.ENTER || event.keyCode === KeyCode.SPACE) {
+            if (dialog.clickSound !== null) void SoundSystem.play(dialog.clickSound)
+            dialog.onConfirm()
+        }
+        return true
+    }
+
+    close(confirmed = false): void {
+        if (this.closed) return
+        this.closed = true
+        this.node.active = false
+        this.resolve(confirmed)
+        this.onClose?.(confirmed)
+        this.node.destroy()
+    }
+
+    onEnable(): void {
+        UIDialog.stack.push(this)
+        UIHoverManager.beginModalBlock(this.node)
+        UIHoverManager.registerClient(this.dragHover)
+        this.node.on(Node.EventType.SIZE_CHANGED, this.fitPanel, this)
+        this.fitPanel()
+        this.content.on(Node.EventType.TOUCH_START, this.startDrag, this)
+        this.content.on(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
+        this.content.on(Node.EventType.TOUCH_END, this.endDrag, this)
+        this.content.on(Node.EventType.TOUCH_CANCEL, this.endDrag, this)
+    }
+
+    onDisable(): void {
+        const index = UIDialog.stack.indexOf(this)
+        if (index >= 0) UIDialog.stack.splice(index, 1)
+        this.dragOffset = null
+        UIHoverManager.unregisterClient(this.dragHover)
+        UIHoverManager.endModalBlock(this.node)
+        this.node.off(Node.EventType.SIZE_CHANGED, this.fitPanel, this)
+        this.content.off(Node.EventType.TOUCH_START, this.startDrag, this)
+        this.content.off(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
+        this.content.off(Node.EventType.TOUCH_END, this.endDrag, this)
+        this.content.off(Node.EventType.TOUCH_CANCEL, this.endDrag, this)
+    }
+
+    onDestroy(): void { this.resolve(false) }
+
+    private localPoint(event: EventTouch): Vec3 {
+        const point = event.getUILocation()
+        return this.node.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(point.x, point.y))
+    }
+
+    private startDrag(event: EventTouch): void {
+        if (!this.draggable || event.target !== this.content) return
+        this.dragOffset = this.localPoint(event).subtract(this.content.position)
+        UIHoverManager.refreshHoverStates()
+        event.propagationStopped = true
+    }
+
+    private moveDrag(event: EventTouch): void {
+        if (!this.dragOffset) return
+        const point = this.localPoint(event).subtract(this.dragOffset)
+        this.setPanelPosition(point.x, point.y)
+        event.propagationStopped = true
+    }
+
+    private fitPanel(): void {
+        const { x, y } = this.content.position
+        this.setPanelPosition(x, y)
+    }
+
+    private setPanelPosition(x: number, y: number): void {
+        const size = this.content.getComponent(UITransform)!.contentSize
+        const bounds = this.node.getComponent(UITransform)!.contentSize
+        const halfWidth = bounds.width / 2 + 8, halfHeight = bounds.height / 2 + 8
+        const clamp = (value: number, a: number, b: number) =>
+            Math.max(Math.min(a, b), Math.min(Math.max(a, b), value))
+        // A pixel is a whole unit (unless /highresolution), as in the original, whose pointer is on whole pixels with whatever
+        // it drags: the dialog goes by whole units from where it stands. Text keeps to whole pixels (FontRenderer), each
+        // line moved by its own part of one; going by less, those parts would change and the lines hop about in the frame.
+        const from = this.content.position
+        const place = (to: number, at: number) => GameDebugSettings.highResolutionEnabled ? to : at + Math.round(to - at)
+        this.content.setPosition(
+            place(clamp(x, -halfWidth, halfWidth - size.width), from.x),
+            place(clamp(y, size.height - halfHeight, halfHeight), from.y),
+        )
+    }
+
+    private endDrag(): void {
+        this.dragOffset = null
+        UIHoverManager.refreshHoverStates()
+    }
+}

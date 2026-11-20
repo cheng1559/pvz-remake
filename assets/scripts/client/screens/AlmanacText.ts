@@ -1,0 +1,120 @@
+import { Color, type Node } from 'cc'
+import { FontMetricsUtil } from '@/client/font'
+import type { UI } from '@/client/ui/UI'
+import type { ScrollbarColors } from '@/client/ui/UIScroll'
+import { uiNode } from '@/client/view/uiNode'
+
+/** `flavor`: {FLAVOR} text, whose line ends are spaces. */
+interface Run { text: string, color: Color, flavor?: boolean }
+interface Line { runs: Run[], spacing: number }
+const BODY = new Color(40, 50, 90)
+const ACCENT = new Color(143, 67, 27)
+const STAT = new Color(204, 36, 29)
+const COLORS: Record<string, Color> = {
+    NORMAL: BODY, KEYWORD: ACCENT, FLAVOR: ACCENT, STAT, METAL: STAT, KEYMETAL: ACCENT,
+    NOCTURNAL: new Color(136, 50, 170), AQUATIC: new Color(11, 161, 219),
+}
+
+/** Keep the original bitmap glyphs and color/spacing tags; descriptions are not Cocos system text. */
+export function almanacLines(text: string, measure: (text: string) => number, width: number): Line[] {
+    const source: Line[] = []
+    let line: Line = { runs: [], spacing: 0 }, color = BODY, flavor = false, skipBreak = false
+    const append = (value: string) => {
+        const last = line.runs.at(-1)
+        if (last?.color === color && !!last.flavor === flavor) last.text += value
+        else line.runs.push({ text: value, color, flavor })
+    }
+    const finish = (spacing = 0) => { line.spacing = spacing; source.push(line); line = { runs: [], spacing: 0 } }
+    for (const part of text.replace(/\r/g, '').split(/(\{[^}]*\}|\n)/)) {
+        if (!part) continue
+        if (part.startsWith('{')) {
+            const tag = part.slice(1, -1)
+            if (tag === 'SHORTLINE' || tag === 'EXTRASHORTLINE') {
+                finish(tag === 'SHORTLINE' ? -9 : -14); skipBreak = true; flavor = false
+            } else if (COLORS[tag]) { color = COLORS[tag]; flavor = tag === 'FLAVOR' }
+        } else if (part === '\n') {
+            if (skipBreak) skipBreak = false
+            else if (flavor) append(' ')
+            else finish()
+        } else { append(part); skipBreak = false }
+    }
+    if (line.runs.length) source.push(line)
+    const wrapped: Line[] = []
+    for (const original of source) {
+        let current: Line = { runs: [], spacing: 0 }, used = 0
+        const add = (value: string, run: Run) => {
+            if (!used && !value.trim()) return
+            // TodWriteString: flavor text draws a run of spaces and line ends as one space (the strings wrap their own
+            // lines after a space), though TodDrawStringWrapped counts each toward the line's width.
+            const drawn = run.flavor && !value.trim() ? ' ' : value
+            const last = current.runs.at(-1)
+            if (last?.color === run.color) last.text += drawn
+            else current.runs.push({ text: drawn, color: run.color })
+            used += measure(value)
+        }
+        for (const run of original.runs) for (const word of run.text.split(/(\s+)/).filter(Boolean)) {
+            const size = measure(word)
+            if (used && used + size > width && word.trim()) { wrapped.push(current); current = { runs: [], spacing: 0 }; used = 0 }
+            if (size <= width) add(word, run)
+            else for (const char of word) {
+                if (used && used + measure(char) > width) { wrapped.push(current); current = { runs: [], spacing: 0 }; used = 0 }
+                add(char, run)
+            }
+        }
+        current.spacing = original.spacing
+        wrapped.push(current)
+    }
+    return wrapped
+}
+
+export function almanacTextHeight(ui: UI, text: string, width: number): number {
+    const font = ui.assets.fonts.small.config
+    const lineSpacing = FontMetricsUtil.getMetrics(font).lineSpacing
+    return almanacLines(text, value => FontMetricsUtil.measureTextWidth(font, value), width)
+        .reduce((sum, line) => sum + lineSpacing + line.spacing, 0)
+}
+
+/** Text in the middle of a box both ways, as TodDrawStringWrapped's DS_ALIGN_CENTER_VERTICAL_MIDDLE draws it. */
+export function drawMiddleAlmanacText(parent: Node, ui: UI, text: string, box: { x: number, y: number, width: number, height: number }): void {
+    drawAlmanacText(parent, ui, text, { x: box.x, y: box.y + (box.height - almanacTextHeight(ui, text, box.width)) / 2, width: box.width, align: 'center' })
+}
+
+export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
+    x: number, y: number, width: number, height?: number, align?: 'left' | 'center' | 'right', scrollColors?: ScrollbarColors,
+}): number {
+    const font = ui.assets.fonts.small.config
+    const metrics = FontMetricsUtil.getMetrics(font)
+    const measure = (value: string) => FontMetricsUtil.measureTextWidth(font, value)
+    let lines = almanacLines(text, measure, box.width)
+    const heightOf = (values: Line[]) => values.reduce((sum, line) => sum + metrics.lineSpacing + line.spacing, 0)
+    const textHeight = heightOf(lines)
+    const scrolling = box.height !== undefined && textHeight > box.height
+    const height = scrolling ? box.height! : textHeight
+    // Steam 1096 AlmanacDialog: the scrollbar runs over the text measured at the full width, with a page of 85% of
+    // the box (so the end usually leaves 15% blank) and 5% of that text per wheel step. The text is drawn 7px
+    // narrower; when that adds lines the 1096 range can hide the last one, so the range reaches it here.
+    const scroll = scrolling ? ui.scroll(parent, {
+        x: box.x, y: box.y, width: box.width, height, contentHeight: textHeight,
+        pageHeight: height * 0.85, wheelStep: textHeight * 0.05, colors: box.scrollColors,
+    }) : null
+    const width = scroll?.contentWidth ?? box.width
+    if (scroll) {
+        lines = almanacLines(text, measure, width)
+        scroll.setContentHeight(textHeight, heightOf(lines))
+    }
+    const content = scroll?.content ?? uiNode({
+        name: 'Description', parent, position: { x: box.x, y: -box.y },
+        anchor: { x: 0, y: 1 }, size: { width, height },
+    }).node
+    let y = 0
+    for (const line of lines) {
+        const free = width - line.runs.reduce((sum, run) => sum + measure(run.text), 0)
+        let x = box.align === 'right' ? free : box.align === 'center' ? Math.round(free / 2) : 0
+        for (const run of line.runs) {
+            ui.label(content, { text: run.text, font: 'small', color: run.color, x, y })
+            x += measure(run.text)
+        }
+        y += metrics.lineSpacing + line.spacing
+    }
+    return height
+}

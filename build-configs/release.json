@@ -1,0 +1,10 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "useSplashScreen": false,
+    "packages": {
+        "web-mobile": {
+            "orientation": "landscape"
+        }
+    }
+}

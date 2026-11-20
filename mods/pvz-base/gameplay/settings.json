@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "economy": {
+    "maxSun": 9990,
+    "maxMoney": 99999
+  },
+  "seedBank": {
+    "baseSlots": 6,
+    "maxSlots": 10,
+    "startingSeeds": ["pvz:peashooter"]
+  },
+  "flagWave": {
+    "zombie": "pvz:flag",
+    "plain": "pvz:normal",
+    "maxPlain": 8
+  },
+  "zenGarden": {
+    "columns": 8,
+    "capacity": 32,
+    "template": {"plant": "pvz:marigold", "whichZenGarden": "main", "facing": "right", "lastWateredTime": 0, "drawVariation": "normal", "plantAge": "sprout", "timesFed": 0, "feedingsPerGrow": 3, "plantNeed": "none", "lastNeedFulfilledTime": 0, "lastFertilizedTime": 0, "lastChocolateTime": 0}
+  }
+}

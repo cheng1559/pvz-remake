@@ -1,0 +1,362 @@
+import { modErrorOwner, modFaults, ModRuntimeError } from '@/shared/mod/ModHost'
+import { BlockInputEvents, Node } from 'cc'
+import { isZombieOnScreen } from '@/shared/content/zombieStates'
+import { LocalIntegratedGame } from './LocalIntegratedGame'
+import { loadInstalledMods } from './ModLoader'
+import { createLocalGameSaveStore } from './CocosGameSaveStore'
+import { GAME_SAVE_KEY } from '@/shared/menu'
+import { createGameSave, parseGameSave, type GameSave } from './SaveCoordinator'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
+import { LevelView } from '@/client/level/LevelView'
+import {
+    LevelScene,
+    type LevelLifecycle,
+} from '@/client/level/LevelScene'
+import { uiNode } from '@/client/view/uiNode'
+import { menuApi } from '@/client/api/MenuApi'
+import { levelStandsStill, sameMod, sameMods, type EnabledMod, type JsonValue } from '@/shared/protocol/index'
+import type { ServerSaveSnapshot } from '@/server/session/save'
+import type { LevelDefinition } from '@/shared/content/gameplay'
+import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+
+/** A stored save that no longer matches the installed content or fails restore checks. */
+class IncompatibleSaveError extends Error {}
+
+/** Restore failures of a stored save become IncompatibleSaveError; other failures pass through. */
+async function restoring<T>(save: GameSave | undefined, task: () => T | Promise<T>): Promise<T> {
+    try {
+        return await task()
+    } catch (error) {
+        if (!save || error instanceof IncompatibleSaveError || modErrorOwner(error)) throw error
+        throw new IncompatibleSaveError(error instanceof Error ? error.message : String(error))
+    }
+}
+
+export interface LevelController {
+    show(): Promise<Node>
+    play(options?: { forceNewGame?: boolean, levelId?: string, onRestore?: () => void }): Promise<Node>
+    hide(): void
+    isRunning(): boolean
+    isPaused(): boolean
+    canPause(reason?: 'focusLoss'): boolean
+    cancelCursor(): boolean
+    isLevelIntro(): boolean
+    /** A repick (`/repick`) is choosing the bank again, or its chooser still lifting out. */
+    isRepicking(): boolean
+    getLevelDefinition(): LevelDefinition | null
+    isWon(): boolean
+    countZombiesOnScreenForMusic(): number
+    debugCommand(command: string): DebugCliResult
+    /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
+    /** `keepMusic`: the board waits but its music plays on (a page opened from the seed chooser). */
+    pause(quiet?: boolean, keepMusic?: boolean): void
+    resume(): void
+    /** Gives the level the profile's purse, which a store page opened over it may have changed. */
+    syncPurse(): Promise<void>
+    snapshot(): Promise<GameSave>
+    restore(save?: unknown): Promise<Node>
+    save(): Promise<GameSave>
+    saveIfRunning(): Promise<GameSave | null>
+    deleteSave(): Promise<void>
+}
+type ProbeGlobal = typeof globalThis & { pvzLevel?: LevelController }
+
+interface RunningLevel {
+    root: Node
+    game: LocalIntegratedGame
+    view: LevelView
+    scene: LevelScene
+    base: EnabledMod
+    level: LevelDefinition
+    createdAt?: number
+}
+
+const DEFAULT_START_OPTIONS = {
+    levelId: 'pvz:adventure-1-1',
+    initialMoney: 0,
+    firstAdventure: true,
+    mods: [] as EnabledMod[],
+}
+
+export function createLevelController(
+    parent: Node,
+    lifecycle: LevelLifecycle = {},
+): LevelController {
+    let current: RunningLevel | null = null
+    let loading: Promise<Node> | null = null
+    let saving: Promise<GameSave> | null = null
+    let revision = 0
+
+    const profileId = async () => {
+        const id = (await menuApi.getCurrentUser())?.id
+        if (!id) throw new Error('Level save requires a current player profile')
+        return id
+    }
+    const storeForProfile = (id: number) =>
+        createLocalGameSaveStore(`${GAME_SAVE_KEY}:${id}:adventure`)
+    const load = async (save?: GameSave, levelId = DEFAULT_START_OPTIONS.levelId): Promise<RunningLevel> => {
+        const rollback = current?.root.isValid ? await current.scene.snapshotPresentation() : undefined
+        const root = uiNode({ name: 'Level', parent, viewport: true }).node
+        // Built hidden, like a restore; commit shows it in the same frame it removes the previous level, so starting a
+        // level (/level, Restart) never shows an empty or half-built screen.
+        root.active = false
+        root.addComponent(BlockInputEvents)
+        let scene: LevelScene | undefined
+        try {
+            const content = await loadIntegratedGameContent()
+            if (!content.levels.levels[save?.levelId ?? levelId]) throw new Error(`Level is not installed: ${save?.levelId ?? levelId}`)
+            const { base } = content
+            if (save) {
+                if (save.profileId !== await profileId()) throw new Error('GameSave belongs to another player profile')
+                if (!sameMod(save.contentSet.base, base)) {
+                    throw new IncompatibleSaveError('GameSave base content does not match the installed content')
+                }
+                if (!sameMods(save.contentSet.mods, content.enabledMods)) {
+                    throw new IncompatibleSaveError('GameSave Mods do not match the installed gameplay Mods')
+                }
+            }
+            // The Mods' server side (behaviors, rules, hooks) goes to the game the client hosts, never through the client.
+            const { gameplay } = await loadInstalledMods()
+            if (!root.isValid) throw new Error('Level scene was closed while loading')
+            const profile = await menuApi.getCurrentUser()
+            const purse = profile ? await menuApi.getPurse()
+                : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
+            const playerName = profile?.name || 'Player'
+            const earnedAchievements = profile ? (await menuApi.getAchievements()).items.filter(item => item.earned).map(item => item.id) : undefined
+            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
+            const startOptions = save ? {
+                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+                randomSeed: save.server.random.state, cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
+                levelId: save.levelId,
+                mods: save.contentSet.mods,
+                save: save.server as unknown as JsonValue,
+            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+                randomSeed: Math.floor(Math.random() * 0x100000000), cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
+                firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
+                // Without a player every seed is there, as on a replay.
+                ...(profile && 'ownedSeeds' in purse ? { ownedSeeds: purse.ownedSeeds } : {}),
+                // CutScene::CanGetPacketUpgrade's mDidntPurchasePacketUpgrade < 2; the level checks the rest.
+                ...(purse.declinedPacketUpgrades < 2 ? { packetUpgradeOffer: { cost: purse.packetUpgradeCost } } : {}) }
+            await restoring(save, () => game.start(startOptions))
+            // LawnApp::CanShowAlmanac and CanShowStore: the seed chooser's links to them.
+            const almanacZombies = profile?.unlocks.almanac ? (await menuApi.getAlmanac()).zombies.map(zombie => zombie.zombie) : undefined
+            const view = await LevelView.create(root, content, save?.levelId ?? levelId, {
+                name: playerName, upgradeCost: purse.packetUpgradeCost, nextUpgradeCost: purse.nextPacketUpgradeCost,
+                ...(almanacZombies ? { almanacZombies } : {}), store: profile?.unlocks.store === true,
+            }, game.render())
+            view.onOpenAlmanac = zombie => { void lifecycle.onAlmanac?.(zombie) }
+            view.onOpenStore = () => { void lifecycle.onStore?.() }
+            // The profile owns the purse; a level only reports what it collected.
+            if (profile) view.onMoneyChanged = money => { void menuApi.setCoins(money).catch(error => console.error('[LevelController] Saving coins failed', error)) }
+            if (profile) view.onAchievementEarned = (id, shown) => {
+                void menuApi.earnAchievement(id, shown).catch(error => console.error('[LevelController] Saving an achievement failed', error))
+            }
+            if (profile) view.onPacketUpgradeAnswered = (accepted, coins) => {
+                void menuApi.recordPacketUpgradeOffer(accepted, coins).catch(error => console.error('[LevelController] Saving the seed-slot upgrade failed', error))
+            }
+            scene = root.addComponent(LevelScene)
+            scene.configure(game, view, startOptions, lifecycle)
+            if (save) await restoring(save, () => scene!.restorePresentation(save.client))
+            // A level's switches start as DEFAULT_DEBUG_RULES (recharge and sun cost on, invincibility off), saved or not;
+            // the preferences turn over those that differ.
+            if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown')
+            if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost')
+            if (GameDebugSettings.plantInvincible) game.debugCommand('/plantinvincible')
+            if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
+            return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
+        } catch (error) {
+            try {
+                if (!modFaults.current && scene && rollback && current?.root.isValid) {
+                    scene.prepareForReplacement()
+                    await current.scene.restorePresentation(rollback)
+                }
+            } catch (rollbackError) {
+                throw new ModRuntimeError(modErrorOwner(rollbackError), rollbackError)
+            } finally { if (root.isValid) root.destroy() }
+            throw error
+        }
+    }
+    const commit = async (save?: GameSave, levelId?: string): Promise<Node> => {
+        const expectedRevision = revision
+        const candidate = await load(save, levelId)
+        if (modFaults.current || revision !== expectedRevision) {
+            if (candidate.root.isValid) candidate.root.destroy()
+            throw new Error('Level scene was closed while loading')
+        }
+        if (current?.root.isValid) {
+            current.scene.prepareForReplacement()
+            current.root.destroy()
+        }
+        candidate.root.active = true
+        current = candidate
+        return candidate.root
+    }
+    const startLoading = (save?: GameSave, levelId?: string) => {
+        const promise = commit(save, levelId).finally(() => {
+            if (loading === promise) loading = null
+        })
+        loading = promise
+        return promise
+    }
+    const snapshot = async (): Promise<GameSave> => {
+        if (loading) await loading
+        if (!current?.root.isValid) throw new Error('Level scene is not running')
+        const currentProfileId = await profileId()
+        const server = current.game.saveAtBoundary() as unknown as ServerSaveSnapshot
+        current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
+        const now = Date.now()
+        current.createdAt ??= now
+        return createGameSave({
+            profileId: currentProfileId,
+            mode: 'adventure',
+            levelId: server.levelId,
+            createdAt: current.createdAt,
+            updatedAt: now,
+            contentSet: { base: current.base, mods: server.mods },
+            server,
+            client: await current.scene.snapshotPresentation(),
+        })
+    }
+    const save = () => {
+        if (current?.level.persistent === false) return Promise.reject(new Error('Temporary levels cannot be saved'))
+        return saving ??= snapshot()
+        .then(value => {
+            if (modFaults.current) throw modFaults.current
+            return storeForProfile(value.profileId).save(value)
+        })
+        .finally(() => { saving = null })
+    }
+    const controller: LevelController = {
+        async show() {
+            if (loading) return loading
+            if (current?.root.isValid) return current.root
+            return startLoading()
+        },
+        async play(options = {}) {
+            if (loading) await loading
+            const requestedLevelId = options.levelId ?? (options.forceNewGame && current?.root.isValid ? current.game.render().levelId : undefined)
+            if (options.forceNewGame) {
+                const targetLevel = current?.root.isValid && requestedLevelId === current.game.render().levelId
+                    ? current.level : requestedLevelId ? (await loadIntegratedGameContent()).levels.levels[requestedLevelId] : undefined
+                const temporary = targetLevel?.persistent === false
+                if (temporary) await controller.saveIfRunning()
+            } else if (current?.root.isValid && (!requestedLevelId || requestedLevelId === current.game.render().levelId)) {
+                return current.root
+            }
+            const stored = options.forceNewGame ? null : storeForProfile(await profileId()).load()
+            const save = !requestedLevelId || stored?.levelId === requestedLevelId ? stored : null
+            const levelId = requestedLevelId ?? save?.levelId ?? (await menuApi.getAdventure()).levelId
+            let root: Node
+            try {
+                root = await startLoading(save ?? undefined, levelId)
+            } catch (error) {
+                if (!save || !(error instanceof IncompatibleSaveError)) throw error
+                // AGENTS.md: dev saves only support the current format, so a mismatched save counts as no save.
+                console.warn(`[LevelController] Discarding incompatible save: ${error.message}`)
+                if (modFaults.current) throw modFaults.current
+                const fresh = await startLoading(undefined, requestedLevelId ?? (await menuApi.getAdventure()).levelId)
+                await controller.deleteSave()
+                return fresh
+            }
+            if (options.forceNewGame && current?.level.persistent !== false) await controller.deleteSave()
+            if (save && current?.root.isValid) {
+                if (options.onRestore) {
+                    current.scene.pause()
+                    options.onRestore()
+                } else current.scene.resume()
+            }
+            return root
+        },
+        hide() {
+            revision++
+            if (current?.root.isValid) {
+                current.view.audio.stop()
+                current.scene.prepareForReplacement()
+                current.root.destroy()
+            }
+            current = null
+        },
+        isRunning() {
+            return current?.root.isValid === true
+        },
+        isWon() {
+            return current?.root.isValid === true && current.game.render().result === 'won'
+        },
+        countZombiesOnScreenForMusic() {
+            const snapshot = current?.root.isValid ? current.game.currentSnapshot : null
+            if (snapshot?.phase !== 'gameplay') return 0
+            return snapshot.zombies.reduce((count, zombie) => count + (isZombieOnScreen(zombie) ? 1 : 0), 0)
+        },
+        getLevelDefinition() {
+            return current?.root.isValid ? current.level : null
+        },
+        debugCommand(command) {
+            if (!current?.root.isValid) return debugCondition('DEBUG_NO_ACTIVE_GAME')
+            const result = current.game.debugCommand(command)
+            current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
+            return result
+        },
+        isPaused() {
+            return current?.root.isValid === true && current.scene.isPaused()
+        },
+        canPause(reason) {
+            return current?.root.isValid === true && (reason === 'focusLoss' ? current.view.canPauseOnFocusLoss : current.view.canOpenMenu) &&
+                !current.scene.isPaused() && current.game.render().result === 'playing'
+        },
+        cancelCursor() {
+            if (!current?.root.isValid) return false
+            const snapshot = current.game.render()
+            if (levelStandsStill(snapshot) || snapshot.result !== 'playing' || snapshot.cursor.mode === 'none') return false
+            current.game.command({ type: 'clearCursor' })
+            current.game.update(0)
+            current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
+            return true
+        },
+        isLevelIntro() {
+            return current?.root.isValid === true && current.game.currentSnapshot?.phase === 'intro'
+        },
+        isRepicking() {
+            return current?.root.isValid === true && current.game.currentSnapshot?.seedChooser?.repick === true
+        },
+        pause(quiet = false, keepMusic = false) {
+            if (current?.root.isValid) current.scene.pause(quiet, keepMusic)
+        },
+        resume() {
+            if (!modFaults.current && current?.root.isValid) current.scene.resume()
+        },
+        async syncPurse() {
+            const level = current
+            if (!level?.root.isValid || !await menuApi.getCurrentUser()) return
+            const purse = await menuApi.getPurse()
+            if (current !== level || !level.root.isValid) return
+            level.game.command({ type: 'syncPurse', money: purse.coins, packetUpgrades: purse.packetUpgrades })
+            level.game.update(0)
+            level.view.sync(level.game.render(), level.game.drainChanges(), level.game.drainEvents())
+        },
+        snapshot,
+        async restore(value?: unknown) {
+            if (loading) await loading
+            const save = value === undefined ? storeForProfile(await profileId()).load() : parseGameSave(value)
+            if (!save) throw new Error('No GameSave exists for the current player profile')
+            return startLoading(save)
+        },
+        save,
+        async saveIfRunning() {
+            if (loading) await loading
+            if (!current?.root.isValid || current.level.persistent === false || current.game.render().result === 'lost') return null
+            if (controller.isLevelIntro()) return null
+            return save()
+        },
+        async deleteSave() {
+            const id = await profileId()
+            if (!modFaults.current) storeForProfile(id).delete()
+        },
+    }
+    return controller
+}
+
+export function installLevelProbe(controller: LevelController): void {
+    ;(globalThis as ProbeGlobal).pvzLevel = controller
+}
+

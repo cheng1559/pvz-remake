@@ -1,0 +1,8 @@
+{
+  "pvz:minigames": {"x": 38, "y": 93, "columnSpacing": 155, "rowSpacing": 119, "buttonWidth": 104, "buttonHeight": 115, "thumbnails": {"sprite": "pvz:challenge_thumbnails", "columns": 22, "rows": 1},
+    "icons": {"WAR_AND_PEAS": 0, "WALL_NUT_BOWLING": 6, "SLOT_MACHINE": 2, "ITS_RAINING_SEEDS": 3, "BEGHOULED": 1, "INVISIGHOUL": 8, "SEEING_STARS": 5, "ZOMBIQUARIUM": 7, "BEGHOULED_TWIST": 20, "LITTLE_TROUBLE": 12, "PORTAL_COMBAT": 15, "COLUMN_AS_YOU_SEE_EM": 4, "BOBSLED_BONANZA": 17, "ZOMBIES_ON_SPEED": 18, "WHACK_A_ZOMBIE": 16, "LAST_STAND": 21, "WAR_AND_PEAS_2": 0, "WALL_NUT_BOWLING_EXTREME": 6, "POGO_PARTY": 14, "FINAL_BOSS": 19}},
+  "pvz:puzzle": {"x": 38, "y": 93, "columnSpacing": 155, "rowSpacing": 119, "buttonWidth": 104, "buttonHeight": 115, "thumbnails": {"sprite": "pvz:challenge_thumbnails", "columns": 22, "rows": 1},
+    "icons": {"SCARY_POTTER_1": 10, "SCARY_POTTER_2": 10, "SCARY_POTTER_3": 10, "SCARY_POTTER_4": 10, "SCARY_POTTER_5": 10, "SCARY_POTTER_6": 10, "SCARY_POTTER_7": 10, "SCARY_POTTER_8": 10, "SCARY_POTTER_9": 10, "SCARY_POTTER_ENDLESS": 10, "I_ZOMBIE_1": 11, "I_ZOMBIE_2": 11, "I_ZOMBIE_3": 11, "I_ZOMBIE_4": 11, "I_ZOMBIE_5": 11, "I_ZOMBIE_6": 11, "I_ZOMBIE_7": 11, "I_ZOMBIE_8": 11, "I_ZOMBIE_9": 11, "I_ZOMBIE_ENDLESS": 11}},
+  "pvz:survival": {"x": 38, "y": 125, "columnSpacing": 155, "rowSpacing": 145, "buttonWidth": 104, "buttonHeight": 115, "thumbnails": {"sprite": "pvz:survival_thumbnails", "columns": 11, "rows": 1},
+    "icons": {"SURVIVAL_DAY_NORMAL": 0, "SURVIVAL_NIGHT_NORMAL": 1, "SURVIVAL_POOL_NORMAL": 2, "SURVIVAL_FOG_NORMAL": 3, "SURVIVAL_ROOF_NORMAL": 4, "SURVIVAL_DAY_HARD": 5, "SURVIVAL_NIGHT_HARD": 6, "SURVIVAL_POOL_HARD": 7, "SURVIVAL_FOG_HARD": 8, "SURVIVAL_ROOF_HARD": 9, "SURVIVAL_POOL_ENDLESS": 10}}
+}

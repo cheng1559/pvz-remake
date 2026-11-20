@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { loadScript } from '../loadScript'
+import { gameClock } from '@/core/GameClock'
+
+test('a level scene runs an injected intro and level through clock scaling, pause, save and completion', async () => {
+    let suspended = false
+    const { LevelScene } = loadScript('assets/scripts/client/level/LevelScene.ts', (id: string) => ({
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/core/GameClock': { gameClock },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfLogicEnabled: true } },
+        './LevelInputPresenter': { LevelInputPresenter: class {
+            start() {} destroy() {} suspend() { suspended = true } resume() { suspended = false }
+        } },
+    }[id] ?? {}))
+    const scene = new LevelScene()
+    let destroyed = false, complete = 0, introTicks = 0, choosing = 0, gameplay = 0
+    let presentationPaused = false, musicPaused = false, soundsPaused = false, coinBanks = 0
+    const commands: string[] = [], deltas: number[] = []
+    const world = { levelId: 'example:second-level', phase: 'intro', result: 'playing', paused: false }
+    const start = { levelId: world.levelId, randomSeed: 5, mods: [], initialMoney: 0 }
+    const audio = {
+        startChoosing() { choosing++ }, startGameplay() { gameplay++ }, syncResult() {}, stop() {},
+        pause() { musicPaused = true }, resume() { musicPaused = false }, pauseSounds(paused: boolean) { soundsPaused = paused },
+    }
+    scene.node = { isValid: true, destroy() { destroyed = true } }
+    scene.configure({
+        start(options: unknown) { assert.equal(options, start) },
+        render: () => world,
+        command(command: { type: string }) {
+            commands.push(command.type)
+            if (command.type === 'completeIntro') world.phase = 'gameplay'
+            if (command.type === 'pause') world.paused = true
+            if (command.type === 'resume') world.paused = false
+        },
+        update(dt: number) { deltas.push(dt) }, drainEvents: () => [], drainChanges: () => ({}),
+        snapshotPresentation: (snapshot: unknown) => snapshot,
+    }, {
+        audio, sync() {}, bindSeedChooser() {}, bindDialogAnswer() {}, setPaused(value: boolean) { presentationPaused = value }, showPauseCoinBank() { coinBanks++ },
+        updateIntro(dt: number) { introTicks += dt; return introTicks >= 1 },
+        updateLevelComplete: () => world.result === 'won',
+        snapshot: async (flow: unknown) => ({ flow }),
+    }, start, { onComplete() { complete++ } })
+    try {
+        scene.pause()
+        assert.deepEqual([world.paused, musicPaused, soundsPaused], [true, false, true], 'intro music plays on while board effects pause')
+        scene.resume()
+        coinBanks = deltas.length = 0
+        gameClock.setSpeed(2)
+        scene.update(0.5)
+        assert.equal(choosing, 1)
+        assert.equal(gameplay, 1)
+        assert.equal(deltas[0], 1)
+        scene.pause()
+        assert.equal(coinBanks, 1, 'Board::Pause shows the coin bank')
+        scene.update(1)
+        assert.equal(presentationPaused, true)
+        assert.equal(musicPaused, true)
+        assert.equal(soundsPaused, true, 'the sounds muted on pause (the disco music) pause with it')
+        assert.equal(suspended, true)
+        assert.equal(deltas.length, 2, 'paused frames cannot advance the world')
+        scene.resume()
+        assert.equal(soundsPaused, false)
+        scene.pause(true)
+        scene.resume()
+        assert.equal(coinBanks, 1, 'a debug pause does not')
+        const snapshot = await scene.snapshotPresentation()
+        assert.equal(snapshot.flow.introCompletionSent, true)
+        assert.equal(snapshot.flow.completionStarted, false)
+        assert.equal(suspended, false)
+        scene.update(0.25)
+        assert.equal(commands.filter(command => command === 'completeIntro').length, 1)
+        world.result = 'won'
+        scene.update(0.25)
+        scene.update(0.25)
+        await Promise.resolve()
+        assert.equal(complete, 1)
+        assert.equal(destroyed, true)
+    } finally { gameClock.setSpeed(1); scene.onDestroy() }
+})

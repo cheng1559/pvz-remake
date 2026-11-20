@@ -1,0 +1,10 @@
+{
+    "debug": true,
+    "useSplashScreen": false,
+    "packages": {
+        "mac": {
+            "skipUpdateXcodeProject": false,
+            "targetVersion": "12.0"
+        }
+    }
+}

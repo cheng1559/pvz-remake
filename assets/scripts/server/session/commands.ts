@@ -1,0 +1,163 @@
+import type { GameCommand } from '@/shared/protocol/index'
+import { debugSuccess, parseDebugCliCommand } from '@/shared/debug/DebugCli'
+import { EconomyStateResource, LevelStateResource, SeedBankResource, TutorialResource } from '../state/resources'
+import { startConveyor } from '../level/conveyor'
+import { executeDebugGameCommand } from '../debug/debugCommands'
+import { items } from '../items/items'
+import { planting } from '../seeds/planting'
+import { applySeedChoice, finishRepick } from '../seeds/seedChooser'
+import type { CommandRejectionCode, QueuedCommand, Session } from './session'
+import { tools } from '../seeds/tools'
+import { levelRule } from '../rules/registry'
+import { clearCursor } from '../seeds/cursor'
+import { getActiveTutorial } from '../tutorials'
+
+/** Runs one player command. Mods handle their own `mod` commands through `host.around(commands, 'execute', ...)`. */
+export const commands = {
+    execute(session: Session, command: GameCommand): CommandRejectionCode | undefined {
+        const { world } = session
+        const level = world.resources.get(LevelStateResource)
+        if (level.result !== 'playing' && command.type !== 'pause' && command.type !== 'resume' && command.type !== 'syncPurse') return 'game-not-playing'
+        if (command.type === 'completeIntro') {
+            if (level.phase !== 'intro') return 'intro-already-complete'
+            if (world.resources.get(SeedBankResource).choosing) return 'seed-choice-incomplete'
+            if (getActiveTutorial(world)?.blocksIntro && world.resources.get(TutorialResource).step !== 'complete') return 'intro-not-complete'
+            level.phase = 'gameplay'
+            startConveyor(world)
+            return
+        }
+        if (command.type === 'pause') {
+            level.paused = true
+            return
+        }
+        if (command.type === 'resume') {
+            level.paused = false
+            return
+        }
+        if (command.type === 'syncPurse') {
+            // StoreScreen::PurchaseItem: a slot bought while a level is up widens an open chooser at once
+            // (SeedBank::UpdateWidth); a bank already in play keeps its size until the next level.
+            const economy = world.resources.get(EconomyStateResource)
+            economy.money = Math.min(session.definitions.economy.maxMoney, command.money)
+            economy.ownedUpgrades = command.packetUpgrades
+            const bank = world.resources.get(SeedBankResource)
+            if (bank.choosing === true && !bank.repick && command.packetUpgrades > economy.packetUpgrades) {
+                economy.packetUpgrades = command.packetUpgrades
+            }
+            return
+        }
+        if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
+            return applySeedChoice(world, session.definitions, command)
+        }
+        if (command.type === 'finishRepick') return finishRepick(world)
+        // A repick stands the level still: nothing but the choice goes on.
+        if (world.resources.get(SeedBankResource).repick) return 'choosing-seeds'
+        if (level.paused) return 'game-paused'
+        if (command.type === 'advanceDialog') {
+            if (level.phase !== 'intro') return 'unsupported-command'
+            getActiveTutorial(world)?.advanceDialog?.(world)
+            return
+        }
+        if (command.type === 'answerDialog') {
+            if (level.phase !== 'intro') return 'unsupported-command'
+            getActiveTutorial(world)?.answerDialog?.(world, command.accept)
+            return
+        }
+        if (command.type === 'selectTool') return tools.select(session, command.toolId)
+        if (command.type === 'useToolAt') return tools.use(session, command.row, command.column)
+        if (command.type === 'clearCursor') {
+            const bank = world.resources.get(SeedBankResource)
+            if (bank.selection.mode !== 'none') getActiveTutorial(world)?.seedCanceled?.(world, session.definitions, session.gameplayTick)
+            clearCursor(world)
+            return
+        }
+        if (level.phase !== 'gameplay') return 'intro-not-complete'
+
+        switch (command.type) {
+            case 'selectConveyorPacket': return planting.selectConveyorPacket(session, command.packetId)
+            case 'selectSeed': return planting.selectSeed(session, command.seedId, command.slot)
+            case 'placePlant': return planting.placePlant(session, command.row, command.column)
+            case 'collectItemAt': return items.collectAt(session, command.x, command.y, command.award !== false)
+            case 'boardClick': {
+                // Challenge::MouseDown: a click that hit nothing else, while nothing is held.
+                const rule = levelRule(world)
+                if (!rule?.boardClick || world.resources.get(SeedBankResource).selection.mode !== 'none') return 'unsupported-command'
+                return rule.boardClick(session, command.x, command.y)
+            }
+            default: return 'unsupported-command'
+        }
+    },
+}
+
+/**
+ * Runs queued commands that take effect between ticks: session commands at any time, and with `processInput`, player
+ * input during gameplay. Returns whether the visible state advanced, which counts as a tick.
+ */
+export function processBoundaryCommands(session: Session, processInput: boolean): boolean {
+    let changed = false
+    while (session.commands.length > 0) {
+        const command = session.commands[0].command
+        const level = session.world.resources.get(LevelStateResource)
+        const playing = level.phase === 'gameplay' && !level.paused && level.result === 'playing'
+        const inputCommand = processInput && playing && (
+            command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant' || command.type === 'mod'
+            || command.type === 'selectConveyorPacket' || command.type === 'selectTool' || command.type === 'useToolAt'
+            || command.type === 'collectItemAt' || command.type === 'boardClick'
+        )
+        if (!isSessionCommand(command) && !inputCommand && playing) {
+            break
+        }
+        const previousPhase = level.phase
+        const previousPaused = level.paused
+        const rejection = processNextCommand(session)
+        const introInput = previousPhase === 'intro' && (command.type === 'advanceDialog' || command.type === 'answerDialog' || command.type === 'selectTool' || command.type === 'useToolAt' || command.type === 'clearCursor')
+        if (inputCommand || (rejection === undefined && (introInput || isSessionCommand(command)
+            && (command.type === 'debug' || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || command.type === 'finishRepick' || level.phase !== previousPhase || level.paused !== previousPaused)))) {
+            session.tick++
+            changed = true
+        }
+    }
+    return changed
+}
+
+/** The schedule's command phase: player input up to the next session command. */
+export function processCommandPhase(session: Session): void {
+    while (session.commands.length > 0 && !isSessionCommand(session.commands[0].command)) {
+        processNextCommand(session)
+    }
+}
+
+function processNextCommand(session: Session): CommandRejectionCode | undefined {
+    const queued = session.commands.shift()!
+    if (queued.command.type === 'debug') {
+        const { definitions, levels } = session
+        const command = queued.command.command
+        const parsed = parseDebugCliCommand(command)
+        const debug = command === 'catalog' ? {
+            ...debugSuccess('Installed debug content'),
+            catalog: {
+                plants: Object.entries(definitions.seeds).filter(([, seed]) => seed.kind === 'plant').map(([id]) => id.replace(/^pvz:/, '')),
+                seeds: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
+                zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
+                items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
+                levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
+            },
+        } : 'name' in parsed ? executeDebugGameCommand(session, parsed) : parsed
+        session.commandResults.push({ sequence: queued.sequence, debug })
+        return
+    }
+    const rejection = commands.execute(session, queued.command)
+    session.commandResults.push({
+        sequence: queued.sequence,
+        ...(rejection === undefined ? {} : { rejection }),
+    })
+    return rejection
+}
+
+/** Commands that change the session rather than the board; they run between ticks even mid-game. */
+function isSessionCommand(command: QueuedCommand): boolean {
+    if (command.type === 'debug') return true
+    return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro' || command.type === 'syncPurse'
+        || command.type === 'advanceDialog' || command.type === 'answerDialog'
+        || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || command.type === 'finishRepick'
+}

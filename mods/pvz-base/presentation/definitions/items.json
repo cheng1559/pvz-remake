@@ -1,0 +1,31 @@
+{
+    "pvz:sun": {
+        "clips": {"idle": {"reanimId": "pvz:sun", "x": 30, "y": -30, "fps": 6, "loop": true}},
+        "collectSounds": [{ "audio": "pvz:points", "foley": true }]
+    },
+    "pvz:smallsun": {
+        "clips": {"idle": {"reanimId": "pvz:sun", "x": 30, "y": -30, "fps": 6, "loop": true}},
+        "collectSounds": [{ "audio": "pvz:points", "foley": true }]
+    },
+    "pvz:coin_silver": {
+        "clips": {"idle": {"reanimId": "pvz:coin_silver", "x": 9, "y": -9, "rateScale": [0.6, 1], "loop": true, "start": "random"}},
+        "flight": { "sprite": "pvz:coin_silver_dollar", "offset": [8, 10] },
+        "glow": { "sprite": "pvz:coinglow", "offset": [-14, -12], "inFlight": true },
+        "arrow": { "particle": "pvz:coinpickuparrow", "offset": [42, -9] },
+        "collectSounds": [{ "audio": "pvz:coin", "foley": true }]
+    },
+    "pvz:coin_gold": {
+        "clips": {"idle": {"reanimId": "pvz:coin_gold", "x": 9, "y": -9, "rateScale": [0.6, 1], "loop": true, "start": "random"}},
+        "flight": { "sprite": "pvz:coin_gold_dollar", "offset": [8, 10] },
+        "glow": { "sprite": "pvz:coinglow", "offset": [-14, -12], "inFlight": true },
+        "arrow": { "particle": "pvz:coinpickuparrow", "offset": [42, -9] },
+        "landSounds": [{ "audio": "pvz:moneyfalls", "foley": true }],
+        "collectSounds": [{ "audio": "pvz:coin", "foley": true }]
+    },
+    "pvz:diamond": {
+        "clips": {"idle": {"reanimId": "pvz:diamond", "x": -3, "y": -4, "fps": [50, 80], "loop": true, "start": "random"}},
+        "glow": { "sprite": "pvz:awardpickupglow", "offset": [-56, -66] },
+        "spawnSounds": [{ "audio": "pvz:chime", "foley": true }],
+        "collectSounds": [{ "audio": "pvz:diamond", "foley": false }]
+    }
+}

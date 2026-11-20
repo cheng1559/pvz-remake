@@ -1,0 +1,10 @@
+{
+    "debug": true,
+    "useSplashScreen": false,
+    "packages": {
+        "ios": {
+            "targetVersion": "15.0",
+            "skipUpdateXcodeProject": false
+        }
+    }
+}

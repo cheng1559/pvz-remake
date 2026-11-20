@@ -12,5 +12,4 @@ include(${CMAKE_CURRENT_LIST_DIR}/../common/CMakeLists.txt)
 
 cc_android_before_target(${CC_LIB_NAME})
 add_library(${CC_LIB_NAME} SHARED ${CC_ALL_SOURCES})
-target_link_libraries(${CC_LIB_NAME} aaudio)
 cc_android_after_target(${CC_LIB_NAME})

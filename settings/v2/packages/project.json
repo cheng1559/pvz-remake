@@ -5,11 +5,12 @@
     "designResolution": {
       "width": 800,
       "height": 600,
+      "fitWidth": true,
       "fitHeight": true
     },
     "highQuality": true
   },
   "script": {
-    "importMap": "C:\\Users\\jp2022213665\\Documents\\projects\\pvz-remake\\import-map.json"
+    "importMap": "C:\\path\\to\\pvz-remake\\import-map.json"
   }
 }

@@ -1,0 +1,13 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "useSplashScreen": false,
+    "outputName": "mac-x64-release",
+    "packages": {
+        "mac": {
+            "skipUpdateXcodeProject": false,
+            "targetVersion": "12.0",
+            "archs": ["x86_64"]
+        }
+    }
+}

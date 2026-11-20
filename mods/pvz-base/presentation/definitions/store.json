@@ -1,0 +1,19 @@
+{
+  "pvz:packet-upgrade": {"sprite": "store_packetupgrade", "offset": [-7, 7], "highlight": {"type": "additive", "opacity": 32}},
+  "pvz:pool-cleaner": {"sprite": "icon_poolcleaner", "offset": [1, 7]},
+  "pvz:rake": {"sprite": "icon_rake", "offset": [-5, 10]},
+  "pvz:roof-cleaner": {"sprite": "icon_roofcleaner", "offset": [0, 28]},
+  "pvz:imitater": {"sprite": "imitaterseed", "highlight": {"type": "seedPacket"}},
+  "pvz:first-aid": {"sprite": "store_firstaidwallnuticon", "offset": [-1, 13]},
+  "pvz:golden-watering-can": {"sprite": "wateringcangold", "offset": [-14, -4]},
+  "pvz:fertilizer": {"sprite": "fertilizer", "offset": [-11, -2]},
+  "pvz:bug-spray": {"sprite": "bug_spray", "offset": [-12, 3]},
+  "pvz:phonograph": {"sprite": "phonograph", "offset": [-12, 3]},
+  "pvz:gardening-glove": {"sprite": "zen_gardenglove", "offset": [-12, 3]},
+  "pvz:mushroom-garden": {"sprite": "store_mushroomgardenicon", "offset": [-8, 2]},
+  "pvz:aquarium-garden": {"sprite": "store_aquariumgardenicon", "offset": [-8, 2]},
+  "pvz:wheelbarrow": {"sprite": "zen_wheelbarrow", "offset": [-12, 3]},
+  "pvz:stinky": {"sprite": "stinky_turn3", "offset": [-24, 14]},
+  "pvz:tree-of-wisdom": {"sprite": "store_treeofwisdomicon", "offset": [-8, 2]},
+  "pvz:tree-food": {"sprite": "treefood", "offset": [-8, -2]}
+}
