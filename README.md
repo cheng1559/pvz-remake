@@ -269,7 +269,7 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | `/tilted` | Enlarges and tilts the pictures in seed packets |
 | `/cursor` | Switches between the original mouse cursors and the system's |
 | `/hotkeys` | Turns keyboard hotkeys on or off; see below |
-| `/autopause` | Turns pausing on focus loss on or off; losing focus always mutes |
+| `/autopause` | Turns pausing on focus loss on or off; off, the game also stays audible behind other windows |
 | `/haptics` | Turns touch haptics on or off |
 | `/mobile`, `/fullscreen` | Switches mobile mode or full screen |
 | `/resize` | Lets the desktop window be resized freely; off, it keeps a height of 600 and its width follows its aspect (off by default) |

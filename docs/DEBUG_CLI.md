@@ -311,7 +311,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 
 #### Focus, haptics, controls, full screen and volume
 
-- `/autopause`: when the window loses focus or is hidden, a level that can pause opens the pause menu (not while a menu page, a dialog or the console is open). Losing focus always mutes the audio, whether this switch is on or off. It is on by default and saved locally.
+- `/autopause`: when the window loses focus or is hidden, a level that can pause opens the pause menu (not while a menu page, a dialog or the console is open), and the audio is muted. Off, the game neither pauses nor mutes when another window takes the focus; it still mutes while hidden (another tab, a minimized window, an app in the background). It is on by default and saved locally.
 - `/haptics` turns all haptic feedback on or off immediately. It is on by default and saved locally.
 - `/mobile` switches mobile mode. In mobile mode the board ignores the mouse and takes touches: press a seed packet or the shovel, drag it onto the lawn and release it there; dragging across sun and coins collects them. See [Touch](UI.md#touch) in UI. It is on by default on mobile devices and off elsewhere, and it lasts for the session only.
 - `/fullscreen` switches full screen, saved in the game settings like the full-screen option in Options. Native mobile apps are always full screen ("Windowed mode is unavailable on mobile"), and a browser without full-screen support reports "Full screen is unavailable".

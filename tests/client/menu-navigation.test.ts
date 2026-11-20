@@ -523,10 +523,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     }
 })
 
-test('focus loss pauses once, hides silently, and regaining focus leaves the pause dialog open', async () => {
+test('focus loss pauses once, hides silently, mutes without auto-pause only when hidden, and regaining focus leaves the pause dialog open', async () => {
     const listeners = new Map<string, () => void>()
     const events = { on: (key: string, f: () => void) => listeners.set(key, f), off: (key: string) => listeners.delete(key) }
-    let focused = true, paused = false, saves = 0, dialogs = 0, eligible = true
+    let focused = true, paused = false, saves = 0, dialogs = 0, eligible = true, muted = false
+    // Each change of the focus mute, as SoundSystem acts only on a change.
     const mute: boolean[] = []
     const settings = { autoPauseEnabled: true }
     const dialogState = { isOpen: false }
@@ -537,7 +538,10 @@ test('focus loss pauses once, hides silently, and regaining focus leaves the pau
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/client/ui/UIDialog': { UIDialog: dialogState },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
-        '@/client/sound/SoundSystem': { SoundSystem: { setFocusMuted: (v: boolean) => mute.push(v), play() { assert.fail('unexpected pause sound') } } },
+        '@/client/sound/SoundSystem': { SoundSystem: {
+            setFocusMuted(value: boolean) { if (value !== muted) mute.push(muted = value) },
+            play() { assert.fail('unexpected pause sound') },
+        } },
         '@/client/dialogs/MenuDialog': { showMenuDialog() { dialogs++; return { node: {} } } },
     }
     const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => modules[id] ?? {}, {
@@ -575,10 +579,13 @@ test('focus loss pauses once, hides silently, and regaining focus leaves the pau
             settings.autoPauseEnabled = skip !== 'disabled'
             listeners.get('blur')!()
             assert.equal(paused, false)
+            assert.equal(muted, skip !== 'disabled', 'losing focus mutes only with auto-pause on')
             listeners.get('hide')!()
+            assert.equal(muted, true, 'hiding mutes whether auto-pause is on or off')
             listeners.get('focus')!()
-            assert.equal(mute.at(-1), true, 'focus alone cannot unmute a hidden window')
+            assert.equal(muted, true, 'focus alone cannot unmute a hidden window')
             listeners.get('show')!()
+            assert.equal(muted, false)
         }
         assert.equal(dialogs, 1)
         assert.equal(saves, 4, 'hiding still saves once when auto-pause is skipped')
