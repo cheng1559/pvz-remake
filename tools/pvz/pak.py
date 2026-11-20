@@ -238,14 +238,14 @@ def rename_all_to_lower(root: Path, *, dry_run: bool = False) -> int:
     if not root.is_dir():
         raise NotADirectoryError(f"Root is not a directory: {root}")
 
-    # Collect first to avoid issues if future enhancements include directory renames.
-    files: list[Path] = [p for p in root.rglob("*") if p.is_file()]
+    # Files and directories alike: on a case-sensitive file system `Images/button.png` is not `images/button.png`.
+    # Collected first and renamed deepest first, so no path is renamed before the paths inside it.
+    paths: list[Path] = list(root.rglob("*"))
 
     renamed = 0
-    # Deepest paths first (not strictly needed for files, but harmless).
-    files.sort(key=lambda p: len(p.parts), reverse=True)
+    paths.sort(key=lambda p: len(p.parts), reverse=True)
 
-    for path in files:
+    for path in paths:
         lower_name = path.name.lower()
         if lower_name == path.name:
             continue

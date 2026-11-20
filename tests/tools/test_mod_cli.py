@@ -110,7 +110,8 @@ class ModCliTests(unittest.TestCase):
 
     def run_cli(self, *arguments, cwd=ROOT):
         subprocess.run(
-            ["node", str(TSX), str(TOOL), *arguments],
+            # As the npm scripts run it: tsconfig.json needs the Cocos-generated declarations, absent in a fresh clone.
+            ["node", str(TSX), "--tsconfig", str(ROOT / "tsconfig.server.json"), str(TOOL), *arguments],
             cwd=cwd,
             check=True,
             capture_output=True,
