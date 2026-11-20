@@ -151,7 +151,8 @@ def main() -> None:
         decompile(raw)
         import_assets(raw, cursors)
     print('[content] Converted Mod assets; packing the base archive', flush=True)
-    subprocess.run(['node', str(ROOT / 'node_modules/tsx/dist/cli.mjs'), str(ROOT / 'tools/mod/cli.ts'), 'pack', 'pvz-base',
+    subprocess.run(['node', str(ROOT / 'node_modules/tsx/dist/cli.mjs'), '--tsconfig', str(ROOT / 'tsconfig.server.json'),
+                    str(ROOT / 'tools/mod/cli.ts'), 'pack', 'pvz-base',
                     '--publish', str(ROOT / 'assets/resources/base.zip')], cwd=ROOT, check=True)
 
 
