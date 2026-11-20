@@ -354,14 +354,17 @@ Cancel discards the imports and ordering. Reordering only disabled Mods needs no
 
 #### Example Mods
 
+Each Mod has a release of its own, with its ZIP, how to install it and where its content comes from.
+
 | Mod | Content |
 | --- | --- |
-| Widescreen (`widescreen`) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
-| JiangNan PvZ2 pack (`jiangnan-pvz2`) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
-| Chinese pack (`zh-cn`) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
-| HD pack (`hd`) | HD resources: every image at 2x and bitmap fonts at 4x |
-| Chinese HD pack (`zh-cn-hd`) | The HD resources and Simplified Chinese in one package, usable alone |
-| Extra buttons pack (`dlc-buttons`) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
+| [Widescreen](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0) (`widescreen`) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
+| [Widescreen Edition music](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0) (`hd-bgm`) | The music of PvZ Widescreen Edition in place of the game's tracks |
+| [JiangNan PvZ2 pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0) (`jiangnan-pvz2`) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
+| [Chinese pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0) (`zh-cn`) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
+| [HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0) (`hd`) | HD resources: every image at 2x and bitmap fonts at 4x |
+| [Chinese HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0) (`zh-cn-hd`) | The HD resources and Simplified Chinese in one package, usable alone |
+| [Extra buttons pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0) (`dlc-buttons`) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
 
 #### Developing Mods
 

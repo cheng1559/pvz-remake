@@ -354,14 +354,17 @@ flowchart LR
 
 #### 示例模组
 
+每个模组都有单独的发布，其中提供 ZIP 文件、安装方法以及内容来源。
+
 | 模组 | 内容 |
 | --- | --- |
-| 宽屏拓展（`widescreen`） | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
-| 江南 PvZ2 资源包（`jiangnan-pvz2`） | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
-| 汉化资源包（`zh-cn`） | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
-| HD 资源包（`hd`） | 全部图像 2 倍、位图字体 4 倍的高清资源 |
-| HD 汉化资源包（`zh-cn-hd`） | 高清资源与简体中文的合并包，可单独使用 |
-| 扩展按钮资源包（`dlc-buttons`） | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
+| [宽屏拓展](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0)（`widescreen`） | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
+| [宽屏版背景音乐](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0)（`hd-bgm`） | 以 PvZ 宽屏版的配乐替换游戏音乐 |
+| [江南 PvZ2 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0)（`jiangnan-pvz2`） | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
+| [汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0)（`zh-cn`） | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
+| [HD 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0)（`hd`） | 全部图像 2 倍、位图字体 4 倍的高清资源 |
+| [HD 汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0)（`zh-cn-hd`） | 高清资源与简体中文的合并包，可单独使用 |
+| [扩展按钮资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0)（`dlc-buttons`） | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
 
 #### 开发说明
 
