@@ -30,10 +30,13 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
         height = 0
         getComponent() { return { setContentSize: (size: any) => Object.assign(this, size) } }
     }
+    const settings = { windowResizable: false }
+    const cc = { Node, view, screen, sys, ResolutionPolicy: { NO_BORDER: crop, SHOW_ALL: letterbox } }
     const exports = loadScript('assets/scripts/client/view/ClientViewport.ts',
-        () => ({ Node, view, screen, sys, ResolutionPolicy: { NO_BORDER: crop, SHOW_ALL: letterbox } }), {
+        id => id === '@/platform/debug/GameDebugSettings' ? { GameDebugSettings: settings } : cc, {
             jsb: { setWindowAspectRatio: (...args: number[]) => { constraints.push(args); return true } },
         })
+    exports.refreshNativeWindow()
     exports.constrainNativeWindow(4 / 3, 21 / 9)
     assert.equal(constraints.length, 0, 'web preview does not constrain its host window')
     sys.isNative = true
@@ -41,7 +44,15 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
         sys.os = os
         exports.constrainNativeWindow(4 / 3, 21 / 9)
     }
-    assert.deepEqual(constraints, [[4 / 3, 21 / 9], [4 / 3, 21 / 9]], 'only native desktop windows are constrained')
+    assert.deepEqual(constraints, [[4 / 3, 21 / 9, 600], [4 / 3, 21 / 9, 600]],
+        'only native desktop windows are constrained, held at the design height until /resize frees them')
+    sys.os = sys.OS.OSX
+    settings.windowResizable = true
+    exports.refreshNativeWindow()
+    settings.windowResizable = false
+    exports.refreshNativeWindow()
+    assert.deepEqual(constraints.slice(2), [[4 / 3, 21 / 9, 0], [4 / 3, 21 / 9, 600]],
+        '/resize frees the window under its current constraint, and turned off holds it at 600 again')
     sys.os = sys.OS.OSX
     constraints.length = 0
     exports.initializeViewport()
@@ -50,7 +61,7 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
     exports.expandViewport({ minAspect: 4 / 3, maxAspect: 21 / 9 })
     exports.expandViewport()
     exports.initializeViewport()
-    assert.deepEqual(constraints, [[4 / 3, 4 / 3], [4 / 3, 21 / 9]], 'desktop window aspect is limited to 21:9')
+    assert.deepEqual(constraints, [[4 / 3, 4 / 3, 600], [4 / 3, 21 / 9, 600]], 'desktop window aspect is limited to 21:9')
     assert.equal(view.listenerCount('canvas-resize'), 1)
     for (const node of [menu, level, dialog]) assert.ok(Math.abs(node.width - 600 * 1600 / 900) < 1e-8)
     // Hiding/destroying a menu does not restore the old letterboxed viewport.
@@ -90,13 +101,13 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
     assert.equal(level.height, 600)
     exports.expandViewport({ minAspect: 4 / 3, maxAspect: 21 / 9 })
     exports.initializeViewport()
-    assert.deepEqual(constraints.slice(2), [[4 / 3, 21 / 9]], 'restart restores the window aspect limit')
+    assert.deepEqual(constraints.slice(2), [[4 / 3, 21 / 9, 600]], 'restart restores the window aspect limit')
     exports.resetViewport()
     exports.expandViewport({ minAspect: 4 / 3, maxAspect: 16 / 9 })
-    assert.deepEqual(constraints.at(-1), [4 / 3, 16 / 9], 'other Mods retain the existing window limit by default')
+    assert.deepEqual(constraints.at(-1), [4 / 3, 16 / 9, 600], 'other Mods retain the existing window limit by default')
     exports.resetViewport()
     exports.initializeViewport()
-    assert.deepEqual(constraints.at(-1), [4 / 3, 4 / 3], 'startup without the Mod restores the fixed window ratio')
+    assert.deepEqual(constraints.at(-1), [4 / 3, 4 / 3, 600], 'startup without the Mod restores the fixed window ratio')
     for (const node of [level, dialog]) node.emit('destroyed')
     assert.deepEqual(view.eventNames(), [])
 })

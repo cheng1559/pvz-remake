@@ -261,6 +261,8 @@ The debug console's history (64 commands) is kept under `pvz-remake:debug:cli-hi
 
 Native Windows and macOS remember the window like the original's `PreferredX`/`PreferredY` registry values. `native/engine/common/Classes/Game.cpp` follows the position and size of the normal window (not full screen, maximized or minimized), writes them to `window.txt` in the writable path when the window closes, and reads them before creating the next window. When the middle of the saved window's top edge is no longer within any display's usable area, the engine centres an 800×600 window instead.
 
+Unless `/resize` is on (see [Debug Console](DEBUG_CLI.md)), the window keeps a height of 600 and a width that follows its aspect within the allowed range, so it is 800×600 without the widescreen Mod. `ClientViewport.constrainNativeWindow` passes that height to `jsb.setWindowAspectRatio`, whose native side scales the window to it and holds it through drags, Snap and DPI changes, with maximizing turned off; a saved window of another size is corrected at startup.
+
 ## UI toolkit
 
 ### Code layout

@@ -1,4 +1,5 @@
 import { Node, ResolutionPolicy, screen, sys, UITransform, view, type Size } from 'cc'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 let restore: (() => void) | undefined
 let followingKeyboard = false
@@ -32,13 +33,31 @@ export function initializeViewport(): void {
     constrainNativeWindow(width / height, width / height)
 }
 
-/** Constrain the OS window's content area on native desktop platforms. */
+/** Whether there is an OS window to constrain: native desktop platforms. */
+export function hasNativeWindow(): boolean {
+    return sys.isNative && (sys.os === sys.OS.OSX || sys.os === sys.OS.WINDOWS)
+}
+
+/** The aspect range the OS window was last constrained to; undefined until the first constraint. */
+let windowAspect: { minimum: number, maximum: number } | undefined
+
+/**
+ * Constrain the OS window's content area on native desktop platforms. Unless `/resize` lets it be resized freely, it
+ * also keeps the design height (600): the native side scales the window to it at its aspect, clamped to the range, and
+ * only the width can change after, so with a single aspect the window keeps 800x600.
+ */
 export function constrainNativeWindow(minimum: number, maximum: number): void {
-    if (!sys.isNative || (sys.os !== sys.OS.OSX && sys.os !== sys.OS.WINDOWS)) return
+    windowAspect = { minimum, maximum }
+    if (!hasNativeWindow()) return
     const host = globalThis as typeof globalThis & { jsb: {
-        setWindowAspectRatio(minimum: number, maximum: number): boolean
+        setWindowAspectRatio(minimum: number, maximum: number, height: number): boolean
     } }
-    host.jsb.setWindowAspectRatio(minimum, maximum)
+    host.jsb.setWindowAspectRatio(minimum, maximum, GameDebugSettings.windowResizable ? 0 : view.getDesignResolutionSize().height)
+}
+
+/** Applies a change of `/resize` to the window under its current constraint. */
+export function refreshNativeWindow(): void {
+    if (windowAspect) constrainNativeWindow(windowAspect.minimum, windowAspect.maximum)
 }
 
 /** Expand the centered stage within the aspect range, letterboxing outside it. */

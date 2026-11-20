@@ -277,6 +277,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 | `/haptics` | Turns haptic feedback on or off |
 | `/mobile` | Switches between mouse controls and touch controls |
 | `/fullscreen` | Switches full screen on or off |
+| `/resize` | Lets the desktop window be resized freely, or holds it at a height of 600 |
 | `/music {0-100}` | Sets the music volume, an integer percentage |
 | `/sfx {0-100}` | Sets the sound effect volume, an integer percentage |
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | Turns one part of drawing or processing off or on |
@@ -314,6 +315,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 - `/haptics` turns all haptic feedback on or off immediately. It is on by default and saved locally.
 - `/mobile` switches mobile mode. In mobile mode the board ignores the mouse and takes touches: press a seed packet or the shovel, drag it onto the lawn and release it there; dragging across sun and coins collects them. See [Touch](UI.md#touch) in UI. It is on by default on mobile devices and off elsewhere, and it lasts for the session only.
 - `/fullscreen` switches full screen, saved in the game settings like the full-screen option in Options. Native mobile apps are always full screen ("Windowed mode is unavailable on mobile"), and a browser without full-screen support reports "Full screen is unavailable".
+- `/resize` decides how the Windows and macOS window can be resized; it is off by default and kept on this device. Off, the window keeps a height of 600 and a width of 600 times its aspect, within the range of aspects the game allows: 800×600 without the widescreen Mod, and with it a width from 800 to 1400 that only a sideways drag changes, and it cannot be maximized. Turning it off scales the window to that height at its current aspect; a full-screen window is scaled when it leaves full screen. On, the window can be resized freely within the range. The 600 is in the game's pixels, which a high-DPI display enlarges as it does the default window. On the web and on mobile devices it reports "Window resizing is unavailable".
 - `/music` and `/sfx` set the volume as an integer from 0 to 100, saved through the settings API in the same settings as Options.
 
 #### Performance switches
@@ -359,7 +361,7 @@ Hotkeys work only in a level, while no dialog covers the board. `F` works whenev
 
 ## Switches and saved settings
 
-The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`.
+The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen`, `/resize` and `/perf {category}`.
 
 | Setting | Command | Default | Kept |
 | --- | --- | --- | --- |
@@ -377,6 +379,7 @@ The switches take no argument: each run turns its switch over and shows where it
 | Hotkeys | `/hotkeys` | Off | On this device |
 | Pause on focus loss | `/autopause` | On | On this device |
 | Haptics | `/haptics` | On | On this device |
+| Window resizing | `/resize` | Off | On this device |
 | Mobile controls | `/mobile` | On on mobile devices, off elsewhere | This session only |
 | Performance switches | `/perf {category}` | On | This session only |
 | Game speed | `/gamespeed` | 1 | This session only |

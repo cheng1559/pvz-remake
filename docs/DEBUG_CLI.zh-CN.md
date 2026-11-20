@@ -279,6 +279,7 @@
 | `/haptics` | 开关触屏振动 |
 | `/mobile` | 在鼠标操作与触屏操作之间切换 |
 | `/fullscreen` | 开关全屏 |
+| `/resize` | 允许自由调整桌面窗口大小，或把窗口固定在 600 高 |
 | `/music {0-100}` | 设定音乐音量，取值为整数百分比 |
 | `/sfx {0-100}` | 设定音效音量，取值为整数百分比 |
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | 关闭或重新开启某一部分的绘制或运算 |
@@ -316,6 +317,7 @@
 - `/haptics` 立即开关全部触屏振动。默认开启，保存在本机。
 - `/mobile` 切换移动模式。移动模式下，草坪忽略鼠标，改为响应触屏：按住种子包或铁铲，拖到草坪上松开即可使用；手指划过阳光和金币即可收集。详见 UI 中的[触屏](UI.zh-CN.md#触屏)一节。在移动设备上默认开启，其他设备默认关闭，只在本次运行期间有效。
 - `/fullscreen` 切换全屏，与"选项"中的全屏设置一样保存在游戏设置中。原生移动版始终全屏（"Windowed mode is unavailable on mobile"）；不支持全屏的浏览器会提示"Full screen is unavailable"。
+- `/resize` 决定 Windows 与 macOS 的窗口能否调整大小，默认关，保存在本机。关闭时窗口高度固定为 600，宽度为 600 × 当前宽高比，并限制在游戏允许的宽高比范围内：没装宽屏模组时就是 800×600；装了宽屏模组时宽度在 800～1400 之间，只能横向拖动；窗口也不能最大化。关闭时窗口按当前宽高比缩放到这个高度；处于全屏时，退出全屏后再缩放。打开后可以在宽高比范围内自由调整。这里的 600 是游戏的像素，高 DPI 屏幕会像默认窗口一样把它放大。网页版和移动设备会提示"Window resizing is unavailable"。
 - `/music` 和 `/sfx` 以 0 到 100 的整数设定音量，通过设置接口保存，与"选项"中的设置相同。
 
 #### 性能开关
@@ -361,7 +363,7 @@
 
 ## 开关与保存的设置
 
-开关类指令不带参数：每执行一次就切换一次状态，并在屏幕上提示新的状态，如"Recharge: off"。开关类指令包括各规则开关，以及 `/autopause`、`/hotkeys`、`/haptics`、`/cursor`、`/highresolution`、`/tilted`、`/fps`、`/hitboxes`、`/mobile`、`/fullscreen` 和 `/perf {category}`。
+开关类指令不带参数：每执行一次就切换一次状态，并在屏幕上提示新的状态，如"Recharge: off"。开关类指令包括各规则开关，以及 `/autopause`、`/hotkeys`、`/haptics`、`/cursor`、`/highresolution`、`/tilted`、`/fps`、`/hitboxes`、`/mobile`、`/fullscreen`、`/resize` 和 `/perf {category}`。
 
 | 设置 | 指令 | 默认值 | 保存方式 |
 | --- | --- | --- | --- |
@@ -379,6 +381,7 @@
 | 快捷键 | `/hotkeys` | 关 | 保存在本机 |
 | 失焦自动暂停 | `/autopause` | 开 | 保存在本机 |
 | 触屏振动 | `/haptics` | 开 | 保存在本机 |
+| 调整窗口大小 | `/resize` | 关 | 保存在本机 |
 | 移动模式 | `/mobile` | 移动设备上为开，其他设备为关 | 仅本次运行 |
 | 性能开关 | `/perf {category}` | 开 | 仅本次运行 |
 | 游戏速度 | `/gamespeed` | 1 | 仅本次运行 |

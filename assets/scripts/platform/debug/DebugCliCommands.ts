@@ -2,6 +2,7 @@ import { screen, sys } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { CursorManager } from '@/client/input/CursorManager'
 import { OriginalResolution } from '@/client/view/OriginalResolution'
+import { hasNativeWindow, refreshNativeWindow } from '@/client/view/ClientViewport'
 import { setFontSharpness } from '@/client/font/FontAreaMaterial'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
@@ -69,6 +70,12 @@ async function executeCommand(
             if (!OptionsSettings.fullScreenForced && !screen.supportsFullScreen) return debugCondition('DEBUG_FULLSCREEN_UNAVAILABLE')
             await OptionsSettings.setFullScreen(enabled)
             return debugSwitched(name, enabled)
+        }
+        case 'resize': {
+            if (!hasNativeWindow()) return debugCondition('DEBUG_RESIZE_UNAVAILABLE')
+            GameDebugSettings.set('windowResizable', !GameDebugSettings.windowResizable)
+            refreshNativeWindow()
+            return debugSwitched(name, GameDebugSettings.windowResizable)
         }
         case 'mobile': return debugSwitched(name, (GameDebugSettings.set('mobileEnabled', !GameDebugSettings.mobileEnabled), GameDebugSettings.mobileEnabled))
         case 'autopause': return debugSwitched(name, GameDebugSettings.set('autoPauseEnabled', !GameDebugSettings.autoPauseEnabled))

@@ -272,6 +272,7 @@ flowchart LR
 | `/autopause` | 开关失去焦点时自动暂停；失去焦点时始终静音（本机保存） |
 | `/haptics` | 开关触屏振动（本机保存） |
 | `/mobile`、`/fullscreen` | 切换移动模式、全屏 |
+| `/resize` | 允许自由调整桌面窗口大小；关闭时窗口固定 600 高，宽度随宽高比（本机保存，默认关） |
 | `/music {0-100}`、`/sfx {0-100}` | 设定音乐、音效音量 |
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | 关闭指定部分的绘制或运算，用于性能排查 |
 | `/mod` | 打开模组管理器 |

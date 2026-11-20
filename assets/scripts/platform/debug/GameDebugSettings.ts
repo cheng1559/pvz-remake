@@ -21,6 +21,8 @@ type DebugSettings = {
     hotkeysEnabled: boolean
     hapticsEnabled: boolean
     originalCursorsEnabled: boolean
+    /** `/resize`: a desktop window resized freely. Off, it keeps the 600 height and only its width follows (ClientViewport). */
+    windowResizable: boolean
     /**
      * `/highresolution`: the game drawn at the window's own pixels. Off, it is drawn as the original draws it, at a
      * pixel to a unit of its 800x600, and that picture enlarged over the window (OriginalResolution).
@@ -53,6 +55,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     hotkeysEnabled: false,
     hapticsEnabled: true,
     originalCursorsEnabled: true,
+    windowResizable: false,
     highResolutionEnabled: false,
     sharpness: 0.5,
     perfPlantsVisible: true,
@@ -72,6 +75,7 @@ const KEPT: { readonly [Key in keyof DebugSettings]?: (value: unknown) => value 
     rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, cheatSeedsEnabled: isBoolean,
     fpsVisible: isBoolean, hitboxesVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
     autoPauseEnabled: isBoolean, hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
+    windowResizable: isBoolean,
     collectMode: (value): value is DebugCollectMode => value === 'auto' || value === 'click' || value === 'move',
     sharpness: (value): value is number => typeof value === 'number' && value >= 0 && value <= 1,
 }

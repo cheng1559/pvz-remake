@@ -272,6 +272,7 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | `/autopause` | Turns pausing on focus loss on or off; losing focus always mutes (saved) |
 | `/haptics` | Turns touch haptics on or off (saved) |
 | `/mobile`, `/fullscreen` | Switches mobile mode or full screen |
+| `/resize` | Lets the desktop window be resized freely; off, it keeps a height of 600 and its width follows its aspect (saved, off by default) |
 | `/music {0-100}`, `/sfx {0-100}` | Sets the music or sound effect volume |
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | Turns off drawing or processing of a part, for performance checks |
 | `/mod` | Opens the Mod manager |

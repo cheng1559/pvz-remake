@@ -261,6 +261,8 @@
 
 原生 Windows 与 macOS 版本会像原版的 `PreferredX`/`PreferredY` 注册表值一样记住窗口位置。`native/engine/common/Classes/Game.cpp` 跟踪普通窗口（非全屏、非最大化、非最小化）的位置和尺寸，在窗口关闭时写入可写目录下的 `window.txt`，并在创建下一个窗口之前读取。若保存的窗口顶边中点已不在任何显示器的可用区域内，引擎改为居中显示 800×600 的窗口。
 
+除非打开了 `/resize`（见[调试指令](DEBUG_CLI.zh-CN.md)），窗口高度固定为 600，宽度按自身宽高比在允许范围内取值，所以没装宽屏模组时就是 800×600。`ClientViewport.constrainNativeWindow` 把这个高度传给 `jsb.setWindowAspectRatio`，由原生端把窗口缩放到这个高度，并在拖动、贴靠和 DPI 变化时保持，同时禁用最大化；保存的窗口尺寸不符合时，启动后会被校正。
+
 ## UI 工具包
 
 ### 代码结构
