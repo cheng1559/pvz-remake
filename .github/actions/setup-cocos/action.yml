@@ -23,5 +23,7 @@ runs:
         npm run install:engine
         npm install
         npm run build
+        # tsc writes the CLI without the execute bit, so on Linux and macOS the linked `cocos` command is refused.
+        chmod +x dist/cli.js
         npm link
         cocos --help > /dev/null
