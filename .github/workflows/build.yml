@@ -1,10 +1,12 @@
-# Builds every platform from a licensed copy of the game, kept in a private repository, and publishes a Release for a
-# `v*` tag. Setup (repository settings):
+# Builds every platform from a licensed copy of the game, kept in a private repository. A `v*` tag also publishes a
+# draft Release and deploys the web build to the Cloudflare Pages project pvz-remake. Setup (repository settings):
 # - variable GAME_FILES_REPO: the private repository (owner/name) holding main.pak and PlantsVsZombies.exe (Steam GOTY
 #   1.2.0.1096) at its root;
 # - secret GAME_FILES_TOKEN: a fine-grained token with read access to that repository's contents;
 # - optional secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD: the
-#   Android release key; without them the APKs are signed with Cocos's public debug keystore.
+#   Android release key; without them the APKs are signed with Cocos's public debug keystore;
+# - secrets CLOUDFLARE_API_TOKEN, a Cloudflare API token with Cloudflare Pages edit permission, and
+#   CLOUDFLARE_ACCOUNT_ID, the account that holds the Pages project.
 # Builds contain resources converted from the original game: artifacts are kept for a day, and only a tag publishes.
 name: Build
 
@@ -266,3 +268,48 @@ jobs:
         with:
           files: release/*
           draft: true
+
+  pages:
+    name: Deploy the web build
+    # Runs only after a tag's Release, as the job is skipped with it.
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      PAGES_PROJECT: pvz-remake
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: dist
+      - name: Stage the web build
+        run: |
+          npm ci
+          mkdir -p build/web-mobile
+          unzip -q dist/*-web.zip -d build/web-mobile
+          npm run package:pages
+      # A preview deployment is checked before production gets the same files.
+      - name: Deploy a preview
+        id: preview
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.107.0
+          command: pages deploy dist/pages --project-name=${{ env.PAGES_PROJECT }} --branch=verify-${{ github.ref_name }} --commit-hash=${{ github.sha }}
+      - name: Check the preview
+        run: npm run verify:pages -- "${{ steps.preview.outputs.deployment-url }}"
+      - name: Deploy to production
+        id: production
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.107.0
+          command: pages deploy dist/pages --project-name=${{ env.PAGES_PROJECT }} --branch=main --commit-hash=${{ github.sha }}
+      - name: Check production
+        run: npm run verify:pages -- "${{ steps.production.outputs.deployment-url }}"

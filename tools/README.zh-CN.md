@@ -34,6 +34,7 @@ tools/
 | 重新生成模组宿主模块列表 | `npm run mod:hosts` |
 | 检查 Cocos 预览的模块映射 | `npm run check:preview` |
 | 打包 Windows 安装程序和 macOS 磁盘映像 | `npm run package:windows`、`npm run package:macos` |
+| 为 Cloudflare Pages 准备 Web 构建，并检查一次部署 | `npm run package:pages`、`npm run verify:pages -- <部署地址>` |
 | 把共享的 C++ 内核编译为 Wasm | `npm run build:kernel` |
 | 用原版程序的图标生成网页与原生应用图标 | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | 字体与图像超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |

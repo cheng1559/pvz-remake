@@ -1,5 +1,5 @@
 name: Set up the Cocos toolchain
-description: Installs Node.js and the project's cocos-cli and cocos4 forks (dev/pvz-remake), and links the `cocos` command.
+description: Installs Node.js and the project's cocos-cli and cocos4 forks (dev/pvz-remake), links the `cocos` command, and gives Linux a display.
 
 runs:
   using: composite
@@ -23,5 +23,18 @@ runs:
         npm run install:engine
         npm install
         npm run build
-        npm link
+        # Without --ignore-scripts, npm link quietly runs postinstall again, which rebuilds the CLI after npm has made it
+        # executable: on Linux and macOS the linked `cocos` command is then refused.
+        npm link --ignore-scripts
         cocos --help > /dev/null
+
+    # cocos-cli compiles effects through a WebGL context, which needs a display: Linux runners get a virtual one for
+    # the rest of the job.
+    - name: Start a virtual display
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq xvfb libgl1-mesa-dri > /dev/null
+        Xvfb :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"

@@ -34,6 +34,7 @@ Common entry points:
 | Regenerate the Mod host module list | `npm run mod:hosts` |
 | Check the Cocos preview's module mapping | `npm run check:preview` |
 | Package the Windows installer and the macOS disk image | `npm run package:windows`, `npm run package:macos` |
+| Stage the web build for Cloudflare Pages and check a deployment | `npm run package:pages`, `npm run verify:pages -- <deployment URL>` |
 | Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
 | Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
