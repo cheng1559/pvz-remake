@@ -23,7 +23,7 @@ runs:
         npm run install:engine
         npm install
         npm run build
-        # tsc writes the CLI without the execute bit, so on Linux and macOS the linked `cocos` command is refused.
-        chmod +x dist/cli.js
-        npm link
+        # Without --ignore-scripts, npm link quietly runs postinstall again, which rebuilds the CLI after npm has made it
+        # executable: on Linux and macOS the linked `cocos` command is then refused.
+        npm link --ignore-scripts
         cocos --help > /dev/null
