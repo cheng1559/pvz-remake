@@ -71,7 +71,7 @@ async function pack(input: string, output?: string, publish?: string) {
     await mkdir(destination, { recursive: true })
     await cp(join(root, 'manifest.json'), join(destination, 'manifest.json'))
     for (const entry of await readdir(root, { withFileTypes: true })) {
-        if (entry.isFile() && (/(?:readme|license|notice|copying)/i.test(entry.name) || entry.name === 'conversion.json')) {
+        if (entry.isFile() && (/(?:license|notice|copying)/i.test(entry.name) || entry.name === 'conversion.json')) {
             await cp(join(root, entry.name), join(destination, entry.name))
         }
     }
