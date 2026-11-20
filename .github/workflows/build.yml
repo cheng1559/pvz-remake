@@ -271,8 +271,8 @@ jobs:
 
   pages:
     name: Deploy the web build
+    # Runs only after a tag's Release, as the job is skipped with it.
     needs: release
-    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     env:
       PAGES_PROJECT: pvz-remake
