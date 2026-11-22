@@ -728,6 +728,26 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
         [false, false, false, false, true, true], 'DetachShield restores the arms, except the lost lower arm and hand')
 })
 
+test('a screen door zombie sets its shield\'s colors once for a flash, and again when its body changes to another Reanim', () => {
+    class Color {
+        static WHITE = new Color(255, 255, 255)
+        static BLACK = new Color(0, 0, 0)
+        constructor(readonly r: number, readonly g: number, readonly b: number, readonly a = 255) {}
+    }
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { cc: { Color } })
+    const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
+    const overrides: string[] = []
+    const player = { loadedId: 'pvz:door_zombie_eat', setExtraAdditiveDraw() {}, setTrackRenderOverride(track: string) { overrides.push(track) } }
+    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, presentation, flash: { flash: 0, through: false, past: false } })
+    const zombie = { shieldHealth: 1100, state: 'eating' }
+    view.applyHitFlash(zombie)
+    view.applyHitFlash(zombie)
+    assert.deepEqual(overrides, ['anim_screendoor'], 'the same flash is not set again')
+    // The body's new Reanim has its tracks anew, without the override (ZombieView.pose).
+    view.applyHitFlash(zombie, true)
+    assert.deepEqual(overrides, ['anim_screendoor', 'anim_screendoor'])
+})
+
 test('a player changes to another clip of its body in place: its batches stay, and it blends from the pose it showed', async () => {
     const track = (id: string, zIndex: number) => ({ id, zIndex, keyframes: [{ sprite: `pvz:${id}` }] })
     const clips: Record<string, unknown> = {

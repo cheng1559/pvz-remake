@@ -580,7 +580,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         this.applyParts(zombie)
         if (board && changed) {
-            this.applyHitFlash(zombie)
+            // A body changed to another Reanim has its tracks anew, without the shield's override.
+            this.applyHitFlash(zombie, true)
             this.applyColor(zombie, true)
         }
         this.syncRise(zombie)
@@ -673,8 +674,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.player.setTint(color === 'burned' ? undefined : entityTint(!!zombie.mindControlled, cold))
     }
 
-    /** Zombie::DrawReanim's hit highlight (mJustGotShotCounter), over its chill; the shield's own (mShieldJustGotShotCounter). */
-    private applyHitFlash(zombie: ShownZombie): void {
+    /**
+     * Zombie::DrawReanim's hit highlight (mJustGotShotCounter), over its chill; the shield's own (mShieldJustGotShotCounter).
+     * `force`: set it although it has not changed.
+     */
+    private applyHitFlash(zombie: ShownZombie, force = false): void {
         const shield = zombie.shieldHealth > 0 ? this.presentation.shield : undefined
         // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom); one that
         // came past the shield (a lobbed projectile) flashes only the body.
@@ -683,7 +687,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const flash = past ? 0 : this.flash.flash
         // Most frames change nothing of it: the same flash on the same player is not set again.
         const drawn = ((bodyFlash * 1024 + flash) * 8) + (through ? 4 : 0) + (shield ? 2 : 0) + (zombie.state === 'burned' ? 1 : 0)
-        if (drawn === this.flashDrawn && this.player === this.flashPlayer) return
+        if (!force && drawn === this.flashDrawn && this.player === this.flashPlayer) return
         this.flashDrawn = drawn
         this.flashPlayer = this.player
         const grayness = Math.min(255, bodyFlash * 10)
