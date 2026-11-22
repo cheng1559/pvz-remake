@@ -1,6 +1,6 @@
 import { record } from '@/shared/validate'
 import { BASE_MOD_ID, deepFreeze, isModId, isOwnId, Registry } from '@/shared/mod'
-import { jsonRoundTrip } from '@/shared/protocol'
+import { jsonRoundTrip, setJsonField } from '@/shared/protocol'
 import { parseGameplayDefinitions, parseGameplayLevels } from './gameplay'
 import { parsePresentationDefinitions } from './presentation'
 
@@ -61,25 +61,32 @@ function modDefinitions(source: DefinitionSource, tables: readonly string[], set
         if (!tables.includes(key)) throw new Error(`${ownerId} registers unknown definition table: ${key}`)
         for (const [id, entry] of Object.entries(record(value, `${ownerId}.${key}`))) {
             const into = isOwnId(ownerId, id) ? own : patches as Record<string, Record<string, unknown>>
-            ;(into[key] ??= {})[id] = entry
+            setJsonField(into[key] ??= {}, id, entry)
         }
     }
-    return { own, patches: { ownerId, data: patches } }
+    return { own, patches }
 }
 
 /**
- * The Mods' changes, in load order, once every Mod has registered its own: each block (a table, the levels, or a
- * block of settings) gets its merge patch, a table's entries named by ID, each of which must be there. A later Mod's
- * value of a field wins, and what comes of it is checked as everything else is.
+ * What is defined, with the Mods taken in load order: each registers its entries, then changes what is there by its
+ * merge patches, each block (a table, the levels, or a block of settings) by its own, a table's entries named by ID,
+ * each of which must be there. So a Mod changes what the base and the Mods loaded before it define, and a later Mod's
+ * value of a field wins. What comes of it is checked as everything else is.
  */
-function applyPatches(blocks: Record<string, unknown>, tables: readonly string[], patches: readonly DefinitionSource[]): Record<string, unknown> {
+function layer(registry: DefinitionRegistry, blocks: Record<string, unknown>, tables: readonly string[], settings: readonly string[],
+    sources: readonly DefinitionSource[]): Record<string, unknown> {
     const result = { ...blocks }
-    for (const { ownerId, data } of patches) for (const [block, patch] of Object.entries(record(data, ownerId))) {
-        const entries = record(patch, `${ownerId}.${block}`)
-        if (tables.includes(block)) for (const id of Object.keys(entries)) {
-            if (!Object.hasOwn(record(result[block], block), id)) throw new Error(`${ownerId} changes unknown ${block} entry: ${id}`)
+    for (const source of sources) {
+        const { ownerId } = source, { own, patches } = modDefinitions(source, tables, settings)
+        registry.register(ownerId, own)
+        for (const [table, entries] of Object.entries(own)) result[table] = { ...record(result[table], table), ...entries }
+        for (const [block, patch] of Object.entries(patches)) {
+            const entries = record(patch, `${ownerId}.${block}`)
+            if (tables.includes(block)) for (const id of Object.keys(entries)) {
+                if (!Object.hasOwn(record(result[block], block), id)) throw new Error(`${ownerId} changes unknown ${block} entry: ${id}`)
+            }
+            result[block] = merged(result[block], entries)
         }
-        result[block] = merged(result[block], entries)
     }
     return result
 }
@@ -94,25 +101,24 @@ function merged(value: unknown, patch: unknown): unknown {
     const result: Record<string, unknown> = isObject(value) ? { ...value } : {}
     for (const [field, fieldPatch] of Object.entries(patch)) {
         if (fieldPatch === null) delete result[field]
-        else result[field] = merged(result[field], fieldPatch)
+        else setJsonField(result, field, merged(Object.hasOwn(result, field) ? result[field] : undefined, fieldPatch))
     }
     return result
 }
 
 export function buildGameplayContent(value: unknown, sources: readonly DefinitionSource[] = []) {
     const { settings, levels: levelEntries, ...tables } = record(value, 'base gameplay')
-    const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'levels'])
+    const tableKinds = [...GAMEPLAY_TABLES, 'levels']
+    const registry = new DefinitionRegistry(tableKinds)
     registry.register(BASE_MOD_ID, {
         ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, tables[kind]])), levels: record(levelEntries, 'gameplay levels'),
     }, true)
-    const tableKinds = [...GAMEPLAY_TABLES, 'levels'], mods = sources.map(source => modDefinitions(source, tableKinds, ['settings']))
-    for (const mod of mods) registry.register(mod.patches.ownerId, mod.own)
-    // Changes may be to any Mod's IDs, so they wait for every registration.
-    const blocks = applyPatches({
-        settings: record(settings, 'gameplay settings'), ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, registry.values(kind)])),
-        levels: registry.values('levels'),
-    }, tableKinds, mods.map(mod => mod.patches))
+    const blocks = layer(registry, {
+        settings: record(settings, 'gameplay settings'), ...Object.fromEntries(tableKinds.map(kind => [kind, registry.values(kind)])),
+    }, tableKinds, ['settings'], sources)
     const definitions = record(blocks.settings, 'gameplay settings')
+    // The settings are read beside the tables: a table written in them would be lost under the table itself.
+    for (const key of Object.keys(definitions)) if (tableKinds.includes(key)) throw new Error(`gameplay settings cannot hold the ${key} table`)
     const resultDefinitions = parseGameplayDefinitions({
         ...definitions, ...tables, ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, blocks[kind]])),
     })
@@ -132,13 +138,10 @@ export function buildPresentationDefinitions(value: unknown, sources: readonly D
         'store', 'almanac']
     const registry = new DefinitionRegistry(kinds)
     registry.register(BASE_MOD_ID, Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)
-    // The presentation's settings are every block of the base outside the tables: its `settings`, `mainMenu`, `conveyor`...
+    // The presentation's settings are every block of the base outside the tables: its `mainMenu`, `conveyor`...
     const settings = Object.keys(base).filter(key => !kinds.includes(key))
-    const mods = sources.map(source => modDefinitions(source, kinds, settings))
-    for (const mod of mods) registry.register(mod.patches.ownerId, mod.own)
-    // Changes wait for every registration.
-    const blocks = { ...base, ...Object.fromEntries(kinds.map(kind => [kind, registry.values(kind)])) }
-    const result = parsePresentationDefinitions(applyPatches(blocks, kinds, mods.map(mod => mod.patches)))
+    const blocks = layer(registry, { ...base, ...Object.fromEntries(kinds.map(kind => [kind, registry.values(kind)])) }, kinds, settings, sources)
+    const result = parsePresentationDefinitions(blocks)
     deepFreeze(result)
     return result
 }

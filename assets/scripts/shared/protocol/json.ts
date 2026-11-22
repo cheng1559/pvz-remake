@@ -44,11 +44,17 @@ function copyJsonContainer(value: object, ancestors: WeakSet<object>): JsonValue
             if (item === UNSAFE_JSON_COPY) return UNSAFE_JSON_COPY
         }
         // JSON.parse creates an own data property here, without changing the result's prototype.
-        if (key === '__proto__') Object.defineProperty(copy, key, { value: item, enumerable: true, writable: true, configurable: true })
+        if (key === '__proto__') setJsonField(copy as JsonObject, key, item)
         else (copy as JsonObject)[key] = item
     }
     ancestors.delete(value)
     return copy
+}
+
+/** Sets a JSON object's field as its own data property: assigned, `__proto__` would set the object's prototype instead. */
+export function setJsonField(object: Record<string, unknown>, key: string, value: unknown): void {
+    if (key === '__proto__') Object.defineProperty(object, key, { value, enumerable: true, writable: true, configurable: true })
+    else object[key] = value
 }
 
 export function assertJsonValue(value: unknown): asserts value is JsonValue {

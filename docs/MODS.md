@@ -12,9 +12,9 @@ A Mod is a ZIP package installed into the game. It can contain any combination o
 - **Definitions**: gameplay definitions (numbers and rules) and presentation definitions (animations, positions, sounds) in JSON. They add plants, zombies, projectiles, seeds, levels, store items, achievements and more, or replace existing ones.
 - **Scripts**: a server entry point (gameplay) and a client entry point (presentation) that register new kinds, views, commands and rule changes.
 
-The same manager handles installation, dependencies, priority, enabled state and uninstallation for every kind of Mod. The base game (`pvz`) always loads first and cannot be disabled, uninstalled or imported.
+The same manager handles installation, priority, enabled state and uninstallation for every kind of Mod. The base game (`pvz`) always loads first and cannot be disabled, uninstalled or imported.
 
-Several Mods can be enabled at once and stack. For example, with an HD pack and a translation pack enabled together, the translation pack can replace only the images that contain text while every other image still comes from the HD pack. A Mod can depend on other Mods, and a translation pack can translate other Mods' text.
+Several Mods can be enabled at once and stack. For example, with an HD pack and a translation pack enabled together, the translation pack can replace only the images that contain text while every other image still comes from the HD pack. A Mod can change what the Mods below it in the list define, and a translation pack can translate other Mods' text.
 
 ## Installing Mods
 
@@ -48,11 +48,9 @@ A restart is needed when anything was imported or uninstalled, a Mod was enabled
 3. saves the current level and the list of pending changes;
 4. restarts the game.
 
-Apply itself does not unpack ZIPs or install or delete Mods. During the next startup only the original PopCap logo is shown, drawn from the base package, while dependencies are checked and Mods are installed and uninstalled in the background. The game resources then load and the title screen opens.
+Apply itself does not unpack ZIPs or install or delete Mods. During the next startup only the original PopCap logo is shown, drawn from the base package, while Mods are installed and uninstalled in the background. The game resources then load and the title screen opens.
 
 If that background task fails, the pending list and the staged ZIPs are kept and the error is logged; clicking or tapping the screen, or pressing a key, retries. Until the restart, the running code, audio and images keep using the archives loaded when the game started.
-
-Apply also checks dependencies: every enabled Mod's dependencies must be enabled too, at matching versions. If they are not, an error dialog opens and the manager stays open.
 
 Reordering only disabled Mods is saved at once, with no restart.
 
@@ -74,11 +72,10 @@ Enabling, disabling and uninstalling all take effect through Apply and a restart
 
 The order of the list is the priority: the higher a Mod is, the higher its priority.
 
-- **Load order.** Enabled Mods load from the bottom of the list to the top, except that a Mod's dependencies always load before it.
+- **Load order.** Enabled Mods load from the bottom of the list to the top.
 - **Resources.** When several running Mods register the same resource ID, the one loaded later (higher in the list) wins. An ID no Mod registers comes from the base package. A Mod that failed to load provides no resources.
 - **Definitions.** Two Mods cannot register the same gameplay definition ID; a duplicate is an error. An existing definition is changed in the tables, under its ID (see [Changing what is defined](#changing-what-is-defined)).
 - **Text.** For the same text key, the Mod later in enabled priority wins. The text language is that of the last enabled Mod that declares a `locale`.
-- **Dependencies.** A Mod requires the Mods it depends on, at an exact version (`1.2.0`) or a minimum (`>=1.2.0`). A missing dependency, a version mismatch or a dependency cycle is an error at Apply; at startup it disables the Mod.
 
 ## Mods and player profiles
 
@@ -112,8 +109,8 @@ Applying Mod changes saves the current level first. If the change affects the se
 
 ### At startup
 
-- **Unreadable archives and dependency errors.** An archive that is corrupt, or whose dependency is missing, has the wrong version or forms a cycle, is disabled: it is removed from the enabled list and shows `[Error]` in the manager. It does not prevent the manager from opening. An enabled Mod whose archive is missing is removed from the enabled list with a console warning.
-- **Registration errors.** A Mod that fails while it registers (a script throws, a definition is invalid, something has no presentation) is skipped for this session and shows `[Error]` in the manager. Its definitions, registrations and method wrappers are rolled back, and the Mods that depend on it are skipped too. It stays enabled, so the next startup tries it again.
+- **Unreadable archives.** A corrupt archive is disabled: it is removed from the enabled list and shows `[Error]` in the manager. It does not prevent the manager from opening. An enabled Mod whose archive is missing is removed from the enabled list with a console warning.
+- **Registration errors.** A Mod that fails while it registers (a script throws, a definition is invalid, something has no presentation) is skipped for this session and shows `[Error]` in the manager. Its definitions, registrations and method wrappers are rolled back, and a Mod loaded after it that changes its definitions fails too. It stays enabled, so the next startup tries it again.
 - **Notice.** On the main menu a **Mods Failed to Load** notice names each Mod that failed, once.
 - **Interrupted startups.** If a startup ends while its Mods are loading (for example, iOS ends the page when it runs out of memory), the next startup runs without Mods and the main menu shows **Startup Failed**. The Mod choices are kept in the manager, and the startup after that loads them again. Hiding or closing the game during startup does not count as a failure.
 
@@ -142,7 +139,7 @@ A Mod's source directory:
 
 ```text
 my-mod/
-├── manifest.json           # ID, version, dependencies and optional module entries
+├── manifest.json           # ID, version and optional module entries
 ├── content.json            # Index of gameplay and presentation definitions and resources
 ├── src/
 │   ├── server/index.ts     # Optional server code
@@ -174,7 +171,6 @@ A source directory and a packed Mod differ in two places:
   "version": "1.0.0",
   "apiVersion": 1,
   "contentHash": "generated-on-pack",
-  "dependencies": [],
   "gameplay": {
     "nodeModule": "gameplay/node/index.js",
     "cocosModule": "gameplay/cocos/index.js"
@@ -192,7 +188,6 @@ A source directory and a packed Mod differ in two places:
 | `version` | Yes | `x.y.z`. |
 | `apiVersion` | Yes | Must be `1`. |
 | `contentHash` | Yes | Any non-empty string in the source; `mod:pack` replaces it with a SHA-256 of the manifest's other fields and every file in the package. |
-| `dependencies` | Yes | `[{ "id": "other-mod", "version": "1.2.0" }]`; the version is exact or `>=x.y.z`. Each ID may appear once. |
 | `locale` | No | The language of the text the Mod supplies, as a language tag such as `zh-CN`. |
 | `author` | No | The author's name, at most 64 characters. |
 | `gameplay` | No | Server scripts: `nodeModule` (an ES module for Node, run by `mod:test`) and `cocosModule` (a SystemJS module, run by the game). |
@@ -274,8 +269,8 @@ A presentation `plants` table can remove a field with `null`:
 ```
 
 - An object is changed field by field, down to the fields given, and `null` removes a field. A list or any other value is replaced whole.
-- Changes apply once every Mod has registered its own entries, so a Mod can change another Mod's IDs whatever the load order. They apply in load order, and two Mods may change the same field: the later Mod's value is kept.
-- An entry under another namespace's ID that is not defined is an error. What comes of the changes is checked as everything else is: its references, and a field its object does not have or a value it does not take, fail the Mod at load.
+- The Mods are taken in load order, each registering its entries and then applying its changes, so a Mod changes the base game's IDs and those of the Mods loaded before it. Two Mods may change the same field: the later Mod's value is kept.
+- An entry under another namespace's ID that is not defined, or is defined only by a Mod loaded later, is an error. What comes of the changes is checked as everything else is: its references, and a field its object does not have or a value it does not take, fail the Mod at load.
 - Changes are data only. An entity takes its kind from its definition's `kind` as changed, and an old save whose entity fields do not fit the new definition is handled as an incompatible save.
 - A base zombie's presentation whose `view` a change removes is drawn as an ordinary zombie.
 
@@ -618,8 +613,8 @@ export function register({ host, assets }) {
 ```
 
 - The server entry (`src/server/index.ts`) registers custom plant, zombie and projectile kinds, rules and commands; in the game it runs from `cocosModule`. The client entry (`src/client/index.ts`) registers views, menus and client commands.
-- `register` may be `async`. The loader calls it after the Mod's static definitions are registered and every dependency has loaded; the server entry runs before the client entry.
-- If registration fails, the loader undoes that Mod's definitions, registrations and method wrappers (calling `host.dispose()`), and skips the Mods that depend on it. Pure resource, data and script Mods use the same loading entry point.
+- `register` may be `async`. The loader calls it after the Mod's static definitions are registered and the Mods before it have loaded; the server entry runs before the client entry.
+- If registration fails, the loader undoes that Mod's definitions, registrations and method wrappers (calling `host.dispose()`). Pure resource, data and script Mods use the same loading entry point.
 - `src/server/` and `src/client/` compile separately and cannot import each other's files or the host's source. Share data through a JSON file in the archive read with `assets.json()`, and reach host code through `host.get()`.
 
 ### Host modules

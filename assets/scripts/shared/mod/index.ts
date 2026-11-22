@@ -1,16 +1,10 @@
-import { record, array, nonEmptyString } from '@/shared/validate'
-export interface ModDependency {
-    id: string
-    version: string
-}
-
+import { record, nonEmptyString } from '@/shared/validate'
 export interface ModManifest {
     schemaVersion: 1
     id: string
     version: string
     apiVersion: 1
     contentHash: string
-    dependencies: ModDependency[]
     /** The language of the text this Mod supplies (BCP 47, e.g. zh-CN); the last running Mod that declares one wins. */
     locale?: string
     /** Who made the Mod, shown in the Mod list. */
@@ -63,19 +57,6 @@ export function parseModManifest(value: unknown): ModManifest {
     if (manifest.apiVersion !== 1) throw new Error('manifest.apiVersion must be 1')
     const contentHash = nonEmptyString(manifest.contentHash, 'manifest.contentHash')
 
-    const dependencyIds = new Set<string>()
-    const dependencies = array(manifest.dependencies, 'manifest.dependencies').map((entry, index) => {
-            const dependency = record(entry, `manifest.dependencies[${index}]`)
-            if (!isModId(dependency.id)) {
-                throw new Error(`manifest.dependencies[${index}].id must be a Mod ID`)
-            }
-            if (dependencyIds.has(dependency.id)) throw new Error(`duplicate dependency: ${dependency.id}`)
-            dependencyIds.add(dependency.id)
-            const range = nonEmptyString(dependency.version, `manifest.dependencies[${index}].version`)
-            semanticVersion(range.startsWith('>=') ? range.slice(2) : range, `manifest.dependencies[${index}].version`)
-            return { id: dependency.id, version: range }
-        })
-
     if (manifest.locale !== undefined && (typeof manifest.locale !== 'string' || !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(manifest.locale))) {
         throw new Error('manifest.locale must be a language tag such as zh-CN')
     }
@@ -91,54 +72,11 @@ export function parseModManifest(value: unknown): ModManifest {
         version,
         apiVersion: 1,
         contentHash,
-        dependencies,
         ...(manifest.locale === undefined ? {} : { locale: manifest.locale as string }),
         ...(manifest.author === undefined ? {} : { author: (manifest.author as string).trim() }),
         gameplay,
         client,
     }
-}
-
-export function sortModManifests(manifests: readonly ModManifest[]): ModManifest[] {
-    const byId = new Map<string, ModManifest>()
-    for (const manifest of manifests) {
-        if (byId.has(manifest.id)) throw new Error(`duplicate mod ID: ${manifest.id}`)
-        byId.set(manifest.id, manifest)
-    }
-
-    const dependants = new Map<string, string[]>()
-    const remaining = new Map<string, number>()
-    for (const manifest of manifests) {
-        remaining.set(manifest.id, manifest.dependencies.length)
-        for (const dependency of manifest.dependencies) {
-            const installed = byId.get(dependency.id)
-            if (!installed) throw new Error(`${manifest.id} requires missing mod ${dependency.id}`)
-            if (!versionSatisfies(installed.version, dependency.version)) {
-                throw new Error(`${manifest.id} requires ${dependency.id} ${dependency.version}, found ${installed.version}`)
-            }
-            const list = dependants.get(dependency.id) ?? []
-            list.push(manifest.id)
-            dependants.set(dependency.id, list)
-        }
-    }
-
-    let ready = [...byId.keys()].filter(id => remaining.get(id) === 0)
-    const sorted: ModManifest[] = []
-    while (ready.length > 0) {
-        const next: string[] = []
-        for (const id of ready) {
-            sorted.push(byId.get(id)!)
-            for (const dependant of dependants.get(id) ?? []) {
-                const count = remaining.get(dependant)! - 1
-                remaining.set(dependant, count)
-                if (count === 0) next.push(dependant)
-            }
-        }
-        ready = next
-    }
-
-    if (sorted.length !== manifests.length) throw new Error('mod dependency cycle')
-    return sorted
 }
 
 /**
@@ -192,16 +130,6 @@ export class Registry<T> {
         this.isFrozen = true
         for (const { value } of this.values.values()) deepFreeze(value)
     }
-}
-
-function versionSatisfies(version: string, range: string): boolean {
-    if (!range.startsWith('>=')) return version === range
-    const actual = version.match(versionPattern)!.slice(1).map(Number)
-    const minimum = range.slice(2).match(versionPattern)!.slice(1).map(Number)
-    for (let index = 0; index < 3; index++) {
-        if (actual[index] !== minimum[index]) return actual[index] > minimum[index]
-    }
-    return true
 }
 
 function parseGameplay(value: unknown): ModManifest['gameplay'] {

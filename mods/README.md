@@ -6,7 +6,7 @@ Resources, data and script extensions all use the same format; create only the d
 
 ```text
 my-mod/
-├── manifest.json             # ID, version, dependencies and optional module entries
+├── manifest.json             # ID, version and optional module entries
 ├── content.json              # Index of gameplay/presentation definitions and resource mappings
 ├── src/
 │   ├── server/index.ts       # Optional server code

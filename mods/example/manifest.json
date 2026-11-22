@@ -5,7 +5,6 @@
     "author": "Uika",
     "apiVersion": 1,
     "contentHash": "generated-on-pack",
-    "dependencies": [],
     "gameplay": {
         "nodeModule": "gameplay/node/index.js",
         "cocosModule": "gameplay/cocos/index.js"

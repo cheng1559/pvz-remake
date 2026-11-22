@@ -38,7 +38,7 @@ const build = (sources = [gameplay()]) => {
 }
 
 function installed(id: string, server: any, client?: any) {
-    const manifest = modApi.parseModManifest({ schemaVersion: 1, apiVersion: 1, id, version: '1.0.0', contentHash: id, dependencies: [],
+    const manifest = modApi.parseModManifest({ schemaVersion: 1, apiVersion: 1, id, version: '1.0.0', contentHash: id,
         gameplay: { nodeModule: 'node.js', cocosModule: 'server.js' }, ...(client ? { client: { module: 'client.js' } } : {}) })
     return { manifest, content: { resources: {} }, files: { 'sprite.png': new Uint8Array([0]) }, modules: { 'server.js': server, 'client.js': client } }
 }
@@ -176,7 +176,7 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     return { load: loader.loadInstalledMods, failures, errors, dispose: () => { for (const host of hosts.reverse()) host.dispose() } }
 }
 
-test('a failed Mod rolls back both entries and patches; dependants skip while independent Mods keep loading', async () => {
+test('a failed Mod rolls back both entries and patches while the other Mods keep loading', async () => {
     const target = { value: () => 1 }, registrations: string[] = []
     let disposeHealthy!: () => void
     const first = installed('first', ({ host, assets }: any) => {
@@ -185,8 +185,6 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         disposeHealthy = host.around(target, 'value', (next: any) => next() + 1)
     })
     const old = installed('legacy', (api: any) => api.registerDefinitions('assets/gameplay.json'))
-    const dependent = installed('dependent', () => assert.fail('A dependant must not execute after its dependency fails'))
-    dependent.manifest.dependencies.push({ id: 'legacy', version: '1.0.0' })
     const broken = installed('broken', ({ host, assets }: any) => {
         const { specs } = host.get('shared/debug/DebugCli')
         host.around(specs, 'list', (next: any) => [...next(), { name: 'broken:leaked', parameters: [], minimum: 0 }])
@@ -214,7 +212,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
     const last = installed('last', ({ assets }: any) => { registrations.push(assets.id) })
     const execute = executor.execute
     let live: unknown[] = []
-    const loader = modLoader([first, old, dependent, broken, last])
+    const loader = modLoader([first, old, broken, last])
     try {
         const result = await loader.load()
         assert.equal(await loader.load(), result, 'a caught error must not leave a rejected startup promise or repeat registrations')
@@ -236,9 +234,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         const content = buildGameplayContent(base(), result.gameplayDefinitions)
         result.gameplay.freeze(content.definitions, content.levels)
         assert.match(loader.failures.get('legacy')!, /registerDefinitions is not a function/)
-        assert.match(loader.failures.get('dependent')!, /Dependency failed to load: legacy/)
         assert.match(loader.failures.get('broken')!, /client.js.*client initialization failed/)
-        assert.equal(loader.errors.length, 3)
+        assert.equal(loader.errors.length, 2)
     } finally { disposeHealthy?.() }
 })
 
@@ -336,9 +333,10 @@ test('what a Mod writes under another namespace\'s ID is a JSON merge patch, app
     assert.equal(definitions.plants['pvz:peashooter'].maxHealth, 999)
     assert.deepEqual(result.levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:sunflower'], 'after the example Mod\'s own change to it')
     assert.equal(base().plants['pvz:peashooter'].maxHealth, basePlants['pvz:peashooter'].maxHealth, 'the base asset is unchanged')
-    // Another Mod's IDs can be changed too, whatever the load order.
-    const late = { ownerId: 'other', data: { plants: { 'example:rapid_pea': { maxHealth: 7 } } } }
-    assert.equal(build([late, gameplay()]).definitions.plants['example:rapid_pea'].maxHealth, 7)
+    // Mods are taken in load order: one changes the IDs of the Mods before it, not of those after it.
+    const change = { ownerId: 'other', data: { plants: { 'example:rapid_pea': { maxHealth: 7 } } } }
+    assert.equal(build([gameplay(), change]).definitions.plants['example:rapid_pea'].maxHealth, 7)
+    assert.throws(() => build([change, gameplay()]), /changes unknown plants entry: example:rapid_pea/)
     // In load order, the later Mod's value of a field wins, and a null removes its field.
     const source = readPresentationSource()
     const installed = buildPresentationDefinitions(source, [
@@ -353,6 +351,24 @@ test('what a Mod writes under another namespace\'s ID is a JSON merge patch, app
     assert.throws(() => build([{ ownerId: 'first', data: { plants: { 'pvz:missing': { maxHealth: 1 } } } }]), /changes unknown plants entry: pvz:missing/)
     assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'first', data: { conveyor: { speed: 2 } } }]), /speed/)
     assert.throws(() => build([{ ownerId: 'first', data: { plants: { 'pvz:peashooter': { maxHealth: -1 } } } }]), /maxHealth/)
+    // A table written in the gameplay settings would be lost under the table itself.
+    assert.throws(() => build([{ ownerId: 'first', data: { settings: { plants: { 'pvz:peashooter': { maxHealth: -1 } } } } }]), /cannot hold the plants table/)
+    // A field or an ID named __proto__ is a field or an ID like any other, never the object's prototype.
+    assert.throws(() => build([{ ownerId: 'first', data: JSON.parse('{"boards":{"pvz:day":{"__proto__":{"night":true}}}}') }]), /__proto__/)
+    assert.throws(() => build([{ ownerId: 'first', data: JSON.parse('{"plants":{"__proto__":{}}}') }]), /changes unknown plants entry: __proto__/)
+})
+
+test('Mods load in the order of the list: one changes the definitions of the Mods loaded before it, not of those after', async () => {
+    const register = (data: object) => ({ host, assets }: any) => { host.get('content/definitions').register(assets.id, data) }
+    const early = installed('early', register({ storePages: { 'early:page': { level: 5 } } }))
+    const middle = installed('middle', register({ storePages: { 'late:page': { level: 6 } } }))
+    const late = installed('late', register({ storePages: { 'late:page': { level: 5 }, 'early:page': { level: 7 } } }))
+    const loader = modLoader([early, middle, late])
+    const result = await loader.load()
+    assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['early', 'late'])
+    assert.match(loader.failures.get('middle')!, /changes unknown storePages entry: late:page/)
+    const { storePages } = buildGameplayContent(base(), result.gameplayDefinitions).definitions
+    assert.deepEqual([storePages['early:page'].level, storePages['late:page'].level], [7, 5])
 })
 
 test('a packed Mod registers both entity kinds, runs custom behaviors and restores without modifying base content', async () => {

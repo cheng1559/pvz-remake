@@ -11,7 +11,7 @@ function archive(id = 'pvz'): ContentArchive {
         'presentation.json': new TextEncoder().encode('{}') }
     return {
         manifest: parseModManifest({ schemaVersion: 1, id, version: '2.0.0', apiVersion: 1,
-            contentHash: id + '@2', dependencies: [] }),
+            contentHash: id + '@2' }),
         content: parseModContent({ gameplay: 'gameplay.json', presentation: 'presentation.json',
             resources: { sprites: { [id + ':sunflower']: { file: 'sprite.png', width: 1, height: 1 } } } }, files),
         files,
@@ -31,7 +31,7 @@ test('base and Mod archives use the same manifest, content parser and file valid
 })
 
 test('a Mod manifest may name its author for the Mod list', () => {
-    const base = { schemaVersion: 1, id: 'example', version: '1.0.0', apiVersion: 1, contentHash: 'x', dependencies: [] }
+    const base = { schemaVersion: 1, id: 'example', version: '1.0.0', apiVersion: 1, contentHash: 'x' }
     assert.equal(parseModManifest({ ...base, author: '  Cheng ' }).author, 'Cheng')
     assert.equal(parseModManifest(base).author, undefined)
     assert.throws(() => parseModManifest({ ...base, author: '' }), /manifest.author/)

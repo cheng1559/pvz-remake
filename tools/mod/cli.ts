@@ -44,7 +44,6 @@ async function init(name: string, output?: string) {
         version: '0.1.0',
         apiVersion: 1,
         contentHash: `${name}-dev`,
-        dependencies: [],
         gameplay: {
             nodeModule: 'gameplay/node/index.js',
             cocosModule: 'gameplay/cocos/index.js',

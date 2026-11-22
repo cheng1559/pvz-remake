@@ -439,7 +439,7 @@ Gameplay and presentation configuration use `GameplayDefinitions` and `Presentat
 
 `shared/content/DefinitionRegistry` registers base and Mod JSON through the generic `Registry`, validates references after registration, then freezes the result.
 
-- Server entries register gameplay tables and levels. A Mod's entries in its own namespace are registered as new; its entries under other namespaces' IDs, and the settings outside the tables it writes, are JSON merge patches, applied in load order once everything is registered, before the result is checked.
+- Server entries register gameplay tables and levels. A Mod's entries in its own namespace are registered as new; its entries under other namespaces' IDs, and the settings outside the tables it writes, are JSON merge patches on what the base and the Mods loaded before it define. The Mods are taken in load order, and the result is checked.
 - Client entries register presentation tables and names the same way.
 - `PlantViewRegistry` creates built-in and Mod views from the same registry.
 - UI and levels consume the same Mod presentation definitions, including new animation targets.

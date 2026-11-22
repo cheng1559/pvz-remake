@@ -457,7 +457,7 @@ test('the base Mod prefab keeps its compiled engine bindings after moving into a
     const requests: string[] = []
     const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
     const files = {
-        'manifest.json': encode({ schemaVersion: 1, id: 'pvz', version: '1.0.0', apiVersion: 1, contentHash: 'base', dependencies: [] }),
+        'manifest.json': encode({ schemaVersion: 1, id: 'pvz', version: '1.0.0', apiVersion: 1, contentHash: 'base' }),
         'content.json': encode({ resources: { prefabs: { 'pvz:level': source } } }),
         [source]: new Uint8Array(readFileSync(`mods/pvz-base/${source}`)),
     }

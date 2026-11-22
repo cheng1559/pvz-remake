@@ -181,7 +181,7 @@ A Mod is an extension package installed into the game. The base game is itself a
 - **New content**: new plants, zombies, projectiles, levels and achievements;
 - **Gameplay changes**: different planting or collecting rules, or new level rules and screens.
 
-Several Mods can be enabled at once and stack. For example, with the HD pack and the Chinese pack enabled together, the Chinese pack replaces only the images with text in them, and the other images still come from the HD pack. A Mod can depend on other Mods or translate them. Data a Mod records is kept in level saves.
+Several Mods can be enabled at once and stack. For example, with the HD pack and the Chinese pack enabled together, the Chinese pack replaces only the images with text in them, and the other images still come from the HD pack. A Mod can change other Mods' definitions or translate them. Data a Mod records is kept in level saves.
 
 #### Example Mods
 
@@ -198,7 +198,7 @@ Several Mods can be enabled at once and stack. For example, with the HD pack and
 #### How It Works
 
 - **One package format**: every extension is a Mod, and the base game is a built-in package with the ID `pvz`. A resource pack holds only resources and needs no scripts; a scripted Mod can carry server scripts (gameplay) and client scripts (presentation).
-- **Load order**: dependencies load first. When several Mods provide the same resource, the one higher in the manager's list wins.
+- **Load order**: Mods load from the bottom of the manager's list to the top. When several Mods provide the same resource, the one higher in the list wins.
 - **Namespaces**: resources and definitions a Mod adds must use its own namespace (such as `widescreen:background1`). An entry written under an existing ID changes that definition field by field; when two Mods change the same field, the one loaded later wins.
 - **Text**: all text is merged into one table. A Mod can rewrite any existing text, and new text needs its namespace. A translation pack lists only the entries it changes, and can translate other Mods too.
 - **Load checks**: loading checks that content is complete, for example that every plant and zombie has a look and every level award has a picture. An incomplete Mod fails to load instead of failing later in a level.
@@ -218,7 +218,7 @@ Cancel discards the imports and ordering. Reordering only disabled Mods needs no
 
 Every Mod has two files at its root:
 
-- `manifest.json`: the Mod's ID, version, dependencies and script entry points, if any;
+- `manifest.json`: the Mod's ID, version and script entry points, if any;
 - `content.json`: the index of its gameplay definitions, presentation definitions and resources.
 
 ```sh
