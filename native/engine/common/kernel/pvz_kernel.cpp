@@ -15,6 +15,13 @@ double nearAngle(double angle, double target) {
     return angle;
 }
 
+// A local position in the world: through a placement, the x, y and z of its x axis, of its y axis and of its origin.
+inline void place(const double *placement, double x, double y, float *position) {
+    position[0] = static_cast<float>(placement[0] * x + placement[3] * y + placement[6]);
+    position[1] = static_cast<float>(placement[1] * x + placement[4] * y + placement[7]);
+    position[2] = static_cast<float>(placement[2] * x + placement[5] * y + placement[8]);
+}
+
 // pvz_sample, looking first where a keyframe for every frame at `rate` a second from time 0 would put the one reached.
 int32_t sampleAt(const double *keys, int32_t count, double time, double rate, double *pose) {
     if (count <= 0) return -1;
@@ -63,14 +70,21 @@ int32_t sampleAt(const double *keys, int32_t count, double time, double rate, do
 } // namespace
 
 void pvz_write_quad(const double *image, double x, double y, double a, double b, double c, double d,
-               double red, double green, double blue, double alpha, float *positions, float *vertices, size_t quad, size_t stride) {
+               double red, double green, double blue, double alpha, float *positions, float *vertices, size_t quad, size_t stride,
+               const double *placement) {
     const double left = image[0], right = image[1], bottom = image[2], top = image[3];
     for (size_t corner = 0; corner < 4; ++corner) {
         const double u = (corner & 1) ? right : left, v = (corner & 2) ? top : bottom;
         const size_t offset = (quad * 4 + corner) * stride;
-        positions[offset] = static_cast<float>(x + a * u + c * v);
-        positions[offset + 1] = static_cast<float>(y + b * u + d * v);
-        positions[offset + 2] = 0;
+        // Placed, a corner is where pvz_place_quads would put the single-precision local one.
+        const float localX = static_cast<float>(x + a * u + c * v), localY = static_cast<float>(y + b * u + d * v);
+        if (placement) {
+            place(placement, localX, localY, positions + offset);
+        } else {
+            positions[offset] = localX;
+            positions[offset + 1] = localY;
+            positions[offset + 2] = 0;
+        }
         vertices[offset + 3] = static_cast<float>(image[4 + corner * 2]);
         vertices[offset + 4] = static_cast<float>(image[5 + corner * 2]);
         vertices[offset + 5] = static_cast<float>(red);
@@ -80,15 +94,13 @@ void pvz_write_quad(const double *image, double x, double y, double a, double b,
     }
 }
 
-void pvz_clear_quads(float *positions, float *vertices, size_t from, size_t capacity, size_t stride) {
-    for (size_t rest = from * 4; rest < capacity * 4; ++rest) {
-        const size_t offset = rest * stride;
-        positions[offset] = positions[offset + 1] = positions[offset + 2] = 0;
-        vertices[offset + 8] = 0;
-    }
-}
-
 extern "C" {
+
+void pvz_place_quads(float *vertices, int32_t vertexCount, int32_t quads, int32_t stride, const double *matrix) {
+    if (quads <= 0 || stride < 3 || static_cast<int64_t>(quads) * 4 * stride > vertexCount) return;
+    float *vertex = vertices;
+    for (int32_t rest = quads * 4; rest > 0; --rest, vertex += stride) place(matrix, vertex[0], vertex[1], vertex);
+}
 
 int32_t pvz_sample(const double *keys, int32_t count, double time, double *pose) {
     return sampleAt(keys, count, time, 0, pose);
@@ -119,6 +131,7 @@ int32_t pvz_write_reanim(const double *keys, int32_t keyCount, const int32_t *tr
     const double ma = state[PVZ_MATRIX_A], mb = state[PVZ_MATRIX_B], mc = state[PVZ_MATRIX_C], md = state[PVZ_MATRIX_D];
     const double mx = state[PVZ_MATRIX_X], my = state[PVZ_MATRIX_Y];
     const double rate = state[PVZ_RATE];
+    const double *placement = state[PVZ_PLACED] != 0 ? state + PVZ_PLACE : nullptr;
     size_t quad = 0;
     for (size_t entry = first; entry < end && quad < capacity; ++entry) {
         const int32_t *track = tracks + entry * PVZ_TRACK;
@@ -155,16 +168,15 @@ int32_t pvz_write_reanim(const double *keys, int32_t keyCount, const int32_t *tr
         } else {
             alpha = roundHalfUp(pose[6] * colorAlpha);
         }
-        pvz_write_quad(image, x, y, a, b, c, d, red / 255, green / 255, blue / 255, alpha * opacity, positions, vertices, quad++, stride);
+        pvz_write_quad(image, x, y, a, b, c, d, red / 255, green / 255, blue / 255, alpha * opacity, positions, vertices, quad++, stride, placement);
         if (extra && quad < capacity) {
             // The extra additive image takes the image alpha, which already includes the track's, as
             // ColorComponentMultiply in Reanimation::DrawTrack; a negative alpha marks it additive.
             const double extraAlpha = -std::floor(state[PVZ_EXTRA_ALPHA] * alpha / 255);
             pvz_write_quad(image, x, y, a, b, c, d, state[PVZ_EXTRA_RED] / 255, state[PVZ_EXTRA_GREEN] / 255,
-                      state[PVZ_EXTRA_BLUE] / 255, extraAlpha * opacity, positions, vertices, quad++, stride);
+                      state[PVZ_EXTRA_BLUE] / 255, extraAlpha * opacity, positions, vertices, quad++, stride, placement);
         }
     }
-    pvz_clear_quads(positions, vertices, quad, capacity, stride);
     return static_cast<int32_t>(quad);
 }
 }

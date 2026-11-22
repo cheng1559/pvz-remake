@@ -46,13 +46,14 @@ class ParticleEmitterView implements KernelQuadSource {
         else this.batch.clear()
     }
 
-    writeQuads(positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number): number {
+    writeQuads(positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number, placement?: Float64Array): number {
         if (!this.system) return 0
         this.options[ParticleOption.OPACITY] = opacity
         this.options[ParticleOption.STRIDE] = stride
         this.options[ParticleOption.CAPACITY] = capacity
         const written = this.system.write(this.index, this.geometry, this.options, positions, vertices)
         if (this.fullScreen && written > 0) fillScreen(this.batch.node, positions, stride, written)
+        if (placement && written > 0) kernel().placeQuads(positions, written, stride, placement)
         return written
     }
 

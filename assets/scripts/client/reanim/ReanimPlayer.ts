@@ -830,7 +830,7 @@ export class ReanimPlayer extends Component {
                 for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
             } else if (shown) {
                 const batch = this.batchAt(used++)
-                // Room for every track and its extra additive image; the kernel clears unused quads.
+                // Room for every track and its extra additive image; only the quads written are drawn.
                 batch.setSource(segment.source, segment.frame.frame, (segment.end - segment.first) * 2)
                 order.push({ node: batch.node, clipped })
             }
@@ -857,10 +857,13 @@ export class ReanimPlayer extends Component {
     }
 
     /** Draws the batched tracks [first, end); the drawing state is the one prepared by the last pose write. */
-    private writeRun(first: number, end: number, positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number): number {
+    private writeRun(first: number, end: number, positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number,
+        placement?: Float64Array): number {
         const drawing = this.drawing
         if (!drawing) return 0
         const state = drawing.state
+        state[Header.PLACED] = placement ? 1 : 0
+        if (placement) state.set(placement, Header.PLACE)
         state[Header.OPACITY] = opacity
         state[Header.STRIDE] = stride
         state[Header.CAPACITY] = capacity

@@ -6,11 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 
-// Writes one quad: an image slot placed by an affine matrix, with a color whose negative alpha marks it additive.
+// Writes one quad: an image slot placed by an affine matrix, with a color whose negative alpha marks it additive. With a
+// placement (as pvz_place_quads takes one), its corners go out placed in the world by it.
 void pvz_write_quad(const double *image, double x, double y, double a, double b, double c, double d,
-                    double red, double green, double blue, double alpha, float *positions, float *vertices, size_t quad, size_t stride);
-// Collapses the unused quads in [from, capacity) so they draw nothing.
-void pvz_clear_quads(float *positions, float *vertices, size_t from, size_t capacity, size_t stride);
+                    double red, double green, double blue, double alpha, float *positions, float *vertices, size_t quad, size_t stride,
+                    const double *placement = nullptr);
 
 extern "C" {
 
@@ -34,8 +34,14 @@ enum PvzHeader {
     // Keyframes a second, where a track has one for every frame from the clip's first: where the keyframe a time has
     // reached is looked for first. 0 looks for it without.
     PVZ_RATE,
-    PVZ_HEADER
+    // Not 0: the quads go out placed in the world by the nine numbers after it (as pvz_place_quads places them).
+    PVZ_PLACED, PVZ_PLACE,
+    PVZ_HEADER = PVZ_PLACE + 9
 };
+
+// Places the first quads of vertices written at local positions (z left at 0) in the world: each position goes through
+// the matrix, given as the x, y and z of its x axis, of its y axis and of its origin.
+void pvz_place_quads(float *vertices, int32_t vertexCount, int32_t quads, int32_t stride, const double *matrix);
 
 // Samples one track's keyframes; writes x, y, scaleX, scaleY, skewX, skewY, alpha and returns the
 // index of the keyframe reached, or -1 before the first keyframe.
@@ -44,8 +50,9 @@ int32_t pvz_sample(const double *keys, int32_t count, double time, double *pose)
 // Blends from a captured pose towards pose, in place, taking the shorter way around for angles.
 void pvz_blend(const double *from, double ratio, double *pose);
 
-// Draws the visible tracks of one animation in [FIRST, END) as quads; the rest of the capacity is
-// cleared. State holds the header, then track colors (4 per entry), blend sources and images.
+// Draws the visible tracks of one animation in [FIRST, END) as quads; the rest of the capacity is left as it was, for
+// the caller draws only the quads returned. State holds the header, then track colors (4 per entry), blend sources
+// and images.
 // Returns the quads drawn, or -1 for invalid input.
 int32_t pvz_write_reanim(const double *keys, int32_t keyCount, const int32_t *tracks, int32_t trackCount,
                          const double *state, int32_t stateCount, float *positions, int32_t positionCount,

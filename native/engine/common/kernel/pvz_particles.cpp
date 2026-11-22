@@ -365,7 +365,6 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
         if (extra) pvz_write_quad(image, x, y, c * scale, sn * scale, -sn * scale * stretch, c * scale * stretch, r, g, b,
                                   -a, positions, vertices, quad++, stride);
     }
-    pvz_clear_quads(positions, vertices, quad, capacity, stride);
     return static_cast<int32_t>(quad);
 }
 

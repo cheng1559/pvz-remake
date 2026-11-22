@@ -14,8 +14,9 @@ enum PvzParticleOption {
     // The size of one sprite cell, which a particle's clip cuts.
     PVZ_PARTICLE_CEL_WIDTH, PVZ_PARTICLE_CEL_HEIGHT, PVZ_PARTICLE_OPTIONS
 };
-// Writes one emitter's particles as quads, each followed by its extra additive copy when enabled, and clears the rest
-// of the capacity. Geometry is one PVZ_IMAGE per sprite cell. Returns the quads written, or -1 for invalid input.
+// Writes one emitter's particles as quads, each followed by its extra additive copy when enabled; the rest of the
+// capacity is left as it was. Geometry is one PVZ_IMAGE per sprite cell. Returns the quads written, or -1 for invalid
+// input.
 int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geometry, int32_t geometryLength,
                             const double *options, int32_t optionsLength, float *positions, int32_t positionCount,
                             float *vertices, int32_t vertexCount);

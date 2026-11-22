@@ -87,6 +87,20 @@ void writeReanimBindingRegistry(const v8::FunctionCallbackInfo<v8::Value> &args)
     args.GetReturnValue().Set(pvz_write_reanim(keys, keyCount, tracks, trackCount, state, stateCount, positions, positionCount, vertices, vertexCount));
 }
 
+// (vertices, quads, stride, matrix): places the first quads in the world, in place
+bool placeQuadsBinding(se::State &s) {
+    const auto &args = s.args();
+    float *vertices = nullptr;
+    const double *matrix = nullptr;
+    int32_t vertexCount = 0, matrixCount = 0;
+    if (args.size() == 4 && typedArray(args[0], Type::FLOAT32, vertices, vertexCount) && args[1].isNumber() && args[2].isNumber() &&
+        typedArray(args[3], Type::FLOAT64, matrix, matrixCount) && matrixCount >= 9) {
+        pvz_place_quads(vertices, vertexCount, args[1].toInt32(), args[2].toInt32(), matrix);
+    }
+    return true;
+}
+SE_BIND_FUNC(placeQuadsBinding)
+
 bool particlesCreateBinding(se::State &s) {
     const auto &a = s.args();
     const double *data = nullptr; int32_t length = 0;
@@ -185,6 +199,7 @@ bool registerPvzKernel(se::Object *global) {
            global->defineFunction("__pvzKernelSample", _SE(sampleBinding)) &&
            global->defineFunction("__pvzKernelBlend", _SE(blendBinding)) &&
            global->defineFunction("__pvzKernelWriteReanim", _SE(writeReanimBinding)) &&
+           global->defineFunction("__pvzKernelPlaceQuads", _SE(placeQuadsBinding)) &&
            global->defineFunction("__pvzKernelDecodePng", _SE(decodePngBinding)) &&
            global->defineFunction("__pvzKernelSandAlphaEdges", _SE(sandAlphaEdgesBinding));
 }
