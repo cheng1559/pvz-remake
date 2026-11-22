@@ -180,6 +180,17 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     assert.throws(() => parseServerPacket(packet), /does not match/)
 })
 
+test('local channel checks one frame in frameChecks, the first among them, and every frame by default', () => {
+    const broken = () => ({ protocolVersion: 1, type: 'frame' }) as unknown as ServerPacket
+    const sampled = new LocalGameChannel(2)
+    assert.throws(() => sampled.sendToClient(broken()))
+    assert.doesNotThrow(() => sampled.sendToClient(broken()))
+    assert.throws(() => sampled.sendToClient(broken()))
+    const every = new LocalGameChannel()
+    assert.throws(() => every.sendToClient(broken()))
+    assert.throws(() => every.sendToClient(broken()))
+})
+
 test('local server replies deeply isolate nested data with JSON copy semantics', () => {
     const channel = new LocalGameChannel()
     const shared = { values: [1, 2] }

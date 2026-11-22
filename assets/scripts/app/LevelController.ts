@@ -1,7 +1,8 @@
 import { modErrorOwner, modFaults, ModRuntimeError } from '@/shared/mod/ModHost'
 import { BlockInputEvents, Node } from 'cc'
+import { DEBUG } from 'cc/env'
 import { isZombieOnScreen } from '@/shared/content/zombieStates'
-import { LocalIntegratedGame } from './LocalIntegratedGame'
+import { LocalIntegratedGame, PLAYED_FRAME_CHECKS } from './LocalIntegratedGame'
 import { loadInstalledMods } from './ModLoader'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from '@/shared/menu'
@@ -124,7 +125,9 @@ export function createLevelController(
                 : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
             const playerName = profile?.name || 'Player'
             const earnedAchievements = profile ? (await menuApi.getAchievements()).items.filter(item => item.earned).map(item => item.id) : undefined
-            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
+            // A debug build checks every frame its server sends, so that what a Mod writes wrong is told of at once; a
+            // release build one a second.
+            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true, DEBUG ? 1 : PLAYED_FRAME_CHECKS)
             const startOptions = save ? {
                 ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
                 randomSeed: save.server.random.state, cheatSeeds: GameDebugSettings.cheatSeedsEnabled,

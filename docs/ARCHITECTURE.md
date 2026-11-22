@@ -100,7 +100,7 @@ The local channel (`shared/channel`) parses every client packet after a JSON rou
 
 Server packets are handled by type:
 
-- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore validated (`validateServerPacket`) and handed over without a copy.
+- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore handed over without a copy. It is validated (`validateServerPacket`) on the way: every frame in a debug build, one a second in a release build (`LocalGameChannel`'s `frameChecks`), where checking every field of every entity each tick cost more than it caught.
 - **Every other server packet** may reference server state. `copyServerPacket` checks its JSON safety and deep-copies it in one traversal, before the protocol's structure checks.
 
 Nested Mod state, extensions and events are copied or checked the same way, so a client changing what it holds cannot reach the server or other snapshots. Client requests, external packet parsing and save formats keep their own rules.
