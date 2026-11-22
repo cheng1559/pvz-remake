@@ -6,6 +6,7 @@
 
 ```text
 tools/
+├── bench/compare.ts            # 在已构建的游戏上运行游戏内性能基准并对比
 ├── build/
 │   └── clean-native-assets.ts  # 原生构建前清除输出目录中旧的 data/assets 和 Xcode 已构建的应用（由 Windows、macOS 和 iOS 构建命令调用）
 ├── installer/                  # 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss，package-macos.ts 生成各架构的 macOS 磁盘映像
@@ -39,6 +40,7 @@ tools/
 | 用原版程序的图标生成网页与原生应用图标 | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | 字体与图像超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
 | iOS 上的 JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
+| 用性能基准对比已构建的游戏 | `npm run bench -- <A> [<B>]` |
 | 资源转换工具的测试 | `npm run test:tools` |
 
 Python 命令需在项目根目录运行。`npm run build:content` 调用 `python3 -m tools.pvz`，转换的实现位于 `pvz/`：
