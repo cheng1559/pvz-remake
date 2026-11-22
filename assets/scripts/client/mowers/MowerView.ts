@@ -31,6 +31,8 @@ export class MowerView extends ProjectileView {
         if (this.held || !animation?.node.isValid) return
         this.held = true
         animation.node.setPosition(WAITING.x, WAITING.y)
+        // Its first frame, however long it has played since it loaded.
+        animation.seek(0)
         animation.pause()
     }
 
