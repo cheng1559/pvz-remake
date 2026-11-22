@@ -115,6 +115,7 @@ test("the board makes a waiting mower's view by the mowers' registry, syncs it w
         '@/client/view/uiNode': { uiNode: () => ({ node }) },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfPlantsVisible: true, perfZombiesVisible: true } },
         './EntityFlashes': load('level/EntityFlashes'),
+        './BoardShadows': load('level/BoardShadows'),
         './LevelStage': { boardToLayer: (x: number, y: number) => ({ x, y }) },
     })
     const made: any[] = [], synced: number[] = []

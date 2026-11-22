@@ -1,6 +1,7 @@
 import { prepareReanims } from '@/client/reanim/ReanimAssets'
 import { modResources } from '@/client/content/ModResources'
 import { Color, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
+import type { BoardShadow } from '@/client/level/BoardShadows'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { zombieDefinition } from './definitions'
 import { renderOrder } from '@/shared/content/renderOrder'
@@ -71,10 +72,14 @@ const NO_FLASH: ZombieFlash = { flash: 0, through: false, past: false }
  */
 export class ZombieView implements EntityView<ZombieSnapshot> {
     /**
-     * Its shadow, a node beside its own (of the board's layer, on it): on the ground under it, drawn with the ground.
-     * None when it is drawn without (ZombieDraw.shadow).
+     * Its shadow off the board, a node beside its own, under what else is there; a winner's too, as it walks on into
+     * the house. None when it is drawn without (ZombieDraw.shadow), nor on the board, where its shadow is `shadow`.
      */
     shadowNode?: Node
+    /** Its shadow on the board: on the ground under it, drawn with the ground and with its row's others (BoardShadows). */
+    shadow?: BoardShadow
+    /** Its shadow's picture. */
+    private shadowFrame?: SpriteFrame
     /** Its attachment list: flags, marks and other effects that belong to it, which go on with it into the house. */
     readonly attachments = new EntityAttachments()
     /** Its animation (ZombieDefinition.animation): what its layers play, kept by the server on the board. */
@@ -159,15 +164,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             this.ice = await IceTrapView.create(this.root, this.root.children[0], look, this.presentation.iceTrap ?? look.zombie)
         }
         if (shadow) this.shadowSize = { width: shadow.originalSize.width, height: shadow.originalSize.height }
-        // Off the board its shadow goes beside its node, under what else is there.
-        if (shadow) this.shadowNode = uiNode({
-            name: 'ZombieShadow', parent: stage?.layer ?? this.node.parent!, anchor: { x: 0, y: 1 }, active: false,
-            sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).node
-        if (!stage) this.shadowNode?.setSiblingIndex(0)
-        // A zombie of another size has its shadow so (placeShadow).
-        const shadowScale = this.presentation.shadow.scale
-        if (shadowScale !== undefined) this.shadowNode?.setScale(shadowScale, shadowScale, 1)
+        this.shadowFrame = shadow
+        if (shadow && stage) {
+            // On the board it is one of the board's shadows; a zombie of another size has its shadow so (placeShadow).
+            this.shadow = stage.shadows.add(shadow)
+            this.shadow.scale = this.presentation.shadow.scale ?? 1
+        } else if (shadow) {
+            // Off the board its shadow goes beside its node, under what else is there.
+            this.shadowNode = this.shadowBeside(shadow, this.node.parent!)
+            this.shadowNode.setSiblingIndex(0)
+        }
         await prepareReanims(this.playable())
         if (!stage) this.stand(zombie)
     }
@@ -197,8 +203,12 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (zombie.alpha !== this.shownAlpha) uiNode({ node: this.node, opacity: this.shownAlpha = zombie.alpha })
         this.placeShadow()
         // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
-        if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
+        const shadowed = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
             zombie.state !== 'airborne' && !zombie.riseTicks
+        if (this.shadow) {
+            this.shadow.row = zombie.row
+            this.shadow.visible = shadowed
+        } else if (this.shadowNode) this.shadowNode.active = shadowed
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
         if (zombie.state === 'mowered') {
@@ -302,10 +312,27 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     private placeShadow(): void {
+        const board = this.shadow, node = this.shadowNode
+        if (!board && !node) return
         const { x, y, backwardsX, scale = 1 } = this.presentation.shadow, { width, height } = this.shadowSize
         // Zombie::DrawShadow's place differs for a zombie walking right; one of a zombie of another size is so about its middle.
-        this.shadowNode?.setPosition(this.node.position.x + (this.mirrored ? backwardsX ?? x : x) + width * (1 - scale) / 2,
-            this.node.position.y + y - height * (1 - scale) / 2)
+        const shadowX = this.node.position.x + (this.mirrored ? backwardsX ?? x : x) + width * (1 - scale) / 2
+        const shadowY = this.node.position.y + y - height * (1 - scale) / 2
+        if (board) {
+            board.x = shadowX
+            board.y = shadowY
+        } else if (node!.position.x !== shadowX || node!.position.y !== shadowY) node!.setPosition(shadowX, shadowY)
+    }
+
+    /** A shadow that is a node of its own under `parent`, hidden until it is placed: off the board, and a winner's. */
+    private shadowBeside(frame: SpriteFrame, parent: Node): Node {
+        const node = uiNode({
+            name: 'ZombieShadow', parent, anchor: { x: 0, y: 1 }, active: false,
+            sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false },
+        }).node
+        const scale = this.presentation.shadow.scale
+        if (scale !== undefined) node.setScale(scale, scale, 1)
+        return node
     }
 
     get players(): ReanimPlayer[] { return this.layers.shown.filter(player => player.node.isValid) }
@@ -381,10 +408,18 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      * `ticks` into the walk after an approach of `approachTicks`, at `y`.
      */
     syncGameOverWalk(zombie: ZombieSnapshot, parent: Node, ticks: number, y: number, approachTicks = 0): void {
-        for (const node of [this.node, this.shadowNode]) {
-            if (!node) continue
-            if (node.parent !== parent) node.setParent(parent)
-            node.active = true
+        if (this.node.parent !== parent) this.node.setParent(parent)
+        this.node.active = true
+        // It leaves the board's layer, and its shadow the board's shadows with it, for a node of its own beside it.
+        if (this.shadow && this.shadowFrame) {
+            this.shadow.remove()
+            this.shadow = undefined
+            this.shadowNode = this.shadowBeside(this.shadowFrame, parent)
+        }
+        const shadow = this.shadowNode
+        if (shadow) {
+            if (shadow.parent !== parent) shadow.setParent(parent)
+            shadow.active = true
         }
         const player = this.player
         if (!player) return
@@ -406,6 +441,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     destroy(): void {
+        this.shadow?.remove()
         if (this.shadowNode?.isValid) this.shadowNode.destroy()
     }
 

@@ -11,6 +11,7 @@ import { PlantView } from '@/client/plants/PlantView'
 import type { LevelParticleOwnerSnapshot, LevelPresentationSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell } from './LevelGeometry'
+import { BoardShadows } from './BoardShadows'
 import { EntityFlashes } from './EntityFlashes'
 import { canShovel, cellPlant } from '@/shared/content/planting'
 import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType } from './LevelStage'
@@ -49,6 +50,7 @@ export class LevelEntityRenderer implements LevelStage {
     shake: LevelStage['shake'] = () => {}
     private readonly creationTasks = new Map<number, Promise<void>>()
     readonly flashes = new EntityFlashes()
+    readonly shadows: BoardShadows
     private pointer?: { x: number; y: number }
     private lastSnapshot?: WorldSnapshot
     private highlightedPlant?: number
@@ -65,7 +67,9 @@ export class LevelEntityRenderer implements LevelStage {
         private readonly awardLayer: Node,
         readonly intro: LevelIntro,
         readonly graveRise: LevelStage['graveRise'],
-    ) {}
+    ) {
+        this.shadows = new BoardShadows(layer)
+    }
 
     get quiet(): boolean { return this.firstFrame || this.restoring }
     get level(): LevelDefinition { return this.content.levels.levels[this.lastSnapshot!.levelId] }
@@ -189,6 +193,8 @@ export class LevelEntityRenderer implements LevelStage {
         // What the frame no longer has goes once its events are heard: what fell off a zombie gone with it (a puff) flies
         // from where it last was.
         for (const id of changes.removed) this.remove(id)
+        // Once every view has placed its own.
+        this.shadows.sync()
         this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
         this.firstFrame = false
@@ -305,6 +311,7 @@ export class LevelEntityRenderer implements LevelStage {
             if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', (value as Positioned).row, SHADOW_RENDER_OFFSET), entityId: value.entityId })
         }
         for (const [order, node] of this.particleHolders) entries.push({ node, order })
+        for (const entry of this.shadows.entries()) entries.push(entry)
         return entries
     }
 

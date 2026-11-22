@@ -644,7 +644,7 @@ The six kinds of view keep one contract (`EntityView` in `LevelStage.ts`):
 - **Sync**: on the board `sync(entity, world)` runs every frame, and the view places its node itself. A new view is synced once with the snapshot of the moment as soon as it is made.
 - **Off the board**: plants, zombies, grid items and projectiles can also be drawn off the board (`client/view/offBoard.ts`). They are created by the same registries with no `stage` in the context, drawn as the context has them from `initialize` on, never synced, and `destroy`ed when done.
 - **Saves**: what must survive a save a view keeps itself through `snapshot` / `restore`: a zombie's body and mower-driver animation, the sun's and coins' spin. Save entries are told apart by kind (`zombie`, `item`). Plant and zombie hit flashes are the board's (`stage.flashes`, `EntityFlashes`), saved with the renderer's state in the level presentation save's `flashes`, not by each view.
-- **Shadows**: a shadow node outside the view's own (zombies, projectiles, mowers) is its `shadowNode`, which the renderer puts on the ground layer. With `draw.shadow: false` neither a plant nor a zombie builds one.
+- **Shadows**: a shadow node outside the view's own (projectiles, mowers, and a zombie off the board) is its `shadowNode`, which the renderer puts on the ground layer. A zombie on the board has no node for its shadow: it is one of the board's (`stage.shadows`, `BoardShadows`), which draws a whole row's in one batch; the view sets its `shadow`'s place, size, row and whether it shows. With `draw.shadow: false` neither a plant nor a zombie builds one.
 
 A plant's or zombie's presentation may leave out `view` (`plant` / `zombie` by default).
 

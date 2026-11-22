@@ -49,7 +49,7 @@ interface TrackRenderOverride {
 const DEG_TO_RAD = Math.PI / 180
 
 /** A frame's texture with its untrimmed, top-left anchored rectangle and UVs, read once. */
-interface FrameGeometry {
+export interface FrameGeometry {
     frame: SpriteFrame
     texture: unknown
     /** left, right, bottom, top, then the four corner UVs. */
@@ -57,7 +57,7 @@ interface FrameGeometry {
 }
 const geometries = new WeakMap<SpriteFrame, FrameGeometry>()
 /** SpriteFrame properties are getters; reading them per image per frame is costly without a JIT. */
-function frameGeometry(frame: SpriteFrame): FrameGeometry {
+export function frameGeometry(frame: SpriteFrame): FrameGeometry {
     let geometry = geometries.get(frame)
     if (!geometry) {
         const border = frame.trimmedBorder, size = frame.originalSize, data = new Float64Array(12)

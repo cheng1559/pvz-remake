@@ -62,6 +62,7 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
 clientStubs['@/client/reanim/clips'] = loadClientModule('reanim/clips', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
+clientStubs['./BoardShadows'] = clientStubs['@/client/level/BoardShadows'] = loadClientModule('level/BoardShadows', {})
 clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
 clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
 
