@@ -7,7 +7,7 @@ import { plantInPlay, plantsInPlay } from '../level/lawn'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
-import { bodyOf, type Projectile, type ProjectileBody, type ProjectileHit, type ProjectileTarget } from './Projectile'
+import { bodyOf, type Projectile, type ProjectileHit, type ProjectileTarget } from './Projectile'
 
 /** How far above or below the screen a projectile is gone, as one that lost what it homed on. */
 const OFF_BOARD_Y = 200
@@ -27,16 +27,17 @@ export class ProjectileSystem implements GameSystem {
         const level = world.resources.get(LevelStateResource)
         if (level.result === 'lost' || level.paused) return
         this.rows = []
-        const add = (target: ProjectileBody, body: { x: number, width: number }) => {
-            const { position } = bodyOf(target), left = position.x + body.x
-            ;(this.rows[position.row] ??= []).push({ ...target, left, right: left + body.width })
-        }
+        // Made for every zombie and plant every tick, and read by every projectile of the row: each written out whole.
+        // One put together from another with a spread is many times as slow to make and to read on the native builds.
+        const rows = this.rows
         for (const zombie of world.zombies) {
-            add({ zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
+            const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)), left = zombie.position.x + body.x
+            ;(rows[zombie.position.row] ??= []).push({ zombie, left, right: left + body.width })
         }
         for (const plant of plantsInPlay(world)) {
             const definition = definitions.plants[plant.typeId]
-            add({ plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
+            const body = plantFacingRect(definition.body, plantTeam(plant)), left = plant.position.x + body.x
+            ;(rows[plant.position.row] ??= []).push({ plant, low: definition.low === true, left, right: left + body.width })
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
         const mowers: Projectile[] = []

@@ -34,6 +34,8 @@ export class ZombieSystem implements GameSystem {
     readonly id = 'pvz:zombie-lifecycle'
     /** Plants by row, collected once per run; their objects are not replaced during it. */
     private plantRows: PlantTarget[][] = []
+    /** A row's plants that a zombie of a side bites, by the side and the row: sorted out once a run for all its zombies. */
+    private hostileRows = new Map<ReturnType<typeof zombieTeam>, PlantTarget[][]>()
     /** Both sides have zombies on the lawn this run; otherwise no zombie can bite another. */
     private bothSides = false
     constructor(private readonly definitions: GameplayDefinitions) {}
@@ -46,14 +48,21 @@ export class ZombieSystem implements GameSystem {
 
         for (const plant of plantsInPlay(world)) if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
         this.plantRows = []
+        this.hostileRows.clear()
         for (const plant of plantsInPlay(world)) {
             const { position } = plant, type = definitions.plants[plant.typeId]
             const body = plantFacingRect(type.body, plantTeam(plant)), left = position.x + body.x
             ;(this.plantRows[position.row] ??= []).push({ plant, left, right: left + body.width, rolling: type.occupiesCell === false })
         }
 
-        const sides = new Set([...world.zombies].map(zombie => zombieTeam(zombie)))
-        this.bothSides = sides.size > 1
+        // Whether zombies of two sides are on the lawn.
+        let side: ReturnType<typeof zombieTeam> | undefined
+        this.bothSides = false
+        for (const zombie of world.zombies) {
+            const team = zombieTeam(zombie)
+            if (side === undefined) side = team
+            else if (team !== side) { this.bothSides = true; break }
+        }
         for (const zombie of world.zombies) zombie.beforeTick(world)
         // An earlier zombie's bite may have blown one up: the list passes it over.
         for (const zombie of world.zombies) {
@@ -129,7 +138,9 @@ export class ZombieSystem implements GameSystem {
         const definition = definitions.zombies[zombie.typeId], animation = definition.animation
         const level = world.resources.get(LevelStateResource), random = world.resources.get(RandomResource)
         const team = zombieTeam(zombie)
-        const hostilePlants = (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
+        let rows = this.hostileRows.get(team)
+        if (!rows) this.hostileRows.set(team, rows = [])
+        const hostilePlants = rows[position.row] ??= (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
 
         // Zombie::UpdateActions: what its kind does of its own, which may take the tick (a pole vaulter's vault).
         if (!zombie.act(context, (attack, rollingAttack) => findPlantTarget(world, hostilePlants, position, attack, rollingAttack))) {

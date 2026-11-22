@@ -68,9 +68,24 @@ export class EntityList<T extends Entity> implements Iterable<T> {
         return this.get(id) !== undefined
     }
 
-    *[Symbol.iterator](): Iterator<T> {
+    /**
+     * Every system goes through its lists every tick: an iterator written out, which costs less than a generator, and
+     * which looks an entity up only once the list has changed since the iteration began.
+     */
+    [Symbol.iterator](): Iterator<T> {
         const ordered = this.ordered ??= [...this.values.values()].sort((a, b) => a.id - b.id)
-        for (const value of ordered) if (this.values.get(value.id) === value && !this.world.leaving(value.id)) yield value
+        const list = this, { values, world } = this
+        let index = 0
+        return {
+            next(): IteratorResult<T> {
+                while (index < ordered.length) {
+                    const value = ordered[index++]
+                    // Unchanged, the list still holds every one it had in order.
+                    if ((list.ordered === ordered || values.get(value.id) === value) && !world.leaving(value.id)) return { done: false, value }
+                }
+                return { done: true, value: undefined }
+            },
+        }
     }
 
     /** World.insert and CommandBuffer.insert put one in; World.destroyEntity takes it out. */
@@ -190,7 +205,7 @@ export class World {
 
     /** Whether it is on its way out (markDestroy). */
     leaving(entity: EntityId): boolean {
-        return this.pendingDestroy.has(entity)
+        return this.pendingDestroy.size > 0 && this.pendingDestroy.has(entity)
     }
 }
 
