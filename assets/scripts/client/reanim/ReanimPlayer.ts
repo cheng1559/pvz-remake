@@ -936,6 +936,7 @@ export class ReanimPlayer extends Component {
         images.forEach((image, slot) => { if (image) state.set(image.data, imageStart + slot * IMAGE) })
         state[Header.TRACKS] = views.length
         state[Header.IMAGES] = images.length
+        state[Header.RATE] = data.fps
         return this.drawing = { keys: clip.keys, tracks, state, segments }
     }
 

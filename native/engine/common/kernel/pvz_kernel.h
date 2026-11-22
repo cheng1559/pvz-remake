@@ -31,6 +31,9 @@ enum PvzHeader {
     // A matrix applied before each pose (identity unless attached to another track).
     PVZ_MATRIX_A, PVZ_MATRIX_B, PVZ_MATRIX_C, PVZ_MATRIX_D, PVZ_MATRIX_X, PVZ_MATRIX_Y,
     PVZ_FIRST, PVZ_END,
+    // Keyframes a second, where a track has one for every frame from the clip's first: where the keyframe a time has
+    // reached is looked for first. 0 looks for it without.
+    PVZ_RATE,
     PVZ_HEADER
 };
 

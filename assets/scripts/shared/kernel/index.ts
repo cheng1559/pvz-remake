@@ -45,7 +45,9 @@ const SAND_BAND = 4 << 20
 export const Header = {
     TIME: 0, RED: 1, GREEN: 2, BLUE: 3, ALPHA: 4, EXTRA: 5, EXTRA_RED: 6, EXTRA_GREEN: 7, EXTRA_BLUE: 8, EXTRA_ALPHA: 9,
     OPACITY: 10, STRIDE: 11, TRACKS: 12, CAPACITY: 13, TINTED: 14, IMAGES: 15, BLENDING: 16, RATIO: 17,
-    MATRIX_A: 18, MATRIX_B: 19, MATRIX_C: 20, MATRIX_D: 21, MATRIX_X: 22, MATRIX_Y: 23, FIRST: 24, END: 25, SIZE: 26,
+    MATRIX_A: 18, MATRIX_B: 19, MATRIX_C: 20, MATRIX_D: 21, MATRIX_X: 22, MATRIX_Y: 23, FIRST: 24, END: 25,
+    /** Keyframes a second where a track has one for every frame: where the one a time has reached is looked for first. */
+    RATE: 26, SIZE: 27,
 } as const
 
 type Native = {
@@ -120,11 +122,15 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
         copy.set(array)
         return address
     }
-    const done = (outputs: Array<[View, number]> = []) => {
-        for (const [array, address] of outputs) {
-            if (array.buffer !== buffer) array.set(new (array.constructor as new (buffer: ArrayBuffer, offset: number, length: number) => View)(buffer, address, array.length))
-        }
-        for (const address of temporary.splice(0)) wasm.free(address)
+    /** Copies an output back to an array outside kernel memory. */
+    const read = (array: View, address: number) => {
+        if (array.buffer !== buffer) array.set(new (array.constructor as new (buffer: ArrayBuffer, offset: number, length: number) => View)(buffer, address, array.length))
+    }
+    /** Frees the copies made for the call; none when its arrays were the kernel's own, as every frame's are. */
+    const done = () => {
+        if (!temporary.length) return
+        for (const address of temporary) wasm.free(address)
+        temporary.length = 0
     }
     const allocate = <T extends Float64Array | Int32Array>(type: new (buffer: ArrayBuffer, offset: number, length: number) => T,
         fallback: new (length: number) => T, bytes: number, length: number): T => {
@@ -150,13 +156,15 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
         particlesInfo(handle, output) {
             const address = pointer(output)
             try { return wasm.pvz_particles_info(handle, address, output.length) }
-            finally { done([[output, address]]) }
+            finally { read(output, address); done() }
         },
         particlesWrite(handle, emitter, geometry, options, positions, vertices) {
             const positionAddress = pointer(positions), vertexAddress = vertices === positions ? positionAddress : pointer(vertices)
             const written = wasm.pvz_particles_write(handle, emitter, pointer(geometry), geometry.length, pointer(options), options.length,
                 positionAddress, positions.length, vertexAddress, vertices.length)
-            done(vertices === positions ? [[positions, positionAddress]] : [[positions, positionAddress], [vertices, vertexAddress]])
+            read(positions, positionAddress)
+            if (vertices !== positions) read(vertices, vertexAddress)
+            done()
             return written
         },
         particlesStop(handle) { wasm.pvz_particles_stop(handle) },
@@ -164,7 +172,8 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
         decodePng(png, output) {
             const address = pointer(output)
             const result = wasm.pvz_png_decode_premultiplied(pointer(png), png.length, address, output.length)
-            done([[output, address]])
+            read(output, address)
+            done()
             return result
         },
         sandAlphaEdges(rgba, width, height) {
@@ -187,19 +196,23 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
             if (first < 0 || count < 0 || (first + count) * KEY > keys.length || pose.length < 7) return -1
             const keyAddress = pointer(keys), poseAddress = pointer(pose)
             const index = wasm.pvz_sample(keyAddress + first * KEY * 8, count, time, poseAddress)
-            done([[pose, poseAddress]])
+            read(pose, poseAddress)
+            done()
             return index
         },
         blend(from, ratio, pose) {
             const fromAddress = pointer(from), poseAddress = pointer(pose)
             wasm.pvz_blend(fromAddress, ratio, poseAddress)
-            done([[pose, poseAddress]])
+            read(pose, poseAddress)
+            done()
         },
         writeReanim(keys, tracks, state, positions, vertices) {
             const positionAddress = pointer(positions), vertexAddress = vertices === positions ? positionAddress : pointer(vertices)
             const written = wasm.pvz_write_reanim(pointer(keys), keys.length, pointer(tracks), tracks.length, pointer(state), state.length,
                 positionAddress, positions.length, vertexAddress, vertices.length)
-            done(vertices === positions ? [[positions, positionAddress]] : [[positions, positionAddress], [vertices, vertexAddress]])
+            read(positions, positionAddress)
+            if (vertices !== positions) read(vertices, vertexAddress)
+            done()
             return written
         },
     }
