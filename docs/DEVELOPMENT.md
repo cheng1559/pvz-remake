@@ -288,7 +288,7 @@ The benchmark (`app/Benchmark.ts`) plays the stress test the same way on every r
 
 A target is a web build folder, opened in a fresh headless Chrome, or a native executable or macOS app. Two targets take turns (A then B, then B then A), each run in a fresh browser or process. Options:
 
-- `--scenario steady` (the default) times the views, animations and drawing of the stress test after 10 seconds of play, the server then standing still; `--scenario combat` plays it from the start, the server included.
+- `--scenario steady` (the default) times the views, animations and drawing of the stress test after 10 seconds of play, the server then standing still; `--scenario combat` plays it from the start, the server included. In both the plants are invincible, so the zombies eat them to the end.
 - `--frames 1200` and `--rounds 3` set the frames each run times, after 120 frames of warm-up, and the runs of each target.
 - `--screenshots <folder>` saves each web run's last frame and counts the pixels that differ from the first run's.
 - `--chrome <path>` names the browser.

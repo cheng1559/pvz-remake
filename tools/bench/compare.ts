@@ -25,6 +25,8 @@ interface Request { scenario: string, frames: number }
 const DEFAULT_CHROME = process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
     : process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'google-chrome'
 const TIMEOUT_SECONDS = 600
+/** How long Chrome may take to answer one debugging command. */
+const COMMAND_TIMEOUT_SECONDS = 60
 
 const TYPES: Record<string, string> = {
     '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -35,13 +37,15 @@ const TYPES: Record<string, string> = {
 const isWeb = (path: string) => existsSync(join(path, 'index.html'))
 
 function exited(child: ChildProcess): Promise<number | null> {
-    return child.exitCode !== null ? Promise.resolve(child.exitCode) : new Promise(done => child.once('exit', done))
+    // One ended by a signal has no exit code, only the signal.
+    return child.exitCode !== null || child.signalCode !== null ? Promise.resolve(child.exitCode) : new Promise(done => child.once('exit', done))
 }
 
-async function waitFor<T>(what: string, read: () => Promise<T | undefined>): Promise<T> {
+/** Reads until there is something to read; `read` failing is tried again, unless `retryFailures` is false. */
+async function waitFor<T>(what: string, read: () => Promise<T | undefined>, retryFailures = true): Promise<T> {
     const deadline = Date.now() + TIMEOUT_SECONDS * 1000
     for (;;) {
-        const value = await read().catch(() => undefined)
+        const value = await read().catch(error => { if (retryFailures) return undefined; throw error })
         if (value !== undefined) return value
         if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`)
         await new Promise(done => setTimeout(done, 500))
@@ -78,21 +82,34 @@ async function runWeb(root: string, request: Request, chromePath: string, screen
         })
         const ws = socket = new WebSocket(page.webSocketDebuggerUrl)
         await new Promise((done, fail) => { ws.addEventListener('open', done, { once: true }); ws.addEventListener('error', fail, { once: true }) })
+        // A command is answered, fails, or fails with the connection: none waits for good.
         let next = 0
-        const pending = new Map<number, (result: any) => void>()
+        const pending = new Map<number, { done(result: any): void, fail(error: Error): void }>()
+        const failAll = (error: Error) => { for (const command of [...pending.values()]) command.fail(error) }
         ws.addEventListener('message', event => {
             const message = JSON.parse(String(event.data))
-            if (message.id !== undefined) pending.get(message.id)?.(message.result)
+            const command = message.id === undefined ? undefined : pending.get(message.id)
+            if (!command) return
+            if (message.error) command.fail(new Error(`Chrome: ${message.error.message}`))
+            else command.done(message.result)
         })
-        const send = (method: string, params: object = {}) => new Promise<any>(done => {
-            pending.set(next, done)
-            ws.send(JSON.stringify({ id: next++, method, params }))
+        ws.addEventListener('close', () => failAll(new Error('Chrome closed the connection')))
+        ws.addEventListener('error', () => failAll(new Error('The connection to Chrome failed')))
+        const send = (method: string, params: object = {}) => new Promise<any>((done, fail) => {
+            if (ws.readyState !== WebSocket.OPEN) return fail(new Error('The connection to Chrome is closed'))
+            const id = next++
+            const timer = setTimeout(() => command.fail(new Error(`Chrome did not answer ${method}`)), COMMAND_TIMEOUT_SECONDS * 1000)
+            const settle = () => { clearTimeout(timer); pending.delete(id) }
+            const command = { done(result: any) { settle(); done(result) }, fail(error: Error) { settle(); fail(error) } }
+            pending.set(id, command)
+            ws.send(JSON.stringify({ id, method, params }))
         })
+        // Until the game reports; Chrome failing ends the wait.
         const outcome = await waitFor('the benchmark', async () => {
             const { result } = await send('Runtime.evaluate', { expression: 'JSON.stringify(globalThis.pvzBenchmark ?? null)', returnByValue: true })
             const value = JSON.parse(result?.value ?? 'null') as Result | { error: string } | null
             return value ?? undefined
-        })
+        }, false)
         if ('error' in outcome) throw new Error(`The benchmark failed: ${outcome.error}`)
         if (screenshot) {
             // The level stands still by now; a moment lets the frame it stands on reach the page.
@@ -219,6 +236,8 @@ async function main(): Promise<void> {
     if (paths.length < 1 || paths.length > 2) throw new Error('Give one or two targets: web build folders, native executables or macOS apps')
     const request = { scenario: options.get('scenario') ?? 'steady', frames: Number(options.get('frames') ?? 1200) }
     const rounds = Number(options.get('rounds') ?? 3), screenshots = options.get('screenshots'), chrome = options.get('chrome') ?? DEFAULT_CHROME
+    // The scenario and frames are the game's to check: it reports one it cannot run as its result.
+    if (!Number.isSafeInteger(rounds) || rounds < 1) throw new Error('--rounds must be a whole number above 0')
     if (screenshots) await mkdir(screenshots, { recursive: true })
     const targets = paths.map((path, index) => ({ label: paths.length === 2 ? 'AB'[index] : basename(path), path: resolve(path) }))
     for (const target of targets) {

@@ -40,7 +40,10 @@ export interface BenchmarkRequest {
     readonly out?: string
 }
 
-/** The benchmark the game was launched with, none if not; one asked for wrongly throws. */
+/**
+ * The benchmark the game was launched with, none if not. One asked for wrongly is not run: its error is its result
+ * (reportBenchmark), and a native build quits, so what launched it learns why at once.
+ */
 export function launchBenchmarkRequest(): BenchmarkRequest | null {
     const options = new Map<string, string>()
     if (sys.isNative) {
@@ -51,10 +54,14 @@ export function launchBenchmarkRequest(): BenchmarkRequest | null {
     } else new URLSearchParams(globalThis.location?.search ?? '').forEach((value, key) => options.set(key, value))
     const scenario = options.get('benchmark')
     if (scenario === undefined) return null
-    if (!Object.hasOwn(SCENARIOS, scenario)) throw new Error(`Unknown benchmark scenario ${scenario}: use ${Object.keys(SCENARIOS).join(' or ')}`)
-    const frames = Number(options.get('frames') ?? DEFAULT_FRAMES)
-    if (!Number.isSafeInteger(frames) || frames < 1) throw new Error('Benchmark frames must be a whole number above 0')
-    const out = options.get('benchmark-out')
+    const frames = Number(options.get('frames') ?? DEFAULT_FRAMES), out = options.get('benchmark-out') || undefined
+    const error = !Object.hasOwn(SCENARIOS, scenario) ? `Unknown benchmark scenario ${scenario}: use ${Object.keys(SCENARIOS).join(' or ')}`
+        : !Number.isSafeInteger(frames) || frames < 1 ? 'Benchmark frames must be a whole number above 0' : undefined
+    if (error !== undefined) {
+        reportBenchmark(out, { error })
+        if (sys.isNative) game.end()
+        return null
+    }
     return { scenario: scenario as Scenario, frames, ...(out ? { out } : {}) }
 }
 
@@ -81,7 +88,7 @@ export async function runLaunchedBenchmark(request: BenchmarkRequest, controller
     } catch (error) {
         outcome = { error: error instanceof Error ? error.message : String(error) }
     } finally { run.dispose() }
-    reportBenchmark(request, outcome)
+    reportBenchmark(request.out, outcome)
     if (sys.isNative) game.end()
 }
 
@@ -159,6 +166,7 @@ class BenchmarkRun {
         this.result.catch(() => {})
         const run = this
         const random = Math.random, speed = gameClock.speed, logic = GameDebugSettings.perfLogicEnabled
+        const invincible = GameDebugSettings.plantInvincible
         // Every system, tween and component takes its delta time from the engine's frame: Game._calculateDT, which is
         // engine-internal and has no public counterpart that keeps the game's own loop running.
         const engine = game as unknown as { _calculateDT(useFixedDeltaTime: boolean): number }
@@ -178,6 +186,9 @@ class BenchmarkRun {
         Math.random = this.between
         gameClock.setSpeed(1)
         GameDebugSettings.setPerfToggle('logic', true)
+        // The plants are not eaten up, so the zombies go on eating them to the end (the level turns /plantinvincible on
+        // as it starts). Set for this run only, not with set, which the device would keep.
+        GameDebugSettings.plantInvincible = true
         director.on(Director.EVENT_BEGIN_FRAME, this.onBeginFrame, this)
         director.on(Director.EVENT_BEFORE_UPDATE, () => { this.marks.update = performance.now() }, this)
         director.on(Director.EVENT_AFTER_UPDATE, () => { this.marks.updated = performance.now() }, this)
@@ -195,6 +206,7 @@ class BenchmarkRun {
             Math.random = random
             gameClock.setSpeed(speed)
             GameDebugSettings.setPerfToggle('logic', logic)
+            GameDebugSettings.plantInvincible = invincible
             running = false
         }
     }
@@ -276,14 +288,14 @@ class BenchmarkRun {
 
 /**
  * Puts a result, or a failure as `{ error }`, where it is read: the console and `globalThis.pvzBenchmark` everywhere,
- * natively also a JSON file, the request's `out` or benchmark.json in the writable folder.
+ * natively also a JSON file, `out` (the request's) or benchmark.json in the writable folder.
  */
-function reportBenchmark(request: BenchmarkRequest, outcome: BenchmarkResult | { error: string }): void {
+function reportBenchmark(out: string | undefined, outcome: BenchmarkResult | { error: string }): void {
     if ('error' in outcome) console.error(`[Benchmark] ${outcome.error}`)
     else console.log(`[Benchmark] ${outcome.scenario}: frame ${outcome.frame.mean.toFixed(2)} ms, 1% low ${outcome.frame.low1.toFixed(2)} ms, ` +
         `server ${outcome.server.mean.toFixed(2)} ms, ${outcome.drawCalls} draw calls, checksum ${outcome.checksum}`)
     ;(globalThis as typeof globalThis & { pvzBenchmark?: unknown }).pvzBenchmark = outcome
     if (!sys.isNative) return
-    const path = request.out ?? `${native.fileUtils.getWritablePath().replace(/[\\/]$/, '')}/benchmark.json`
+    const path = out ?? `${native.fileUtils.getWritablePath().replace(/[\\/]$/, '')}/benchmark.json`
     if (!native.fileUtils.writeStringToFile(JSON.stringify(outcome, null, 4), path)) console.error(`[Benchmark] Could not write ${path}`)
 }

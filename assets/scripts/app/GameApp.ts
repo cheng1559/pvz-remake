@@ -27,7 +27,7 @@ import {
 } from './LevelController'
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
-import { benchmarkRunning, launchBenchmarkRequest, runLaunchedBenchmark, type BenchmarkRequest } from './Benchmark'
+import { benchmarkRunning, launchBenchmarkRequest, runLaunchedBenchmark } from './Benchmark'
 import { createProfileStore } from '@/server/menu/profileStore'
 import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
@@ -133,8 +133,7 @@ export class GameApp extends Component {
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
         // Animations and particles draw through the kernel and its material; the kernel may compile asynchronously on the web.
-        let benchmark: BenchmarkRequest | null = null
-        try { benchmark = launchBenchmarkRequest() } catch (error) { console.error('[Benchmark]', error) }
+        const benchmark = launchBenchmarkRequest()
         void Promise.all([loadKernel(), loadKernelMaterial()]).then(async () => {
             if (!this.node?.isValid) return
             await this.navigate('splash')
