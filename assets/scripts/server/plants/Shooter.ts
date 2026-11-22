@@ -63,9 +63,17 @@ export class Shooter extends Plant {
         if (this.burst) this.burst.fireAtTick++
     }
 
-    /** Plant::DoBlink: one about to shoot misses its blink. */
+    /**
+     * In the middle of a shot (Plant::mShootingCounter): its burst, and then its firing clips until they are through, as
+     * Plant::UpdateShooting holds the counter at 1 until the shooting animation has played.
+     */
+    protected shooting(): boolean {
+        return !!this.burst || Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
+    }
+
+    /** Plant::DoBlink: one in the middle of a shot misses its blink. */
     blinkMisses(): boolean {
-        return !!this.burst || super.blinkMisses()
+        return this.shooting() || super.blinkMisses()
     }
 
     attack({ world, commands, tick }: SystemContext): void {

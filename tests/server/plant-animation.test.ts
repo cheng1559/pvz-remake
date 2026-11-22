@@ -115,6 +115,24 @@ test('a wall-nut all but stops while it is chewed, and blinks one of its three w
     assert.ok(blinks.size > 0 && [...blinks].every(clip => ['blinkTwitch', 'blinkTwice', 'blinkThrice'].includes(clip)), [...blinks].join())
 })
 
+test('a pea shooter starts a blink only with its head idle, not while the head still plays its shot', () => {
+    // Plant::UpdateShooting holds mShootingCounter at 1 until the head's shooting clip is through, and Plant::DoBlink
+    // misses a blink while it is not 0: a blink is attached to the idle head, from the idle head's first frame.
+    const server = begin('/plant peashooter 3 1', '/zombie buckethead 3 9')
+    let shooting = 0, blinks = 0, blinking = false
+    // While the buckethead walks up, before it reaches the plant (some 3700 ticks in).
+    for (let tick = 0; tick < 3000; tick++) {
+        const { head, blink } = server.tick().plants[0].animations!
+        if (head.clip === 'shootHead') shooting++
+        if (blink && !blinking) {
+            blinks++
+            assert.equal(head.clip, 'idleHead', `tick ${tick}: a blink starts with the head idle`)
+        }
+        blinking = !!blink
+    }
+    assert.ok(shooting > 1000 && blinks > 0, `shooting for ${shooting} ticks, ${blinks} blinks`)
+})
+
 test('Reanimation::GetFrameTime: a clip spreads its frames over its whole length, its last reached as it ends', () => {
     const loop = { frames: 25, fps: { min: 12, max: 12 } }, once = { ...loop, hold: true as const }
     assert.equal(framePosition(loop, 0), 0)
