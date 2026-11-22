@@ -97,9 +97,10 @@ export interface LevelStage {
     particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored?: boolean): void
     /**
      * A particle effect on the board at a draw order, in the layer's coordinates, played as `args` say. Every particle
-     * of the board is drawn at its order among the rest this way, and a save puts it back the same way.
+     * of the board is drawn at its order among the rest this way, and a save puts it back the same way. None while
+     * the particle pools are full (ParticlePlayer.spawn).
      */
-    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer | null
     /** A particle of the board (spawnParticle) goes to another draw order, as a projectile's trail does with its projectile. */
     reorderParticle(player: ParticlePlayer, order: number): void
     /**

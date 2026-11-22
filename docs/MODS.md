@@ -245,7 +245,7 @@ The gameplay tables a Mod can add to:
 
 The presentation tables a Mod can add to are `plants`, `zombies`, `projectiles`, `gridItems`, `items`, `awards`, `tools`, `foley`, `boards`, `screens`, `clips`, `levels`, `rules`, `challenges`, `store` and `almanac`. `items` is indexed by dropped item ID, `awards` by level award ID, `rules` by the level rule's `kind`, `store` by store item ID, and `almanac` by the ID of the plant or zombie the almanac shows.
 
-Both sides follow the same rules: new IDs only in the Mod's own namespace, and an entry under anyone else's ID changes it. The base package also has settings outside these tables: the gameplay `settings` and the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. A Mod changes them by writing the same key. Any other top-level key is an error.
+Both sides follow the same rules: new IDs only in the Mod's own namespace, and an entry under anyone else's ID changes it. The base package also has settings outside these tables: the gameplay `settings` and the presentation `settings`, `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. A Mod changes them by writing the same key. Any other top-level key is an error.
 
 Presentation definitions are as strict as gameplay definitions: each object accepts only its own fields, and an extra, misspelled or moved field (such as `vault` in a zombie presentation) reports `... is not supported`.
 
@@ -253,7 +253,7 @@ A new level must be registered in both the gameplay `levels` (rules and waves) a
 
 ### Changing what is defined
 
-An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
+An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `settings`, `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
 
 ```json
 {
@@ -581,6 +581,8 @@ Particles are all registered in `resources.particles`. Their JSON uses `schemaVe
 XML conversion always goes through `tools/pvz/particles.py`. For the base package it unpacks the PAK temporarily, converts straight into `mods/pvz-base/assets/particles/` and registers the files in the resource list; the generic Mod packer then packs them. The original's curves and random distributions are kept by the conversion and computed by the shared particle kernel.
 
 Scripts play particles with `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })`, and every platform uses the same C++ core. `whenReady()` waits for loading; `snapshot()` and `ParticlePlayer.restore()` use the same save structure.
+
+The base presentation `settings`' `particles` gives how many particle effects, emitters and particles may be alive at once, as the original's particle pools do (1024 each). While an effect would not fit, `ParticlePlayer.spawn` and the board's `spawnParticle` return `null` and play nothing, and a particle that would not fit is not spawned. `ParticlePlayer.restore()` always brings back what a save kept.
 
 The old particle format and old particle saves are no longer accepted; existing Mods' particle resources must be converted and packed again.
 
@@ -935,7 +937,7 @@ The base game's `assets/resources/base.zip` shares `manifest.json`, `content.jso
 
 - The base package always loads first and cannot be disabled or uninstalled.
 - Its source, `mods/pvz-base/content.json`, indexes categorized JSON as a Mod does, merged into `assets/gameplay.json` and `assets/presentation.json` when packed.
-- The base gameplay also provides `settings` (schemaVersion, the sun and money caps `economy`, the seed bank `seedBank`, the flag waves' `flagWave` and the Zen Garden's `zenGarden`), the full levels, the default text and the seed catalog. Mods loaded later add content in their own namespaces.
+- The base gameplay also provides `settings` (schemaVersion, the sun and money caps `economy`, the seed bank `seedBank`, the flag waves' `flagWave` and the Zen Garden's `zenGarden`), which the server reads, and the presentation `settings` (the particle limits `particles`), which only the client reads; the full levels, the default text and the seed catalog. Mods loaded later add content in their own namespaces.
 - Every resource (particles included) is registered explicitly in the source `content.json`'s `resources`; packing does not scan for missing ones.
 
 Packing and publishing:

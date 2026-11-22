@@ -3,6 +3,7 @@ import { contentJson, type ContentArchive } from '@/shared/mod/content'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { modResources } from './ModResources'
 import { SoundSystem } from '@/client/sound/SoundSystem'
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { installedMods } from './installedMods'
 
 let pending: Promise<PresentationDefinitions> | undefined
@@ -15,13 +16,14 @@ export function basePresentationJson(base: ContentArchive): unknown {
 
 /**
  * The presentation: the base's with the running Mods' layers on it, built once for the UI and the game alike. Its
- * foley tables are the sound system's from here on.
+ * foley tables are the sound system's from here on, and its particle limits the particle players'.
  */
 export function loadPresentationDefinitions(): Promise<PresentationDefinitions> {
     return pending ??= (async () => {
         const [base, mods] = await Promise.all([modResources.baseContent(), installedMods()])
         const presentation = buildPresentationDefinitions(basePresentationJson(base), mods.presentationDefinitions)
         SoundSystem.useFoley(presentation.foley)
+        ParticlePlayer.useLimits(presentation.settings.particles)
         return presentation
     })().catch(error => { pending = undefined; throw error })
 }

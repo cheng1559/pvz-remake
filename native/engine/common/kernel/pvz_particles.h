@@ -24,4 +24,6 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
 // its last particle.
 void pvz_particles_stop(int32_t handle);
 void pvz_particles_destroy(int32_t handle);
+// TodParticleHolder's particles: how many may be alive across all systems at once; more are not spawned.
+void pvz_particles_limit(int32_t count);
 }

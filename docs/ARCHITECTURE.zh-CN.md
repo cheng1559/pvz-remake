@@ -420,7 +420,7 @@ flowchart LR
 
 玩法定义的编写表位于 `mods/pvz-base/gameplay/definitions/`，拆分为植物、僵尸、种子、场地、子弹、物品、成就、工具、商店、商店页面和图鉴。`gameplay/settings.json` 包含全局默认值，`gameplay/levels.json` 包含关卡。
 
-表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。
+表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。`presentation/settings.json` 包含客户端自己的全局设置，与服务端读取的玩法设置分开。
 
 根目录的 `mods/pvz-base/content.json` 以与模组源码相同的格式索引所有表。打包（`npm run mod:pack`，`tools/mod/cli.ts`）把它们合并为包内的 `assets/gameplay.json` 和 `assets/presentation.json`，结构与模组包相同，不增加额外的资源请求。基础内容包发布到 `assets/resources/base.zip`（`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`，`npm run build:content` 也会执行这一步）。无界面工具和测试读取同一套源表（`tools/mod/content.ts`）。
 
@@ -780,6 +780,7 @@ Release 版本启动时会预热共享的 ZIP 缓存，并准备好所有 Reanim
 - 多个模拟步在一次调用中进入内核，只渲染最后的状态。
 - 存档保留种子和年龄，以便确定性重放。销毁或重启播放器会释放其内核状态。
 - 已用完固定发射上限的空系统会推迟剩余的模拟步并跳过空渲染，同时保持原有的寿命和存档年龄。
+- 表现层设置的 `particles` 规定原版粒子池（TodParticleHolder）的上限。`ParticlePlayer` 统计存活的特效和发射器，放不下的特效不会启动；内核统计所有系统的粒子，超过上限就不再生成，并且不为它取随机数。
 
 ### 游戏时钟
 

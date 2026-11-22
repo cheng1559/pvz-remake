@@ -418,7 +418,7 @@ A huge wave's message is the level's advice (`AdviceWidget`, style `huge-wave`, 
 
 Gameplay authoring tables live under `mods/pvz-base/gameplay/definitions/`, split into plants, zombies, seeds, boards, projectiles, items, achievements, tools, the store, its pages and the almanac. `gameplay/settings.json` contains the global defaults, and `gameplay/levels.json` the levels.
 
-Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more.
+Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more. `presentation/settings.json` contains the client's own global settings, apart from the gameplay settings the server reads.
 
 The root `mods/pvz-base/content.json` indexes every table, in the same format as Mod sources. Packing (`npm run mod:pack`, `tools/mod/cli.ts`) merges them into the package's `assets/gameplay.json` and `assets/presentation.json`, using the same structure as Mod packages and adding no resource requests. The base package is published to `assets/resources/base.zip` (`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`, which `npm run build:content` also runs). Headless tools and tests read the same source tables (`tools/mod/content.ts`).
 
@@ -776,6 +776,7 @@ Particles:
 - Multiple simulation ticks enter the kernel in one call, and only the last state is rendered.
 - Saves retain the seed and age for deterministic replay. Destroying or restarting a player releases its kernel state.
 - Empty systems that have exhausted a fixed launch cap defer their remaining ticks and skip empty rendering, preserving their original lifetime and save age.
+- The presentation settings' `particles` gives the limits of the original's pools (TodParticleHolder). `ParticlePlayer` counts the effects and emitters alive and starts none that would not fit; the kernel counts the particles of all systems and spawns none past the limit, before drawing any random number for it.
 
 ### Game clock
 

@@ -429,14 +429,16 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' }))
 })
 
-test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
+test('the presentation is built once from the base archive and the running Mods, its foley goes to the sound system and its particle limits to the particle players', async () => {
     const base = { content: { presentation: 'presentation.json' },
         files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
     let builds = 0, foley = 0
+    const limits: unknown[] = []
     const load = (archive: object) => loadClientModule('content/loadPresentationDefinitions', {
         './ModResources': { modResources: { baseContent: async () => archive } },
         './installedMods': { installedMods: async () => ({ presentationDefinitions: [] }) },
         '@/client/sound/SoundSystem': { SoundSystem: { useFoley() { foley++ } } },
+        '@/client/particle/ParticlePlayer': { ParticlePlayer: { useLimits(value: unknown) { limits.push(value) } } },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions: (...args: Parameters<typeof buildPresentationDefinitions>) => {
             builds++
             return buildPresentationDefinitions(...args)
@@ -448,6 +450,7 @@ test('the presentation is built once from the base archive and the running Mods,
     assert.deepEqual(presentation, presentationFixture)
     assert.equal(await loadPresentation(), presentation, 'the UI and the game draw with the same one')
     assert.deepEqual([builds, foley], [1, 1])
+    assert.deepEqual(limits, [{ systems: 1024, emitters: 1024, particles: 1024 }], 'TodParticleHolder::InitializeHolder')
     await assert.rejects(load({ ...base, content: {} })(), /does not define presentation/)
 })
 

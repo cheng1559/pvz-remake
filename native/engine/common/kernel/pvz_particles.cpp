@@ -12,8 +12,9 @@ constexpr double PI = 3.14159265358979323846, RAD = PI / 180;
 constexpr size_t MAX_PARTICLES = 4096;
 // Fields per emitter; particles keep their field state inline instead of allocating per spawn.
 constexpr size_t MAX_FIELDS = 8;
-// Live particles across all systems. Spawning stops at the cap, so kernel memory stays bounded.
-constexpr size_t MAX_LIVE_PARTICLES = 65536;
+// Live particles across all systems. TodParticleEmitter::SpawnParticle: none is spawned while there are as many as the
+// limit (pvz_particles_limit), before anything is drawn for it.
+size_t liveParticleLimit = 65536;
 size_t liveParticles = 0;
 // Keep this order in sync with PARTICLE_TRACKS in particles.ts.
 enum TrackId {
@@ -234,7 +235,7 @@ struct System {
         if (maximum >= 0) count = std::min(count, maximum - double(live));
         const double launched = std::floor(e.tracks[MaxLaunched].at(e.time, e.interpolation[8]));
         if (launched >= 0) count = std::min(count, launched - e.spawned);
-        const double room = double(std::min(MAX_PARTICLES - live, MAX_LIVE_PARTICLES - std::min(liveParticles, MAX_LIVE_PARTICLES)));
+        const double room = double(std::min(MAX_PARTICLES - live, liveParticleLimit - std::min(liveParticles, liveParticleLimit)));
         const int spawnCount = static_cast<int>(std::clamp(count, 0.0, room));
         for (int i = 0; i < spawnCount; ++i) { e.particles.push_back(spawn(e, e.time, i, spawnCount)); ++e.spawned; }
         liveParticles += static_cast<size_t>(spawnCount);
@@ -372,4 +373,5 @@ void pvz_particles_stop(int32_t handle) {
     if (auto *s = get(handle)) for (auto &e : s->emitters) e.stopped = true;
 }
 void pvz_particles_destroy(int32_t handle) { systems.erase(handle); }
+void pvz_particles_limit(int32_t count) { liveParticleLimit = count > 0 ? static_cast<size_t>(count) : 0; }
 }

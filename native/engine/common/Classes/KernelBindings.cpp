@@ -157,6 +157,13 @@ bool particlesDestroyBinding(se::State &s) {
 }
 SE_BIND_FUNC(particlesDestroyBinding)
 
+bool particlesLimitBinding(se::State &s) {
+    const auto &a = s.args();
+    if (a.size() == 1 && a[0].isNumber()) pvz_particles_limit(a[0].toInt32());
+    return true;
+}
+SE_BIND_FUNC(particlesLimitBinding)
+
 // (png, output) -> PvzPngResult
 bool decodePngBinding(se::State &s) {
     const auto &a = s.args();
@@ -196,6 +203,7 @@ bool registerPvzKernel(se::Object *global) {
            global->defineFunction("__pvzParticlesWrite", _SE(particlesWriteBinding)) &&
            global->defineFunction("__pvzParticlesStop", _SE(particlesStopBinding)) &&
            global->defineFunction("__pvzParticlesDestroy", _SE(particlesDestroyBinding)) &&
+           global->defineFunction("__pvzParticlesLimit", _SE(particlesLimitBinding)) &&
            global->defineFunction("__pvzKernelSample", _SE(sampleBinding)) &&
            global->defineFunction("__pvzKernelBlend", _SE(blendBinding)) &&
            global->defineFunction("__pvzKernelWriteReanim", _SE(writeReanimBinding)) &&

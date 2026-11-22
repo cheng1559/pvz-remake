@@ -219,7 +219,7 @@ export class LevelEntityRenderer implements LevelStage {
         this.spawnParticle(order, { id: effect, ...boardToLayer(x, y), tint, mirrored, recycle: true })
     }
 
-    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer {
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer | null {
         return ParticlePlayer.spawn({ ...args, parent: this.particleLayer(order), renderOrder: order })
     }
 
