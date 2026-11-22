@@ -16,23 +16,21 @@ const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const start = (levelId: string, levels: Parameters<typeof adventureSeeds>[0], firstAdventure: boolean): StartSessionPacket => ({ type: 'startSession',
     protocolVersion: 1, sequence: 1, levelId, randomSeed: 1, initialMoney: 0, firstAdventure, mods: [], ownedSeeds: adventureSeeds(levels, levelId) })
 
-test('the store and the almanac are definition tables: a Mod adds its own entries, overrides any, and their looks go the same way', () => {
-    const { store } = readGameplaySource('definitions')
+test('the store and the almanac are definition tables: a Mod adds its own entries, changes any, and their looks go the same way', () => {
     const built = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
         storePages: { 'test:page': { level: 5 } },
-        store: { 'test:hat': { page: 'test:page', place: 0, cost: 10, message: 2000, purchase: { kind: 'set', value: 1 } } },
-        overrides: { store: { 'pvz:rake': { ...store['pvz:rake'], cost: 30 } }, almanac: { 'pvz:screendoor': { place: 10, startingLevel: 13 } } },
+        store: { 'test:hat': { page: 'test:page', place: 0, cost: 10, message: 2000, purchase: { kind: 'set', value: 1 } }, 'pvz:rake': { cost: 30 } },
+        almanac: { 'pvz:screendoor': { place: 10, startingLevel: 13 } },
     } }]).definitions
     assert.deepEqual(Object.keys(built.storePages), ['pvz:slot-upgrades', 'pvz:plant-upgrades', 'pvz:zen-garden-1', 'pvz:zen-garden-2', 'test:page'],
         "a Mod's pages come after the base's")
     assert.deepEqual([built.store['test:hat'].page, built.store['pvz:rake'].cost, built.almanac['pvz:screendoor'].place], ['test:page', 30, 10])
     for (const kind of ['store', 'storePages', 'almanac', 'tools']) {
-        assert.throws(() => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: { [kind]: { 'pvz:extra': {} } } }]), /cannot register pvz:extra/)
+        assert.throws(() => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: { [kind]: { 'pvz:extra': {} } } }]), new RegExp(`changes unknown ${kind} entry: pvz:extra`))
     }
     const looks = buildPresentationDefinitions(readPresentationSource(), [{ ownerId: 'test', data: {
-        store: { 'test:hat': { sprite: 'test:hat', highlight: { type: 'none' } } },
-        almanac: { 'test:walker': { ground: 'night' } },
-        overrides: { store: { 'pvz:rake': { sprite: 'icon_rake' } }, almanac: { 'pvz:normal': { ground: 'ice' } } },
+        store: { 'test:hat': { sprite: 'test:hat', highlight: { type: 'none' } }, 'pvz:rake': { offset: null } },
+        almanac: { 'test:walker': { ground: 'night' }, 'pvz:normal': { ground: 'ice' } },
     } }])
     assert.deepEqual([looks.store['test:hat'], looks.store['pvz:rake']], [{ sprite: 'test:hat', highlight: { type: 'none' } }, { sprite: 'icon_rake' }])
     assert.deepEqual(['pvz:normal', 'test:walker', 'pvz:puffshroom', 'pvz:explodenut'].map(id => almanacGround(looks, id)), ['ice', 'night', 'night', 'day'],
@@ -110,7 +108,7 @@ test("a level's tools, tool award and tutorial name what is installed, and a lev
 
 test('a tool does what its kind does: a Mod\'s shovel digs as the base\'s, and it needs its look', () => {
     const content = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
-        tools: { 'test:spade': { kind: 'shovel' } }, levelPatches: { 'pvz:adventure-1-4': { tools: ['test:spade'] } },
+        tools: { 'test:spade': { kind: 'shovel' } }, levels: { 'pvz:adventure-1-4': { tools: ['test:spade'] } },
     } }])
     const server = new IntegratedGameServer(content.definitions, content.levels)
     server.start(start('pvz:adventure-1-4', content.levels, false))

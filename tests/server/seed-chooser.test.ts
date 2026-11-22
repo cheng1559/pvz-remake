@@ -161,21 +161,20 @@ test('a seed\'s position is its place in its group: the original grid, a Mod\'s 
     const hidden = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].hidden)
     assert.deepEqual(hidden.map(position).sort((left, right) => left - right), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
     const build = (data: Record<string, unknown>) => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data }]).definitions
-    const pea = definitions.seeds['pvz:peashooter'], sunflower = definitions.seeds['pvz:sunflower']
-    // Overriding a seed moves it; the chooser follows place order and skips the gap left behind.
-    const moved = build({ overrides: { seeds: { 'pvz:sunflower': { ...sunflower, position: 30 } } } })
+    const pea = definitions.seeds['pvz:peashooter']
+    // Changing a seed's position moves it; the chooser follows place order and skips the gap left behind.
+    const moved = build({ seeds: { 'pvz:sunflower': { position: 30 } } })
     assert.deepEqual(chooserSeeds(moved), [...seeds.filter(id => id !== 'pvz:sunflower'), 'pvz:sunflower'])
     // The grid holds the original's 48 plant seed types; the Imitater's 48 and beyond are no place in it.
-    assert.throws(() => build({ overrides: { seeds: { 'pvz:sunflower': { ...sunflower, position: 48 } } } }), /must be below 48/)
-    const { hidden: _hidden, ...zombie } = definitions.seeds['pvz:normal']
-    assert.throws(() => build({ overrides: { seeds: { 'pvz:normal': zombie } } }), /not a plant seed/)
+    assert.throws(() => build({ seeds: { 'pvz:sunflower': { position: 48 } } }), /must be below 48/)
+    assert.throws(() => build({ seeds: { 'pvz:normal': { hidden: null } } }), /not a plant seed/)
     // A Mod numbers its own seeds, the base's places notwithstanding, and none of them is a hidden card.
     assert.equal(build({ seeds: { 'test:pea': { ...pea, position: 0 } } }).seeds['test:pea'].position, 0)
     assert.throws(() => build({ seeds: { 'test:pea': { ...pea, hidden: true } } }), /only the base game's seeds are hidden cards/)
     assert.throws(() => build({ seeds: { 'test:pea': { ...pea }, 'test:other': { ...pea } } }), /share position 0 in their group/)
     const { position: _position, ...unplaced } = pea
     assert.throws(() => build({ seeds: { 'test:pea': unplaced } }), /position is required/)
-    assert.throws(() => build({ seeds: { 'pvz:extra': { ...pea } } }), /cannot register/)
+    assert.throws(() => build({ seeds: { 'pvz:extra': { ...pea } } }), /changes unknown seeds entry: pvz:extra/)
 })
 
 test('Mods offer cards beyond the grid, on either side, which the bank tells apart and a save keeps', () => {

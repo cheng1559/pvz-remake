@@ -95,7 +95,7 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 - 内置 ZIP 与模组使用相同的 `manifest.json` 和 `content.json`，玩法定义与表现定义直接由通用索引引用。其哈希覆盖所有默认文件和资源映射。
 - 读取存档时仍会检查基础内容的 ID、版本与哈希，以及玩法模组。不匹配的存档会被丢弃，关卡重新开始。
-- 表现层的覆盖不会修改权威的玩法 JSON。
+- 模组对表现层的修改不会改动权威的玩法 JSON。
 
 ### 音乐与音效
 

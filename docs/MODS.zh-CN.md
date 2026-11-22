@@ -78,7 +78,7 @@
 
 - **加载顺序**：已启用的模组从列表底部向顶部依次加载，但模组的依赖总是先于它加载。
 - **资源**：多个运行中的模组注册了同一资源 ID 时，后加载（列表中更靠上）的模组生效。没有任何模组注册的 ID 取自基础内容包。加载失败的模组不提供任何资源。
-- **定义**：两个模组不能注册同一个玩法定义 ID，重复即为错误。要整体替换某个定义，必须在 `overrides` 中声明（见[覆盖与关卡补丁](#覆盖与关卡补丁)），覆盖与加载顺序无关。
+- **定义**：两个模组不能注册同一个玩法定义 ID，重复即为错误。已有定义在表里按 ID 修改（见[修改已有定义](#修改已有定义)）。
 - **文本**：同一文本键以启用优先级更靠后的模组为准。文本语言取最后一个声明了 `locale` 的已启用模组。
 - **依赖**：模组依赖的其他模组必须存在，版本可以是精确版本（`1.2.0`）或最低版本（`>=1.2.0`）。缺少依赖、版本不符或循环依赖在应用时报错；在启动时则会使该模组被停用。
 
@@ -225,7 +225,6 @@ my-mod/
 ```
 
 - `gameplay` 和 `presentation` 把表名映射到文件。路径相对于根目录的 `content.json`。每个表文件都是从 ID 到配置的对象；配置按类别拆分到不同文件中。
-- `overrides` 和 `levelPatches` 也以同样方式索引（见[覆盖与关卡补丁](#覆盖与关卡补丁)）。
 - 资源路径相对于模组根目录。
 - 加载器会自动注册静态的玩法定义、表现定义和新资源，脚本入口无需再次注册这些文件。
 
@@ -233,7 +232,7 @@ my-mod/
 
 - **模组 ID**：不含冒号的名称，如 `widescreen`；由小写字母、数字、`.`、`_` 和 `-` 组成，以字母或数字开头。`mod:init` 只接受小写字母、数字、`_` 和 `-`。
 - **命名空间**：模组 ID 同时也是模组的命名空间。模组新增的资源和定义都写作 `名称:...`，例如 `widescreen:background1`。不存在 ID 相同的两个模组，因此命名空间不会重叠。内置基础游戏的命名空间是 `pvz`。
-- **定义**：模组只能在自己的命名空间中注册定义。注册其他命名空间的 ID 会报错；替换已有定义需通过 `overrides`。
+- **定义**：模组只能在自己的命名空间中注册定义。写在其他命名空间 ID 下的条目会修改该定义，该定义不存在时报错。
 - **资源**：替换已有资源只需使用原 ID。写在其他命名空间中的资源算作替换，而不是模组自己的资源。
 - **脚本中的 ID**：模组新增的类型、实体数据、模组类型的定义字段、文本键和教程步骤同样使用自己的命名空间（`example:regeneration`、`example:dig`）。指令名也可以带上命名空间（`example:hello`）。
 - **音效**：表现配置中的音效（`{ "audio", "foley", "pitchRange"? }`）里，`audio` 是完整的音频资源 ID，如 `pvz:splat` 或 `corn:shoop`；不带命名空间的 ID 在校验时报错。
@@ -253,34 +252,34 @@ my-mod/
 
 模组可以添加内容的表现表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`clips`、`levels`、`rules`、`challenges`、`store` 和 `almanac`。其中 `items` 以掉落物 ID 为键，`awards` 以关卡奖励 ID 为键，`rules` 以关卡规则的 `kind` 为键，`store` 以商店物品 ID 为键，`almanac` 以图鉴所展示的植物或僵尸 ID 为键。
 
-两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，修改已有 ID 需通过 `overrides`。基础内容包还有一些不属于这些表的设置，模组无法写入：玩法侧的 `settings`，以及表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。写入其他顶层键都会报错。
+两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，写在别人 ID 下的条目会修改它。基础内容包还有一些不属于这些表的设置：玩法侧的 `settings`，以及表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。模组写同样的键来修改它们。写入其他顶层键都会报错。
 
 表现定义与玩法定义一样严格：每个对象只接受自己的字段，多出、拼错或放错位置的字段（如写在僵尸表现中的 `vault`）会报告 `... is not supported`。
 
 新关卡必须同时在玩法 `levels`（规则与波次）和表现 `levels`（开场、草坪与提示）中注册。
 
-### 覆盖与关卡补丁
+### 修改已有定义
 
-要整体替换一个已有定义（基础游戏的或其他模组的），在 `gameplay` 或 `presentation` 下添加 `"overrides": "assets/gameplay/overrides.json"`。该文件按表分组给出完整定义：
-
-```json
-{ "plants": { "pvz:peashooter": { "...": "完整的定义" } } }
-```
-
-- 覆盖在所有模组注册完成后才应用，可以覆盖任何已有 ID，与加载顺序无关。
-- 同一 ID 只能被一个模组覆盖；出现第二个即为冲突。
-- 覆盖不存在的 ID 会报错。
-- 被覆盖的定义照常检查其引用。
-- 覆盖只替换数据。实体的类型取自覆盖后定义的 `kind`；实体字段与新定义不符的旧存档按不兼容存档处理。
-- 整体替换基础僵尸表现定义的模组必须保留其 `view`，否则该僵尸会按普通僵尸绘制。
-
-关卡同样可以被覆盖。之后 `levelPatches` 会在覆盖之后逐字段应用：每个条目指定一个关卡及要替换的顶层字段。
+模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
 
 ```json
-{ "pvz:adventure-1-1": { "seedPackets": ["pvz:peashooter", "example:rapid_pea"] } }
+{
+  "example:testing": { "...": "自己的关卡" },
+  "pvz:adventure-1-1": { "seedPackets": ["pvz:peashooter", "example:rapid_pea", "example:beacon"] }
+}
 ```
 
-修补不存在的关卡会报错；两个模组修补同一关卡的同一字段即为冲突。
+表现层的 `plants` 表可以用 `null` 删除字段：
+
+```json
+{ "pvz:explodenut": { "visual": { "tint": null } } }
+```
+
+- 对象逐字段修改，直到给出的字段为止；`null` 删除字段。列表和其他值整体替换。
+- 修改在所有模组注册完自己的条目后才应用，因此模组可以修改其他模组的 ID，与加载顺序无关。修改按加载顺序应用，两个模组可以修改同一字段：保留后加载的模组的值。
+- 写在其他命名空间 ID 下、但该定义不存在的条目会报错。修改后的结果和其他内容一样接受检查：引用、对象没有的字段、该字段不接受的值，都会让模组在加载时失败。
+- 修改只涉及数据。实体的类型取自修改后定义的 `kind`；实体字段与新定义不符的旧存档按不兼容存档处理。
+- 基础僵尸的表现定义如果被修改删掉了 `view`，该僵尸会按普通僵尸绘制。
 
 ### 加载校验
 
@@ -317,7 +316,7 @@ my-mod/
 
 模组的种子不在选卡界面的网格中。开启 `/cheatseed` 时，选卡界面和图鉴会在原版页面之后按模组加载顺序为每个模组单独分页，隐藏种子的页面排在最后；否则模组种子通过 `seedChooser.entries` 提供（见[修改服务端规则](#修改服务端规则)）。
 
-与其他定义表一样，模组只能在自己的命名空间中注册种子。要移动基础游戏或其他模组的种子，需用 `overrides.seeds` 整体替换该种子的定义。
+与其他定义表一样，模组只能在自己的命名空间中注册种子。要移动基础游戏或其他模组的种子，在模组自己的 `seeds` 中按它的 ID 写入新的 `position`。
 
 ### 植物
 
@@ -451,11 +450,11 @@ my-mod/
 | `pvz:win-planting` | `boards`、`skipRules`、`only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
-模组新增的成就可以直接使用这些类型。需要新的判断方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`registry` 是宿主模块 `gameplay/registry`，即 `server/registry/GameplayRegistry` 的实例）。`observe` 接收事件、设置，以及该成就在本关中的状态（保存在存档中）。要让基础成就把模组的植物也计算在内，用 `overrides` 修改它的 `trigger`。
+模组新增的成就可以直接使用这些类型。需要新的判断方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`registry` 是宿主模块 `gameplay/registry`，即 `server/registry/GameplayRegistry` 的实例）。`observe` 接收事件、设置，以及该成就在本关中的状态（保存在存档中）。要让基础成就把模组的植物也计算在内，在模组自己的 `achievements` 中按它的 ID 修改 `trigger`。
 
 ### 商店
 
-商店同样是玩法定义表：模组在自己的命名空间中添加条目，并可用 `overrides` 修改任何人的条目。`store` 按物品 ID 给出商店物品：
+商店同样是玩法定义表：模组在自己的命名空间中添加条目，并可按 ID 修改任何人的条目。`store` 按物品 ID 给出商店物品：
 
 ```text
 { page, place, cost or prices, message or messages, purchase, level?, completed?, requires?, effect?, unlockChallenge? }
@@ -550,7 +549,7 @@ my-mod/
 
 ## 动画片段
 
-动画的使用方用一个按名称索引的 `clips` 对象描述片段，包括只有一个片段的使用方，如掉落物（`idle`）、带动画的子弹（`fly`）、掉落的护具（`drop`）和打僵尸规则（`hammer`）。界面布景使用 `screens[screenId].clips`，按绘制顺序排列。表现顶层的 `clips` 表存放共享特效，如 `pvz:sod-roll` 和 `pvz:final-wave`；模组可以添加带命名空间的 ID，并通过 `overrides.clips` 覆盖已有条目。
+动画的使用方用一个按名称索引的 `clips` 对象描述片段，包括只有一个片段的使用方，如掉落物（`idle`）、带动画的子弹（`fly`）、掉落的护具（`drop`）和打僵尸规则（`hammer`）。界面布景使用 `screens[screenId].clips`，按绘制顺序排列。表现顶层的 `clips` 表存放共享特效，如 `pvz:sod-roll` 和 `pvz:final-wave`；模组可以添加带命名空间的 ID，并按 ID 修改已有条目。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -916,7 +915,7 @@ npm run mod:hosts                      # 重新生成宿主模块列表
 
 只给名称时表示 `mods/<name>`。
 
-示例模组 [Mod Lab](../mods/example/README.zh-CN.md) 演示了玩法类型与 mixin、实体上和存档中的模组数据、关卡补丁、新增与覆盖资源、自定义视图、双端指令、菜单扩展以及生命周期清理。其功能表指向每项功能的实际实现。
+示例模组 [Mod Lab](../mods/example/README.zh-CN.md) 演示了玩法类型与 mixin、实体上和存档中的模组数据、修改基础关卡、新增与覆盖资源、自定义视图、双端指令、菜单扩展以及生命周期清理。其功能表指向每项功能的实际实现。
 
 ### 打包
 

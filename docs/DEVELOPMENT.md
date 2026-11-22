@@ -95,7 +95,7 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 - The built-in ZIP uses the same `manifest.json` and `content.json` as Mods, with gameplay and presentation definitions referenced directly from the common index. Its hash covers every default file and resource mapping.
 - Loading a save still checks the base content's ID, version and hash and the gameplay Mods. A save that does not match is discarded, and the level starts afresh.
-- Presentation overrides do not modify the authoritative gameplay JSON.
+- A Mod's presentation changes do not modify the authoritative gameplay JSON.
 
 ### Music and sound effects
 

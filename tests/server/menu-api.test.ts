@@ -32,8 +32,11 @@ test('shop rules, tiers and purchase effects follow the store table, for a Mod\'
     const upgrade = readGameplaySource('definitions').store['pvz:packet-upgrade']
     // A Mod sells its own seed-slot upgrade in the base's place, and moves the base's off the store.
     const { definitions } = buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data: {
-        store: { 'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001] } },
-        overrides: { store: { 'pvz:packet-upgrade': { page: 'test:page', place: 0, cost: 1, message: 1, purchase: { kind: 'set', value: 1 } } } },
+        store: {
+            'test:upgrade': { ...upgrade, prices: [123, 500], messages: [9000, 9001] },
+            'pvz:packet-upgrade': { page: 'test:page', place: 0, cost: 1, message: 1, prices: null, messages: null, effect: null,
+                purchase: { kind: 'set', value: 1, amount: null, limit: null } },
+        },
         storePages: { 'test:page': { completed: true } },
     } }])
     const { storage, profiles } = fixture()

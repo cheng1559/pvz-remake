@@ -53,7 +53,7 @@
 
 ### 流程
 
-1. **定义。** 玩法定义的 `achievements` 表（`mods/pvz-base/gameplay/definitions/achievements.json`）把 `pvz:sunny-days` 等 ID 映射到 `{ titleKey, descriptionKey, icon: { sprite, index }, trigger? }`。基础内容包按原版的 id 顺序列出 21 个成就，图标的 `index` 就是该 id（见[定义](#定义)）。模组可以新增成就，也可以通过 `overrides` 修改已有成就（见[模组](MODS.zh-CN.md)）；成就页面和奖励页面先列基础游戏的成就，再依次列各模组的成就。
+1. **定义。** 玩法定义的 `achievements` 表（`mods/pvz-base/gameplay/definitions/achievements.json`）把 `pvz:sunny-days` 等 ID 映射到 `{ titleKey, descriptionKey, icon: { sprite, index }, trigger? }`。基础内容包按原版的 id 顺序列出 21 个成就，图标的 `index` 就是该 id（见[定义](#定义)）。模组可以新增成就，也可以按 ID 修改已有成就（见[模组](MODS.zh-CN.md)）；成就页面和奖励页面先列基础游戏的成就，再依次列各模组的成就。
 2. **判定。** 玩法代码只发出服务端事件，从不调用成就模块。会话把成就模块设为事件队列的观察者（`EventQueue.observer`，在 `server/session/session.ts` 中设置），因此 `observeAchievements` 会在每个事件发出时看到它（`achievementEarned` 本身除外）。对玩家尚未获得的每个成就，由其 `trigger.kind` 指定的触发类型判定该事件；判定时机与原版调用 `GiveAchievement` 的位置一致。
 3. **授予。** `grantAchievement(world, id, announce)`（`server/achievements/achievements.ts`）遇到未知 ID 时抛出错误；玩家已拥有该成就或关卡定义为 `achievements: false` 时返回 false；否则加入已获得集合并发出 `achievementEarned`（`id`、`titleKey`、`announce`）。已获得集合来自玩家档案，随开始数据包下发（`startSession.earnedAchievements`，在 `IntegratedGameServer.start` 中写入）；存档不保存它，因此读取存档时仍以数据包为准。
 4. **写入玩家档案。** 收到 `achievementEarned` 后，客户端（`LevelView.onAchievementEarned`，仅在存在玩家档案时由 `app/LevelController.ts` 接上）调用菜单 API `earnAchievement(id, shown)`，`shown` 即 `announce`。`MenuService` 把 ID 加入档案的 `earnedAchievements`，已提示的同时加入 `shownAchievements`，然后保存档案（`server/menu/profileStore.ts`）。

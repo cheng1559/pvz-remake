@@ -13,7 +13,7 @@
 | 自定义植物与视图 | Pulse Beacon 每 200 逻辑步增加 25 阳光，并用自己的动画循环发光 | `src/server/index.ts`、`src/client/beacon.ts` |
 | 实体、快照与存档中的模组数据 | `example:charge` 把剩余时间保存在植物的 `extensions` 中；客户端通过 `world.extensions` 读取 | `registry.extensions.register()` |
 | 自定义关卡 | `/level example:testing` 提供新的种子和僵尸 | `assets/gameplay/levels.json`、`assets/presentation/levels.json` |
-| 修改已有内容 | 1-1 的种子列表加入两株示例植物 | `assets/gameplay/level-patches.json` |
+| 修改已有内容 | 1-1 的种子列表加入两株示例植物 | `assets/gameplay/levels.json` |
 | 新增资源 | 自带的 PNG、WAV、Reanim、粒子、JSON 和文本随 ZIP 发布 | `content.json` 中的 `resources` |
 | 覆盖基础资源 | 普通豌豆也改用青色能量球贴图 | `resources.sprites["pvz:projectilepea"]` |
 | 表现与文本 | 新子弹、粒子命中效果、发射音效和菜单文本 | `assets/presentation/` |

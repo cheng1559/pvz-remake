@@ -270,15 +270,13 @@ test('invalid registered gameplay and presentation are rejected before UI startu
     assert.match(loader.failures.get('bad-view')!, /definitions:/)
 })
 
-test('definition registries reject collisions, foreign namespaces, unresolved references and conflicting level patches', () => {
+test('definition registries reject collisions, unknown IDs of other namespaces and unresolved references', () => {
     assert.throws(() => build([gameplay(), gameplay()]), /duplicate registration/)
-    assert.throws(() => build([{ ...gameplay(), ownerId: 'other' }]), /cannot register/)
+    // Under another Mod's ID, its entries change what is there, and nothing is there.
+    assert.throws(() => build([{ ...gameplay(), ownerId: 'other' }]), /changes unknown \w+ entry: example:/)
     const missing = gameplay()
     missing.data.plants['example:rapid_pea'].shooter.projectile = 'example:missing'
     assert.throws(() => build([missing]), /unknown ID/)
-    const conflict = { ownerId: 'other', data: { levelPatches: { 'pvz:adventure-1-1': { seedPackets: [] } } } }
-    assert.throws(() => build([gameplay(), conflict]), /Conflicting level patch/)
-    assert.throws(() => build([{ ownerId: 'other', data: { levelPatches: { 'other:missing': {} } } }]), /unknown level/)
 
     const source = readPresentationSource()
     const before = JSON.stringify(source)
@@ -293,20 +291,21 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     assert.throws(() => assertPresented(build(), buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
 })
 
-test('a Mod adds and overrides item, award and rule presentations, and one missing fails at load', () => {
+test('a Mod adds and changes item, award and rule presentations, and one missing fails at load', () => {
     const source = readPresentationSource()
     const any = { draws: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
     const sun = source.items['pvz:sun'], almanac = source.awards['pvz:almanac'], whack = source.rules['pvz:whack-a-zombie']
-    // Like every other table: new IDs in the Mod's own namespace, anyone's through overrides.
+    // Like every other table: new IDs in the Mod's own namespace, and changes to anyone's under their IDs.
     const plain = buildPresentationDefinitions(source, [presentation()])
     const added = buildPresentationDefinitions(source, [{ ownerId: 'example', data: { ...presentation().data,
-        items: { 'example:moon': sun }, awards: { 'example:key': almanac }, rules: { 'example:rule': whack },
-        overrides: { items: { 'pvz:sun': { ...sun, clips: { idle: { ...sun.clips.idle, x: 1, y: 2 } } } }, awards: { 'pvz:almanac': { ...almanac, x: 7 } }, rules: { 'pvz:whack-a-zombie': { ...whack, seedBankSlide: 3 } } },
+        items: { 'example:moon': sun, 'pvz:sun': { clips: { idle: { x: 1, y: 2 } } } },
+        awards: { 'example:key': almanac, 'pvz:almanac': { x: 7 } },
+        rules: { 'example:rule': whack, 'pvz:whack-a-zombie': { seedBankSlide: 3 } },
     } }])
     assert.deepEqual([added.items['example:moon'], added.awards!['example:key'], added.rules!['example:rule']], [sun, almanac, whack])
     assert.deepEqual([[added.items['pvz:sun'].clips.idle.x, added.items['pvz:sun'].clips.idle.y], added.awards!['pvz:almanac'].x, added.rules!['pvz:whack-a-zombie'].seedBankSlide], [[1, 2], 7, 3])
     for (const kind of ['items', 'awards', 'rules']) {
-        assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'other', data: { [kind]: { 'pvz:extra': {} } } }]), /cannot register pvz:extra/)
+        assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'other', data: { [kind]: { 'pvz:extra': {} } } }]), new RegExp(`changes unknown ${kind} entry: pvz:extra`))
     }
 
     // A gameplay item or a level award the presentation has nothing for fails as content is put together.
@@ -323,33 +322,37 @@ test('a Mod adds and overrides item, award and rule presentations, and one missi
     assert.throws(() => assertPresented(noted, added, views), /Award presentation is not installed: example:key/, 'a note needs its pages')
 })
 
-test('overrides replace whole existing definitions by ID, one Mod per ID, before level patches apply', () => {
+test('what a Mod writes under another namespace\'s ID is a JSON merge patch, applied after every registration, a later Mod\'s value winning, and checked', () => {
     const basePlants = base().plants
-    const peashooter = { ...basePlants['pvz:peashooter'], maxHealth: 999 }
-    const level = build([]).levels.levels['pvz:adventure-1-1'] as any
-    const override = { ownerId: 'other', data: { overrides: {
-        plants: { 'pvz:peashooter': peashooter },
-        levels: { 'pvz:adventure-1-1': { ...level, seedPackets: ['pvz:sunflower'] } },
-    } } }
-    const result = build([override])
-    assert.equal(result.definitions.plants['pvz:peashooter'].maxHealth, 999, 'the base ID now resolves to the Mod definition')
+    // An object is changed field by field and keeps its other fields, in the settings, a table's entry and a level alike;
+    // a list is replaced whole.
+    const result = build([gameplay(), { ownerId: 'first', data: {
+        settings: { economy: { maxSun: 20000 } }, seeds: { 'pvz:peashooter': { sunCost: 75 } }, plants: { 'pvz:peashooter': { maxHealth: 999 } },
+        levels: { 'pvz:adventure-1-1': { seedPackets: ['pvz:sunflower'] } },
+    } }])
+    const { definitions } = result
+    assert.deepEqual(definitions.economy, { maxSun: 20000, maxMoney: 99999 })
+    assert.deepEqual([definitions.seeds['pvz:peashooter'].sunCost, definitions.seeds['pvz:peashooter'].cooldownTicks], [75, 750])
+    assert.equal(definitions.plants['pvz:peashooter'].maxHealth, 999)
+    assert.deepEqual(result.levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:sunflower'], 'after the example Mod\'s own change to it')
     assert.equal(base().plants['pvz:peashooter'].maxHealth, basePlants['pvz:peashooter'].maxHealth, 'the base asset is unchanged')
-    assert.deepEqual(result.levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:sunflower'])
-    const patch = { ownerId: 'third', data: { levelPatches: { 'pvz:adventure-1-1': { seedPackets: ['pvz:peashooter'] } } } }
-    assert.deepEqual(build([override, patch]).levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'], 'level patches apply to the overridden level')
-    // Another Mod's IDs can be overridden too, whatever the load order.
-    const rapid = gameplay().data.plants['example:rapid_pea']
-    const late = { ownerId: 'other', data: { overrides: { plants: { 'example:rapid_pea': { ...rapid, maxHealth: 7 } } } } }
+    // Another Mod's IDs can be changed too, whatever the load order.
+    const late = { ownerId: 'other', data: { plants: { 'example:rapid_pea': { maxHealth: 7 } } } }
     assert.equal(build([late, gameplay()]).definitions.plants['example:rapid_pea'].maxHealth, 7)
-    assert.throws(() => build([override, { ...override, ownerId: 'third' }]), /Conflicting override: plants\/pvz:peashooter/)
-    assert.throws(() => build([{ ownerId: 'other', data: { overrides: { plants: { 'pvz:missing': peashooter } } } }]), /overrides unknown plants/)
-    assert.throws(() => build([{ ownerId: 'other', data: { overrides: { plants: { 'pvz:peashooter': { ...peashooter, maxHealth: -1 } } } } }]), /maxHealth/,
-        'overridden definitions are validated like any other')
-
+    // In load order, the later Mod's value of a field wins, and a null removes its field.
     const source = readPresentationSource()
-    const view = { ...source.plants['pvz:sunflower'] }
-    const visuals = buildPresentationDefinitions(source, [{ ownerId: 'other', data: { overrides: { plants: { 'pvz:peashooter': view } } } }])
-    assert.deepEqual(visuals.plants['pvz:peashooter'], buildPresentationDefinitions(source).plants['pvz:sunflower'], 'presentation overrides work the same way')
+    const installed = buildPresentationDefinitions(source, [
+        { ownerId: 'first', data: { conveyor: { x: 1, clipX: 5 }, plants: { 'pvz:explodenut': { visual: { tint: null } } } } },
+        { ownerId: 'second', data: { conveyor: { x: 2 } } },
+    ])
+    assert.deepEqual([installed.conveyor.x, installed.conveyor.clipX, installed.conveyor.width], [2, 5, source.conveyor.width])
+    assert.equal(installed.plants['pvz:explodenut'].visual.tint, undefined)
+    assert.ok(source.plants['pvz:explodenut'].visual.tint, 'changes do not change the base asset')
+    // A table or an entry that is not there, a field its object does not have, and a value it does not take fail at load.
+    assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'first', data: { nonsense: {} } }]), /unknown definition table: nonsense/)
+    assert.throws(() => build([{ ownerId: 'first', data: { plants: { 'pvz:missing': { maxHealth: 1 } } } }]), /changes unknown plants entry: pvz:missing/)
+    assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'first', data: { conveyor: { speed: 2 } } }]), /speed/)
+    assert.throws(() => build([{ ownerId: 'first', data: { plants: { 'pvz:peashooter': { maxHealth: -1 } } } }]), /maxHealth/)
 })
 
 test('a packed Mod registers both entity kinds, runs custom behaviors and restores without modifying base content', async () => {
