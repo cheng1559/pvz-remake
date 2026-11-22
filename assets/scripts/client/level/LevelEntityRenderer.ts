@@ -285,6 +285,10 @@ export class LevelEntityRenderer implements LevelStage {
         }
     }
 
+    /** What syncLayerOrder last put in order, as collected, and the layer's children then. */
+    private orderedEntries?: { node: Node, order: number }[]
+    private orderedChildren = 0
+
     /** Everything of the layer that has a place in the draw order, with it. */
     private collectLayerEntries(snapshot: WorldSnapshot): { node: Node, order: number, entityId?: number }[] {
         const entries: { node: Node, order: number, entityId?: number }[] = []
@@ -329,6 +333,12 @@ export class LevelEntityRenderer implements LevelStage {
 
     syncLayerOrder(snapshot: WorldSnapshot): void {
         const entries = this.collectLayerEntries(snapshot)
+        // Most frames nothing joins, leaves or changes its order: the children are then in order already.
+        const last = this.orderedEntries, count = this.layer.children.length
+        if (last && count === this.orderedChildren && last.length === entries.length &&
+            entries.every((entry, index) => entry.node === last[index].node && entry.order === last[index].order)) return
+        this.orderedEntries = entries.slice()
+        this.orderedChildren = count
         // Equal orders keep entities in creation order, then what was added at their order (an entity's own particles).
         entries.sort((left, right) => left.order - right.order || (left.entityId ?? Infinity) - (right.entityId ?? Infinity))
         // Unlisted children (an entity leaving the snapshot) keep their place; comparing by index instead would move every

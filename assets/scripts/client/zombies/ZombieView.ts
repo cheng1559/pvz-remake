@@ -85,7 +85,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private readonly layers: LayerPlayers
     /** The clip its body is on. */
     protected bodyClip: string | null = null
-    private parts = ''
+    /** What applyParts last showed, as a number of its own; none before the first and after a change of body. */
+    private parts = -1
     private mowerDriver: ReanimPlayer | null = null
     /** The zombie as it was last shown. */
     protected latestZombie: ShownZombie | null = null
@@ -178,8 +179,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      */
     sync(zombie: ZombieSnapshot, world: WorldSnapshot): void {
         this.won = world.result === 'lost'
-        const at = boardToLayer(zombie.x, zombie.y)
-        this.node.setPosition(at.x, at.y)
+        // A zombie that stands where it stood (eating, frozen) is left there: placing it anew has the engine work its
+        // world position and its children's out again.
+        const at = boardToLayer(zombie.x, zombie.y), position = this.node.position
+        if (position.x !== at.x || position.y !== at.y) this.node.setPosition(at.x, at.y)
         this.latestZombie = zombie
         this.flash = this.context.stage?.flashes.zombie(zombie.entityId, world.gameplayTick) ?? NO_FLASH
         this.syncFacing(zombie)
@@ -191,7 +194,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
                 if (armor?.clips) this.attachments.remove(armor.clips.drop.reanimId)
             }
         }
-        uiNode({ node: this.node, opacity: zombie.alpha })
+        if (zombie.alpha !== this.shownAlpha) uiNode({ node: this.node, opacity: this.shownAlpha = zombie.alpha })
         this.placeShadow()
         // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
         if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
@@ -283,6 +286,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     /** The zombie's clips, for what a layer shows (shownLayer): made once, as it is asked for every layer every frame. */
     /** The layers the board last posed it on (pose): a snapshot's, new each tick. */
     private posedAnimations: ShownZombie['animations'] | undefined
+    /** The zombie being posed, and what its layers ask of it as they are shown (pose). */
+    private posing!: ShownZombie
+    private asked?: { shown: Parameters<LayerPlayers['show']>[0], options: Parameters<LayerPlayers['show']>[1] }
 
     private readonly layerClips: LayerClips = {
         picture: name => this.clip(name),
@@ -435,7 +441,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
                 ? Object.entries(this.clips()).find(([, clip]) => clip?.reanimId === snapshot.body!.id)?.[0] ?? null
                 : null
         // What it has on goes back on the clip it came back to: off the board (a street's zombie) nothing shows it again.
-        this.parts = ''
+        this.parts = -1
         this.posedAnimations = undefined
         if (this.latestZombie) this.applyParts(this.latestZombie)
     }
@@ -518,17 +524,23 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (board && zombie.animations === this.posedAnimations) return
         this.posedAnimations = board ? zombie.animations : undefined
         const changed = this.bodyClip !== body(zombie).clip
-        this.layers.show(layer => this.shown(layer, zombie), {
-            blend: (layer, clip, first) => first ? 0 : clip.blend ?? (layer === ZOMBIE_BODY_LAYER ? this.bodyBlend(zombie) : 0),
-            place: (layer, player, clip) => {
-                const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
-                if (player.node.parent === this.root) this.place(player.node, at.x ?? 0, at.y ?? 0)
+        // Every zombie is posed every tick: what its layers ask as they are shown is made once, of the zombie being posed.
+        this.posing = zombie
+        const asked = this.asked ??= {
+            shown: layer => this.shown(layer, this.posing),
+            options: {
+                blend: (layer, clip, first) => first ? 0 : clip.blend ?? (layer === ZOMBIE_BODY_LAYER ? this.bodyBlend(this.posing) : 0),
+                place: (layer, player, clip) => {
+                    const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
+                    if (player.node.parent === this.root) this.place(player.node, at.x ?? 0, at.y ?? 0)
+                },
             },
-            holdsStill: board,
-        })
+        }
+        asked.options.holdsStill = board
+        this.layers.show(asked.shown, asked.options)
         if (changed) {
             this.bodyClip = body(zombie).clip
-            this.parts = ''
+            this.parts = -1
         }
         this.applyParts(zombie)
         if (board && changed) {
@@ -542,7 +554,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const helmStage = armorStage(zombie.helmHealth, this.gameplay.helm), shieldStage = armorStage(zombie.shieldHealth, this.gameplay.shield)
         // Zombie::ShowDoorArms: an eating zombie lowers the shield arms; a dropped shield takes them away for good.
         const holdingShield = shieldStage >= 0 && zombie.state !== 'eating', own = this.ownParts(zombie)
-        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${helmStage}|${shieldStage}|${holdingShield ? 1 : 0}|${own.map(([, visible]) => visible ? 1 : 0).join('')}`
+        // Asked every frame: a number, where a string would be made anew each time. An armor's stage is -1 to 2.
+        let signature = (zombie.hasHead ? 1 : 0) + (zombie.hasTongue ? 2 : 0) + (zombie.hasArm ? 4 : 0) + (holdingShield ? 8 : 0) +
+            (helmStage + 1) * 16 + (shieldStage + 1) * 64
+        for (const [, visible] of own) signature = signature * 2 + (visible ? 1 : 0)
+        signature = signature * 32 + own.length
         if (!this.player || signature === this.parts) return
         this.parts = signature
         const presentation = this.presentation, parts = presentation.parts
@@ -568,6 +584,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     protected putOnParts(_zombie: ShownZombie, _player: ReanimPlayer): void {}
 
     private color: 'normal' | 'chilled' | 'mindControlled' | 'mindControlledChilled' | 'burned' = 'normal'
+    /** The opacity the board last gave it (sync). */
+    private shownAlpha?: number
+    /** What applyHitFlash last drew, and on which body. */
+    private flashDrawn?: number
+    private flashPlayer?: ReanimPlayer
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
     /** Its body is drawn turned round (syncFacing, turnedRound). */
@@ -624,6 +645,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const { through, past } = this.flash
         const bodyFlash = shield && !through && !past ? 0 : this.flash.flash
         const flash = past ? 0 : this.flash.flash
+        // Most frames change nothing of it: the same flash on the same player is not set again.
+        const drawn = ((bodyFlash * 1024 + flash) * 8) + (through ? 4 : 0) + (shield ? 2 : 0) + (zombie.state === 'burned' ? 1 : 0)
+        if (drawn === this.flashDrawn && this.player === this.flashPlayer) return
+        this.flashDrawn = drawn
+        this.flashPlayer = this.player
         const grayness = Math.min(255, bodyFlash * 10)
         this.player?.setExtraAdditiveDraw(bodyFlash > 0, new Color(grayness, grayness, grayness, 255))
         if (shield && this.player) {
