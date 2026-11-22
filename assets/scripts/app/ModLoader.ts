@@ -32,7 +32,6 @@ async function loadMods() {
     const gameplay = new GameplayRegistry()
     const views = new ClientViews()
     const manifests: ModManifest[] = []
-    const loadedIds = new Set<string>()
     const fail = (id: string, stage: string, error: unknown) => {
         const message = `${stage}: ${error instanceof Error ? error.message : String(error)}`
         modManager.failures.set(id, message)
@@ -40,8 +39,6 @@ async function loadMods() {
     }
     for (const mod of installed) {
         const { manifest } = mod
-        const missing = manifest.dependencies.find(dependency => !loadedIds.has(dependency.id))
-        if (missing) { fail(manifest.id, 'dependencies', `Dependency failed to load: ${missing.id}`); continue }
         const rollback = [gameplayDefinitions.checkpoint(), presentationDefinitions.checkpoint(), gameplay.checkpoint(),
             views.checkpoint()]
         const hosts: ModHost[] = []
@@ -74,7 +71,6 @@ async function loadMods() {
             new ClientAnimationRegistry(presentation)
             assertPresented(content, presentation, views)
             manifests.push(manifest)
-            loadedIds.add(manifest.id)
         } catch (error) {
             for (const host of hosts.reverse()) host.dispose()
             for (const undo of rollback.reverse()) undo()

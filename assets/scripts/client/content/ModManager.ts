@@ -1,5 +1,5 @@
 import { Game, game, sys } from 'cc'
-import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
+import { BASE_MOD_ID, isModId, parseModManifest, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
 import { PLAYER_MODS_PREFIX } from '@/shared/menu'
 import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
@@ -156,25 +156,10 @@ export class ModManager {
                     console.error(`[Mods] Disabled invalid archive ${id}`, error)
                 }
             }
-            const byId = new Map(installed.map(mod => [mod.manifest.id, mod]))
-            const valid = installed.filter(mod => {
-                const closure = new Map<string, ModManifest>()
-                const visit = (manifest: ModManifest) => {
-                    if (closure.has(manifest.id)) return
-                    closure.set(manifest.id, manifest)
-                    for (const dependency of manifest.dependencies) {
-                        const target = byId.get(dependency.id)
-                        if (target) visit(target.manifest)
-                    }
-                }
-                try { visit(mod.manifest); sortModManifests([...closure.values()]); return true }
-                catch (error) { this.failures.set(mod.manifest.id, String(error)); return false }
-            })
-            const ordered = sortModManifests(valid.map(mod => mod.manifest))
-            const mods = ordered.map(manifest => byId.get(manifest.id)!)
-            if (valid.length !== ids.length) this.saveEnabled(valid.map(mod => mod.manifest.id))
+            // They load in the order of the list, from its bottom up.
+            if (installed.length !== ids.length) this.saveEnabled(installed.map(mod => mod.manifest.id))
             this.session = this.signature(this.profile)
-            return mods
+            return installed
         })()
     }
 
@@ -245,12 +230,10 @@ export class ModManager {
         await this.ready()
         const imported = new Map(changes.imports.map(mod => [mod.id, mod.manifest]))
         // The list reads only manifests; a Mod enabled now is fully read and validated here instead.
-        const manifests = await Promise.all(changes.enabled.map(async id => {
+        await Promise.all(changes.enabled.map(async id => {
             const manifest = imported.get(id) ?? (await this.read(id).catch(() => undefined))?.manifest
             if (!manifest) throw new Error(this.failures.get(id) ?? `Mod is not ready: ${id}`)
-            return manifest
         }))
-        sortModManifests(manifests)
         const installed = [...new Set([...this.installedIds(), ...imported.keys()])]
         this.validateSelection(changes.enabled, changes.order, installed)
         if (changes.imports.some(mod => mod.id === BASE_MOD_ID || mod.manifest.id !== mod.id)
@@ -287,7 +270,6 @@ export class ModManager {
             replacements.push({ manifest, content, files: Object.create(null), archive: new Uint8Array() })
             staged.set(manifest.id, mod)
         }
-        await progress('Checking Mod dependencies')
         await this.saveSelection(changes.enabled, changes.order, replacements, id => progress(`Installing ${id}`),
             mod => this.readImport(staged.get(mod.manifest.id)!))
         for (const id of changes.uninstalls) {
@@ -309,7 +291,7 @@ export class ModManager {
     }
 
     /**
-     * Saves the ZIP; without `enable`, dependencies are checked only when it replaces an enabled Mod. Like uninstall,
+     * Saves the ZIP, and with `enable` enables it at the top of the list. Like uninstall,
      * this changes installed files at once; the game queues changes instead, since running Mods read them on demand.
      */
     async install(archive: ArchiveData, enable = true): Promise<string> {
@@ -319,7 +301,6 @@ export class ModManager {
         const order = this.installedIds()
         if (!order.includes(mod.manifest.id)) order.unshift(mod.manifest.id)
         const ids = enable ? order.filter(id => enabled.includes(id) || id === mod.manifest.id).reverse() : enabled
-        if (ids.includes(mod.manifest.id)) await this.resolve(ids, [mod])
         await this.store(mod)
         if (enable) this.saveEnabled(ids)
         this.saveOrder(order)
@@ -363,7 +344,7 @@ export class ModManager {
     private async saveSelection(ids: readonly string[], order: readonly string[] | undefined, replacements: readonly ArchivedMod[],
         beforeInstall: (id: string) => Promise<void> = async () => {}, load?: (mod: ArchivedMod) => Promise<ArchivedMod>): Promise<boolean> {
         if (new Set(ids).size !== ids.length) throw new Error('Duplicate Mod ID')
-        await this.resolve([...ids], replacements)
+        await this.readAll(ids, replacements)
         const installed = [...new Set([...this.installedIds(), ...replacements.map(mod => mod.manifest.id)])]
         this.validateSelection(ids, order, installed)
         const priority = [...ids].reverse()
@@ -399,7 +380,6 @@ export class ModManager {
         if (ids.includes(id)) return false
         const order = this.installedIds()
         const next = order.filter(candidate => candidate === id || ids.includes(candidate)).reverse()
-        await this.resolve(next)
         this.saveEnabled(next)
         this.saveOrder(order)
         return true
@@ -411,7 +391,6 @@ export class ModManager {
         const ids = this.enabledIds(), next = id === 'all' ? [] : ids.filter(candidate => candidate !== id)
         if (next.length === ids.length) return false
         const order = this.installedIds()
-        await this.resolve(next)
         this.saveEnabled(next)
         this.saveOrder(order)
         return true
@@ -422,18 +401,16 @@ export class ModManager {
         const order = this.installedIds()
         if (!order.includes(id)) throw new Error(`Mod is not installed: ${id}`)
         const ids = this.enabledIds(), next = ids.filter(candidate => candidate !== id)
-        await this.resolve(next)
         this.saveEnabled(next)
         this.saveOrder(order.filter(candidate => candidate !== id))
         await this.removeInstalled(id)
         return ids.includes(id)
     }
 
-    private async resolve(ids: string[], replacements: readonly InstalledMod[] = []): Promise<InstalledMod[]> {
+    /** Every Mod of `ids` can be read: its archive is there, and its manifest and content are sound. */
+    private async readAll(ids: readonly string[], replacements: readonly InstalledMod[] = []): Promise<void> {
         const pending = new Map(replacements.map(mod => [mod.manifest.id, mod]))
-        const mods = await Promise.all(ids.map(id => pending.get(id) ?? this.read(id)))
-        const byId = new Map(mods.map(mod => [mod.manifest.id, mod]))
-        return sortModManifests(mods.map(mod => mod.manifest)).map(manifest => byId.get(manifest.id)!)
+        await Promise.all(ids.map(id => pending.get(id) ?? this.read(id)))
     }
 
     private read(id: string): Promise<InstalledMod>

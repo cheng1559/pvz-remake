@@ -13,7 +13,7 @@
 | 自定义植物与视图 | Pulse Beacon 每 200 逻辑步增加 25 阳光，并用自己的动画循环发光 | `src/server/index.ts`、`src/client/beacon.ts` |
 | 实体、快照与存档中的模组数据 | `example:charge` 把剩余时间保存在植物的 `extensions` 中；客户端通过 `world.extensions` 读取 | `registry.extensions.register()` |
 | 自定义关卡 | `/level example:testing` 提供新的种子和僵尸 | `assets/gameplay/levels.json`、`assets/presentation/levels.json` |
-| 修改已有内容 | 1-1 的种子列表加入两株示例植物 | `assets/gameplay/level-patches.json` |
+| 修改已有内容 | 1-1 的种子列表加入两株示例植物 | `assets/gameplay/levels.json` |
 | 新增资源 | 自带的 PNG、WAV、Reanim、粒子、JSON 和文本随 ZIP 发布 | `content.json` 中的 `resources` |
 | 覆盖基础资源 | 普通豌豆也改用青色能量球贴图 | `resources.sprites["pvz:projectilepea"]` |
 | 表现与文本 | 新子弹、粒子命中效果、发射音效和菜单文本 | `assets/presentation/` |
@@ -58,4 +58,4 @@ npm run mod:test -- dist/mods/example
 - `host.dispose()` 撤销方法包装；本示例还包装了这个方法，用来销毁它创建的按钮和对话框。实体视图随宿主的实体节点一起销毁；注册失败时，加载器会回滚注册表。正常的启用和停用会重启游戏，以加载完整的模组集合。
 - 存档只支持当前的模组版本和内容哈希。示例不转换旧存档。
 
-需要进一步扩展时，按同样的方式添加更多视图和玩法。字体、音乐和预制体的格式以及宿主模块列表见[模组](../../docs/MODS.zh-CN.md)；预制体仍有引擎导入方面的要求。manifest 中的 `dependencies` 声明对其他模组 ID 和版本的依赖；本示例保持自包含。
+需要进一步扩展时，按同样的方式添加更多视图和玩法。字体、音乐和预制体的格式以及宿主模块列表见[模组](../../docs/MODS.zh-CN.md)；预制体仍有引擎导入方面的要求。

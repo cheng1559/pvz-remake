@@ -1,6 +1,5 @@
 {
   "gameplay": {
-    "levelPatches": "assets/gameplay/level-patches.json",
     "levels": "assets/gameplay/levels.json",
     "plants": "assets/gameplay/plants.json",
     "projectiles": "assets/gameplay/projectiles.json",

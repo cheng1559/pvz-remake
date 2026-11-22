@@ -12,9 +12,9 @@ A Mod is a ZIP package installed into the game. It can contain any combination o
 - **Definitions**: gameplay definitions (numbers and rules) and presentation definitions (animations, positions, sounds) in JSON. They add plants, zombies, projectiles, seeds, levels, store items, achievements and more, or replace existing ones.
 - **Scripts**: a server entry point (gameplay) and a client entry point (presentation) that register new kinds, views, commands and rule changes.
 
-The same manager handles installation, dependencies, priority, enabled state and uninstallation for every kind of Mod. The base game (`pvz`) always loads first and cannot be disabled, uninstalled or imported.
+The same manager handles installation, priority, enabled state and uninstallation for every kind of Mod. The base game (`pvz`) always loads first and cannot be disabled, uninstalled or imported.
 
-Several Mods can be enabled at once and stack. For example, with an HD pack and a translation pack enabled together, the translation pack can replace only the images that contain text while every other image still comes from the HD pack. A Mod can depend on other Mods, and a translation pack can translate other Mods' text.
+Several Mods can be enabled at once and stack. For example, with an HD pack and a translation pack enabled together, the translation pack can replace only the images that contain text while every other image still comes from the HD pack. A Mod can change what the Mods below it in the list define, and a translation pack can translate other Mods' text.
 
 ## Installing Mods
 
@@ -48,11 +48,9 @@ A restart is needed when anything was imported or uninstalled, a Mod was enabled
 3. saves the current level and the list of pending changes;
 4. restarts the game.
 
-Apply itself does not unpack ZIPs or install or delete Mods. During the next startup only the original PopCap logo is shown, drawn from the base package, while dependencies are checked and Mods are installed and uninstalled in the background. The game resources then load and the title screen opens.
+Apply itself does not unpack ZIPs or install or delete Mods. During the next startup only the original PopCap logo is shown, drawn from the base package, while Mods are installed and uninstalled in the background. The game resources then load and the title screen opens.
 
 If that background task fails, the pending list and the staged ZIPs are kept and the error is logged; clicking or tapping the screen, or pressing a key, retries. Until the restart, the running code, audio and images keep using the archives loaded when the game started.
-
-Apply also checks dependencies: every enabled Mod's dependencies must be enabled too, at matching versions. If they are not, an error dialog opens and the manager stays open.
 
 Reordering only disabled Mods is saved at once, with no restart.
 
@@ -74,11 +72,10 @@ Enabling, disabling and uninstalling all take effect through Apply and a restart
 
 The order of the list is the priority: the higher a Mod is, the higher its priority.
 
-- **Load order.** Enabled Mods load from the bottom of the list to the top, except that a Mod's dependencies always load before it.
+- **Load order.** Enabled Mods load from the bottom of the list to the top.
 - **Resources.** When several running Mods register the same resource ID, the one loaded later (higher in the list) wins. An ID no Mod registers comes from the base package. A Mod that failed to load provides no resources.
-- **Definitions.** Two Mods cannot register the same gameplay definition ID; a duplicate is an error. Replacing a whole definition must be declared in `overrides` (see [Overrides and level patches](#overrides-and-level-patches)), which does not depend on load order.
+- **Definitions.** Two Mods cannot register the same gameplay definition ID; a duplicate is an error. An existing definition is changed in the tables, under its ID (see [Changing what is defined](#changing-what-is-defined)).
 - **Text.** For the same text key, the Mod later in enabled priority wins. The text language is that of the last enabled Mod that declares a `locale`.
-- **Dependencies.** A Mod requires the Mods it depends on, at an exact version (`1.2.0`) or a minimum (`>=1.2.0`). A missing dependency, a version mismatch or a dependency cycle is an error at Apply; at startup it disables the Mod.
 
 ## Mods and player profiles
 
@@ -112,8 +109,8 @@ Applying Mod changes saves the current level first. If the change affects the se
 
 ### At startup
 
-- **Unreadable archives and dependency errors.** An archive that is corrupt, or whose dependency is missing, has the wrong version or forms a cycle, is disabled: it is removed from the enabled list and shows `[Error]` in the manager. It does not prevent the manager from opening. An enabled Mod whose archive is missing is removed from the enabled list with a console warning.
-- **Registration errors.** A Mod that fails while it registers (a script throws, a definition is invalid, something has no presentation) is skipped for this session and shows `[Error]` in the manager. Its definitions, registrations and method wrappers are rolled back, and the Mods that depend on it are skipped too. It stays enabled, so the next startup tries it again.
+- **Unreadable archives.** A corrupt archive is disabled: it is removed from the enabled list and shows `[Error]` in the manager. It does not prevent the manager from opening. An enabled Mod whose archive is missing is removed from the enabled list with a console warning.
+- **Registration errors.** A Mod that fails while it registers (a script throws, a definition is invalid, something has no presentation) is skipped for this session and shows `[Error]` in the manager. Its definitions, registrations and method wrappers are rolled back, and a Mod loaded after it that changes its definitions fails too. It stays enabled, so the next startup tries it again.
 - **Notice.** On the main menu a **Mods Failed to Load** notice names each Mod that failed, once.
 - **Interrupted startups.** If a startup ends while its Mods are loading (for example, iOS ends the page when it runs out of memory), the next startup runs without Mods and the main menu shows **Startup Failed**. The Mod choices are kept in the manager, and the startup after that loads them again. Hiding or closing the game during startup does not count as a failure.
 
@@ -142,7 +139,7 @@ A Mod's source directory:
 
 ```text
 my-mod/
-├── manifest.json           # ID, version, dependencies and optional module entries
+├── manifest.json           # ID, version and optional module entries
 ├── content.json            # Index of gameplay and presentation definitions and resources
 ├── src/
 │   ├── server/index.ts     # Optional server code
@@ -174,7 +171,6 @@ A source directory and a packed Mod differ in two places:
   "version": "1.0.0",
   "apiVersion": 1,
   "contentHash": "generated-on-pack",
-  "dependencies": [],
   "gameplay": {
     "nodeModule": "gameplay/node/index.js",
     "cocosModule": "gameplay/cocos/index.js"
@@ -192,7 +188,6 @@ A source directory and a packed Mod differ in two places:
 | `version` | Yes | `x.y.z`. |
 | `apiVersion` | Yes | Must be `1`. |
 | `contentHash` | Yes | Any non-empty string in the source; `mod:pack` replaces it with a SHA-256 of the manifest's other fields and every file in the package. |
-| `dependencies` | Yes | `[{ "id": "other-mod", "version": "1.2.0" }]`; the version is exact or `>=x.y.z`. Each ID may appear once. |
 | `locale` | No | The language of the text the Mod supplies, as a language tag such as `zh-CN`. |
 | `author` | No | The author's name, at most 64 characters. |
 | `gameplay` | No | Server scripts: `nodeModule` (an ES module for Node, run by `mod:test`) and `cocosModule` (a SystemJS module, run by the game). |
@@ -223,7 +218,6 @@ A pure resource Mod needs only the first six fields. When it needs scripts, add 
 ```
 
 - `gameplay` and `presentation` map a table name to a file. Paths are relative to the root `content.json`. Each table file is an object from ID to configuration; split configuration into files by category.
-- `overrides` and `levelPatches` are indexed the same way (see [Overrides and level patches](#overrides-and-level-patches)).
 - Resource paths are relative to the Mod's root.
 - The loader registers static gameplay definitions, presentation definitions and new resources automatically. Script entry points need not register these files again.
 
@@ -231,7 +225,7 @@ A pure resource Mod needs only the first six fields. When it needs scripts, add 
 
 - **Mod ID.** A name without a colon, such as `widescreen`: lowercase letters, digits, `.`, `_` and `-`, starting with a letter or digit. `mod:init` accepts lowercase letters, digits, `_` and `-`.
 - **Namespace.** The Mod ID is also the Mod's namespace. The resources and definitions it adds are all written `name:...`, for example `widescreen:background1`. No two Mods have the same ID, so namespaces never overlap. The built-in base game's namespace is `pvz`.
-- **Definitions.** A Mod registers definitions only in its own namespace. Registering another namespace's ID is an error; replacing an existing definition goes through `overrides`.
+- **Definitions.** A Mod registers definitions only in its own namespace. An entry under another namespace's ID changes that definition, and is an error if there is none.
 - **Resources.** Replacing an existing resource needs only its original ID. A resource written in another namespace counts as a replacement, not as the Mod's own.
 - **Script-side IDs.** Kinds, entity data, definition fields of Mod kinds, text keys and tutorial steps that a Mod adds also use its namespace (`example:regeneration`, `example:dig`). Command names may carry it too (`example:hello`).
 - **Sounds.** In a sound in presentation configuration (`{ "audio", "foley", "pitchRange"? }`), `audio` is the full audio resource ID, such as `pvz:splat` or `corn:shoop`; an ID without a namespace is an error at validation.
@@ -251,34 +245,34 @@ The gameplay tables a Mod can add to:
 
 The presentation tables a Mod can add to are `plants`, `zombies`, `projectiles`, `gridItems`, `items`, `awards`, `tools`, `foley`, `boards`, `screens`, `clips`, `levels`, `rules`, `challenges`, `store` and `almanac`. `items` is indexed by dropped item ID, `awards` by level award ID, `rules` by the level rule's `kind`, `store` by store item ID, and `almanac` by the ID of the plant or zombie the almanac shows.
 
-Both sides follow the same rules: new IDs only in the Mod's own namespace, changes to existing ones through `overrides`. The base package also has settings outside these tables, which a Mod cannot write: the gameplay `settings` and the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Any other top-level key is an error.
+Both sides follow the same rules: new IDs only in the Mod's own namespace, and an entry under anyone else's ID changes it. The base package also has settings outside these tables: the gameplay `settings` and the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. A Mod changes them by writing the same key. Any other top-level key is an error.
 
 Presentation definitions are as strict as gameplay definitions: each object accepts only its own fields, and an extra, misspelled or moved field (such as `vault` in a zombie presentation) reports `... is not supported`.
 
 A new level must be registered in both the gameplay `levels` (rules and waves) and the presentation `levels` (intro, lawn and hints).
 
-### Overrides and level patches
+### Changing what is defined
 
-To replace an existing definition whole (the base game's or another Mod's), add `"overrides": "assets/gameplay/overrides.json"` under `gameplay` or `presentation`. The file gives complete definitions grouped by table:
-
-```json
-{ "plants": { "pvz:peashooter": { "...": "the complete definition" } } }
-```
-
-- Overrides apply after every Mod has registered, can override any existing ID, and do not depend on load order.
-- An ID can be overridden by only one Mod; a second one is a conflict.
-- A target ID that does not exist is an error.
-- An overridden definition has its references checked as usual.
-- Overrides replace data only. An entity takes its kind from the overriding definition's `kind`, and an old save whose entity fields do not fit the new definition is handled as an incompatible save.
-- A Mod that replaces a base zombie's whole presentation definition must keep its `view`, or the zombie is drawn as an ordinary one.
-
-Levels can be overridden too. `levelPatches` then apply field by field, after the overrides: each entry names a level and the top-level fields to replace.
+An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
 
 ```json
-{ "pvz:adventure-1-1": { "seedPackets": ["pvz:peashooter", "example:rapid_pea"] } }
+{
+  "example:testing": { "...": "its own level" },
+  "pvz:adventure-1-1": { "seedPackets": ["pvz:peashooter", "example:rapid_pea", "example:beacon"] }
+}
 ```
 
-Patching a level that does not exist is an error, and two Mods patching the same field of the same level is a conflict.
+A presentation `plants` table can remove a field with `null`:
+
+```json
+{ "pvz:explodenut": { "visual": { "tint": null } } }
+```
+
+- An object is changed field by field, down to the fields given, and `null` removes a field. A list or any other value is replaced whole.
+- The Mods are taken in load order, each registering its entries and then applying its changes, so a Mod changes the base game's IDs and those of the Mods loaded before it. Two Mods may change the same field: the later Mod's value is kept.
+- An entry under another namespace's ID that is not defined, or is defined only by a Mod loaded later, is an error. What comes of the changes is checked as everything else is: its references, and a field its object does not have or a value it does not take, fail the Mod at load.
+- Changes are data only. An entity takes its kind from its definition's `kind` as changed, and an old save whose entity fields do not fit the new definition is handled as an incompatible save.
+- A base zombie's presentation whose `view` a change removes is drawn as an ordinary zombie.
 
 ### Load checks
 
@@ -315,7 +309,7 @@ There are three kinds of group, in this order: the original, each Mod, and hidde
 
 A Mod's seeds are not in the seed chooser grid. With `/cheatseed` on, the seed chooser and the almanac give each Mod pages of its own after the original pages, in Mod load order, and the hidden seeds' page comes last. Otherwise they are offered through `seedChooser.entries` (see [Changing server rules](#changing-server-rules)).
 
-As with the other definition tables, a Mod can only register seeds in its own namespace. To move a seed of the base game or of another Mod, replace that seed's whole definition with `overrides.seeds`.
+As with the other definition tables, a Mod can only register seeds in its own namespace. To move a seed of the base game or of another Mod, write its new `position` under its ID in the Mod's own `seeds`.
 
 ### Plants
 
@@ -449,11 +443,11 @@ Achievements are written in the gameplay `achievements` table, from ID to `{ tit
 | `pvz:win-planting` | `boards`, `skipRules`, `only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
-A Mod's new achievements can use these types directly. When a new way of judging is needed, register one with `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` (`registry` is the host module `gameplay/registry`, the instance of `server/registry/GameplayRegistry`). `observe` receives the event, the settings and this achievement's state in the level (kept in the save). To make a base achievement count a Mod's plants, change its `trigger` with `overrides`.
+A Mod's new achievements can use these types directly. When a new way of judging is needed, register one with `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` (`registry` is the host module `gameplay/registry`, the instance of `server/registry/GameplayRegistry`). `observe` receives the event, the settings and this achievement's state in the level (kept in the save). To make a base achievement count a Mod's plants, change its `trigger` under its ID in the Mod's own `achievements`.
 
 ### Store
 
-The store is a gameplay definition table too: a Mod adds entries in its own namespace and changes anyone's with `overrides`. `store` gives store items by item ID:
+The store is a gameplay definition table too: a Mod adds entries in its own namespace and changes anyone's under their IDs. `store` gives store items by item ID:
 
 ```text
 { page, place, cost or prices, message or messages, purchase, level?, completed?, requires?, effect?, unlockChallenge? }
@@ -548,7 +542,7 @@ The format is in `shared/content/music.ts` (schemaVersion 3): duration, loop poi
 
 ## Animation clips
 
-Animation owners use a `clips` object keyed by name, including single-clip owners such as items (`idle`), animated projectiles (`fly`), dropped armor (`drop`) and the Whack-a-Zombie rule (`hammer`). Screen scenery uses `screens[screenId].clips` in drawing order. The presentation's top-level `clips` table holds shared effects such as `pvz:sod-roll` and `pvz:final-wave`; Mods can add qualified IDs and override existing entries through `overrides.clips`.
+Animation owners use a `clips` object keyed by name, including single-clip owners such as items (`idle`), animated projectiles (`fly`), dropped armor (`drop`) and the Whack-a-Zombie rule (`hammer`). Screen scenery uses `screens[screenId].clips` in drawing order. The presentation's top-level `clips` table holds shared effects such as `pvz:sod-roll` and `pvz:final-wave`; Mods can add qualified IDs and change existing entries under their IDs.
 
 | Field | Meaning |
 | --- | --- |
@@ -619,8 +613,8 @@ export function register({ host, assets }) {
 ```
 
 - The server entry (`src/server/index.ts`) registers custom plant, zombie and projectile kinds, rules and commands; in the game it runs from `cocosModule`. The client entry (`src/client/index.ts`) registers views, menus and client commands.
-- `register` may be `async`. The loader calls it after the Mod's static definitions are registered and every dependency has loaded; the server entry runs before the client entry.
-- If registration fails, the loader undoes that Mod's definitions, registrations and method wrappers (calling `host.dispose()`), and skips the Mods that depend on it. Pure resource, data and script Mods use the same loading entry point.
+- `register` may be `async`. The loader calls it after the Mod's static definitions are registered and the Mods before it have loaded; the server entry runs before the client entry.
+- If registration fails, the loader undoes that Mod's definitions, registrations and method wrappers (calling `host.dispose()`). Pure resource, data and script Mods use the same loading entry point.
 - `src/server/` and `src/client/` compile separately and cannot import each other's files or the host's source. Share data through a JSON file in the archive read with `assets.json()`, and reach host code through `host.get()`.
 
 ### Host modules
@@ -914,7 +908,7 @@ npm run mod:hosts                      # regenerate the host module lists
 
 A bare name means `mods/<name>`.
 
-The [Mod Lab](../mods/example/README.md) shows gameplay kinds and mixins, Mod data on entities and in saves, level patches, adding and overriding resources, custom views, commands on both sides, menu extensions and lifecycle cleanup. Its capability table points to the actual implementation of each.
+The [Mod Lab](../mods/example/README.md) shows gameplay kinds and mixins, Mod data on entities and in saves, changes to a base level, adding and overriding resources, custom views, commands on both sides, menu extensions and lifecycle cleanup. Its capability table points to the actual implementation of each.
 
 ### Packing
 

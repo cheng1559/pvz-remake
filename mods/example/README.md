@@ -13,7 +13,7 @@ The repository maintains only this one sample. It demonstrates the whole extensi
 | Custom plant and view | Pulse Beacon adds 25 sun every 200 ticks and glows in a loop with its own animation | `src/server/index.ts`, `src/client/beacon.ts` |
 | Mod data on entities, snapshots, saves | `example:charge` keeps the remaining time in the plant's `extensions`; the client reads it through `world.extensions` | `registry.extensions.register()` |
 | Custom level | `/level example:testing` offers the new seeds and zombie | `assets/gameplay/levels.json`, `assets/presentation/levels.json` |
-| Changing existing content | 1-1's seed list gains the two sample plants | `assets/gameplay/level-patches.json` |
+| Changing existing content | 1-1's seed list gains the two sample plants | `assets/gameplay/levels.json` |
 | New resources | Its own PNG, WAV, Reanim, particles, JSON and text ship in the ZIP | `resources` in `content.json` |
 | Overriding base resources | The ordinary pea also uses the cyan energy-orb texture | `resources.sprites["pvz:projectilepea"]` |
 | Presentation and text | The new projectile, a particle hit effect, the firing sound and the menu text | `assets/presentation/` |
@@ -58,4 +58,4 @@ The original's resources still come from the base package. Rapid Pea's body and 
 - `host.dispose()` undoes the method wrappers; this sample also wraps that method to destroy the button and dialog it created. Entity views are destroyed with the host's entity nodes; when registration fails, the loader rolls the registries back. Normal enabling and disabling restarts the game to load the complete set of Mods.
 - Saves support only the current Mod version and content hash. The sample does not convert old saves.
 
-To extend further, add more views and gameplay the same way. See [Mods](../../docs/MODS.md) for the font, music and prefab formats and the list of host modules; prefabs still have engine import requirements. The manifest's `dependencies` declares dependencies on other Mods' IDs and versions; this sample stays self-contained.
+To extend further, add more views and gameplay the same way. See [Mods](../../docs/MODS.md) for the font, music and prefab formats and the list of host modules; prefabs still have engine import requirements.

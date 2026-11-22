@@ -168,9 +168,9 @@ function setup() {
         Texture, archive, archives: modArchives, pendingArchives, db: modDb, jsb, blobs, picker: () => picker }
 }
 
-function modFiles(id = 'screen', version = '1.0.0', dependencies: { id: string, version: string }[] = []) {
+function modFiles(id = 'screen', version = '1.0.0') {
     return {
-        'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version, apiVersion: 1, contentHash: `${id}-${version}`, dependencies,
+        'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version, apiVersion: 1, contentHash: `${id}-${version}`,
             client: { module: 'client/index.js' } })),
         'content.json': strToU8('{"resources":{}}'),
         'client/index.js': strToU8('System.register([], function () { return { execute: function () {} }; });'),
@@ -183,7 +183,7 @@ function zipFiles(id = 'hd', tag = 'first', options: any = {}) {
     const resources = { sprites: { 'pvz:button': { file: 'button.png', width: 50, height: 70, scale: 2, ...sprite } },
         fonts: { 'pvz:demo': 'fonts/demo.json' }, audio: { 'pvz:chomp': 'audio/chomp.mp3' },
         json: { 'pvz:config': 'config.json' }, text: { 'pvz:note': 'note.txt' } }
-    return { 'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version: '1.0.0', apiVersion: 1, contentHash: tag, dependencies: [],
+    return { 'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version: '1.0.0', apiVersion: 1, contentHash: tag,
             ...(locale ? { locale } : {}) })),
         'content.json': strToU8(JSON.stringify({ resources })), 'button.png': image,
         'fonts/demo.json': strToU8(JSON.stringify({ layers: [{ image: 'atlas', textureScale: 4 }] })), 'fonts/atlas.png': image,
@@ -400,13 +400,10 @@ test('cancelled draft imports discard staged ZIPs and preserve installed archive
     await manager.install(zipSync(modFiles('parent')))
     await manager.installed()
     const beforeArchives = new Map(archives), beforeStorage = new Map(storage)
-    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=2.0.0' }])))
+    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0')))
     const parent = await manager.prepareImport(zipSync(modFiles('parent', '2.0.0')))
     assert.deepEqual(archives, beforeArchives, 'selecting an update does not replace the installed ZIP')
     assert.deepEqual(storage, beforeStorage, 'a cancelled draft has no persistent changes')
-    await assert.rejects(manager.queueChanges({ enabled: ['parent', 'child'], order: ['child', 'parent'], imports: [child], uninstalls: [] }), /requires parent/)
-    assert.deepEqual(archives, beforeArchives, 'invalid dependencies are rejected before saving any imports')
-    assert.deepEqual(storage, beforeStorage)
     await manager.discardImports([child, parent])
     assert.equal(pendingArchives.size, 0)
     assert.deepEqual(archives, beforeArchives)
@@ -418,7 +415,7 @@ test('Apply queues metadata without decoding ZIPs or changing installed Mods; st
     await manager.install(zipSync(modFiles('parent')))
     await manager.install(zipSync(modFiles('remove')))
     await manager.installed()
-    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=2.0.0' }])))
+    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0')))
     const parent = await manager.prepareImport(zipSync(modFiles('parent', '2.0.0')))
     const before = new Map(archives), enabled = storage.get(key), removed = archiveOf(storage, 'remove')!
     const unzip = modules.fflate.default.unzipSync
@@ -459,17 +456,13 @@ test('Apply queues metadata without decoding ZIPs or changing installed Mods; st
     assert.equal(archives.has('cancelled'), false)
 })
 
-test('ZIP, geometry and dependency failures do not change installed state', async () => {
+test('ZIP and geometry failures do not change installed state', async () => {
     const { manager, archives } = setup()
     await assert.rejects(manager.install(zipSync({ ...zipFiles(), '../escape.txt': strToU8('x') })), /Invalid ZIP path/)
     await assert.rejects(manager.install(zipSync(zipFiles('bad', 'bad', { width: 49 }))), /dimensions/)
-    await assert.rejects(manager.install(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=1.0.0' }]))), /missing mod/)
-    await manager.install(zipSync(modFiles('parent')))
-    await manager.install(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=1.0.0' }])))
-    await assert.rejects(manager.unload('parent'), /missing mod/)
-    assert.equal(archives.size, 2)
     const broken = modFiles(); delete (broken as any)['client/index.js']
     await assert.rejects(manager.install(zipSync(broken)), /Missing Mod module/)
+    assert.equal(archives.size, 0)
 })
 
 test('startup repairs missing and corrupt records while leaving a usable manager', async () => {
