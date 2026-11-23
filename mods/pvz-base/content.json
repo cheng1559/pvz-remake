@@ -17410,13 +17410,13 @@
       },
       "pvz:zombiedancerhead_disco": {
         "file": "assets/images/particles/zombiedancerhead_disco.png",
-        "width": 94,
-        "height": 86,
+        "width": 80,
+        "height": 72,
         "rect": [
           0,
           0,
-          94,
-          86
+          80,
+          72
         ],
         "offset": [
           0,
@@ -33958,16 +33958,16 @@
       },
       "pvz:zombie_backup_chops": {
         "file": "assets/images/zombie_backup_chops.png",
-        "width": 19,
-        "height": 23,
+        "width": 16,
+        "height": 20,
         "rect": [
-          4,
+          1,
           0,
           15,
-          23
+          20
         ],
         "offset": [
-          2,
+          0.5,
           0
         ],
         "borders": [
@@ -33979,17 +33979,17 @@
       },
       "pvz:zombie_backup_collar_overlay": {
         "file": "assets/images/zombie_backup_collar_overlay.png",
-        "width": 20,
-        "height": 21,
+        "width": 16,
+        "height": 20,
         "rect": [
-          8,
+          4,
           0,
           12,
-          21
+          19
         ],
         "offset": [
-          4,
-          0
+          2,
+          0.5
         ],
         "borders": [
           0,
@@ -34000,16 +34000,16 @@
       },
       "pvz:zombie_backup_innerarm_lower": {
         "file": "assets/images/zombie_backup_innerarm_lower.png",
-        "width": 25,
-        "height": 31,
+        "width": 20,
+        "height": 28,
         "rect": [
-          7,
+          3,
           0,
-          14,
-          28
+          16,
+          25
         ],
         "offset": [
-          1.5,
+          1,
           1.5
         ],
         "borders": [
@@ -34021,17 +34021,17 @@
       },
       "pvz:zombie_backup_innerarm_upper": {
         "file": "assets/images/zombie_backup_innerarm_upper.png",
-        "width": 22,
-        "height": 37,
+        "width": 20,
+        "height": 32,
         "rect": [
           0,
-          1,
-          22,
-          36
+          0,
+          20,
+          32
         ],
         "offset": [
           0,
-          -0.5
+          0
         ],
         "borders": [
           0,
@@ -34042,16 +34042,16 @@
       },
       "pvz:zombie_backup_innerfoot": {
         "file": "assets/images/zombie_backup_innerfoot.png",
-        "width": 48,
-        "height": 39,
+        "width": 40,
+        "height": 32,
         "rect": [
           0,
           0,
-          47,
-          39
+          40,
+          32
         ],
         "offset": [
-          -0.5,
+          0,
           0
         ],
         "borders": [
@@ -34063,13 +34063,13 @@
       },
       "pvz:zombie_backup_innerhand": {
         "file": "assets/images/zombie_backup_innerhand.png",
-        "width": 25,
-        "height": 35,
+        "width": 20,
+        "height": 28,
         "rect": [
           0,
-          4,
-          25,
-          26
+          1,
+          20,
+          25
         ],
         "offset": [
           0,
@@ -34084,16 +34084,16 @@
       },
       "pvz:zombie_backup_innerhand_point": {
         "file": "assets/images/zombie_backup_innerhand_point.png",
-        "width": 25,
-        "height": 35,
+        "width": 20,
+        "height": 28,
         "rect": [
-          2,
           0,
-          23,
-          35
+          0,
+          20,
+          28
         ],
         "offset": [
-          1,
+          0,
           0
         ],
         "borders": [
@@ -34105,16 +34105,16 @@
       },
       "pvz:zombie_backup_innerleg_lower": {
         "file": "assets/images/zombie_backup_innerleg_lower.png",
-        "width": 47,
-        "height": 42,
+        "width": 40,
+        "height": 36,
         "rect": [
           0,
           0,
-          47,
-          42
+          39,
+          36
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -34126,13 +34126,13 @@
       },
       "pvz:zombie_backup_innerleg_upper": {
         "file": "assets/images/zombie_backup_innerleg_upper.png",
-        "width": 23,
-        "height": 44,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
           0,
-          23,
-          44
+          20,
+          36
         ],
         "offset": [
           0,
@@ -34147,13 +34147,13 @@
       },
       "pvz:zombie_backup_lowerbody": {
         "file": "assets/images/zombie_backup_lowerbody.png",
-        "width": 42,
-        "height": 37,
+        "width": 36,
+        "height": 32,
         "rect": [
           0,
           0,
-          42,
-          37
+          36,
+          32
         ],
         "offset": [
           0,
@@ -34168,16 +34168,16 @@
       },
       "pvz:zombie_backup_outerarm_lower": {
         "file": "assets/images/zombie_backup_outerarm_lower.png",
-        "width": 28,
-        "height": 36,
+        "width": 24,
+        "height": 32,
         "rect": [
-          4,
+          2,
           0,
-          24,
-          32
+          22,
+          28
         ],
         "offset": [
-          2,
+          1,
           2
         ],
         "borders": [
@@ -34189,16 +34189,16 @@
       },
       "pvz:zombie_backup_outerarm_upper": {
         "file": "assets/images/zombie_backup_outerarm_upper.png",
-        "width": 24,
-        "height": 34,
+        "width": 20,
+        "height": 28,
         "rect": [
           0,
           0,
-          22,
-          34
+          20,
+          28
         ],
         "offset": [
-          -1,
+          0,
           0
         ],
         "borders": [
@@ -34210,16 +34210,16 @@
       },
       "pvz:zombie_backup_outerarm_upper_bone": {
         "file": "assets/images/zombie_backup_outerarm_upper_bone.png",
-        "width": 24,
-        "height": 42,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
           0,
-          22,
-          42
+          20,
+          36
         ],
         "offset": [
-          -1,
+          0,
           0
         ],
         "borders": [
@@ -34231,16 +34231,16 @@
       },
       "pvz:zombie_backup_outerfoot_lower": {
         "file": "assets/images/zombie_backup_outerfoot_lower.png",
-        "width": 53,
-        "height": 30,
+        "width": 44,
+        "height": 24,
         "rect": [
           0,
           0,
-          51,
-          30
+          43,
+          24
         ],
         "offset": [
-          -1,
+          -0.5,
           0
         ],
         "borders": [
@@ -34273,16 +34273,16 @@
       },
       "pvz:zombie_backup_outerfoot_upper": {
         "file": "assets/images/zombie_backup_outerfoot_upper.png",
-        "width": 51,
-        "height": 33,
+        "width": 44,
+        "height": 28,
         "rect": [
-          2,
           0,
-          48,
-          33
+          0,
+          42,
+          28
         ],
         "offset": [
-          0.5,
+          -1,
           0
         ],
         "borders": [
@@ -34294,17 +34294,17 @@
       },
       "pvz:zombie_backup_outerhand": {
         "file": "assets/images/zombie_backup_outerhand.png",
-        "width": 33,
-        "height": 35,
+        "width": 28,
+        "height": 28,
         "rect": [
           0,
-          4,
-          33,
-          31
+          1,
+          28,
+          27
         ],
         "offset": [
           0,
-          -2
+          -0.5
         ],
         "borders": [
           0,
@@ -34315,13 +34315,13 @@
       },
       "pvz:zombie_backup_outerleg_lower": {
         "file": "assets/images/zombie_backup_outerleg_lower.png",
-        "width": 48,
-        "height": 45,
+        "width": 40,
+        "height": 36,
         "rect": [
           0,
           0,
-          48,
-          45
+          40,
+          36
         ],
         "offset": [
           0,
@@ -34336,13 +34336,13 @@
       },
       "pvz:zombie_backup_outerleg_upper": {
         "file": "assets/images/zombie_backup_outerleg_upper.png",
-        "width": 24,
-        "height": 44,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
           0,
-          24,
-          44
+          20,
+          36
         ],
         "offset": [
           0,
@@ -34357,13 +34357,13 @@
       },
       "pvz:zombie_backup_stash": {
         "file": "assets/images/zombie_backup_stash.png",
-        "width": 39,
-        "height": 15,
+        "width": 32,
+        "height": 12,
         "rect": [
           0,
           0,
-          39,
-          15
+          32,
+          12
         ],
         "offset": [
           0,
@@ -34378,17 +34378,17 @@
       },
       "pvz:zombie_backup_upperbody": {
         "file": "assets/images/zombie_backup_upperbody.png",
-        "width": 67,
-        "height": 80,
+        "width": 56,
+        "height": 64,
         "rect": [
           0,
           0,
-          67,
-          66
+          56,
+          55
         ],
         "offset": [
           0,
-          7
+          4.5
         ],
         "borders": [
           0,
@@ -41581,17 +41581,17 @@
       },
       "pvz:zombie_disco_collar_overlay": {
         "file": "assets/images/zombie_disco_collar_overlay.png",
-        "width": 20,
-        "height": 21,
+        "width": 16,
+        "height": 20,
         "rect": [
           0,
           0,
-          20,
-          21
+          16,
+          19
         ],
         "offset": [
           0,
-          0
+          0.5
         ],
         "borders": [
           0,
@@ -41602,13 +41602,13 @@
       },
       "pvz:zombie_disco_fish": {
         "file": "assets/images/zombie_disco_fish.png",
-        "width": 18,
-        "height": 9,
+        "width": 16,
+        "height": 8,
         "rect": [
           0,
           0,
-          18,
-          9
+          16,
+          8
         ],
         "offset": [
           0,
@@ -41623,13 +41623,13 @@
       },
       "pvz:zombie_disco_glasses": {
         "file": "assets/images/zombie_disco_glasses.png",
-        "width": 64,
-        "height": 28,
+        "width": 52,
+        "height": 24,
         "rect": [
           0,
           0,
-          64,
-          28
+          52,
+          24
         ],
         "offset": [
           0,
@@ -41644,13 +41644,13 @@
       },
       "pvz:zombie_disco_hair": {
         "file": "assets/images/zombie_disco_hair.png",
-        "width": 94,
-        "height": 64,
+        "width": 76,
+        "height": 52,
         "rect": [
           0,
           0,
-          94,
-          64
+          76,
+          52
         ],
         "offset": [
           0,
@@ -41665,17 +41665,17 @@
       },
       "pvz:zombie_disco_innerarm_lower": {
         "file": "assets/images/zombie_disco_innerarm_lower.png",
-        "width": 25,
-        "height": 31,
+        "width": 20,
+        "height": 28,
         "rect": [
           0,
           0,
-          25,
-          31
+          20,
+          26
         ],
         "offset": [
           0,
-          0
+          1
         ],
         "borders": [
           0,
@@ -41686,12 +41686,12 @@
       },
       "pvz:zombie_disco_innerarm_lowercuff": {
         "file": "assets/images/zombie_disco_innerarm_lowercuff.png",
-        "width": 17,
+        "width": 16,
         "height": 8,
         "rect": [
           0,
           0,
-          17,
+          16,
           8
         ],
         "offset": [
@@ -41707,13 +41707,13 @@
       },
       "pvz:zombie_disco_innerarm_upper": {
         "file": "assets/images/zombie_disco_innerarm_upper.png",
-        "width": 18,
-        "height": 34,
+        "width": 16,
+        "height": 28,
         "rect": [
           0,
           0,
-          18,
-          34
+          16,
+          28
         ],
         "offset": [
           0,
@@ -41728,13 +41728,13 @@
       },
       "pvz:zombie_disco_innerfoot": {
         "file": "assets/images/zombie_disco_innerfoot.png",
-        "width": 48,
-        "height": 39,
+        "width": 40,
+        "height": 32,
         "rect": [
           0,
           0,
-          48,
-          39
+          40,
+          32
         ],
         "offset": [
           0,
@@ -41749,17 +41749,17 @@
       },
       "pvz:zombie_disco_innerhand": {
         "file": "assets/images/zombie_disco_innerhand.png",
-        "width": 25,
-        "height": 35,
+        "width": 20,
+        "height": 28,
         "rect": [
           0,
           0,
-          25,
-          30
+          20,
+          26
         ],
         "offset": [
           0,
-          2.5
+          1
         ],
         "borders": [
           0,
@@ -41770,16 +41770,16 @@
       },
       "pvz:zombie_disco_innerhand_point": {
         "file": "assets/images/zombie_disco_innerhand_point.png",
-        "width": 25,
-        "height": 35,
+        "width": 20,
+        "height": 28,
         "rect": [
-          2,
           0,
-          23,
-          35
+          0,
+          20,
+          28
         ],
         "offset": [
-          1,
+          0,
           0
         ],
         "borders": [
@@ -41791,16 +41791,16 @@
       },
       "pvz:zombie_disco_innerleg_lower": {
         "file": "assets/images/zombie_disco_innerleg_lower.png",
-        "width": 47,
-        "height": 42,
+        "width": 40,
+        "height": 36,
         "rect": [
           0,
           0,
-          47,
-          42
+          39,
+          36
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -41812,13 +41812,13 @@
       },
       "pvz:zombie_disco_innerleg_upper": {
         "file": "assets/images/zombie_disco_innerleg_upper.png",
-        "width": 23,
-        "height": 44,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
           0,
-          23,
-          44
+          20,
+          36
         ],
         "offset": [
           0,
@@ -41833,13 +41833,13 @@
       },
       "pvz:zombie_disco_lowerbody": {
         "file": "assets/images/zombie_disco_lowerbody.png",
-        "width": 42,
-        "height": 37,
+        "width": 36,
+        "height": 32,
         "rect": [
           0,
           0,
-          42,
-          37
+          36,
+          32
         ],
         "offset": [
           0,
@@ -41875,17 +41875,17 @@
       },
       "pvz:zombie_disco_outerarm_lower": {
         "file": "assets/images/zombie_disco_outerarm_lower.png",
-        "width": 28,
-        "height": 36,
+        "width": 24,
+        "height": 32,
         "rect": [
           0,
           0,
-          28,
-          36
+          24,
+          31
         ],
         "offset": [
           0,
-          0
+          0.5
         ],
         "borders": [
           0,
@@ -41896,16 +41896,16 @@
       },
       "pvz:zombie_disco_outerarm_upper": {
         "file": "assets/images/zombie_disco_outerarm_upper.png",
-        "width": 24,
-        "height": 34,
+        "width": 20,
+        "height": 28,
         "rect": [
           0,
           0,
-          24,
-          34
+          19,
+          28
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -41917,16 +41917,16 @@
       },
       "pvz:zombie_disco_outerarm_upper_bone": {
         "file": "assets/images/zombie_disco_outerarm_upper_bone.png",
-        "width": 24,
-        "height": 42,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
           0,
-          24,
-          42
+          19,
+          36
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -41938,16 +41938,16 @@
       },
       "pvz:zombie_disco_outerfoot_lower": {
         "file": "assets/images/zombie_disco_outerfoot_lower.png",
-        "width": 51,
-        "height": 30,
+        "width": 44,
+        "height": 24,
         "rect": [
           0,
           0,
-          51,
-          30
+          43,
+          24
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -41959,13 +41959,13 @@
       },
       "pvz:zombie_disco_outerfoot_lower_overlay": {
         "file": "assets/images/zombie_disco_outerfoot_lower_overlay.png",
-        "width": 53,
-        "height": 30,
+        "width": 44,
+        "height": 24,
         "rect": [
           0,
           0,
-          53,
-          30
+          44,
+          24
         ],
         "offset": [
           0,
@@ -41980,17 +41980,17 @@
       },
       "pvz:zombie_disco_outerfoot_upper": {
         "file": "assets/images/zombie_disco_outerfoot_upper.png",
-        "width": 51,
-        "height": 33,
+        "width": 44,
+        "height": 28,
         "rect": [
-          2,
           0,
-          49,
-          32
+          0,
+          43,
+          28
         ],
         "offset": [
-          1,
-          0.5
+          -0.5,
+          0
         ],
         "borders": [
           0,
@@ -42001,13 +42001,13 @@
       },
       "pvz:zombie_disco_outerhand": {
         "file": "assets/images/zombie_disco_outerhand.png",
-        "width": 33,
-        "height": 35,
+        "width": 28,
+        "height": 28,
         "rect": [
           0,
           0,
-          33,
-          35
+          28,
+          28
         ],
         "offset": [
           0,
@@ -42022,16 +42022,16 @@
       },
       "pvz:zombie_disco_outerhand_point": {
         "file": "assets/images/zombie_disco_outerhand_point.png",
-        "width": 33,
-        "height": 35,
+        "width": 28,
+        "height": 28,
         "rect": [
-          5,
+          2,
           0,
-          24,
-          35
+          23,
+          28
         ],
         "offset": [
-          0.5,
+          -0.5,
           0
         ],
         "borders": [
@@ -42043,13 +42043,13 @@
       },
       "pvz:zombie_disco_outerleg_lower": {
         "file": "assets/images/zombie_disco_outerleg_lower.png",
-        "width": 48,
-        "height": 45,
+        "width": 40,
+        "height": 36,
         "rect": [
           0,
           0,
-          48,
-          45
+          40,
+          36
         ],
         "offset": [
           0,
@@ -42064,17 +42064,17 @@
       },
       "pvz:zombie_disco_outerleg_upper": {
         "file": "assets/images/zombie_disco_outerleg_upper.png",
-        "width": 24,
-        "height": 44,
+        "width": 20,
+        "height": 36,
         "rect": [
           0,
-          4,
-          24,
-          40
+          1,
+          20,
+          35
         ],
         "offset": [
           0,
-          -2
+          -0.5
         ],
         "borders": [
           0,
@@ -42085,13 +42085,13 @@
       },
       "pvz:zombie_disco_upperbody": {
         "file": "assets/images/zombie_disco_upperbody.png",
-        "width": 67,
-        "height": 80,
+        "width": 56,
+        "height": 64,
         "rect": [
           0,
           0,
-          67,
-          80
+          56,
+          64
         ],
         "offset": [
           0,
@@ -50066,27 +50066,107 @@
       "pvz:zombie_charred_zamboni6_": {
         "file": "assets/images/zombie_charred_zamboni6_.png",
         "width": 180,
-        "height": 129
+        "height": 129,
+        "rect": [
+          1,
+          4,
+          179,
+          124
+        ],
+        "offset": [
+          0.5,
+          -1.5
+        ],
+        "borders": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       "pvz:zombie_hand_rock_7": {
         "file": "assets/images/zombie_hand_rock_7.png",
         "width": 40,
-        "height": 45
+        "height": 45,
+        "rect": [
+          1,
+          1,
+          37,
+          44
+        ],
+        "offset": [
+          -0.5,
+          -0.5
+        ],
+        "borders": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       "pvz:cursor_pointer": {
         "file": "assets/images/cursor_pointer.png",
         "width": 32,
-        "height": 32
+        "height": 32,
+        "rect": [
+          0,
+          0,
+          20,
+          32
+        ],
+        "offset": [
+          -6,
+          0
+        ],
+        "borders": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       "pvz:cursor_hand": {
         "file": "assets/images/cursor_hand.png",
         "width": 32,
-        "height": 32
+        "height": 32,
+        "rect": [
+          6,
+          4,
+          17,
+          22
+        ],
+        "offset": [
+          -1.5,
+          1
+        ],
+        "borders": [
+          0,
+          0,
+          0,
+          0
+        ]
       },
       "pvz:cursor_dragging": {
         "file": "assets/images/cursor_dragging.png",
         "width": 32,
-        "height": 32
+        "height": 32,
+        "rect": [
+          6,
+          4,
+          18,
+          22
+        ],
+        "offset": [
+          -1,
+          1
+        ],
+        "borders": [
+          0,
+          0,
+          0,
+          0
+        ]
       }
     },
     "fonts": {

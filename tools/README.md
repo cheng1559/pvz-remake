@@ -52,6 +52,7 @@ pvz/
 ├── pak.py                   # PAK unpacking, file name normalization, temporary directory
 ├── images.py                # Images and alpha channel merging
 ├── reanim.py                # Reanim tracks, clips and animation marks
+├── oversized.py             # The dancers' art, a quarter larger than the others', shrunk with their Reanims to the others' size
 ├── compiled_reanim.py       # Decoding of the original's compiled animations
 ├── particles.py             # Particle XML conversion
 ├── compiled_particles.py    # Decoding of the original's compiled particles

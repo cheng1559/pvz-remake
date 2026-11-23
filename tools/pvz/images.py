@@ -136,6 +136,17 @@ def _write_if_changed(dst: Path, data: bytes) -> bool:
     return True
 
 
+def sprite_trim(image: Image.Image) -> tuple[list[int], list[float]]:
+    """A sprite's `rect`, the box of its image's visible pixels, and `offset`, that box's middle from the image's (right and up)."""
+    left, top, right, bottom = image.convert('RGBA').getchannel('A').getbbox() or (0, 0, 0, 0)
+    width, height = right - left, bottom - top
+    return [left, top, width, height], [_whole(left + (width - image.width) / 2), _whole((image.height - height) / 2 - top)]
+
+
+def _whole(value: float) -> float:
+    return int(value) if value == int(value) else value
+
+
 def content_sprite_name(name: str) -> str:
     return re.sub(r"[^a-z0-9_.-]+", "_", name.lower())
 

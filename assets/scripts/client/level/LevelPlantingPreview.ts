@@ -91,10 +91,11 @@ export class LevelPlantingPreview {
         if (zombieId !== undefined || this.zombiePreviews) {
             // Put down facing right, the zombie stands its own `facingRightOffsetX` further (see ZombieDefinition).
             const facingRightOffsetX = zombieId === undefined ? undefined : this.content.definitions.zombies[zombieId].facingRightOffsetX
-            // Plant::DrawSeedType draws some smaller and further off in hand (the dancers): the cached frame's Reanim origin
-            // is 40 into it at its size.
+            // Plant::DrawSeedType draws some further off in hand (the dancers), and could draw one smaller: the cached
+            // frame's Reanim origin is 40 into it at its size.
             const held = zombieId === undefined ? undefined : this.content.presentation.zombies[zombieId]?.held
-            const inHand = held ? { ...CURSOR_ZOMBIE, x: CURSOR_ZOMBIE.x + held.x - 40 * (1 - held.scale), y: CURSOR_ZOMBIE.y - held.y + 40 * (1 - held.scale), scale: held.scale } : CURSOR_ZOMBIE
+            const heldScale = held?.scale ?? 1
+            const inHand = held ? { ...CURSOR_ZOMBIE, x: CURSOR_ZOMBIE.x + held.x - 40 * (1 - heldScale), y: CURSOR_ZOMBIE.y - held.y + 40 * (1 - heldScale), scale: heldScale } : CURSOR_ZOMBIE
             const { cursor, grid } = this.zombiePreview
             for (const [preview, placement] of [[cursor, inHand], [grid, GRID_ZOMBIE]] as const) {
                 preview.setZombie(zombieId)

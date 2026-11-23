@@ -19,4 +19,9 @@ test('the pole vaulter’s facing-right corrections follow from the original’s
     const footballInFrame = (middle - football.packet.x) / football.packet.scale - (middle - plain.packet.x) / plain.packet.scale
     assert.ok(Math.abs(gameplay['pvz:football'].facingRightOffsetX - footballInFrame) < 0.01, `${footballInFrame}`)
     assert.deepEqual([football.clips.walk.x, football.clips.walk.y], [plain.clips.walk.x, plain.clips.walk.y + 16])
+    // The dancers, by the same reckoning, take back the 6 they turn round further left than the others (turnedOffsetX).
+    for (const id of ['pvz:dancer', 'pvz:backup_dancer']) {
+        const dancer = presentation[id], inFrame = (middle - dancer.packet.x) / dancer.packet.scale - (middle - plain.packet.x) / plain.packet.scale
+        assert.ok(Math.abs(gameplay[id].facingRightOffsetX - (inFrame - dancer.turnedOffsetX)) < 0.01, `${id}: ${inFrame - dancer.turnedOffsetX}`)
+    }
 })

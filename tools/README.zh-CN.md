@@ -52,6 +52,7 @@ pvz/
 ├── pak.py                   # PAK 解包、文件名规范化、临时目录
 ├── images.py                # 图像与 Alpha 通道合并
 ├── reanim.py                # Reanim 轨道、片段与动画标记
+├── oversized.py             # 舞者僵尸与伴舞僵尸的美术比其他僵尸大四分之一，连同其 Reanim 缩到与其他僵尸相同的尺寸
 ├── compiled_reanim.py       # 原版编译后动画的解码
 ├── particles.py             # 粒子 XML 转换
 ├── compiled_particles.py    # 原版编译后粒子的解码

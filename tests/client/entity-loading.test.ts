@@ -1311,9 +1311,11 @@ test("the zombies that do something of their own add it to the zombie's view: a 
     const context = { content: { presentation: { graves } } }
     const dancer = Object.assign(Object.create(DancerView.prototype), { context, presentation: { dance: { rise } } })
     const plain = Object.assign(Object.create(base.ZombieView.prototype), { context })
-    const moonwalking = { state: 'walking', own: { phase: 'moonwalk' } }
+    const moonwalking = { state: 'walking', own: { phase: 'moonwalk' }, animations: { body: { clip: 'moonwalk' } } }
     assert.deepEqual([dancer.turnedRound(moonwalking), dancer.turnedRound({ ...moonwalking, team: 'plants' }), dancer.turnedRound({ ...moonwalking, state: 'eating' }),
         plain.turnedRound(moonwalking), plain.turnedRound({ team: 'plants' })], [true, false, false, false, true], 'it moonwalks in the other way round from its side, not as it eats')
+    assert.equal(dancer.turnedRound({ ...moonwalking, animations: { body: { clip: 'walk' } } }), false,
+        'having stopped eating in its moonwalk, it walks on facing the way it goes')
     assert.deepEqual([dancer.rise({ own: { phase: 'rise' } }), dancer.rise({ own: { phase: 'walk' } }), plain.rise({ own: { phase: 'rise' } })], [rise, graves.zombie, graves.zombie])
     assert.throws(() => dancer.turnedRound({ typeId: 'pvz:dancer', own: { phase: 'tango' } }), /pvz:dancer\.own\.phase/, 'its view reads its own as its kind has it')
     const danced = (from: string, to: string, won = false, state = 'walking') => {

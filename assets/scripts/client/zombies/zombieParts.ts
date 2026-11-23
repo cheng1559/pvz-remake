@@ -1,14 +1,15 @@
 import type { ZombiePresentationDefinition } from '@/shared/content/presentation'
 
 /**
- * Where a zombie walking right is drawn: Zombie::UpdateReanim's 90 further, flipped, whatever the clip's offset. One
- * put down facing right lines up through where it stands (ZombieDefinition.facingRightOffsetX), not how it is drawn.
+ * Where a zombie walking right is drawn: Zombie::UpdateReanim's 90 further, flipped, whatever the clip's offset, and its
+ * presentation's own `turnedOffsetX` on that. One put down facing right lines up through where it stands
+ * (ZombieDefinition.facingRightOffsetX), not how it is drawn.
  */
 export const MIRRORED_SHIFT = 90
 
 /**
  * Zombie::UpdateReanim: a zombie of another size (ZombieDefinition.scale) has its body drawn so about this point of its
- * Reanim (Y down), and turned round 90 times its size further right.
+ * Reanim (Y down), and turned round MIRRORED_SHIFT times its size further right.
  */
 export const ZOMBIE_PIVOT = { x: 30, y: 120 } as const
 

@@ -10,7 +10,8 @@ from pathlib import Path
 from PIL import Image
 from .compiled_particles import convert_directory as decompile_particles
 from .compiled_reanim import convert_file as decompile_reanim
-from .images import convert_images
+from .images import convert_images, sprite_trim
+from .oversized import normalize_dancers
 from .reanim import build_reanim_clip, get_anim_nodes, load_anim_xml, load_animation_config
 from .fonts import convert_font
 from .particles import convert_directory as convert_particles
@@ -49,25 +50,43 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     def register_sprite(file: Path) -> None:
         with Image.open(file) as image:
             width, height = image.size
+            rect, offset = sprite_trim(image)
         id = f'pvz:{file.stem}'
         previous = resources['sprites'].get(id, {})
         resources['sprites'][id] = {**previous, 'file': file.relative_to(mod).as_posix(),
-            'width': width, 'height': height}
+            'width': width, 'height': height, 'rect': rect, 'offset': offset, 'borders': previous.get('borders', [0, 0, 0, 0])}
 
     # Convert every image once, directly into its final Mod location.
     print('[content] Images and alpha channels', flush=True)
-    outputs = convert_images(raw / 'reanim', assets / 'images')
-    outputs += convert_images(raw / 'images', assets / 'images', raw / 'properties/resources.xml')
-    outputs += convert_images(raw / 'particles', assets / 'images/particles')
-    for image in outputs:
-        register_sprite(image)
+    images = convert_images(raw / 'reanim', assets / 'images')
+    images += convert_images(raw / 'images', assets / 'images', raw / 'properties/resources.xml')
+    particle_images = convert_images(raw / 'particles', assets / 'images/particles')
     # The mouse cursors are only in the executable: pvz:cursor_pointer, pvz:cursor_hand, pvz:cursor_dragging.
     for name, image in cursors.items():
         file = assets / f'images/cursor_{name}.png'
         image.save(file)
-        register_sprite(file)
+        images.append(file)
 
     # resources.xml only guides conversion (alpha companions, particle grids); the game never reads it, so it is not copied.
+
+    print('[content] Animation tracks and display clips', flush=True)
+    configs = load_animation_config()
+    sprites = set(resources['sprites']) | {f'pvz:{file.stem}' for file in images + particle_images}
+    nodes, clips = {}, {}
+    for name, definitions in configs.items():
+        for node, settings in definitions.items():
+            for clip, id in settings.get('exports', {}).items():
+                source = raw / f'reanim/{name}.reanim'
+                if name not in nodes:
+                    nodes[name] = get_anim_nodes(name, definitions, load_anim_xml(source.parent, name))
+                clips[id] = (name, build_reanim_clip(source, definitions, node, clip, id, sprites, nodes=nodes[name]))
+    shrunk = normalize_dancers(clips, images, particle_images)
+    for file in images + particle_images:
+        register_sprite(file)
+    for id, (_, value) in clips.items():
+        file = mod / resources['reanim'].get(id, f"assets/reanim/{id.split(':', 1)[1]}.json")
+        write_json(file, value)
+        register('reanim', id, file)
 
     print('[content] Bitmap fonts', flush=True)
     for source in sorted((raw / 'data').glob('*.txt')):
@@ -76,32 +95,14 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
         # A font's atlases go with it by its layers (the Mod packer); nothing names them as sprites.
         register('fonts', f'pvz:{source.stem}', config)
 
-    print('[content] Animation tracks and display clips', flush=True)
-    configs = load_animation_config()
-
-    def emit_clips(clips: list, definitions: dict) -> None:
-        nodes = {}
-        for source, node, clip, id in clips:
-            source = source if source.is_absolute() else raw / source
-            if source.stem not in nodes:
-                nodes[source.stem] = get_anim_nodes(source.stem, definitions[source.stem],
-                                                   load_anim_xml(source.parent, source.stem))
-            value = build_reanim_clip(source, definitions[source.stem], node, clip, id,
-                                     set(resources['sprites']), nodes=nodes[source.stem])
-            file = mod / resources['reanim'].get(id, f"assets/reanim/{id.split(':', 1)[1]}.json")
-            write_json(file, value)
-            register('reanim', id, file)
-
-    shared = [(Path(f'reanim/{name}.reanim'), node, clip, id)
-              for name, nodes in configs.items() for node, settings in nodes.items()
-              for clip, id in settings.get('exports', {}).items()]
-    emit_clips(shared, configs)
-
     print('[content] Particle effects and text', flush=True)
     convert_particles(raw / 'particles', assets / 'particles', raw / 'properties/resources.xml')
     for file in sorted((assets / 'particles').glob('*.json')):
         particle = json.loads(file.read_text())
         particle['emitters'] = [emitter for emitter in particle['emitters'] if emitter['sprite'] in resources['sprites']]
+        # Only the dancers' drops put their shrunk images in an effect; one an effect drew itself would come out 0.8 too small.
+        if any(emitter['sprite'] in shrunk for emitter in particle['emitters']):
+            raise ValueError(f"{particle['id']} draws a dancer's shrunk image")
         write_json(file, particle)
         register('particles', particle['id'], file)
     # All game text: the original LawnStrings plus the project's own UI text.

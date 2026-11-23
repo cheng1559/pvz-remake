@@ -369,7 +369,7 @@ my-mod/
 
 #### 僵尸尺寸
 
-僵尸的 `scale` 是其绘制尺寸（舞者僵尸与伴舞僵尸的 0.8，以 Reanim 的 (30, 120) 为中心缩放）。它以该尺寸沿地面轨迹行走，动画相应加快。
+僵尸的 `scale` 是其绘制尺寸，以 Reanim 的 (30, 120) 为中心缩放。它以该尺寸沿地面轨迹行走，动画相应加快。本体的僵尸都按 1 绘制：舞者僵尸与伴舞僵尸的美术资源比其他僵尸大四分之一，原版的 0.8 已放进本体转换后的图片和 Reanim（`tools/pvz/oversized.py`），因此替换它们的图片也应与其他僵尸同样大小。
 
 #### 舞蹈
 
@@ -393,10 +393,11 @@ my-mod/
 
 #### 僵尸表现
 
-- `shadow` 可以有 `scale`，以影子中心缩放（舞者僵尸与伴舞僵尸的 0.8）。
-- `held: { x, y, scale }` 先按 `scale` 缩放手持时的缓存图像，再平移 (`x`, `y`)（原版 `Plant::DrawSeedType`；舞者僵尸的 0.8 和 (20, 42)）。
+- `shadow` 可以有 `scale`，以影子中心缩放。
+- `turnedOffsetX` 使僵尸转身（面朝右）时身体再向右绘制这么多，按僵尸的 `scale` 计。原版把每个僵尸转身后向右移 90；舞者僵尸与伴舞僵尸的 −6 使它们停在原版 0.8 所得的位置。
+- `held: { x, y, scale? }` 先按 `scale`（默认 1）缩放手持时的缓存图像，再平移 (`x`, `y`)（原版 `Plant::DrawSeedType`；舞者僵尸的 (6, 10)）。
 - `portrait` 可以有 `clip`，图鉴小窗绘制它的第一帧（默认 `idle`，按僵尸的 `scale` 绘制）。种子包的 `packet.clip` 和手持图像按 Reanim 自身尺寸绘制。
-- `drops` 中的部件可以有 `behind: true`，在掉落时绘制在僵尸后面一层（舞者僵尸的头）；也可以有 `scale`，在特效和僵尸尺寸之外进一步放大（伴舞僵尸的头，1.3125：原版把它的粒子缩放从僵尸的 0.8 换成 1.05）。
+- `drops` 中的部件可以有 `behind: true`，在掉落时绘制在僵尸后面一层（舞者僵尸的头）；也可以有 `scale`，在特效和僵尸尺寸之外进一步放大。
 - 带 `dance` 的僵尸，其表现可以有 `dance: { music?, spotlight?, rise? }`：
   - `music` 在领舞者第一次打响指时播放（场上僵尸不超过 15 个时），场上没有领舞者时停止。
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` 是领舞者第一次打响指后的聚光灯：`floor` 画在它下方，`beam` 画在它上方，颜色随时间在 `colors` 中循环。

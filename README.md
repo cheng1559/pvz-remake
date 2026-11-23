@@ -487,6 +487,9 @@ The following problems exist in the original 1.2.0.1096 and are fixed in this pr
 6. Fixed the sod roll sound looping for as long as the game is paused during the opening sod roll.
 7. Fixed the direction of the heads, arms and flags dropped by zombies under a Hypno-shroom's control; they now fly the way the zombie faces.
 8. Fixed the spotlight of a Dancing Zombie under a Hypno-shroom's control sitting off its body.
+9. Fixed the Backup Dancer's head flying off slightly larger than it was on its body.
+10. Fixed the Dancing Zombie's and Backup Dancer's shadows being smaller than other zombies'.
+11. Fixed the Dancing Zombie facing the wrong way after eating during its moonwalk: for a frame, or walking backwards.
 
 ### Logic
 
