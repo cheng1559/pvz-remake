@@ -4,7 +4,7 @@ Rewinding and single-stepping combat for debugging: taking the level back to an 
 
 ## Current state
 
-For now the game can only go forward: `/gamespeed {0-10}` (0 freezes it; with `/hotkeys` on, `D` toggles speed 0), and the pause while the debug CLI is open. There is no single-step command.
+For now the game can only go forward: `/gamespeed {0-10}` (0 freezes it), and the pause while the debug CLI is open. There is no single-step command.
 
 What is already in place:
 

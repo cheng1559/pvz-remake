@@ -11,7 +11,7 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
     const page = {}, modal: any = { activeModalRoot: page, isInputBlocked: false }
     const settings = { hotkeysEnabled: true }
     const modules: Record<string, unknown> = {
-        cc: { KeyCode: { SPACE: 32, ENTER: 13, DIGIT_0: 48, DIGIT_1: 49, KEY_D: 68, KEY_F: 70 } },
+        cc: { KeyCode: { SPACE: 32, ENTER: 13, DIGIT_0: 48, DIGIT_1: 49, KEY_F: 70 } },
         '@/client/input/UIHoverManager': { UIHoverManager: modal },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/platform/Haptics': { Haptics: { play() {} } },

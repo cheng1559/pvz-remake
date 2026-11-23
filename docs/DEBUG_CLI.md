@@ -352,7 +352,6 @@ With hotkeys on (`/hotkeys`, off by default and saved locally), each seed packet
 | --- | --- |
 | `1`–`9`, `0` | Pick the packet in seed slot 1–10, or the conveyor belt's packet in that place from the left. Holding another packet or the shovel, the key swaps straight to it; pressing the held packet's key puts it back. |
 | `F` | Pick up the shovel, or put it back. Holding a plant, it swaps straight to the shovel, as the number keys swap packets. |
-| `D` | Turn speed 0 on, or back to the speed from before |
 | `R` | Run `/repick`; pressed again in the repick, it is Let's Rock |
 | `S` | Turn `/suncost` the other way, as typing it would |
 | `C` | Turn `/cooldown` the other way, as typing it would |

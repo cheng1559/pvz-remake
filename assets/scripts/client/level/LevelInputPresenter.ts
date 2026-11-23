@@ -1,7 +1,6 @@
 import type { ToolButton } from './LevelBoardHud'
 import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, UITransform, type Vec2, Vec3 } from 'cc'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
@@ -29,7 +28,6 @@ interface MobilePress {
 export class LevelInputPresenter {
     private enabled = false
     private started = false
-    private previousSpeed = 1
     private readonly buttons: UIButton[] = []
     private seedButtons: UIButton[] = []
     private toolButtons: ToolButton[] = []
@@ -324,10 +322,6 @@ export class LevelInputPresenter {
             const snapshot = this.game.render()
             if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
             this.selectSeedPacket(packetIndex, true)
-        }
-        else if (event.keyCode === KeyCode.KEY_D) {
-            if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }
-            else gameClock.setSpeed(this.previousSpeed)
         }
         // `/repick`, which says itself when the level has no bank to choose again; in a repick, its Let's Rock.
         else if (event.keyCode === KeyCode.KEY_R) {
