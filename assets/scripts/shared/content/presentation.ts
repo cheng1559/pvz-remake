@@ -449,9 +449,21 @@ export interface ZombieParts {
     readonly shieldArms?: { readonly holding: readonly string[]; readonly free: readonly string[] }
 }
 
+/** A level's intro. Its switches, each on (`true`) when its part plays, turn the original's parts off one by one. */
 export interface AdventureIntroLayout {
-    readonly previewCapacity: number
-    readonly stationary?: boolean
+    /**
+     * CutScene::PlaceStreetZombies: the street's slots for the level's zombies, 10 unless given. The original gives
+     * 18 on its levels 10, 20 and 30 (the conveyor belt levels) and 15 on level 25 (Big Trouble Little Zombie).
+     */
+    readonly previewCapacity?: number
+    /** CutScene's pan over the street and back, with the house's name and the level's zombies to preview; on unless false. */
+    readonly pan?: boolean
+    /**
+     * CutScene's bank sliding down (TimeSeedBankOnStart) and the mowers coming on (TimeLawnMowerStart); on unless false.
+     * Off, they are in place from the start and the intro ends that much sooner, at once with no pan, sod roll, graves or
+     * Ready, Set, Plant (the sandboxes).
+     */
+    readonly entrance?: boolean
     /** CutScene: a level without a seed bank (IsChallengeWithoutSeedBank) leaves it above the screen. */
     readonly hiddenSeedBank?: boolean
     readonly sod: string
@@ -1037,8 +1049,8 @@ function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
 
 function parseIntro(value: unknown, name: string): AdventureIntroLayout {
     type Sod = NonNullable<AdventureIntroLayout['existingSod']>
-    return fields<AdventureIntroLayout>(value, name, ['previewCapacity', 'sod', 'x', 'y', 'width', 'rolls', 'readySetPlant'], {
-        previewCapacity: positiveInteger, stationary: boolean, hiddenSeedBank: boolean,
+    return fields<AdventureIntroLayout>(value, name, ['sod', 'x', 'y', 'width', 'rolls', 'readySetPlant'], {
+        previewCapacity: positiveInteger, pan: boolean, entrance: boolean, hiddenSeedBank: boolean,
         sod: nonEmptyString, x: finite, y: finite, width: positiveFinite, sourceX: finite,
         existingSod: (value, name) => allFields<Sod>(value, name, { sprite: nonEmptyString, x: finite, y: finite }),
         rolls: (value, name) => array(value, name).map((roll, index) =>
