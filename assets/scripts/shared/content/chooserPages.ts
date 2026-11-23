@@ -1,7 +1,22 @@
 import type { GameplayDefinitions } from './gameplay'
-import type { Team } from '@/shared/protocol'
+import { chooserEntryKey, type ChooserEntry, type Team } from '@/shared/protocol'
 import { seedGroupPages } from './seedGroups'
 import { seedTeam } from './teams'
+
+/**
+ * SeedChooserScreen::EnableStartButton: Let's Rock takes a full bank, or one with every card offered in it (the owned
+ * catalog seeds `available` and the `entries` beyond them), or with `/cheatseed` any cards; the slots left over stay
+ * empty. A `/repick` keeps the bank's size, which can outnumber the cards offered once `/cheatseed` is turned off. The
+ * server checks Let's Rock with it, and the client lights the button.
+ */
+export function seedChoiceComplete(choice: { chosen: readonly ChooserEntry[], available: readonly string[],
+    entries: readonly ChooserEntry[], slots: number, cheatSeeds: boolean }): boolean {
+    const { chosen, available, entries, slots, cheatSeeds } = choice
+    if (chosen.length > slots) return false
+    if (chosen.length === slots || cheatSeeds && chosen.length > 0) return true
+    const keys = new Set(chosen.map(chooserEntryKey))
+    return [...available.map(seedId => ({ seedId })), ...entries].every(card => keys.has(chooserEntryKey(card)))
+}
 
 /** A card on a chooser page: a seed, on `team` when not its seed's own, at a grid place (8 columns in reading order from 0). */
 export interface ChooserPageCard { seedId: string, team?: Team, place: number }

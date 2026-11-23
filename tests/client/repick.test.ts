@@ -16,6 +16,7 @@ test("a repick drops the chooser in, holds it while choosing and lifts it out af
     const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
         cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
+        '@/shared/content/chooserPages': chooserPages,
     })
     const ticks: number[] = [], sent: unknown[] = []
     const almanac = { node: { active: true } }
@@ -24,7 +25,7 @@ test("a repick drops the chooser in, holds it while choosing and lifts it out af
         age: 0, choices: [], start: {}, syncPlaceholders() {}, syncIntro(tick: number) { ticks.push(tick) }, layOut() {},
         pageButtons: [almanac], send: (command: unknown) => sent.push(command),
     })
-    const snapshot = (repick: boolean, choosing = repick) => ({ seedPackets: [], seedChooser: { slots: 6, choosing, ...(repick ? { repick: true } : {}) } })
+    const snapshot = (repick: boolean, choosing = repick) => ({ seedPackets: [], seedChooser: { availableSeeds: [], slots: 6, choosing, ...(repick ? { repick: true } : {}) } })
     chooser.sync(snapshot(false, true))
     assert.equal(chooser.repickTick, undefined, "the intro's chooser runs on the intro's ticks")
     assert.equal(almanac.node.active, true, "the intro's chooser shows the almanac")
@@ -106,6 +107,7 @@ test('a card the bank holds that nothing offers gets its card in its slot, so th
         '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
         '@/shared/protocol': { chooserEntryKey: (entry: { seedId: string, team?: string }) => `${entry.seedId}|${entry.team ?? ''}` },
         './LevelGeometry': { seedPacketX: (slot: number) => 85 + slot * 59 },
+        '@/shared/content/chooserPages': chooserPages,
     })
     const added: Array<{ seedId: string, team?: string }> = []
     const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
@@ -119,11 +121,33 @@ test('a card the bank holds that nothing offers gets its card in its slot, so th
             return choice
         },
     })
-    const snapshot = { seedPackets: [{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }, null], seedChooser: { slots: 6, choosing: true } }
+    const snapshot = { seedPackets: [{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }, null], seedChooser: { availableSeeds: [], slots: 6, choosing: true } }
     chooser.sync(snapshot)
     chooser.sync(snapshot)
     assert.equal(JSON.stringify(added), JSON.stringify([{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }]), 'once each')
     assert.deepEqual(chooser.choices.map((choice: { slot: number }) => choice.slot), [0, 1], 'straight in their slots')
+})
+
+test("Let's Rock lights for a full bank, or for one holding every card offered, as the server takes it", () => {
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
+        '@/shared/protocol': protocol, '@/shared/content/chooserPages': chooserPages,
+    })
+    const lit = (chosen: string[], seedChooser: object) => {
+        const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+            age: 0, start: {} as { interactable?: boolean }, pageButtons: [], syncPlaceholders() {}, syncIntro() {}, layOut() {},
+            choices: chosen.map((seedId, slot) => ({ seedId, key: `${seedId}|`, slot })),
+        })
+        chooser.sync({ seedPackets: chosen.map(seedId => ({ seedId })), seedChooser: { choosing: true, ...seedChooser } })
+        return chooser.start.interactable
+    }
+    // A repick's bank keeps its 10 slots once /cheatseed is off and two seeds are owned.
+    const owned = { availableSeeds: ['pvz:pea', 'pvz:sun'], slots: 10 }
+    assert.equal(lit(['pvz:pea'], owned), false)
+    assert.equal(lit(['pvz:pea', 'pvz:sun'], owned), true, 'every card offered is in: the slots left over stay empty')
+    assert.equal(lit(['pvz:pea', 'pvz:nut'], { availableSeeds: ['pvz:pea', 'pvz:sun', 'pvz:nut'], slots: 2 }), true, 'a full bank')
+    assert.equal(lit(['pvz:pea'], { ...owned, cheatSeeds: true }), true, '/cheatseed takes any cards')
 })
 
 test('a chooser lays its pages out from the offer it has now, as /cheatseed turning over between repicks changes the grid', () => {

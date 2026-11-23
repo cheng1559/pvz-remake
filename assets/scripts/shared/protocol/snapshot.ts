@@ -463,9 +463,10 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const slots = chooser.slots as number
         boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
         // An open bank may hold a card no longer offered (a saved hidden card whose Mod is gone); it can still go back.
-        // A repick keeps the bank's size, which a level's fixed bank may make larger than what the chooser offers.
+        // The slots may outnumber the cards offered: a repick keeps the bank's size, which a level's fixed bank may make
+        // larger, and `/cheatseed` turned off leaves fewer cards.
         if (chooser.repick !== undefined && chooser.repick !== true) throw new TypeError('snapshot.seedChooser.repick must be true')
-        if (slots < 1 || slots > 10 || slots > available.length + entries.length && chooser.repick === undefined || new Set(available).size !== available.length ||
+        if (slots < 1 || slots > 10 || new Set(available).size !== available.length ||
             seedPackets.length > slots) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }

@@ -327,10 +327,10 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 ### Bank size and when the chooser opens
 
 - A level's `conveyor` gives a belt and its `seedPackets` a fixed bank. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
-- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`); a level started with `/cheatseed` on counts every upgrade as bought. Levels list no slot count or candidate pool.
+- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`); a level started with `/cheatseed` on counts every upgrade as bought. An open chooser keeps its slots when fewer cards are offered later (`/cheatseed` turned off). Levels list no slot count or candidate pool.
 - The client builds `maxSlots` packets up front, so a slot bought during the intro only shows one more.
 - `server/seeds/seedChooser.ts` supplies the grid, validates the choices and the confirmation, and saves their order and opening recharges.
-- A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when `/cheatseed`'s Let's Rock starts with fewer cards than slots; a short bank from an older save gets its empty slots back when loaded.
+- A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when Let's Rock starts with fewer cards than slots: under `/cheatseed`, or with every card offered chosen once it is turned off; a short bank from an older save gets its empty slots back when loaded.
 - An empty slot draws nothing and cannot be picked; `/seed` fills or empties any slot.
 - A seed's opening recharge (`initialCooldownTicks`) applies when the level starts: a 5000-tick seed starts at 3500 and a 3000-tick one at 2000, as in the original; a level with `openingRecharge: false` starts them ready.
 

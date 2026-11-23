@@ -12,7 +12,7 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
 import { CHOOSER_PLACES, FIVE_ROW_PLACES, type GameplayDefinitions } from '@/shared/content/gameplay'
-import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/chooserPages'
+import { chooserPages, pagePlaces, seedChoiceComplete, type ChooserPage } from '@/shared/content/chooserPages'
 import { packetTeam } from '@/shared/content/teams'
 import type { LoadedContent } from './LevelView'
 import { seedPacketX } from './LevelGeometry'
@@ -405,11 +405,13 @@ export class LevelSeedChooser {
                 } else choice.view.node.setPosition(destination.x, -destination.y)
             }
         }
-        // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while the bank is full; a dialog or the
-        // intro only keeps it from being pressed (canInteract), as GameButton::IsMouseOver does.
-        // `/cheatseed` starts with any cards chosen, the slots left over empty.
-        const chosen = snapshot.seedPackets.length
-        this.start.interactable = !!offer && (chosen === offer.slots || offer.cheatSeeds === true && chosen > 0)
+        // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while Let's Rock would start
+        // (seedChoiceComplete); a dialog or the intro only keeps it from being pressed (canInteract), as
+        // GameButton::IsMouseOver does.
+        this.start.interactable = !!offer && seedChoiceComplete({
+            chosen: snapshot.seedPackets.flatMap(packet => packet ? [packet] : []), available: offer.availableSeeds,
+            entries: offer.entries ?? [], slots: offer.slots, cheatSeeds: offer.cheatSeeds === true,
+        })
         this.syncPlaceholders()
     }
 

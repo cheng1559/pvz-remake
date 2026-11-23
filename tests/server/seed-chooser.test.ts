@@ -512,6 +512,52 @@ test('/repick stands the level still and chooses the bank again, its cards still
     assert.deepEqual(slotSeeds(setup(game.saveAtBoundary())), slotSeeds(game), 'the chosen bank saves as one chosen at the start')
 })
 
+test("/cheatseed turned off in a repick lets Let's Rock take every owned card, the slots left over empty", () => {
+    const levelId = 'pvz:adventure-1-3', ownedSeeds = adventureSeeds(levels, levelId)
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ ...options, levelId, firstAdventure: true, ownedSeeds, cheatSeeds: true })
+    const { slots } = game.render().seedChooser!
+    assert.equal(slots, definitions.seedBank.maxSlots, 'the switch on as the level starts gives every slot')
+    for (const seedId of [...ownedSeeds, 'pvz:chomper']) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    assert.equal(game.debugCommand('/repick').ok, true)
+    assert.equal(game.debugCommand('/cheatseed').enabled, false)
+    // The repick keeps the bank's slots, more than the owned cards: Let's Rock takes them all chosen.
+    command(game, { type: 'chooseSeed', seedId: ownedSeeds[0] })
+    game.command({ type: 'confirmSeeds' })
+    game.update(0)
+    assert.equal(game.lastRejection?.code, 'seed-choice-incomplete', 'an owned card left out keeps it waiting')
+    command(game, { type: 'chooseSeed', seedId: ownedSeeds[0] })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'finishRepick' })
+    assert.deepEqual(slotSeeds(game), [...ownedSeeds.slice(1), 'pvz:chomper', ownedSeeds[0], ...Array(slots - ownedSeeds.length - 1).fill(null)])
+})
+
+test('/cheatseed turned off leaves a chooser its slots, in play and while choosing', () => {
+    const levelId = 'pvz:adventure-1-3', ownedSeeds = adventureSeeds(levels, levelId)
+    const start = () => {
+        const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+        game.start({ ...options, levelId, firstAdventure: true, ownedSeeds, cheatSeeds: true })
+        for (const seedId of [...ownedSeeds, 'pvz:chomper']) command(game, { type: 'chooseSeed', seedId })
+        return game
+    }
+    const { maxSlots } = definitions.seedBank
+    // In play: the bank keeps its slots, the empty ones too.
+    const playing = start()
+    command(playing, { type: 'confirmSeeds' })
+    command(playing, { type: 'completeIntro' })
+    assert.equal(playing.debugCommand('/cheatseed').enabled, false)
+    assert.deepEqual([playing.render().seedChooser?.slots, playing.render().seedPackets.length], [maxSlots, maxSlots])
+    // While choosing, more cards chosen than are owned: the one not owned can go back, and Let's Rock takes the owned ones.
+    const choosing = start()
+    assert.equal(choosing.debugCommand('/cheatseed').enabled, false)
+    assert.deepEqual([choosing.render().seedChooser?.slots, chosen(choosing)], [maxSlots, [...ownedSeeds, 'pvz:chomper']])
+    command(choosing, { type: 'chooseSeed', seedId: 'pvz:chomper' })
+    command(choosing, { type: 'confirmSeeds' })
+    assert.deepEqual(slotSeeds(choosing), [...ownedSeeds, ...Array(maxSlots - ownedSeeds.length).fill(null)])
+})
+
 test('/repick opens the chooser on a level that deals its bank, which goes back to a dealt bank afterwards, but not on a conveyor', () => {
     const start = (levelId: string) => {
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
