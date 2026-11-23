@@ -2,7 +2,7 @@ import type { GameSystem, World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource, SkySunResource, TutorialResource, WaveResource } from '../state/resources'
 import { updateSkySun } from './sun'
-import { getActiveTutorial, levelTutorial } from '../tutorials'
+import { getActiveTutorial, levelTutorial, skipTutorial } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
 import { seedAffordable } from '../seeds/seedBank'
@@ -14,9 +14,12 @@ const FIRST_WAVE_TICKS = 1800
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition
     const script = levelTutorial(world)
-    const blocked = firstAdventure && script?.blocksStart
+    // TutorialScript.skips: a first adventure without what the script teaches starts as a replay does.
+    const skipped = firstAdventure && !!script?.skips?.(world)
+    const blocked = firstAdventure && !skipped && script?.blocksStart
     world.resources.set(TutorialResource, {
         firstAdventure,
+        ...(skipped ? { skipped: true } : {}),
         step: 'complete',
         displayedAdvice: [],
     })
@@ -43,7 +46,13 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
     return {
         id: 'pvz:level-progress',
         run({ world, commands, tick }) {
-            const script = getActiveTutorial(world)
+            let script = getActiveTutorial(world)
+            // TutorialScript.skips: what the script teaches gone from the bank (`/seed`), it lets go and plays no more.
+            const tutorial = world.resources.get(TutorialResource)
+            if (script && tutorial.firstAdventure && tutorial.step !== 'complete' && script.skips?.(world)) {
+                skipTutorial(world, tick, script)
+                script = getActiveTutorial(world)
+            }
             // Keep tutorial transitions on the same side of sky-sun spawning as before.
             script?.beforeSun?.(world, tick)
             if (updateSkySun(world, commands, definitions, tick)) script?.sunSpawned?.(world)

@@ -306,7 +306,7 @@ flowchart LR
 - 基础游戏的脚本通过 `installBuiltinTutorials` 注册；
 - 模组的脚本通过 `registry.tutorials.register(ownerId, id, script)` 注册。
 
-关卡的 `tutorial` 指定其中一个脚本，在内容校验时检查。运行中的游戏从世界中查找脚本：`levelTutorial` 返回关卡的脚本，`getActiveTutorial` 在脚本生效时返回它（首次冒险时，或对 `alwaysActive` 的脚本始终生效）。游戏通过它分发各种回调：选卡、取消、种植、冷却完成、收集阳光和金钱、选择工具、移除植物以及对话。
+关卡的 `tutorial` 指定其中一个脚本，在内容校验时检查。运行中的游戏从世界中查找脚本：`levelTutorial` 返回关卡的脚本，`getActiveTutorial` 在脚本生效时返回它（首次冒险时，除非脚本被跳过；或对 `alwaysActive` 的脚本始终生效）。游戏通过它分发各种回调：选卡、取消、种植、冷却完成、收集阳光和金钱、选择工具、移除植物以及对话。
 
 - 没有脚本的关卡省略 `tutorial`，使用共享流程。
 - 基础脚本的步骤是 `TUTORIAL_STEPS`，模组的步骤位于其命名空间中。
@@ -323,6 +323,7 @@ flowchart LR
 | `dialogQuestion` | 把当前台词标记为是/否提问，客户端用 `answerDialog` 回答。 |
 | `blocksIntro` | 阻止开场结束。 |
 | `blocksStart` | 阻止僵尸到来。与 `blocksIntro` 相互独立。 |
+| `skips` | 条件成立时，首次冒险不运行该脚本，例如卡槽里没有豌豆射手时的种植教程。开局时检查，成立则按重玩开局；关卡进行中也会检查，成立时由 `skipped` 放开脚本压住的内容。 |
 
 ### 工具
 

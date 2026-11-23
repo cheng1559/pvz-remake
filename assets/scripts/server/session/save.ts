@@ -223,9 +223,10 @@ function parseIceTrap(value: unknown, name: string): Partial<Record<Team, number
 }
 
 function parseTutorial(value: unknown): TutorialState {
-    const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex'])
+    const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex', 'skipped'])
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
+        ...(source.skipped === undefined ? {} : { skipped: trueFlag(source.skipped, 'server save.tutorial.skipped') }),
         step: isQualifiedId(source.step) ? source.step as TutorialStep : oneOf(source.step, TUTORIAL_STEPS, 'server save.tutorial.step'),
         displayedAdvice: array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
             .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]')),

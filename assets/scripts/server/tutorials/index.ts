@@ -51,12 +51,21 @@ export interface TutorialScript {
     beforeSun?(world: World, tick: number): void
     sunSpawned?(world: World): void
     update?(world: World, definitions: GameplayDefinitions, tick: number): void
+    /**
+     * A first adventure plays the level without the script while this holds, as the planting tutorial without a
+     * Peashooter in the bank: checked as the level starts, which then starts as a replay does, and as the level goes on,
+     * where `skipped` lets go of what the script holds back. A finished script is not skipped, and a skipped one stays so.
+     */
+    skips?(world: World): boolean
+    skipped?(world: World, tick: number): void
     seedSelected?(world: World, seedId: string): void
     seedCanceled?(world: World, definitions: GameplayDefinitions, tick: number): void
     seedReady?(world: World, definitions: GameplayDefinitions, tick: number, seedId: string): void
     seedRejected?(world: World, reason: 'seed-not-ready' | 'not-enough-sun'): void
     /** `seedId`: what was planted. */
     plantPlaced?(world: World, definitions: GameplayDefinitions, tick: number, seedId: string): void
+    /** A card is put down, whatever it puts down (a plant, a zombie, a grave or a crater): after plantPlaced for a plant. */
+    seedPlaced?(world: World, definitions: GameplayDefinitions, tick: number, seedId: string): void
     sunCollected?(world: World, tick: number, seedId: string, canAfford: boolean): void
     /** A coin or diamond is picked up. */
     moneyCollected?(world: World, typeId: string): void
@@ -125,8 +134,17 @@ export function levelTutorial(world: World): TutorialScript | undefined {
     return world.resources.get(TutorialsResource).get(world.resources.get(LevelStateResource).definition)
 }
 
-/** The level's script when it plays: on a first adventure, or always for one that is `alwaysActive`. */
+/** The level's script when it plays: on a first adventure unless it is skipped (`skips`), or always for one that is `alwaysActive`. */
 export function getActiveTutorial(world: World): TutorialScript | undefined {
-    const script = levelTutorial(world)
-    return world.resources.get(TutorialResource).firstAdventure || script?.alwaysActive ? script : undefined
+    const script = levelTutorial(world), tutorial = world.resources.get(TutorialResource)
+    return tutorial.firstAdventure && !tutorial.skipped || script?.alwaysActive ? script : undefined
+}
+
+/** TutorialScript.skips as the level goes on: the script lets go of what it holds back and plays no more this game. */
+export function skipTutorial(world: World, tick: number, script: TutorialScript): void {
+    script.skipped?.(world, tick)
+    const tutorial = world.resources.get(TutorialResource)
+    tutorial.skipped = true
+    tutorial.step = 'complete'
+    tutorial.promptAtTick = undefined
 }

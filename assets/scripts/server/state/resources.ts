@@ -113,6 +113,8 @@ export type TutorialStep = typeof TUTORIAL_STEPS[number] | `${string}:${string}`
 export interface TutorialState {
     dialogIndex?: number
     firstAdventure: boolean
+    /** The level's script sits this first adventure out (TutorialScript.skips). */
+    skipped?: true
     step: TutorialStep
     promptAtTick?: number
     /** The advice shown this game, each once (Board::mHelpDisplayed). */

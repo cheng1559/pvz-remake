@@ -1,7 +1,7 @@
 import type { World } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { SeedAvailability, Team } from '@/shared/protocol'
-import { LevelStateResource, type SeedBankState, type SeedCard, type SeedPacketState } from '../state/resources'
+import { LevelStateResource, SeedBankResource, type SeedBankState, type SeedCard, type SeedPacketState } from '../state/resources'
 import { getDebugRules } from '../debug/debugRules'
 import { getAvailableSun } from '../items/items'
 
@@ -19,6 +19,12 @@ function selectedPacket(bank: SeedBankState): SeedCard | null | undefined {
     const selected = bank.selection
     return selected.mode === 'seed' ? bank.packets[selected.slot] : selected.mode === 'conveyor'
         ? bank.conveyor?.packets.find(packet => packet.id === selected.packetId)?.card : undefined
+}
+
+/** The bank has no packet of `seedId`; while it is chosen (the chooser, `/repick`) its choice is not made yet. */
+export function bankLacks(world: World, seedId: string): boolean {
+    const bank = world.resources.get(SeedBankResource)
+    return bank.choosing !== true && !bank.repick && !bank.packets.some(packet => packet?.seedId === seedId)
 }
 
 /** What a seed costs to plant: its sun, or nothing under `/suncost false`. */

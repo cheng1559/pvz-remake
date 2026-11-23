@@ -304,7 +304,7 @@ Tutorial scripts are registered by ID in `GameplayRegistry.tutorials` (`server/t
 - the base game's through `installBuiltinTutorials`;
 - a Mod's through `registry.tutorials.register(ownerId, id, script)`.
 
-A level's `tutorial` names one, checked when the content is validated. The running game looks it up from the world: `levelTutorial` gives the level's script, and `getActiveTutorial` gives it when it plays (on a first adventure, or always for one that is `alwaysActive`). The game routes its callbacks through it: seed selection, cancellation, planting, cooldown completion, sun and money collection, tool selection, plant removal and the dialogue.
+A level's `tutorial` names one, checked when the content is validated. The running game looks it up from the world: `levelTutorial` gives the level's script, and `getActiveTutorial` gives it when it plays (on a first adventure unless the script is skipped, or always for one that is `alwaysActive`). The game routes its callbacks through it: seed selection, cancellation, planting, cooldown completion, sun and money collection, tool selection, plant removal and the dialogue.
 
 - A level without a script leaves `tutorial` out and uses the shared flow.
 - A base script's steps are `TUTORIAL_STEPS`; a Mod's are in its namespace.
@@ -321,6 +321,7 @@ Script fields that shape the level:
 | `dialogQuestion` | Marks the current line as a Yes/No question, which the client answers with `answerDialog`. |
 | `blocksIntro` | Keeps the intro from ending. |
 | `blocksStart` | Keeps the zombies from coming. Independent of `blocksIntro`. |
+| `skips` | Plays a first adventure without the script while it holds, as the planting tutorial without a Peashooter in the bank. Checked as the level starts, which then starts as a replay does, and as the level goes on, where `skipped` lets go of what the script holds back. |
 
 ### Tools
 

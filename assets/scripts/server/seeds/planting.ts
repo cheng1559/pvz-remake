@@ -115,6 +115,7 @@ export const planting = {
             return code
         }
         const team = selectedTeam(seedBank) ?? seedTeam(seed)
+        const placed = () => getActiveTutorial(world)?.seedPlaced?.(world, definitions, gameplayTick, seedId)
         const refusal = plantingRefusal(sessionLawn(session), seed, team, row, column)
         if (refusal) {
             // Board::MouseDownWithPlant: the line's advice once a game; Board::DisplayAdvice remembers a grave's help
@@ -128,6 +129,7 @@ export const planting = {
             const entity = planting.placeZombie(session, seed.id, row, column, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.id, row, column })
+            placed()
             return
         }
         if (seed.kind === 'grave') {
@@ -135,12 +137,14 @@ export const planting = {
             placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
+            placed()
             return
         }
         if (seed.kind === 'crater') {
             placeCrater(world, definitions, row, column, seed.craterTicks, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'craterPlaced', { seedId, row, column })
+            placed()
             return
         }
         if (session.plantingAdvice) {
@@ -151,6 +155,7 @@ export const planting = {
         const entity = planting.createPlant(session, seedId, row, column, team)
         spendSeed(session, seed, packet, sunCost)
         getActiveTutorial(world)?.plantPlaced?.(world, definitions, gameplayTick, seed.id)
+        placed()
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: seed.id,

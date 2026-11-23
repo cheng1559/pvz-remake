@@ -21,7 +21,7 @@
   },
   "pvz:adventure-1-1": {
     "intro": {"previewCapacity": 10, "sod": "pvz:sod1row", "x": 19, "y": 265, "width": 771, "rolls": [{"x": 0, "y": 0, "particleY": 348}], "readySetPlant": false},
-    "seedGuideSteps": ["pick-first-seed", "pick-second-seed"], "lawnGuideSteps": ["plant-first-seed", "plant-second-seed"],
+    "guideSeed": "pvz:peashooter", "seedGuideSteps": ["pick-first-seed", "pick-second-seed"], "lawnGuideSteps": ["plant-first-seed", "plant-second-seed"],
     "advice": {
       "pick-first-seed": "ADVICE_CLICK_SEED_PACKET", "plant-first-seed": "ADVICE_CLICK_ON_GRASS",
       "first-plant-done": "ADVICE_PLANTED_PEASHOOTER", "collect-first-sun": "ADVICE_CLICK_ON_SUN",

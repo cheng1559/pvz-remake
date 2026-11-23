@@ -21,6 +21,97 @@ function game(index: number, intro = false) {
     return server
 }
 
+function debug(server: IntegratedGameServer, command: string) {
+    server.enqueueDebugCommand(1, command)
+    server.processBoundaryCommands()
+    assert.equal((server.drainCommandResults()[0].debug as { ok: boolean }).ok, true, command)
+}
+
+test('1-1 goes on by the Peashooters planted, no other plant', () => {
+    const one = game(1)
+    // 1-1's bank has one slot: a second, restored, holds a Sunflower.
+    const save = one.save()
+    save.seedBank.packets.push({ seedId: 'pvz:sunflower', readyAtTick: 0, cooldownTotal: 0 })
+    one.start({ ...options(1), save: save as unknown as JsonValue })
+    for (const command of ['/cooldown', '/suncost']) debug(one, command)
+    const step = () => one.snapshot().tutorial.step
+    const plant = (seedId: string, column: number) => {
+        assert.equal(runCommand(one, { type: 'selectSeed', seedId }), undefined)
+        assert.equal(runCommand(one, { type: 'placePlant', row: 2, column }), undefined)
+    }
+    assert.equal(runCommand(one, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
+    assert.equal(runCommand(one, { type: 'selectSeed', seedId: 'pvz:sunflower' }), undefined)
+    assert.equal(step(), 'pick-first-seed', 'another card picked up puts the Peashooter back')
+    plant('pvz:sunflower', 0)
+    one.tick()
+    assert.deepEqual([step(), one.save().skySun.atTick], ['pick-first-seed', undefined], 'a Sunflower does not count')
+    plant('pvz:peashooter', 1)
+    assert.equal(step(), 'first-plant-done')
+    assert.equal(one.save().skySun.atTick, one.save().gameplayTick + 400, 'the first Peashooter lets the sky sun fall')
+    plant('pvz:sunflower', 2)
+    one.tick()
+    assert.equal(one.save().wave.nextWaveAtTick, undefined)
+    plant('pvz:peashooter', 3)
+    assert.equal(step(), 'complete')
+    assert.equal(one.save().wave.nextWaveAtTick, one.save().gameplayTick + 99, 'the second starts the waves')
+})
+
+test('1-1 and 1-2 without the Peashooter or the Sunflower start as replays do', () => {
+    for (const [index, ownedSeeds] of [[1, []], [2, ['pvz:peashooter']]] as const) {
+        const start = (firstAdventure: boolean) => {
+            const server = new IntegratedGameServer(definitions, levels)
+            server.start({ ...options(index), firstAdventure, ownedSeeds: [...ownedSeeds] })
+            runCommand(server, { type: 'completeIntro' })
+            return server
+        }
+        const first = start(true), replay = start(false)
+        const { tutorial, skySun, wave } = first.save()
+        assert.deepEqual([tutorial.skipped, tutorial.step], [true, 'complete'])
+        assert.deepEqual(skySun, replay.save().skySun, 'the sky sun falls as on a replay')
+        // Board::InitZombieWaves: the first adventure's 1-2 waits for its first wave, tutorial or not.
+        assert.equal(wave.nextWaveAtTick, index === 2 ? 5000 : replay.save().wave.nextWaveAtTick)
+        for (let tick = 0; tick < 600; tick++) first.tick()
+        assert.deepEqual(first.drainEvents().filter(event => event.type === 'advice'), [], 'and no tutorial advice comes')
+    }
+})
+
+test('1-1 and 1-2 skip their tutorial once the Peashooter or the Sunflower leaves the bank', () => {
+    const step = (server: IntegratedGameServer) => server.snapshot().tutorial.step
+    // Before the first Peashooter: the sky sun and the waves go on as the tutorial's end would let them.
+    const one = game(1)
+    debug(one, '/seed 1 normal')
+    one.tick()
+    const { gameplayTick, skySun, wave } = one.save()
+    assert.deepEqual([step(one), skySun.atTick, wave.nextWaveAtTick], ['complete', gameplayTick + 400, gameplayTick + 99])
+    // After it: the sky sun keeps its time.
+    const after = game(1)
+    assert.equal(runCommand(after, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
+    assert.equal(runCommand(after, { type: 'placePlant', row: 2, column: 0 }), undefined)
+    const sunAt = after.save().skySun.atTick
+    debug(after, '/seed 1 normal')
+    after.tick()
+    assert.deepEqual([step(after), after.save().skySun.atTick, after.save().wave.nextWaveAtTick], ['complete', sunAt, after.save().gameplayTick + 99])
+    after.start({ ...options(1), save: after.save() as unknown as JsonValue })
+    assert.equal(after.save().tutorial.skipped, true, 'a save keeps it skipped')
+    // 1-2 holds nothing back: its first wave keeps its time.
+    const two = game(2)
+    debug(two, '/seed 2 normal')
+    two.tick()
+    assert.deepEqual([step(two), two.save().wave.nextWaveAtTick], ['complete', 5000])
+    debug(two, '/seed 2 sunflower')
+    two.tick()
+    assert.equal(step(two), 'complete', 'a skipped tutorial stays skipped')
+})
+
+test('1-2 goes back to the Sunflower after any card put down, a zombie card too', () => {
+    const two = game(2)
+    for (const command of ['/cooldown', '/suncost', '/seed 1 normal']) debug(two, command)
+    assert.equal(runCommand(two, { type: 'selectSeed', seedId: 'pvz:normal' }), undefined)
+    assert.equal(two.snapshot().tutorial.step, 'refresh-sunflower')
+    assert.equal(runCommand(two, { type: 'placePlant', row: 2, column: 7 }), undefined)
+    assert.equal(two.snapshot().tutorial.step, 'pick-sunflower', 'the Sunflower is ready, so the arrow goes back to it')
+})
+
 test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original initial packet recharge', () => {
     for (const index of [3, 4]) {
         const server = game(index, true)

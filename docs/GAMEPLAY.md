@@ -87,8 +87,8 @@ Timing (`server/level/waves.ts`, `Board::UpdateZombieSpawning`):
 
 #### 1-1 to 1-4
 
-- **1-1** is played on row 3 alone with four waves of Zombies. On a first adventure the planting tutorial (`plantingTutorial`) holds the first wave and the sky sun back until the first plant. Award: Sunflower.
-- **1-2** uses rows 2–4. On a first adventure the Sunflower tutorial (`sunflowerTutorial`) prompts the player to plant Sunflowers. Award: Cherry Bomb.
+- **1-1** is played on row 3 alone with four waves of Zombies. On a first adventure the planting tutorial (`plantingTutorial`) holds the sky sun and the waves back: the first Peashooter planted lets the sun fall, and the second starts the waves (the original counts any two plants on the lawn, `Board::MouseDownWithPlant`, where the bank has only the Peashooter). Without a Peashooter in the bank the tutorial is skipped. Award: Sunflower.
+- **1-2** uses rows 2–4. On a first adventure the Sunflower tutorial (`sunflowerTutorial`) prompts the player to plant Sunflowers; without a Sunflower in the bank it is skipped. Award: Cherry Bomb.
 - **1-3** uses rows 2–4 and introduces the Conehead on waves 5 and 8. Award: Wall-nut.
 - **1-4** uses all five rows. Award: the Shovel, a tool award. It records the shovel in the profile's `tools` when the level is won; from then on every level has it but one with tools of its own (Whack a Zombie has none) (the original's level 5, `CutScene::ShowShovel`).
 - On 1-3, 1-4, 1-6 and 1-7, on a first adventure, the more-sun reminder (`moreSunTutorial`, `Board::UpdateTutorial`) asks for more Sunflowers once five waves have come, while fewer than three are planted and a Sunflower packet is ready. It never delays the waves.
