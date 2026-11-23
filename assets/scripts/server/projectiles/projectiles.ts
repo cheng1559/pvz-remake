@@ -7,7 +7,7 @@ import { plantInPlay, plantsInPlay } from '../level/lawn'
 import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
-import { bodyOf, type Projectile, type ProjectileHit, type ProjectileTarget } from './Projectile'
+import { bodyOf, Projectile, type ProjectileHit, type ProjectileTarget } from './Projectile'
 
 /** How far above or below the screen a projectile is gone, as one that lost what it homed on. */
 const OFF_BOARD_Y = 200
@@ -105,9 +105,13 @@ export class ProjectileSystem implements GameSystem {
             return direction * (first.position.x - second.position.x) || Number('zombie' in b) - Number('zombie' in a) || first.id - second.id
         }
         let nearest: ProjectileTarget | undefined, all: ProjectileTarget[] | undefined
+        // The base kinds' canHit hits nothing they do not overlap: one of them passes over a target clear of it before
+        // anything else. A kind with a canHit of its own is asked of every target.
+        const overlapping = projectile.canHit === Projectile.prototype.canHit || projectile.canHit === MowingProjectile.prototype.canHit
         // Runs for every projectile on every tick: the span overlap test comes before entity lookups, and a miss makes nothing.
         for (let i = 0; i < candidates.length; i++) {
             const target = candidates[i]
+            if (overlapping && (right <= target.left || target.right <= left)) continue
             const overlap = Math.min(right, target.right) - Math.max(left, target.left)
             if (aim === ('zombie' in target ? 'plants' : 'zombies')) continue
             const body = bodyOf(target)

@@ -57,11 +57,12 @@ export class EntityList<T extends Entity> implements Iterable<T> {
     private readonly values = new Map<EntityId, T>()
     private ordered: T[] | undefined
 
-    constructor(private readonly world: World) {}
+    /** `leaving`: the world's entities on their way out (World.markDestroy), which no list shows. */
+    constructor(private readonly leaving: ReadonlySet<EntityId>) {}
 
     /** The one of `id`, unless it is gone or on its way out. */
     get(id: EntityId): T | undefined {
-        return this.world.leaving(id) ? undefined : this.values.get(id)
+        return this.leaving.size > 0 && this.leaving.has(id) ? undefined : this.values.get(id)
     }
 
     has(id: EntityId): boolean {
@@ -70,20 +71,27 @@ export class EntityList<T extends Entity> implements Iterable<T> {
 
     /**
      * Every system goes through its lists every tick: an iterator written out, which costs less than a generator, and
-     * which looks an entity up only once the list has changed since the iteration began.
+     * which looks an entity up only once the list has changed since the iteration began. It gives every step in one
+     * result, which a for-of or a spread reads at once, rather than making one for each entity.
      */
     [Symbol.iterator](): Iterator<T> {
         const ordered = this.ordered ??= [...this.values.values()].sort((a, b) => a.id - b.id)
-        const list = this, { values, world } = this
+        const list = this, { values, leaving } = this
+        const result: { done: boolean, value: T | undefined } = { done: false, value: undefined }
         let index = 0
         return {
             next(): IteratorResult<T> {
                 while (index < ordered.length) {
                     const value = ordered[index++]
                     // Unchanged, the list still holds every one it had in order.
-                    if ((list.ordered === ordered || values.get(value.id) === value) && !world.leaving(value.id)) return { done: false, value }
+                    if ((list.ordered === ordered || values.get(value.id) === value) && !(leaving.size > 0 && leaving.has(value.id))) {
+                        result.value = value
+                        return result as IteratorResult<T>
+                    }
                 }
-                return { done: true, value: undefined }
+                result.done = true
+                result.value = undefined
+                return result as IteratorResult<T>
             },
         }
     }
@@ -136,22 +144,22 @@ export class ResourceStore {
  */
 export class World {
     readonly resources = new ResourceStore()
-    /** The sun, coins and the level's award (Coin). */
-    readonly items = new EntityList<Item>(this)
-    /** The things of a cell: graves and craters (GridItem). */
-    readonly gridItems = new EntityList<GridItem>(this)
-    /** The plants, of their kinds (Plant), a mowed one too until it is squashed (Plant.state; lawn.plantsInPlay). */
-    readonly plants = new EntityList<Plant>(this)
-    /** What flies, of its kind (Projectile): a mower set off runs as one (MowingProjectile). */
-    readonly projectiles = new EntityList<Projectile>(this)
-    /** The rows' lawn mowers waiting at their house ends (Mower). */
-    readonly mowers = new EntityList<Mower>(this)
-    /** The zombies, each of its kind (Zombie). */
-    readonly zombies = new EntityList<Zombie>(this)
-
-    private nextEntity = 1
     /** Those on their way out (markDestroy), which no list shows any more. */
     private readonly pendingDestroy = new Set<EntityId>()
+    /** The sun, coins and the level's award (Coin). */
+    readonly items = new EntityList<Item>(this.pendingDestroy)
+    /** The things of a cell: graves and craters (GridItem). */
+    readonly gridItems = new EntityList<GridItem>(this.pendingDestroy)
+    /** The plants, of their kinds (Plant), a mowed one too until it is squashed (Plant.state; lawn.plantsInPlay). */
+    readonly plants = new EntityList<Plant>(this.pendingDestroy)
+    /** What flies, of its kind (Projectile): a mower set off runs as one (MowingProjectile). */
+    readonly projectiles = new EntityList<Projectile>(this.pendingDestroy)
+    /** The rows' lawn mowers waiting at their house ends (Mower). */
+    readonly mowers = new EntityList<Mower>(this.pendingDestroy)
+    /** The zombies, each of its kind (Zombie). */
+    readonly zombies = new EntityList<Zombie>(this.pendingDestroy)
+
+    private nextEntity = 1
     private readonly allLists: readonly EntityList<Entity>[] = [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
 
     /** Every list of the world. */
