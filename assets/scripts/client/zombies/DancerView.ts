@@ -10,7 +10,7 @@ import { SoundSystem } from '@/client/sound/SoundSystem'
 import { DANCE_PHASES, type DancePhase } from '@/shared/content/zombieStates'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { type ShownZombie, ZombieView } from './ZombieView'
-import { MIRRORED_SHIFT, ZOMBIE_PIVOT } from './zombieParts'
+import { ZOMBIE_PIVOT } from './zombieParts'
 
 /**
  * A dancer (ZombieDefinition.dance, the presentation's `dance`): it moonwalks in turned round, a leader stands in its
@@ -82,7 +82,7 @@ export class DancerView extends ZombieView {
         const [r, g, b] = colors[age >= colorsFrom ? Math.floor(age / colorTicks) * colorStep % colors.length : 0]
         const color = new Color(r, g, b, 255)
         const turnedAbout = this.turned
-            ? this.clip(zombie.animations[ZOMBIE_BODY_LAYER].clip).x + ZOMBIE_PIVOT.x * (1 - this.scale) + MIRRORED_SHIFT * this.scale / 2 : undefined
+            ? this.clip(zombie.animations[ZOMBIE_BODY_LAYER].clip).x + ZOMBIE_PIVOT.x * (1 - this.scale) + this.turnedShift / 2 : undefined
         for (const [node, [x]] of [[floor, look.floorOffset], [beam, look.beamOffset]] as const) {
             node.getComponent(Sprite)!.color = color
             node.setPosition(turnedAbout === undefined ? x : 2 * turnedAbout - x, node.position.y)
@@ -95,10 +95,15 @@ export class DancerView extends ZombieView {
 
     /**
      * UpdateReanim's anOpposite: the other way round from its side's while it moonwalks in (PHASE_DANCER_DANCING_IN),
-     * not while it eats, nor mowed, falling or burned, which are phases of their own.
+     * not while it eats, nor mowed, falling or burned, which are phases of their own; and only on its moonwalk clip. One
+     * that stops eating as it moonwalks walks on its walk (StopEating's StartWalkAnim) facing the way it goes, where the
+     * original draws it turned round until its moonwalk is through, for a frame even when it already is (the dance is
+     * updated before the zombie stops eating).
      */
     protected turnedRound(zombie: ShownZombie): boolean {
-        return super.turnedRound(zombie) !== (this.dancePhase(zombie) === 'moonwalk' && zombie.state === 'walking')
+        const moonwalking = this.dancePhase(zombie) === 'moonwalk' && zombie.state === 'walking' &&
+            zombie.animations[ZOMBIE_BODY_LAYER]?.clip === ZOMBIE_CLIPS.moonwalk
+        return super.turnedRound(zombie) !== moonwalking
     }
 
     /** One called up into a troupe comes up out of the ground (DancePresentation.rise, PHASE_DANCER_RISING). */

@@ -110,7 +110,6 @@ export class PoleVaulter extends Zombie {
     private startVault(plantPosition: Position, random: AnimationRandom, inPlace: boolean): void {
         this.state = 'airborne'
         const jump = playZombie(this, this.definition.animation, ZOMBIE_CLIPS.jump, random)
-        this.biteTicks = 0
         this.hasPole = false
         // Zombie::UpdateZombiePolevaulter spreads the jump over the animation; the landing adds the rest. The jump ends 80
         // past the plant's left edge (mX - aPlant->mX - 80); a zombie facing right mirrors that across both widths. One

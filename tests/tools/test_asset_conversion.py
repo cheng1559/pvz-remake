@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parents[2] / 'tools'))
 
 from pvz.pak import extracted_pak, PAK_MAGIC, XOR_KEY
 from pvz.fonts import convert_font
-from pvz.images import convert_images
+from pvz.images import convert_images, sprite_trim
 from pvz.particles import build_particle, write_particle
 from pvz.pe import RT_GROUP_ICON, RT_ICON, icon
 
@@ -154,6 +154,16 @@ SetDefaultPointSize 2;
             self.assertEqual(Image.open(files[0]).getpixel((0, 0))[3], 127)
             convert_images(source, output)
             self.assertEqual(files[0].read_bytes(), before)
+
+    def test_a_sprite_is_trimmed_to_its_visible_pixels(self):
+        image = Image.new('RGBA', (67, 80), (0, 0, 0, 0))
+        image.paste((255, 0, 0, 255), (0, 0, 67, 66))
+        # Cocos's trim: the box, and its middle from the image's, right and up.
+        self.assertEqual(sprite_trim(image), ([0, 0, 67, 66], [0, 7]))
+        image = Image.new('RGBA', (26, 40), (0, 0, 0, 0))
+        image.paste((255, 0, 0, 1), (3, 6, 22, 40))
+        self.assertEqual(sprite_trim(image), ([3, 6, 19, 34], [-0.5, -3]))
+        self.assertEqual(sprite_trim(Image.new('RGBA', (4, 2), (0, 0, 0, 0))), ([0, 0, 0, 0], [-2, 1]))
 
     def test_peasplat_particle_tracks_and_atlases(self):
         particle_xml = '\n<Emitter><Image>IMAGE_PEA_SPLATS</Image><ImageFrames>4</ImageFrames>\n<SpawnMinActive>1</SpawnMinActive><SpawnMaxLaunched>1</SpawnMaxLaunched>\n<ParticleAlpha>.9,70 0</ParticleAlpha><ParticleScale>[.4 .6] [.8 1.2]</ParticleScale>\n<EmitterRadius>[0 10]</EmitterRadius><ParticleDuration>20</ParticleDuration>\n<SystemDuration>20</SystemDuration><RandomLaunchSpin>1</RandomLaunchSpin></Emitter>\n<Emitter><Image>IMAGE_PEA_PARTICLES</Image><ImageFrames>3</ImageFrames>\n<SpawnMinActive>[6 10]</SpawnMinActive><ParticleAlpha>1,80 0</ParticleAlpha>\n<ParticleScale>[.8 1.2]</ParticleScale><EmitterRadius>[0 10]</EmitterRadius>\n<LaunchSpeed>[150]</LaunchSpeed><ParticleDuration>20</ParticleDuration>\n<SystemDuration>20</SystemDuration><ParticleSpinSpeed>[-200 200]</ParticleSpinSpeed>\n<Field><FieldType>Friction</FieldType><X>0.0,40 .1</X><Y>0.0,40 .1</Y></Field>\n<Field><FieldType>Acceleration</FieldType><Y>10</Y></Field></Emitter>\n'

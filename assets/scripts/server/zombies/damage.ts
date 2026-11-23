@@ -120,7 +120,6 @@ export function flattenZombie(world: World, definitions: GameplayDefinitions, zo
     // Zombie::MowDown's RemoveIceTrap, which breaks nothing off.
     delete zombie.frozenTicks
     playZombie(zombie, definitions.zombies[zombie.typeId].animation, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
-    zombie.biteTicks = 0
     zombie.deathTicksRemaining = 0
 }
 

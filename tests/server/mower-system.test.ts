@@ -60,7 +60,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     const zombie = world.createEntity()
     world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: zombie, position: { x: -10, y: 280, row: 2 },
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
-        speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
+        speedPerTick: 0.3, age: 0, deathTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, riseTicks: 0,
@@ -84,7 +84,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     const secondZombie = world.createEntity()
     world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: secondZombie, position: { x: -10, y: 280, row: 2 },
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
-        speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
+        speedPerTick: 0.3, age: 0, deathTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, riseTicks: 0,
@@ -127,7 +127,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
     const zombies = ['pvz:conehead', 'pvz:screendoor'].map(typeId => {
         const entity = world.createEntity()
         world.insert(world.zombies, newZombie(world, typeId, { id: entity, position: { x: -10, y: 280, row: 2 },
-            typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
+            typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, age: 0, deathTicksRemaining: 0,
             walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
             helmHealth: definitions.zombies[typeId].helm?.health ?? 0, shieldHealth: definitions.zombies[typeId].shield?.health ?? 0,
@@ -154,7 +154,7 @@ test('a zombie that cannot be flattened (dying, in the air, rising) goes in a pu
     const world = mowerWorld()
     const zombie = world.createEntity()
     world.insert(world.zombies, newZombie(world, 'pvz:normal', { id: zombie, position: { x: -10, y: 280, row: 2 },
-        typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 100,
+        typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, age: 0, deathTicksRemaining: 100,
         walkClip: 'walk', animations: { body: { clip: 'death', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, riseTicks: 0,

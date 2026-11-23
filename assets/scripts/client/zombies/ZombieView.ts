@@ -193,8 +193,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         uiNode({ node: this.node, opacity: zombie.alpha })
         this.placeShadow()
-        // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
-        if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
+        // Zombie::HasShadow hides it while falling, vaulting or coming up. A mowed one keeps it where it stood as its
+        // body is drawn into the mower. A burned one (headless, standing black) has none, as charred remains have
+        // none; the original's HasShadow keeps it.
+        if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'burned' &&
             zombie.state !== 'airborne' && !zombie.riseTicks
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
@@ -574,13 +576,18 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     protected turned = false
 
     /**
-     * Zombie::UpdateReanim: a zombie drawn turned round has its body mirrored (`m00 = -scale`) and 90 further right (see
-     * MIRRORED_SHIFT), at its size about ZOMBIE_PIVOT. Every body animation node is placed through here.
+     * Zombie::UpdateReanim: a zombie drawn turned round has its body mirrored (`m00 = -scale`) and further right
+     * (turnedShift), at its size about ZOMBIE_PIVOT. Every body animation node is placed through here.
      */
     private place(node: Node, x: number, y: number): void {
         const scale = this.scale
-        node.setPosition(x + (this.turned ? MIRRORED_SHIFT * scale : 0) + ZOMBIE_PIVOT.x * (1 - scale), y - ZOMBIE_PIVOT.y * (1 - scale))
+        node.setPosition(x + (this.turned ? this.turnedShift : 0) + ZOMBIE_PIVOT.x * (1 - scale), y - ZOMBIE_PIVOT.y * (1 - scale))
         node.setScale(this.turned ? -scale : scale, scale, 1)
+    }
+
+    /** How much further right its body is drawn turned round: MIRRORED_SHIFT and its own offset (turnedOffsetX), at its size. */
+    protected get turnedShift(): number {
+        return (MIRRORED_SHIFT + (this.presentation.turnedOffsetX ?? 0)) * this.scale
     }
 
     /** Zombie::UpdateReanim's anOpposite: its body is drawn turned round, facing right on the plants' side. */
@@ -593,7 +600,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.mirrored = zombie.team === 'plants'
         const turned = this.turnedRound(zombie)
         if (turned === this.turned) return
-        const scale = this.scale, moved = (turned ? MIRRORED_SHIFT : -MIRRORED_SHIFT) * scale
+        const scale = this.scale, moved = turned ? this.turnedShift : -this.turnedShift
         this.turned = turned
         for (const node of [this.player?.node, this.root.getChildByName('MoweredDriver')]) {
             if (!node?.isValid) continue

@@ -328,11 +328,12 @@
   "pvz:dancer": {
     "view": "dancer",
     "renderOffset": 4,
-    "packet": {"x": 1, "y": 2, "scale": 0.3, "clip": "moonwalk"},
+    "packet": {"x": -4.25, "y": -10, "scale": 0.375, "clip": "moonwalk"},
     "portrait": {"x": 24, "y": 14.9, "scale": 0.5, "clip": "moonwalk"},
-    "held": {"x": 20, "y": 42, "scale": 0.8},
+    "held": {"x": 6, "y": 10},
     "nameKey": "DANCING_ZOMBIE",
-    "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
+    "shadow": {"x": 19, "y": -92, "backwardsX": 7},
+    "turnedOffsetX": -6,
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair", "Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_disco_glasses"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand", "Zombie_disco_outerhand_point"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArmSprite": "pvz:zombie_disco_outerarm_upper_bone",
     "clips": {
@@ -381,11 +382,11 @@
   },
   "pvz:backup_dancer": {
     "view": "dancer",
-    "packet": {"x": -4, "y": 2, "scale": 0.3, "clip": "walk"},
+    "packet": {"x": -5, "y": -8, "scale": 0.35, "clip": "walk"},
     "portrait": {"x": 16, "y": 19.9, "scale": 0.5, "clip": "walk"},
-    "held": {"x": 20, "y": 42, "scale": 0.8},
     "nameKey": "BACKUP_DANCER",
-    "shadow": {"x": 19, "y": -92, "backwardsX": 7, "scale": 0.8},
+    "shadow": {"x": 19, "y": -92, "backwardsX": 7},
+    "turnedOffsetX": -6,
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["Zombie_disco_chops", "Zombie_disco_chops_2", "Zombie_backup_stash"], "tongue": [], "arm": ["Zombie_disco_outerarm_lower", "Zombie_disco_outerhand"], "upperArm": "Zombie_disco_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArmSprite": "pvz:zombie_backup_outerarm_upper_bone",
     "clips": {
@@ -403,7 +404,6 @@
         "offset": [58, -30],
         "moweredEffect": "pvz:moweredzombiehead",
         "image": "pvz:zombiebackupdancerhead_disco",
-        "scale": 1.3125,
         "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]
       },
       "arm": {

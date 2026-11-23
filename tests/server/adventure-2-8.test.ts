@@ -105,10 +105,10 @@ test('2-8 follows 2-7 with 10 waves over seven graves, brings the dancer in on w
     assert.deepEqual(start({ initialMoney: 1000, packetUpgradeOffer: { cost: 750 } }).snapshot().dialog, { index: 1501 })
 })
 
-test('the dancers: 500 and 270 health, drawn at 0.8, a backup dancer never picked for a wave', () => {
+test('the dancers: 500 and 270 health, drawn at 1 (the original\'s 0.8 is in their art), a backup dancer never picked for a wave', () => {
     const dancer = definitions.zombies['pvz:dancer'], backup = definitions.zombies['pvz:backup_dancer']
-    assert.deepEqual([dancer.maxHealth, dancer.scale, dancer.wave], [500, 0.8, { points: 5, weight: 1000, firstWave: 5 }])
-    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, 0.8, 0, {}])
+    assert.deepEqual([dancer.maxHealth, dancer.scale, dancer.wave], [500, undefined, { points: 5, weight: 1000, firstWave: 5 }])
+    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, undefined, 0, {}])
     assert.deepEqual({ ...lead, moonwalkTicks: { ...lead.moonwalkTicks } }, {
         moonwalkTicks: { min: 300, max: 311 }, backup: 'pvz:backup_dancer',
         troupe: [{ row: -1, x: 0 }, { row: 1, x: 0 }, { row: 0, x: -100 }, { row: 0, x: 100 }],
@@ -284,8 +284,9 @@ test('a dancer that stops eating walks on until the beat brings its next phase, 
     const id = zombiesOf(server, 'pvz:backup_dancer')[0].entityId, dancer = world(server).zombies.get(id) as Dancer
     ticks(server, 1)
     assert.equal(dancer.phase, 'raise')
-    // Zombie::StopEating, with nothing left to eat: StartWalkAnim plays anim_walk, and the phase stays.
+    // Zombie::StopEating, with nothing left to eat as it looks: StartWalkAnim plays anim_walk, and the phase stays.
     dancer.state = 'eating'
+    dancer.age = definitions.zombies['pvz:backup_dancer'].bite.cadenceTicks - 1
     ticks(server, 1)
     const x = dancer.position.x, walk = dancer.animations[ZOMBIE_BODY_LAYER]
     assert.deepEqual([dancer.state, dancer.phase, walk.clip, walk.rate], ['walking', 'raise', 'walk', 18],

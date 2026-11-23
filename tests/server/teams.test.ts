@@ -494,7 +494,12 @@ test('a zombie that chews an awake hypno-shroom comes over to the plants\u2019 s
     const server = beginAtNight()
     debug(server, '/plant hypnoshroom 3 2')
     debug(server, '/zombie normal 3 3')
-    const events = run(server, 1500)
+    const events: { type: string, data: Record<string, unknown> }[] = [], healths = new Set<number>()
+    for (let tick = 0; tick < 1500; tick++) {
+        events.push(...run(server, 1))
+        for (const plant of plants(server)) if (plant.typeId === 'pvz:hypnoshroom') healths.add(plant.health)
+    }
+    assert.deepEqual([...healths], [definitions.plants['pvz:hypnoshroom'].maxHealth], 'Zombie::EatPlant does not hurt it awake')
     const changed = events.filter(event => event.type === 'mindControlled')
     assert.equal(changed.length, 1)
     const [zombie] = zombies(server)

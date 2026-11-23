@@ -295,8 +295,8 @@ export interface ZombieDrop {
     /** It flies off just under the zombie rather than over it (Zombie::DropHead's mRenderOrder - 1 for the dancer). */
     readonly behind?: true
     /**
-     * Its picture this much larger than its effect and the zombie's size draw it (the original's 1): the backup dancer's
-     * head, a picture the size of its body's head, which the effect's 0.8 and the zombie's 0.8 would leave smaller.
+     * Its picture this much larger than its effect and the zombie's size draw it (1 by default). The base leaves out the
+     * original's 1.05 for the Backup Dancer's head (Zombie::DropHead), which would fly off larger than it was on the body.
      */
     readonly scale?: number
 }
@@ -346,6 +346,11 @@ export interface ZombiePresentationDefinition {
      */
     readonly shadow: { readonly x: number; readonly y: number; readonly backwardsX?: number; readonly scale?: number }
     /**
+     * How much further right than the original's 90 (MIRRORED_SHIFT) its body is drawn turned round, at its size. The
+     * dancers' -6 keeps them where the original has them: it draws their art, a quarter larger, at 0.8 about (30, 120).
+     */
+    readonly turnedOffsetX?: number
+    /**
      * Its zombie seed's packet (SeedPacket::DrawSeedPacket for SEED_ZOMBIE_*): where the original has the cached
      * zombie frame, posed at (40, 40), drawn at this offset and scale. `clip` names the animation whose first frame
      * it shows, `idle` unless the original's cache takes another (the pole vaulter's anim_walk,
@@ -353,10 +358,11 @@ export interface ZombiePresentationDefinition {
      */
     readonly packet?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
     /**
-     * Plant::DrawSeedType: its seed's cached zombie in hand drawn at `scale`, its frame `x`, `y` further (original Y-down
-     * pixels; the dancer's 0.8 and (20, 42)), and as it is without. Its `packet` has the same in it already.
+     * Plant::DrawSeedType: its seed's cached zombie in hand drawn at `scale` (1 by default), its frame `x`, `y` further
+     * (original Y-down pixels), and as it is without. The Dancing Zombie's (6, 10) is what is left of the original's 0.8
+     * and (20, 42) with its art at the others' size. Its `packet` has the same in it already.
      */
-    readonly held?: { readonly x: number; readonly y: number; readonly scale: number }
+    readonly held?: { readonly x: number; readonly y: number; readonly scale?: number }
     /**
      * The almanac's small picture of it (AlmanacDialog::DrawZombies' cached zombie): where its Reanim's origin goes in
      * the frame, and at what size; `clip` names the animation whose first frame it shows, `idle` unless the original's
@@ -1151,10 +1157,11 @@ function parseZombie(value: unknown, name: string): ZombiePresentationDefinition
         viewConfig,
         clips: layerClips,
         shadow: (value, name) => fields<Zombie['shadow']>(value, name, ['x', 'y'], { x: finite, y: finite, backwardsX: finite, scale: positiveFinite }),
+        turnedOffsetX: finite,
         packet: (value, name) => fields<NonNullable<Zombie['packet']>>(value, name, ['x', 'y', 'scale'], {
             x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
         }),
-        held: (value, name) => allFields<NonNullable<Zombie['held']>>(value, name, { x: finite, y: finite, scale: positiveFinite }),
+        held: (value, name) => fields<NonNullable<Zombie['held']>>(value, name, ['x', 'y'], { x: finite, y: finite, scale: positiveFinite }),
         portrait: (value, name) => fields<NonNullable<Zombie['portrait']>>(value, name, ['x', 'y', 'scale'], {
             x: finite, y: finite, scale: positiveFinite, clip: nonEmptyString,
         }),

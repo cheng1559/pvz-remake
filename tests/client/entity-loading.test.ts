@@ -428,6 +428,23 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' }))
 })
 
+test('a mowed zombie keeps its shadow; one falling, vaulting, coming up or burned has none, as charred remains have none', () => {
+    class Node { active = false; position = { x: 0, y: 0 }; setPosition() {} setScale() {} }
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node }) } })
+    const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        context: { content: {} }, node: new Node(), shadowNode: new Node(), attachments: new EntityAttachments(), mirrored: false,
+        turned: false, scale: 1, shadowSize: { width: 0, height: 0 }, presentation: presentationFixture.zombies['pvz:normal'],
+        applyHitFlash() {}, applyColor() {}, syncMowered() {}, step() {}, onBoard() {},
+    })
+    const shadow = (state: string, riseTicks?: number) => {
+        view.sync({ state, riseTicks, x: 100, y: 200, animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }, { result: 'playing' })
+        return view.shadowNode.active
+    }
+    assert.deepEqual([shadow('walking'), shadow('mowered'), shadow('dying'), shadow('airborne'), shadow('walking', 50), shadow('burned')],
+        [true, true, false, false, false, false])
+})
+
 test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
     const base = { content: { presentation: 'presentation.json' },
         files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
@@ -1311,9 +1328,11 @@ test("the zombies that do something of their own add it to the zombie's view: a 
     const context = { content: { presentation: { graves } } }
     const dancer = Object.assign(Object.create(DancerView.prototype), { context, presentation: { dance: { rise } } })
     const plain = Object.assign(Object.create(base.ZombieView.prototype), { context })
-    const moonwalking = { state: 'walking', own: { phase: 'moonwalk' } }
+    const moonwalking = { state: 'walking', own: { phase: 'moonwalk' }, animations: { body: { clip: 'moonwalk' } } }
     assert.deepEqual([dancer.turnedRound(moonwalking), dancer.turnedRound({ ...moonwalking, team: 'plants' }), dancer.turnedRound({ ...moonwalking, state: 'eating' }),
         plain.turnedRound(moonwalking), plain.turnedRound({ team: 'plants' })], [true, false, false, false, true], 'it moonwalks in the other way round from its side, not as it eats')
+    assert.equal(dancer.turnedRound({ ...moonwalking, animations: { body: { clip: 'walk' } } }), false,
+        'having stopped eating in its moonwalk, it walks on facing the way it goes')
     assert.deepEqual([dancer.rise({ own: { phase: 'rise' } }), dancer.rise({ own: { phase: 'walk' } }), plain.rise({ own: { phase: 'rise' } })], [rise, graves.zombie, graves.zombie])
     assert.throws(() => dancer.turnedRound({ typeId: 'pvz:dancer', own: { phase: 'tango' } }), /pvz:dancer\.own\.phase/, 'its view reads its own as its kind has it')
     const danced = (from: string, to: string, won = false, state = 'walking') => {

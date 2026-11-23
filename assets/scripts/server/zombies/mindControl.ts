@@ -22,10 +22,7 @@ export function mindControl(world: World, definitions: GameplayDefinitions, eate
     turned.mindControlled = true
     if (team === (zombie ? 'zombies' : 'plants')) delete turned.team
     else turned.team = team
-    if (zombie) {
-        zombie.biteTicks = 0
-        zombie.changedSides(world)
-    }
+    if (zombie) zombie.changedSides(world)
     emitServerEvent(world.resources.get(EventQueueResource), 'mindControlled', { entityId: eater, plantId: plantEntity, typeId: turned.typeId, team })
     if (zombie) tryDropLevelAward(world, definitions, remover, eater)
 }

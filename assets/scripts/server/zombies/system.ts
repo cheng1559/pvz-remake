@@ -1,8 +1,8 @@
-import { playZombie, stepZombie, walkZombie, zombieBody } from './animation'
+import { moveZombie, playZombie, stepZombie, walkZombie, zombieBody } from './animation'
 import { passedMark } from '@/shared/content/animation'
 import { squashed } from '@/shared/content/zombieAnimation'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import type { GameSystem, Position, SystemContext, World } from '@/server/state/World'
+import type { GameSystem, SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { zombiePartDropped } from './parts'
@@ -14,7 +14,7 @@ import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection,
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl } from './mindControl'
 import { meltIce } from '../combat/ice'
-import { plantInPlay, plantsInPlay } from '../level/lawn'
+import { plantsInPlay } from '../level/lawn'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /**
@@ -63,6 +63,8 @@ export class ZombieSystem implements GameSystem {
                 commands.destroyEntity(entity)
                 continue
             }
+            // Zombie::Update counts its age first, whatever it does then.
+            zombie.age++
             zombie.count()
             const definition = definitions.zombies[zombie.typeId], animation = definition.animation
             const random = world.resources.get(RandomResource)
@@ -130,60 +132,67 @@ export class ZombieSystem implements GameSystem {
         const level = world.resources.get(LevelStateResource), random = world.resources.get(RandomResource)
         const team = zombieTeam(zombie)
         const hostilePlants = (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
+        // Zombie::mX: where it stood as the tick began, in whole pixels, which its attack reaches from all the tick.
+        const x = Math.trunc(position.x)
 
         // Zombie::UpdateActions: what its kind does of its own, which may take the tick (a pole vaulter's vault).
-        if (!zombie.act(context, (attack, rollingAttack) => findPlantTarget(world, hostilePlants, position, attack, rollingAttack))) {
-            // Zombie::UpdateEating bites an enemy zombie first, then a plant (CheckIfPreyCaught, if its kind eats now).
+        if (!zombie.act(context, (attack, rollingAttack) => findPlantTarget(world, hostilePlants, x, attack, rollingAttack))) {
+            // Zombie::CheckIfPreyCaught: on every `cadenceTicks`-th tick of its age, twice as far apart while it is chilled,
+            // it looks for an enemy zombie, then a plant, to bite; between, it goes on as it was.
             const attack = zombieFacingRect(zombie.attackRect(), team)
-            const eats = zombie.eats()
-            const prey = eats && this.bothSides ? findZombieTarget(world, definitions, zombie, attack) : undefined
-            let target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack)?.plant.id : undefined
+            const cadence = definition.bite.cadenceTicks * (zombie.chilledTicks > 0 ? CHILLED_BITE_CADENCE_FACTOR : 1)
+            const looks = zombie.age % cadence === 0 && zombie.eats()
+            const prey = looks && this.bothSides ? findZombieTarget(world, definitions, zombie, x, attack) : undefined
+            let target = looks && prey === undefined ? findPlantTarget(world, hostilePlants, x, attack)?.plant : undefined
             // Zombie::EatPlant: a plant its kind does not bite (it ends a leader's moonwalk).
             if (target !== undefined && zombie.passesPlant()) target = undefined
-            if (target === undefined && prey === undefined) {
-                if (zombie.state !== 'walking') {
-                    // Zombie::StopEating: StartWalkAnim picks its speed and walk again, so a mind-controlled one walks at a zombie's own.
+            const caught = prey !== undefined || target !== undefined
+            if (zombie.state === 'eating' ? looks && !caught : !caught) {
+                if (zombie.state === 'eating') {
+                    // Zombie::StopEating, having stood this tick: StartWalkAnim picks its speed and walk again, so a
+                    // mind-controlled one walks at a zombie's own.
                     zombie.state = 'walking'
                     zombie.stopEating(random)
-                }
-                zombie.biteTicks = 0
+                    stepZombie(zombie, animation, random)
                 // Zombie::ZombieNotWalking: it walks unless its kind stands it still (a dancer off its walking steps).
-                if (zombie.walks(world)) walkZombie(zombie, definition, random, teamDirection(team))
+                } else if (zombie.walks(world)) walkZombie(zombie, definition, random, teamDirection(team))
                 else stepZombie(zombie, animation, random)
                 if (!zombie.hasHead) updateHeadlessZombie(world, definitions, zombie)
             } else {
+                const events = world.resources.get(EventQueueResource)
                 if (zombie.state !== 'eating') {
+                    // Zombie::StartEating, having walked this tick before it looked (UpdateZombiePosition).
+                    if (zombie.walks(world)) moveZombie(zombie, definition, teamDirection(team))
                     zombie.state = 'eating'
                     playZombie(zombie, animation, ZOMBIE_CLIPS.eat, random)
+                }
+                // Zombie::EatZombie bites through the shield and without a flash. EatPlant does not hurt a plant that is
+                // inedible now, nor one that mind-controls what eats it (an awake hypno-shroom).
+                if (prey !== undefined) {
+                    const victim = world.zombies.get(prey)!
+                    damageZombie(world, definitions, prey, definition.bite.damage, { flash: false, bypassShield: true }, commands)
+                    if (victim.health <= 0) emitServerEvent(events, 'zombieAteZombie', { zombieId: entity, targetId: prey })
+                } else if (target !== undefined && !target.inedible(world) && !target.mindControls(world)) {
+                    damagePlant(world, definitions, target.id, definition.bite.damage, commands, undefined, entity)
                 }
                 const body = zombieBody(zombie), eat = animation.clips[ZOMBIE_CLIPS.eat], previous = body.time
                 stepZombie(zombie, animation, random)
                 if (!zombie.hasHead) {
                     updateHeadlessZombie(world, definitions, zombie)
                 } else {
-                    // Zombie::EatZombie bites an enemy zombie as it bites a plant, but through the shield and without
-                    // a flash. The client flashes a chewed plant.
-                    const events = world.resources.get(EventQueueResource)
-                    const chewed = eat.marks!.some(mark => passedMark(eat, previous, body.time, mark))
-                    const cadence = definition.bite.cadenceTicks * (zombie.chilledTicks > 0 ? CHILLED_BITE_CADENCE_FACTOR : 1)
-                    const bites = ++zombie.biteTicks >= cadence
-                    if (bites) zombie.biteTicks = 0
-                    if (prey !== undefined) {
-                        if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey })
-                        if (bites) {
-                            const victim = world.zombies.get(prey)!
-                            damageZombie(world, definitions, prey, definition.bite.damage, { flash: false, bypassShield: true }, commands)
-                            if (victim.health <= 0) emitServerEvent(events, 'zombieAteZombie', { zombieId: entity, targetId: prey })
-                        }
-                    } else if (target !== undefined) {
-                        const plant = plantInPlay(world, target)!
-                        // Zombie::AnimateChewSound: an awake hypno-shroom turns the zombie as it chews, in place of the chew.
-                        if (chewed && plant.mindControls(world)) {
-                            mindControl(world, definitions, entity, target, commands)
+                    // Zombie::Animate: at its eat's chews, AnimateChewSound and AnimateChewEffect look anew for the plant
+                    // it chews, which the client flashes.
+                    if (eat.marks!.some(mark => passedMark(eat, previous, body.time, mark))) {
+                        const plant = findPlantTarget(world, hostilePlants, x, attack)?.plant
+                        // An awake hypno-shroom turns the zombie as it chews, in place of the chew.
+                        if (plant?.mindControls(world)) {
+                            mindControl(world, definitions, entity, plant.id, commands)
                             return
                         }
-                        if (chewed) emitServerEvent(events, 'zombieChewedPlant', { zombieId: entity, plantId: target })
-                        if (bites && !plant.inedible(world)) damagePlant(world, definitions, target, definition.bite.damage, commands, undefined, entity)
+                        const chewing = plant === undefined && this.bothSides ? findZombieTarget(world, definitions, zombie, x, attack) : undefined
+                        if (chewing !== undefined) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: chewing })
+                        // With neither, it chews at nothing, its prey gone before it looks again: the chew's sound alone.
+                        else emitServerEvent(events, 'zombieChewedPlant', plant ? { zombieId: entity, plantId: plant.id } : { zombieId: entity })
                     }
                 }
             }
@@ -209,48 +218,52 @@ export class ZombieSystem implements GameSystem {
 
 /**
  * Zombie::FindZombieTarget: the first enemy zombie on the row, standing, whose body the attack rect overlaps by 20, or
- * at all while it eats.
+ * at all while it eats. `x` is where the zombie stood as its tick began and each other is where it stands, in whole
+ * pixels (Zombie::mX).
  */
 function findZombieTarget(
     world: World,
     definitions: GameplayDefinitions,
     zombie: Zombie,
+    x: number,
     attack: { x: number, width: number },
 ): number | undefined {
     const { id: self, position } = zombie, team = zombieTeam(zombie)
-    const left = position.x + attack.x, right = left + attack.width
+    const left = x + attack.x, right = left + attack.width
     for (const other of world.zombies) {
         const { id: entity, position: at } = other
         if (entity === self) continue
         const otherTeam = zombieTeam(other)
         if (at.row !== position.row || !isHostile(team, otherTeam) || other.health <= 0 || !world.hasEntity(entity) || isDeadOrDying(other)) continue
-        const body = zombieFacingRect(definitions.zombies[other.typeId].body, otherTeam)
-        const overlap = Math.min(right, at.x + body.x + body.width) - Math.max(left, at.x + body.x)
+        const body = zombieFacingRect(definitions.zombies[other.typeId].body, otherTeam), otherX = Math.trunc(at.x)
+        const overlap = Math.min(right, otherX + body.x + body.width) - Math.max(left, otherX + body.x)
         if (overlap >= 20 || overlap >= 0 && other.state === 'eating') return entity
     }
     return undefined
 }
 
-/** The plant `attack` reaches, a rolling nut by `rollingAttack` (none without it). */
+/**
+ * Zombie::FindPlantTarget: the first of the row's plants, in the order they were put down, that `attack` overlaps by 20
+ * from `x`, where the zombie stood as its tick began in whole pixels (Zombie::mX); a rolling nut by `rollingAttack`, and
+ * none without it.
+ */
 function findPlantTarget(
     world: World,
     /** The plants on the zombie's row. */
     plants: readonly PlantTarget[],
-    zombiePosition: Position,
+    x: number,
     attack: { x: number, width: number },
     rollingAttack?: { x: number, width: number },
 ): PlantTarget | undefined {
-    let target: PlantTarget | undefined
-    // Runs for every zombie on every tick, so the span overlap test comes before entity lookups.
+    // A zombie looks often, so the span overlap test comes before entity lookups.
     for (let i = 0; i < plants.length; i++) {
-        const candidate = plants[i], { plant } = candidate, { id: entity, position } = plant
+        const candidate = plants[i], { plant } = candidate
         const reach = candidate.rolling ? rollingAttack : attack
         if (!reach) continue
-        const left = zombiePosition.x + reach.x
+        const left = x + reach.x
         if (Math.min(left + reach.width, candidate.right) - Math.max(left, candidate.left) < 20) continue
         // An earlier zombie may have finished this plant during the same run.
-        if (plant.health <= 0 || !world.hasEntity(entity)) continue
-        if (!target || position.x < target.plant.position.x || (position.x === target.plant.position.x && entity < target.plant.id)) target = candidate
+        if (plant.health > 0 && world.hasEntity(plant.id)) return candidate
     }
-    return target
+    return undefined
 }

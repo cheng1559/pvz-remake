@@ -467,7 +467,9 @@ export interface ZombieDefinition {
      * line up with the others: Zombie::UpdateReanim draws every zombie 90 further, flipped, which turns the plain
      * zombie about its body but not one whose body stands elsewhere in its frame. The pole vaulter's stands 6 left
      * of its frame (GetDrawPos) and 14.29 further right in it (its packet x, -8 against -3 at 0.35), so it takes
-     * 6 + 14.29. Zombies that face right in the original (mind-controlled, a digger walking back) keep its place.
+     * 6 + 14.29. The dancers turn round 6 further left (their presentation's turnedOffsetX), which they take back: the
+     * Dancing Zombie's body stands 2 left in its frame, so -2 + 6, the Backup Dancer's 5.71 right, so 5.71 + 6. Zombies
+     * that face right in the original (mind-controlled, a digger walking back) keep its place.
      */
     facingRightOffsetX?: number
     /**
@@ -539,8 +541,9 @@ export interface ZombieDefinition {
         evades?: string[]
     }
     /**
-     * Zombie::mScaleZombie: the size its body is drawn at (the dancers' 0.8), 1 when omitted. Its walk takes it over
-     * its ground at this size, its clip going the faster to keep its speed (UpdateZombieWalking, UpdateAnimSpeed).
+     * Zombie::mScaleZombie: the size its body is drawn at, 1 when omitted. Its walk takes it over its ground at this
+     * size, its clip going the faster to keep its speed (UpdateZombieWalking, UpdateAnimSpeed). The original's 0.8 for
+     * the dancers is in the base's converted art and Reanims instead (tools/pvz/oversized.py).
      */
     scale?: number
     /** It dances to the lawn's beat with a troupe (the original's dancers; the `dancer` kind, server/zombies/Dancer.ts). */

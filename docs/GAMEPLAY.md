@@ -511,7 +511,13 @@ From `mods/pvz-base/gameplay/definitions/zombies.json`. Health is the body's; ar
 | Dancing Zombie | 500 | — | 0.45 | 5 | 1000 | 5 | −130 | 350 |
 | Backup Dancer | 270 | — | 0.45 | 1 | 0 | called up only | −130 | 100 |
 
-Every zombie's bite deals 4 damage every 4 ticks (`bite`).
+A zombie looks for something to eat on every 4th tick of its age, every 8th while chilled (`bite.cadenceTicks`, `Zombie::CheckIfPreyCaught`):
+
+- It looks only with its head on. A zombie without one goes on eating or walking as it was.
+- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant put down that it overlaps by 20.
+- Finding one, it starts eating in that tick and bites it at once, for 4 (`bite.damage`). An awake Hypno-shroom is bitten without harm.
+- Finding nothing while it eats, it stops and walks on from the next tick. Between the ticks it looks on, it goes on as it was.
+- At each chew of its eat clip it looks again for the plant it chews, which flashes (`Zombie::AnimateChewSound`).
 
 ### Armor
 
@@ -524,7 +530,8 @@ Every zombie's bite deals 4 damage every 4 ticks (`bite`).
 
 - The gameplay `animation` gives each clip's frames, the walk's ground track and the frames that mark bites and the fall; `from` takes another zombie's clips. `vault` describes the Pole Vaulting Zombie's run, jump and landing.
 - A projectile's `chillTicks` halves a zombie's animation, walk and bites, as the original's `ApplyAnimRate` does.
-- Burning blasts (`burn: true`: the Cherry Bomb, the Explode-o-nut and its bowling version, the Doom-shroom) char a zombie whose body has less health than the blast into `pvz:zombie_charred`; a tougher one only takes the damage. A headless zombie turns black and stands for 300 ticks instead.
+- Burning blasts (`burn: true`: the Cherry Bomb, the Explode-o-nut and its bowling version, the Doom-shroom) char a zombie whose body has less health than the blast into `pvz:zombie_charred`; a tougher one only takes the damage. A headless zombie turns black and stands for 300 ticks instead, without its shadow, as charred remains have none; the original's `Zombie::HasShadow` keeps it (see the README's [Bug Fixes](../README.md#bug-fixes)).
+- A zombie a lawn mower runs over is drawn into it by `pvz:lawnmowered_zombie`'s `locator` track, at its size, and its shadow stays where it stood (`Zombie::HasShadow`). Its body sets off from where it was drawn. The original's `Zombie::UpdateReanim` loses the body's own offset as it is mowed, so its zombie first jumps 14 px left, a dancer about 20 (see the README's [Bug Fixes](../README.md#bug-fixes)).
 - New combat animations are registered in the `exports` of `tools/pvz/anim-defs.json`. `npm run build:content -- --pak /path/to/main.pak` converts them into `mods/pvz-base/assets/` and repacks the built-in ZIP, leaving the authored gameplay and presentation tables as they are.
 
 ### Walking on after eating
@@ -560,7 +567,7 @@ This is why the original's `mVelX = 0.17` for a mind-controlled zombie never sho
 
 The dancers are the zombies with a `dance`, of the `dancer` kind (`Dancer`, `server/zombies/Dancer.ts`). The Dancing Zombie (`pvz:dancer`) leads (`dance.lead`); the Backup Dancers (`pvz:backup_dancer`) it calls up form its troupe.
 
-**Size.** Both are drawn at their `scale`, 0.8 (`Zombie::mScaleZombie`), about the point (30, 120) of their Reanim. Their walk covers its ground track at that size, so its clip plays faster for the same speed. The Dancing Zombie is drawn above the other zombies of its row (its presentation's `renderOffset` 4), so its head shows over its Backup Dancers'.
+**Size.** Their art is a quarter larger than the other zombies', and the original draws both at 0.8 (`Zombie::mScaleZombie`) about the point (30, 120) of their Reanim. The base has that 0.8 in its converted art instead (`tools/pvz/oversized.py`): their images are shrunk to 0.8, and their Reanims' frames, ground tracks with them, are moved and scaled to match, so they are drawn at 1 where the original draws them. Turned round, they are drawn 6 px further left than other zombies (their presentation's `turnedOffsetX`), as the original's 0.8 puts them. Their shadows are as large as the other zombies', where the original puts them, and a lawn mower draws them in as it does other zombies, up to 6 px from the original's path at 0.8. The Dancing Zombie is drawn above the other zombies of its row (its presentation's `renderOffset` 4), so its head shows over its Backup Dancers'.
 
 **Entrance.**
 
@@ -569,6 +576,7 @@ The dancers are the zombies with a `dance`, of the `dancer` kind (`Dancer`, `ser
   - a chill does not slow the moonwalk; the leader is only tinted (`Dancer.chillSlows`);
   - a leader frozen in its moonwalk keeps the rate of 0 `HitIceTrap` gave it, and once thawed stands still until its moonwalk time is through (`RemoveIceTrap`'s `UpdateAnimSpeed`; `Dancer.count`); the moonwalk's time does not run while it is frozen.
 - A plant in its way ends the moonwalk without being bitten (`Zombie::EatPlant`).
+- A leader that stops eating during its moonwalk (an enemy zombie in its way) walks on its walk clip until its moonwalk time is through, facing the way it goes. The original draws it turned round all that while, and for one frame even when that time is already up, since it stops eating after its dance has been updated (`Zombie::UpdatePlaying`; see the README's [Bug Fixes](../README.md#bug-fixes)).
 - It then snaps its fingers (`point`), its speed picked as it does, and as the snap ends calls up its `backup` into each place of its `troupe`: a row above and a row below, and 100 px behind and ahead in its own row (turned round on the plants' side). No dancer is called up into a row zombies do not walk.
 - Each Backup Dancer comes up out of the ground over 150 ticks, standing still and untouchable as a grave's zombie is (`riseTicks`), with `PARTICLE_DANCER_RISE` and the rumble (`dancerCalledUp`, the backup's `dance.rise` presentation).
 - The leader holds the pose for 200 ticks.
@@ -612,15 +620,15 @@ The dancers are the zombies with a `dance`, of the `dancer` kind (`Dancer`, `ser
 - **Differs from the original:** a dancer that reaches the house walks in on its walk, whatever phase it was in (`Dancer.intoHouse`). One called up past the edge may reach it standing with its arm up, where the original's would stand at the door. Its body changes to the walk at once, as every winner's does, a Pole Vaulting Zombie that arrives holding its pole too (`Zombie::WalkIntoHouse`'s `StartWalkAnim(0)`); the original's dancer keeps its clip.
 - A blend a winner was in when the zombies won (one that had just stopped eating) goes on by the game over's ticks while the lawn stands still (`ZombieView.syncGameOverWalk`, `ReanimPlayer.advanceBlend`). A Pole Vaulting Zombie's landing changes at once too.
 
-**Drops.** A dancer's head falls just under it (`drops.head.behind`), as its own image, and what falls off it is at its size. The Backup Dancer's dropped head is drawn 1.3125 times larger (`drops.head.scale`): `Zombie::DropHead` puts its effect at 1.05 instead of the zombie's 0.8 (in 1073 and 1096), so it falls a little larger than the body's head, of the same picture.
+**Drops.** A dancer's head falls just under it (`drops.head.behind`), as its own image, and what falls off it is at its size. The Backup Dancer's head falls at the size it was on its body, where the original's `Zombie::DropHead` puts its effect at 1.05 instead of the zombie's 0.8 (in 1073 and 1096), so that it falls a little larger than the body's head, of the same picture (see the README's [Bug Fixes](../README.md#bug-fixes)).
 
 **Pictures in packets and the almanac.**
 
 - The dancers' Reanims are made at 24 fps (their Reanims' own `fps`).
 - Their cached picture, used for a packet and the almanac's small window, is the Reanim's first frame (`ReanimatorCache::MakeCachedZombieFrame` asks for `anim_idle`, which their Reanim lacks): a moonwalk frame for the Dancing Zombie and a walk frame for the Backup Dancer (`packet.clip`, `portrait.clip`).
 - In a packet and in hand they are drawn at the Reanim's own size, since the cache draws no zombie and so no `mScaleZombie` (`ZombieDraw.ownSize`); in the almanac's window, at the zombie's.
-- The Dancing Zombie's packet is the original's 0.375 at (−19, −40) combined with `Plant::DrawSeedType`'s 0.8 and (20, 42): 0.3 at (1, 2). The Backup Dancer's is 5 px further left. In hand both are drawn the same way (the presentation's `held`).
-- **Differs from the original:** in their small almanac windows the dancers are drawn at their own 0.8 (about (30, 120), as on the lawn), where the original draws its cached frame of them unscaled, the Dancing Zombie 15 px and the Backup Dancer 20 px lower and 4 px left. They stand where v0.1.1's cached pictures put them (0.8 about the cache's middle, 16 px lower in it, the Backup Dancer a further (−8, 5)), a place with no counterpart in the original: `portrait` (24, 14.9) and (16, 19.9).
+- The original's Dancing Zombie packet is its 0.375 at (−19, −40) combined with `Plant::DrawSeedType`'s 0.8 and (20, 42). With that 0.8 in the base's art, the packet is 0.375 at (−4.25, −10), and in hand it is (6, 10) further off (the presentation's `held`), drawn as the original draws it. The original has no Backup Dancer seed: its packet and the zombie in hand are drawn as the other zombies' are, its packet at 0.35 at (−5, −8), its feet and middle where theirs are.
+- **Differs from the original:** in their small almanac windows the dancers are drawn at their lawn size, where the original draws its cached frame of them unscaled, a quarter larger, the Dancing Zombie 15 px and the Backup Dancer 20 px lower and 4 px left. They stand where v0.1.1's cached pictures put them (0.8 about the cache's middle, 16 px lower in it, the Backup Dancer a further (−8, 5)), a place with no counterpart in the original: `portrait` (24, 14.9) and (16, 19.9).
 
 ## Coins
 

@@ -197,15 +197,15 @@
   },
   "pvz:dancer": {
     "kind": "dancer",
+    "facingRightOffsetX": 4,
     "wave": {"points": 5, "weight": 1000, "firstWave": 5},
     "maxHealth": 500,
     "boardEdgeX": -130,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
     "speedPerTick": {"min": 0.45, "max": 0.45},
     "body": {"x": 36, "y": 0, "width": 42, "height": 115},
-    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "attack": {"x": 50, "y": 0, "width": 20, "height": 115},
     "bite": {"damage": 4, "cadenceTicks": 4},
-    "scale": 0.8,
     "dance": {"lead": {
       "moonwalkTicks": {"min": 300, "max": 311},
       "backup": "pvz:backup_dancer",
@@ -219,12 +219,12 @@
       "clips": {
         "idle": {"frames": 22, "fps": 12},
         "moonwalk": {"frames": 27, "fps": 24, "ground": [
-          9.8, 9.8, 9.8, 13.3, 16.700001, 20.1, 23.6, 27.0, 30.4, 33.900002, 37.299999, 40.799999, 44.200001, 47.599998,
-          51.099998, 51.099998, 51.099998, 53.799999, 56.599998, 59.299999, 62.099998, 64.800003, 67.599998, 70.400002, 73.099998,
-          75.900002, 78.599998
+          1.84, 1.84, 1.84, 4.64, 7.360001, 10.08, 12.88, 15.6, 18.32, 21.120002, 23.839999, 26.639999, 29.360001, 32.079998,
+          34.879998, 34.879998, 34.879998, 37.039999, 39.279998, 41.439999, 43.679998, 45.840002, 48.079998, 50.320002, 52.479998,
+          54.720002, 56.879998
         ]},
         "point": {"frames": 9, "fps": 24, "hold": true},
-        "walk": {"frames": 21, "ground": [-9.8, -7.3, -4.8, -2.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.3, 2.5, 3.8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]},
+        "walk": {"frames": 21, "ground": [-1.84, 0.16, 2.16, 4.16, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 7.04, 8.0, 9.04, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]},
         "raise": {"frames": 22, "fps": 18},
         "eat": {"frames": 31, "fps": 36, "marks": [0.14, 0.68]},
         "death": {"frames": 44, "fps": [24, 30], "marks": [0.83], "hold": true}
@@ -236,20 +236,20 @@
   },
   "pvz:backup_dancer": {
     "kind": "dancer",
+    "facingRightOffsetX": 11.71,
     "wave": {"points": 1, "weight": 0, "firstWave": 1},
     "maxHealth": 270,
     "boardEdgeX": -130,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
     "speedPerTick": {"min": 0.45, "max": 0.45},
     "body": {"x": 36, "y": 0, "width": 42, "height": 115},
-    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "attack": {"x": 50, "y": 0, "width": 20, "height": 115},
     "bite": {"damage": 4, "cadenceTicks": 4},
-    "scale": 0.8,
     "dance": {},
     "animation": {
       "clips": {
         "idle": {"frames": 22, "fps": 12},
-        "walk": {"frames": 21, "ground": [-9.8, -7.3, -4.8, -2.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.3, 2.5, 3.8, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]},
+        "walk": {"frames": 21, "ground": [-1.84, 0.16, 2.16, 4.16, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 6.0, 7.04, 8.0, 9.04, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]},
         "raise": {"frames": 22, "fps": 18},
         "eat": {"frames": 31, "fps": 36, "marks": [0.14, 0.68]},
         "death": {"frames": 44, "fps": [24, 30], "marks": [0.83], "hold": true}

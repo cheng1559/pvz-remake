@@ -367,7 +367,7 @@ A plant's `mindControl: true` (the Hypno-shroom) brings over to its side a hosti
 
 #### Zombie size
 
-A zombie's `scale` is its drawn size (the dancers' 0.8, scaled about the Reanim's (30, 120)). It walks the ground track at that size, its animation faster to match.
+A zombie's `scale` is its drawn size, scaled about the Reanim's (30, 120). It walks the ground track at that size, its animation faster to match. Every base zombie is at 1: the original's 0.8 for the dancers, whose art is a quarter larger than the others', is in the base's converted images and Reanims instead (`tools/pvz/oversized.py`), so images that replace theirs are at the others' size too.
 
 #### Dancing
 
@@ -391,10 +391,11 @@ The bowling nut is of the plant kind `bowlingnut`. The values of its `bowling` c
 
 #### Zombie presentation
 
-- `shadow` can have a `scale`, scaled about the shadow's center (the dancers' 0.8).
-- `held: { x, y, scale }` scales the cached picture held in hand by `scale`, then moves it by (`x`, `y`) (the original's `Plant::DrawSeedType`; the Dancing Zombie's 0.8 and (20, 42)).
+- `shadow` can have a `scale`, scaled about the shadow's center.
+- `turnedOffsetX` draws its body that much further right when it is turned round (facing right), at the zombie's `scale`. The original turns every zombie 90 further right; the dancers' −6 keeps them where the original's 0.8 puts them.
+- `held: { x, y, scale? }` scales the cached picture held in hand by `scale` (1 by default), then moves it by (`x`, `y`) (the original's `Plant::DrawSeedType`; the Dancing Zombie's (6, 10)).
 - `portrait` can have a `clip`, whose first frame the almanac's small window draws (`idle` by default, drawn at the zombie's `scale`). The seed packet's `packet.clip` and the held picture are drawn at the Reanim's own size.
-- A part in `drops` can have `behind: true`, to be drawn one layer behind the zombie when it falls (the Dancing Zombie's head), and a `scale`, to enlarge it beyond the effect's and the zombie's size (the backup dancer's head, 1.3125: the original swaps its particle scale from the zombie's 0.8 to 1.05).
+- A part in `drops` can have `behind: true`, to be drawn one layer behind the zombie when it falls (the Dancing Zombie's head), and a `scale`, to enlarge it beyond the effect's and the zombie's size.
 - The presentation of a zombie with a `dance` can have `dance: { music?, spotlight?, rise? }`:
   - `music` is played when a leader first snaps its fingers (with no more than 15 zombies on the board), and stopped when no leading dancer is left on the board.
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` is the leader's spotlight after its first snap: `floor` is drawn under it and `beam` over it, its color cycling through `colors` by age.

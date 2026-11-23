@@ -14,7 +14,11 @@ export interface ZombieFields {
     state: ZombieState
     /** Walking speed; while vaulting, the horizontal jump speed. */
     speedPerTick: number
-    biteTicks: number
+    /**
+     * Zombie::mZombieAge: the ticks it has been on the lawn, counted as each starts, whatever it does then. It looks for
+     * prey on every `bite.cadenceTicks`-th (CheckIfPreyCaught); a leader's spotlight changes color by it.
+     */
+    age: number
     /** Also counts down a burned zombie. */
     deathTicksRemaining: number
     /** The clip it walks on, drawn as it comes (`walk` or `walk2`). */
@@ -57,7 +61,7 @@ export interface ZombieFields {
 
 /** Every zombie's fields by name, those a zombie may be without last: what else its save has is its kind's own. */
 export const ZOMBIE_FIELDS = [
-    'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining', 'walkClip', 'animations', 'hasHead',
+    'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'age', 'deathTicksRemaining', 'walkClip', 'animations', 'hasHead',
     'hasTongue', 'hasArm', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'riseTicks',
     'droppedLoot', 'frozenTicks', 'slowed', 'team', 'mindControlled',
 ] as const satisfies readonly (keyof ZombieFields)[]
@@ -65,7 +69,10 @@ export const ZOMBIE_FIELDS = [
 /** A zombie as its save has it: every zombie's fields, and its kind's own beside them (Zombie.restore). */
 export type SavedZombie = ZombieFields & { readonly [own: string]: unknown }
 
-/** The plant a zombie's attack reaches on its row, a rolling nut by `rollingAttack` (ZombieSystem's findPlantTarget). */
+/**
+ * The first plant a zombie's attack reaches on its row, a rolling nut by `rollingAttack`, from where it stood as its tick
+ * began (ZombieSystem's findPlantTarget).
+ */
 export type PlantFinder = (attack: { x: number, width: number }, rollingAttack?: { x: number, width: number }) =>
     { plant: Plant, rolling: boolean } | undefined
 
@@ -107,7 +114,7 @@ export class Zombie {
         this.health = this.maxHealth = definition.maxHealth
         this.state = 'walking'
         this.speedPerTick = 0
-        this.biteTicks = 0
+        this.age = 0
         this.deathTicksRemaining = 0
         this.walkClip = ZOMBIE_CLIPS.walk
         this.animations = {}
@@ -184,7 +191,7 @@ export class Zombie {
     /** As the zombies' tick starts, before any of them acts (a dancer's troupe's pace). */
     beforeTick(_world: World): void {}
 
-    /** Zombie::Update's counters, each tick it is on the lawn whatever it does (a dancer's age). */
+    /** Zombie::Update's counters of its kind, each tick it is on the lawn whatever it does, once its age is counted (a dancer's phase). */
     count(): void {}
 
     /** A tick it spends on its own before it would act, true if it did (the newspaper zombie's gasp). */
@@ -200,9 +207,12 @@ export class Zombie {
         return false
     }
 
-    /** Zombie::CheckIfPreyCaught: it looks for something to eat: with its head on, or going on eating without it. */
+    /**
+     * Zombie::CheckIfPreyCaught: it looks for something to eat, as its head is on: one without goes on as it was, eating
+     * or walking.
+     */
     eats(): boolean {
-        return this.hasHead || this.state === 'eating'
+        return this.hasHead
     }
 
     /** Zombie::GetZombieAttackRect: what it eats with, facing left. */
