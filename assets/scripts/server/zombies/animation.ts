@@ -66,14 +66,21 @@ export function startWalk(zombie: Zombie, definition: ZombieDefinition, clip: st
 }
 
 /**
- * Zombie::UpdateZombieWalking: a tick of a walk. It goes as far as the ground does between the frames its clip is at,
- * at the clip's rate (Reanimation::GetTrackVelocity on `_ground`), at its size. A walk goes at its speed's rate, a clip
- * of its own pace at that (a dancer's moonwalk). `direction`: -1 walks left (toward the house), 1 right (a
- * mind-controlled zombie).
+ * Zombie::UpdateZombieWalking: a tick of a walk, its step (moveZombie) and then its animation's tick.
  */
 export function walkZombie(zombie: Zombie, definition: ZombieDefinition, random: AnimationRandom, direction: -1 | 1 = -1): void {
-    const animation = definition.animation, state = zombieBody(zombie), clip = animation.clips[state.clip]
+    moveZombie(zombie, definition, direction)
+    stepZombie(zombie, definition.animation, random)
+}
+
+/**
+ * A walk's step, its animation not ticked. It goes as far as the ground does between the frames its clip is at, at the
+ * clip's rate (Reanimation::GetTrackVelocity on `_ground`), at its size. A walk goes at its speed's rate, a clip of its
+ * own pace at that (a dancer's moonwalk). `direction`: -1 walks left (toward the house), 1 right (a mind-controlled
+ * zombie).
+ */
+export function moveZombie(zombie: Zombie, definition: ZombieDefinition, direction: -1 | 1 = -1): void {
+    const state = zombieBody(zombie), clip = definition.animation.clips[state.clip]
     if (!clip.fps) state.rate = walkRate(zombie.speedPerTick, clip, definition.scale)
     zombie.position.x += direction * groundStep(clip, state, zombiePace(zombie)) * (definition.scale ?? 1)
-    stepZombie(zombie, animation, random)
 }

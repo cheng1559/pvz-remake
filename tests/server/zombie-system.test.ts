@@ -77,7 +77,8 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     assert.equal(eating.world.plants.get(plant)!.health, 296)
     for (let tick = 0; tick < 4; tick++) eating.run()
     assert.equal(eating.world.plants.get(plant)!.health, 292)
-    for (let tick = 0; tick < 8; tick++) eating.run()
+    // Its first chew, 16 ticks into its eat.
+    for (let tick = 0; tick < 11; tick++) eating.run()
     assert.equal(
         eating.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieChewedPlant'),
         true,
@@ -89,7 +90,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     eating.world.plants.get(plant)!.health = definitions.zombies['pvz:normal'].bite.damage
     const otherEater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (const zombie of [eater, otherEater]) {
-        eating.world.zombies.get(zombie)!.biteTicks = definitions.zombies['pvz:normal'].bite.cadenceTicks - 1
+        eating.world.zombies.get(zombie)!.age = definitions.zombies['pvz:normal'].bite.cadenceTicks - 1
     }
     eating.run()
     assert.equal([...eating.world.plants].length, 0)
@@ -102,16 +103,18 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     const ignoredPlant = headless.world.createEntity()
     headless.world.insert(headless.world.plants, newPlant(headless.world, 'pvz:peashooter', { id: ignoredPlant, position: { x: 40, y: 280, row: 2 } }))
     const headlessWalker = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
-    headless.run()
+    for (let tick = 0; tick < 4; tick++) headless.run()
     assert.equal(headless.world.zombies.get(headlessWalker)!.state, 'eating')
+    const bitten = headless.world.plants.get(ignoredPlant)!.health
     damageZombie(headless.world, definitions, headlessWalker, 200)
-    headless.run()
+    // Past the tick it would look again: without its head it goes on eating, and bites no more.
+    for (let tick = 0; tick < 4; tick++) headless.run()
     assert.equal(headless.world.zombies.get(headlessWalker)!.state, 'eating')
-    assert.equal(headless.world.plants.get(ignoredPlant)!.health, 300)
+    assert.equal(headless.world.plants.get(ignoredPlant)!.health, bitten)
 
     const neverStartedEating = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     damageZombie(headless.world, definitions, neverStartedEating, 200)
-    headless.run()
+    for (let tick = 0; tick < 4; tick++) headless.run()
     assert.equal(headless.world.zombies.get(neverStartedEating)!.state, 'walking')
 
     const dying = game()
@@ -167,21 +170,72 @@ test('zombie targets follow a plant’s position, its state and its removal', ()
     world.insert(world.plants, newPlant(world, 'pvz:peashooter', { id: plant, position: { x: 40, y: 280, row: 2 } }))
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 70, 280)
     const state = () => world.zombies.get(zombie)!.state
-    const resetPosition = () => { world.zombies.get(zombie)!.position.x = 70 }
-    run()
+    // Back where it was put, on the tick before one it looks for prey on (CheckIfPreyCaught).
+    const looksAgain = () => {
+        const looking = world.zombies.get(zombie)!
+        looking.position.x = 70
+        looking.age = definitions.zombies['pvz:normal'].bite.cadenceTicks - 1
+    }
+    looksAgain(); run()
     assert.equal(state(), 'eating')
     world.plants.get(plant)!.position = { x: 400, y: 280, row: 2 }
-    resetPosition(); run()
+    looksAgain(); run()
     assert.equal(state(), 'walking', 'a new position is seen')
     world.plants.get(plant)!.position.x = 40
-    resetPosition(); run()
+    looksAgain(); run()
     assert.equal(state(), 'eating', 'a moved position is seen')
     world.plants.get(plant)!.state = 'mowered'
-    resetPosition(); run()
+    looksAgain(); run()
     assert.equal(state(), 'walking', 'a plant out of play is no target')
     world.destroyEntity(plant)
-    resetPosition(); run()
+    looksAgain(); run()
     assert.equal(state(), 'walking')
+})
+
+test('a zombie looks for prey as CheckIfPreyCaught does: on every fourth tick of its age, every eighth chilled, from where it stood in whole pixels, at the first plant put down', () => {
+    const { attack, bite } = definitions.zombies['pvz:normal'], body = definitions.plants['pvz:peashooter'].body
+    // Coming from the right, its attack reaches a plant at `x` by 20 from here on.
+    const reach = (x: number) => x + body.x + body.width - attack.x - 20
+    const put = (lawn: ReturnType<typeof game>, x: number) => {
+        const entity = lawn.world.createEntity()
+        lawn.world.insert(lawn.world.plants, newPlant(lawn.world, 'pvz:peashooter', { id: entity, position: { x, y: 280, row: 2 } }))
+        return entity
+    }
+
+    const walking = game(), walked = put(walking, 200)
+    const walker = walking.world.zombies.get(spawnZombie(walking.world, definitions, 'pvz:normal', 2, reach(200), 280))!
+    for (let tick = 1; tick < bite.cadenceTicks; tick++) walking.run()
+    assert.equal(walker.state, 'walking', 'it walks on with the plant in reach until it looks')
+    walking.run()
+    assert.deepEqual([walker.state, walking.world.plants.get(walked)!.health], ['eating', 300 - bite.damage], 'it bites as it catches it')
+
+    // Zombie::mX: half a pixel short of reaching it reaches it, a whole one does not.
+    for (const [offset, state] of [[0.5, 'eating'], [1, 'walking']] as const) {
+        const near = game()
+        put(near, 200)
+        const zombie = near.world.zombies.get(spawnZombie(near.world, definitions, 'pvz:normal', 2, reach(200) + offset, 280))!
+        zombie.age = bite.cadenceTicks - 1
+        near.run()
+        assert.equal(zombie.state, state, `${offset} px short`)
+    }
+
+    const chilled = game()
+    put(chilled, 200)
+    const entity = spawnZombie(chilled.world, definitions, 'pvz:normal', 2, reach(200) - 5, 280), cold = chilled.world.zombies.get(entity)!
+    damageZombie(chilled.world, definitions, entity, 1, { chillTicks: 1000 })
+    cold.age = bite.cadenceTicks - 1
+    chilled.run()
+    assert.equal(cold.state, 'walking', 'chilled, it does not look on the fourth tick')
+    cold.age = 2 * bite.cadenceTicks - 1
+    chilled.run()
+    assert.equal(cold.state, 'eating', 'but on the eighth')
+
+    // Of two plants a wide attack reaches, the one put down first, though the other is nearer the house.
+    const wide = { ...definitions, zombies: { ...definitions.zombies, 'pvz:normal': { ...definitions.zombies['pvz:normal'], attack: { ...attack, x: -100, width: 300 } } } }
+    const both = game(wide), first = put(both, 280), second = put(both, 200)
+    both.world.zombies.get(spawnZombie(both.world, wide, 'pvz:normal', 2, 200, 280))!.age = bite.cadenceTicks - 1
+    both.run()
+    assert.deepEqual([first, second].map(plant => both.world.plants.get(plant)!.health), [300 - bite.damage, 300])
 })
 
 test('a chilled zombie body goes at half its rate and its flag at its own, which it lets go with its head', () => {
@@ -208,11 +262,12 @@ test('a zombie that stops eating sets off again as StartWalkAnim does: a new spe
     const zombies = Array.from({ length: 12 }, () => spawnZombie(eating.world, definitions, 'pvz:normal', 2, 330, 280))
     const flags = Array.from({ length: 4 }, () => spawnZombie(eating.world, definitions, 'pvz:flag', 2, 330, 280))
     const before = new Map([...zombies, ...flags].map(entity => [entity, { ...eating.world.zombies.get(entity)! }]))
-    // A few ticks of chewing, before sixteen of them finish the plant.
-    for (let tick = 0; tick < 3; tick++) eating.run()
+    // They catch the plant as they first look, on the fourth tick of their age, each biting it once.
+    for (let tick = 0; tick < 4; tick++) eating.run()
     assert.deepEqual([...zombies, ...flags].map(entity => eating.world.zombies.get(entity)!.state), Array(16).fill('eating'))
     eating.world.destroyEntity(plant)
-    eating.run()
+    // They stop as they look again, four ticks on.
+    for (let tick = 0; tick < 4; tick++) eating.run()
     const after = [...zombies, ...flags].map(entity => eating.world.zombies.get(entity)!)
     assert.deepEqual(after.map(zombie => zombie.state), Array(16).fill('walking'))
     const { min, max } = definitions.zombies['pvz:normal'].speedPerTick

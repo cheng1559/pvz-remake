@@ -69,7 +69,6 @@ export class Newspaper extends Zombie {
         this.gaspTicks = this.enrage.pauseTicks
         this.state = 'walking'
         playZombie(this, this.definition.animation, ZOMBIE_CLIPS.gasp, random)
-        this.biteTicks = 0
     }
 
     /** Its rage once its paper is gone: NewspaperView draws its enraged clips and head. */

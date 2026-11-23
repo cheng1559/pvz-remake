@@ -32,8 +32,6 @@ export interface Dancer {
     phase: DancePhase
     /** Zombie::mPhaseCounter: the ticks left of a leader's moonwalk or of its hold after calling up its troupe; 0 otherwise. */
     phaseTicks: number
-    /** Zombie::mZombieAge: the ticks it has been on the lawn, which a leader's spotlight changes color by. */
-    age: number
     /** A leader's troupe by place (DanceLead.troupe): the dancer there, or null (mFollowerZombieID). */
     troupe?: Array<EntityId | null>
     /** Zombie::mSummonCounter: missing some of its troupe, a leader calls them up again once this runs out. */
@@ -56,7 +54,6 @@ export class Dancer extends Zombie {
         super(typeId, definition, definitions)
         this.phase = 'walk'
         this.phaseTicks = 0
-        this.age = 0
     }
 
     /** Its lead (DanceLead): it moonwalks in and calls up its troupe; none for one called up into a troupe. */
@@ -65,10 +62,9 @@ export class Dancer extends Zombie {
     }
 
     protected restoreOwn(fields: Record<string, unknown>, name: string): void {
-        const { phase, phaseTicks, age, troupe, summonTicks, leader, ...rest } = fields
+        const { phase, phaseTicks, troupe, summonTicks, leader, ...rest } = fields
         this.phase = oneOf(phase, DANCE_PHASES, `${name}.phase`)
         this.phaseTicks = nonNegativeInteger(phaseTicks, `${name}.phaseTicks`)
-        this.age = nonNegativeInteger(age, `${name}.age`)
         if (troupe !== undefined) this.troupe = array(troupe, `${name}.troupe`).map((id, index) => id === null ? null : positiveInteger(id, `${name}.troupe[${index}]`))
         if (summonTicks !== undefined) this.summonTicks = positiveInteger(summonTicks, `${name}.summonTicks`)
         if (leader !== undefined) this.leader = positiveInteger(leader, `${name}.leader`)
@@ -103,12 +99,11 @@ export class Dancer extends Zombie {
     }
 
     /**
-     * Zombie::Update: its age, and the ticks of its phase counting down unless it is frozen (IsImmobilizied). Frozen as it
-     * moonwalks, its rate is stopped (HitIceTrap's ApplyAnimRate(0)) and RemoveIceTrap's UpdateAnimSpeed sets it none
-     * again: thawed, it stands in its moonwalk, its body still, until the moonwalk is through and it snaps its fingers.
+     * Zombie::Update: the ticks of its phase counting down unless it is frozen (IsImmobilizied). Frozen as it moonwalks,
+     * its rate is stopped (HitIceTrap's ApplyAnimRate(0)) and RemoveIceTrap's UpdateAnimSpeed sets it none again:
+     * thawed, it stands in its moonwalk, its body still, until the moonwalk is through and it snaps its fingers.
      */
     count(): void {
-        this.age++
         if (this.frozenTicks !== undefined && this.phase === 'moonwalk') zombieBody(this).rate = 0
         if (this.phaseTicks > 0 && this.frozenTicks === undefined) this.phaseTicks--
     }

@@ -91,7 +91,7 @@ export const SAVED_LISTS: readonly SavedList[] = [
             const fields: readonly string[] = ZOMBIE_FIELDS, all = record(value, name)
             const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
             const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))), [
-                'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
+                'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'age', 'deathTicksRemaining',
                 'walkClip', 'animations', 'hasHead', 'hasArm',
                 'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'riseTicks',
             ], name, ['droppedLoot', 'team', 'mindControlled', 'frozenTicks', 'slowed'])
@@ -105,7 +105,7 @@ export const SAVED_LISTS: readonly SavedList[] = [
                 maxHealth,
                 state: oneOf(source.state, ZOMBIE_STATES, `${name}.state`),
                 speedPerTick: finite(source.speedPerTick, `${name}.speedPerTick`),
-                biteTicks: nonNegativeInteger(source.biteTicks, `${name}.biteTicks`),
+                age: nonNegativeInteger(source.age, `${name}.age`),
                 deathTicksRemaining: nonNegativeInteger(source.deathTicksRemaining, `${name}.deathTicksRemaining`),
                 walkClip: nonEmptyString(source.walkClip, `${name}.walkClip`),
                 animations: parseLayers(source.animations, `${name}.animations`),

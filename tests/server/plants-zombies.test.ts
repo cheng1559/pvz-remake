@@ -209,11 +209,13 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     assert.equal(state().state, 'eating', 'after landing it eats the next plant')
     assert.equal(world.hasEntity(behind), true)
     const behindX = world.plants.get(behind)!.position.x
+    // Each run is one it looks for prey on (CheckIfPreyCaught).
+    const looksNext = () => { state().age = definitions.zombies['pvz:pole_vaulter'].bite.cadenceTicks - 1 }
     world.zombies.get(vaulter)!.position.x = behindX + 1
-    run()
+    looksNext(); run()
     assert.equal(state().state, 'walking', 'the narrow post-vault attack needs 20px overlap before eating')
     world.zombies.get(vaulter)!.position.x = behindX
-    run()
+    looksNext(); run()
     assert.equal(state().state, 'eating', 'the post-vault attack reaches the plant at x + 50')
 })
 

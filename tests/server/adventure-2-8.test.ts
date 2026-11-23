@@ -284,8 +284,9 @@ test('a dancer that stops eating walks on until the beat brings its next phase, 
     const id = zombiesOf(server, 'pvz:backup_dancer')[0].entityId, dancer = world(server).zombies.get(id) as Dancer
     ticks(server, 1)
     assert.equal(dancer.phase, 'raise')
-    // Zombie::StopEating, with nothing left to eat: StartWalkAnim plays anim_walk, and the phase stays.
+    // Zombie::StopEating, with nothing left to eat as it looks: StartWalkAnim plays anim_walk, and the phase stays.
     dancer.state = 'eating'
+    dancer.age = definitions.zombies['pvz:backup_dancer'].bite.cadenceTicks - 1
     ticks(server, 1)
     const x = dancer.position.x, walk = dancer.animations[ZOMBIE_BODY_LAYER]
     assert.deepEqual([dancer.state, dancer.phase, walk.clip, walk.rate], ['walking', 'raise', 'walk', 18],

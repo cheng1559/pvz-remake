@@ -203,7 +203,7 @@
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
     "speedPerTick": {"min": 0.45, "max": 0.45},
     "body": {"x": 36, "y": 0, "width": 42, "height": 115},
-    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "attack": {"x": 50, "y": 0, "width": 20, "height": 115},
     "bite": {"damage": 4, "cadenceTicks": 4},
     "scale": 0.8,
     "dance": {"lead": {
@@ -242,7 +242,7 @@
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
     "speedPerTick": {"min": 0.45, "max": 0.45},
     "body": {"x": 36, "y": 0, "width": 42, "height": 115},
-    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "attack": {"x": 50, "y": 0, "width": 20, "height": 115},
     "bite": {"damage": 4, "cadenceTicks": 4},
     "scale": 0.8,
     "dance": {},

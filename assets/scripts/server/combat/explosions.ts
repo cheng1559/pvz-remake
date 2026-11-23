@@ -74,7 +74,6 @@ function burnZombie(world: World, definitions: GameplayDefinitions, zombie: Zomb
         delete zombie.frozenTicks
         zombie.state = 'burned'
         zombie.deathTicksRemaining = BURNED_TICKS
-        zombie.biteTicks = 0
         emitServerEvent(events, 'zombieBurned', { entityId: entity })
         return
     }
