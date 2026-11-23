@@ -382,7 +382,7 @@
   },
   "pvz:backup_dancer": {
     "view": "dancer",
-    "packet": {"x": -5, "y": -8, "scale": 0.35, "clip": "walk"},
+    "packet": {"x": -6, "y": -7, "scale": 0.35, "clip": "walk"},
     "portrait": {"x": 16, "y": 19.9, "scale": 0.5, "clip": "walk"},
     "nameKey": "BACKUP_DANCER",
     "shadow": {"x": 19, "y": -92, "backwardsX": 7},

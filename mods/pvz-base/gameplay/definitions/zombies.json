@@ -236,7 +236,7 @@
   },
   "pvz:backup_dancer": {
     "kind": "dancer",
-    "facingRightOffsetX": 11.71,
+    "facingRightOffsetX": 14.57,
     "wave": {"points": 1, "weight": 0, "firstWave": 1},
     "maxHealth": 270,
     "boardEdgeX": -130,
