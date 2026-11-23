@@ -331,7 +331,7 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 - The client builds `maxSlots` packets up front, so a slot bought during the intro only shows one more.
 - `server/seeds/seedChooser.ts` supplies the grid, validates the choices and the confirmation, and saves their order and opening recharges.
 - A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when Let's Rock starts with fewer cards than slots: under `/cheatseed`, or with every card offered chosen once it is turned off; a short bank from an older save gets its empty slots back when loaded.
-- An empty slot draws nothing and cannot be picked; `/seed` fills or empties any slot.
+- An empty slot draws nothing and cannot be picked; `/seed` fills any slot or replaces its packet.
 - A seed's opening recharge (`initialCooldownTicks`) applies when the level starts: a 5000-tick seed starts at 3500 and a 3000-tick one at 2000, as in the original; a level with `openingRecharge: false` starts them ready.
 
 ### The chooser

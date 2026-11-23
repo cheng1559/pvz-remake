@@ -207,10 +207,11 @@ test('the conveyor counts planted and waiting grave busters before dealing anoth
     game.update(TICK_SECONDS)
     assert.equal(game.render().conveyorPackets!.length, 2, 'a new grave opens supply again')
     for (const cell of [first, second, { row: 0, column: 0 }]) assert.ok(game.debugCommand(`/griditem crater ${cell.row + 1} ${cell.column + 1}`).ok)
-    assert.ok(game.debugCommand('/seed 1 empty').ok)
-    assert.ok(game.debugCommand('/seed 1 empty').ok)
+    // The two waiting grave busters swapped for Peashooters: with no grave left, none is dealt in their place.
+    for (const line of ['/seed 1 peashooter', '/seed 2 peashooter']) assert.ok(game.debugCommand(line).ok, line)
     game.update(TICK_SECONDS)
-    assert.deepEqual(game.render().conveyorPackets, [], 'an empty lawn draws no grave buster')
+    assert.deepEqual(game.render().conveyorPackets!.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:peashooter'],
+        'an empty lawn draws no grave buster')
 })
 
 function worldFor(night: boolean) {

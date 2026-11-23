@@ -297,7 +297,6 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | Command | Effect |
 | --- | --- |
 | `/seed {slot} {seed} [team]` | Replaces the seed in a slot, ready at once; on conveyor-belt levels it replaces a packet on the belt |
-| `/seed {slot} empty` | Empties a slot |
 | `/sun {add\|set} {number}` | Adds or sets sun |
 | `/money {add\|set} {number}` | Adds or sets coins, also in the player profile |
 | `/item {item} [row col]` | Drops an item; `/item award` drops the level's award |

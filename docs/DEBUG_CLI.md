@@ -168,7 +168,6 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | Command | Effect |
 | --- | --- |
 | `/seed {slot} {seed_name} [team]` | Puts a seed in a seed slot, ready at once |
-| `/seed {slot} empty` | Empties a seed slot |
 | `/sun {add\|set} {number}` | Adds or sets sun, kept within 0–9990 |
 | `/money {add\|set} {number}` | Adds or sets coins, kept within 0–99999, in the player profile as well |
 | `/item {item_name} [row col]` | Drops an installed item as zombie loot |
@@ -178,7 +177,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 
 #### `/seed`
 
-- It replaces the packet in a seed slot, numbered from 1 on the left, with an installed seed, or fills the slot when it is empty. `/seed {slot} empty` empties it. A slot outside the bank reports the slots there are ("Use slot 1-6").
+- It replaces the packet in a seed slot, numbered from 1 on the left, with an installed seed, or fills the slot when it is empty. A slot outside the bank reports the slots there are ("Use slot 1-6").
 - The new packet is immediately ready and uses its own cost and recharge.
 - The seed may be a zombie seed, such as `/seed 1 normal`, which puts down a hostile zombie.
 - A `team` other than the seed's own makes the packet put down the other side's, drawn mirrored in the packet, in hand and in the placement preview:
@@ -190,7 +189,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 
   See [Teams and the Hypno-shroom](TEAMS.md).
 - Replacing a held packet clears the cursor. A seed may appear in several slots, each with its own recharge.
-- On a conveyor-belt level the slots are the belt's packets from the left. A seed changes that packet where it stands, and `empty` takes it off, the packets after it closing up as the belt moves; `team` works there too.
+- On a conveyor-belt level the slots are the belt's packets from the left. A seed changes that packet where it stands; `team` works there too.
 - The command becomes available when gameplay starts; during a repick, once the seed chooser has closed. Changes work while paused or at speed 0 and persist in the level save.
 
 #### `/sun` and `/money`
