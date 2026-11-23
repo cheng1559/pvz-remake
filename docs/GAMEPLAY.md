@@ -530,7 +530,8 @@ A zombie looks for something to eat on every 4th tick of its age, every 8th whil
 
 - The gameplay `animation` gives each clip's frames, the walk's ground track and the frames that mark bites and the fall; `from` takes another zombie's clips. `vault` describes the Pole Vaulting Zombie's run, jump and landing.
 - A projectile's `chillTicks` halves a zombie's animation, walk and bites, as the original's `ApplyAnimRate` does.
-- Burning blasts (`burn: true`: the Cherry Bomb, the Explode-o-nut and its bowling version, the Doom-shroom) char a zombie whose body has less health than the blast into `pvz:zombie_charred`; a tougher one only takes the damage. A headless zombie turns black and stands for 300 ticks instead.
+- Burning blasts (`burn: true`: the Cherry Bomb, the Explode-o-nut and its bowling version, the Doom-shroom) char a zombie whose body has less health than the blast into `pvz:zombie_charred`; a tougher one only takes the damage. A headless zombie turns black and stands for 300 ticks instead, without its shadow, as charred remains have none; the original's `Zombie::HasShadow` keeps it (see the README's [Bug Fixes](../README.md#bug-fixes)).
+- A zombie a lawn mower runs over is drawn into it by `pvz:lawnmowered_zombie`'s `locator` track, at its size, and its shadow stays where it stood (`Zombie::HasShadow`). Its body sets off from where it was drawn. The original's `Zombie::UpdateReanim` loses the body's own offset as it is mowed, so its zombie first jumps 14 px left, a dancer about 20 (see the README's [Bug Fixes](../README.md#bug-fixes)).
 - New combat animations are registered in the `exports` of `tools/pvz/anim-defs.json`. `npm run build:content -- --pak /path/to/main.pak` converts them into `mods/pvz-base/assets/` and repacks the built-in ZIP, leaving the authored gameplay and presentation tables as they are.
 
 ### Walking on after eating

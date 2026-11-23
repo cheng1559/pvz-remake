@@ -193,8 +193,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
         uiNode({ node: this.node, opacity: zombie.alpha })
         this.placeShadow()
-        // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
-        if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
+        // Zombie::HasShadow hides it while falling, vaulting or coming up. A mowed one keeps it where it stood as its
+        // body is drawn into the mower. A burned one (headless, standing black) has none, as charred remains have
+        // none; the original's HasShadow keeps it.
+        if (this.shadowNode) this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'burned' &&
             zombie.state !== 'airborne' && !zombie.riseTicks
         this.applyHitFlash(zombie)
         this.applyColor(zombie)

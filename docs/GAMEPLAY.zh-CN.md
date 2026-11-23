@@ -530,7 +530,8 @@
 
 - 玩法定义中的 `animation` 给出每段动画的帧数、行走的地面轨迹，以及标记啃咬和倒地的帧；`from` 可以引用另一种僵尸的动画。`vault` 描述撑杆僵尸的跑动、起跳和落地。
 - 子弹的 `chillTicks` 让僵尸的动画、行走和啃咬速度减半，与原版的 `ApplyAnimRate` 相同。
-- 灼烧型爆炸（`burn: true`：樱桃炸弹、爆炸坚果及其保龄球版本、末日菇）会把本体生命值低于爆炸伤害的僵尸烧成 `pvz:zombie_charred`；更耐打的僵尸只承受伤害。没有头的僵尸则变黑并站立 300 逻辑步。
+- 灼烧型爆炸（`burn: true`：樱桃炸弹、爆炸坚果及其保龄球版本、末日菇）会把本体生命值低于爆炸伤害的僵尸烧成 `pvz:zombie_charred`；更耐打的僵尸只承受伤害。没有头的僵尸则变黑并站立 300 逻辑步，与焦黑残骸一样没有影子；原版的 `Zombie::HasShadow` 会保留它的影子（见 README 的[问题修复](../README.zh-CN.md#问题修复)）。
+- 被小推车碾过的僵尸按其尺寸由 `pvz:lawnmowered_zombie` 的 `locator` 轨道卷入小推车，影子留在它原来站的位置（`Zombie::HasShadow`）。身体从它当时的绘制位置出发。原版的 `Zombie::UpdateReanim` 在碾压时丢掉了身体自身的偏移，僵尸会先向左跳一下：普通僵尸 14 像素，舞者类约 20 像素（见 README 的[问题修复](../README.zh-CN.md#问题修复)）。
 - 新的战斗动画在 `tools/pvz/anim-defs.json` 的 `exports` 中登记。`npm run build:content -- --pak /path/to/main.pak` 会把它们转换到 `mods/pvz-base/assets/` 并重新打包内置 ZIP，手写的玩法与表现表格保持不变。
 
 ### 吃完后继续行走
