@@ -327,7 +327,7 @@ Script fields that shape the level:
 Tools are the gameplay `tools` table, by ID. Each has the `kind` that says what it does: with `shovel`, `tools.use` digs up the cell's plant, which the client lights under the pointer.
 
 - A level's `tools` and a `tool` award must name one, and each needs its presentation `tools` look.
-- Tools come from awards: a tool one level awards is available from the next level on a first adventure, and on every level in replays. A level's own `tools` replace the awarded ones.
+- Tools come from awards: a tool award records the tool in the profile when the level is won, and from then on every level has it. A level's own `tools` replace the awarded ones.
 
 The shovel is a `UIButton` with the same touch flow as a packet: press to pick it up, drag to aim, release to use it, drag back onto its button to cancel. Tutorials allow it, and a pause ends the gesture.
 

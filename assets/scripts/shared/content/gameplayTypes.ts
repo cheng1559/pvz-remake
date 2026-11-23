@@ -772,14 +772,15 @@ export interface LevelDefinition {
      * Scary Potter and similar levels); planting still recharges them (SeedPacket::WasPlanted).
      */
     openingRecharge?: false
-    /** The tools the level offers instead of the ones earlier levels awarded (CutScene::ShowShovel). */
+    /** The tools the level offers instead of the ones the player has collected (CutScene::ShowShovel): Whack a Zombie's none. */
     tools?: string[]
     nextLevel?: string
     /** Its scripted flow (CutScene, the tutorials): a registered TutorialScript's ID. A level without one has none. */
     tutorial?: string
     /**
-     * `tool` also becomes usable in later levels (the shovel); `unlock` is only collected and shown (the almanac), and
-     * its award page button can open the page it unlocks before the next level (AwardScreen::StartButtonPressed).
+     * `tool` and `unlock` record what they give in the profile when the level is won: a tool every level with tools has
+     * from then on (the shovel), an unlock its main menu entry (the almanac), whose award page button can open the page
+     * it unlocks before the next level (AwardScreen::StartButtonPressed).
      */
     award: { kind: 'seed'; id: string }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }

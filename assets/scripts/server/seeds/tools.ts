@@ -1,4 +1,6 @@
-import { LevelStateResource, SeedBankResource, TutorialResource } from '../state/resources'
+import { LevelStateResource, SeedBankResource } from '../state/resources'
+import { defineResource } from '../state/World'
+import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planting } from './planting'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -8,11 +10,18 @@ import { clearCursor } from './cursor'
 import { canShovel } from '@/shared/content/planting'
 import { plantInPlay } from '../level/lawn'
 
+/**
+ * The tools the player has collected from level awards, the profile's, from the start packet (StartSessionPacket.ownedTools).
+ * The profile owns them, so a save does not keep them. Absent, every tool counts as collected (levelTools).
+ */
+export const OwnedToolsResource = defineResource<readonly string[]>('pvz:owned-tools')
+
 /** Cursor tools such as the shovel, each doing what its definition's `kind` does. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
     /** The tools this game has, whether usable now or not. */
     owned(session: Session): string[] {
-        return levelTools(session.levels, session.world.resources.get(LevelStateResource).definition, session.world.resources.get(TutorialResource).firstAdventure)
+        const world = session.world, owned = world.resources.has(OwnedToolsResource) ? world.resources.get(OwnedToolsResource) : undefined
+        return levelTools(session.levels, world.resources.get(LevelStateResource).definition, owned, getDebugRules(world).cheatSeeds)
     },
 
     available(session: Session, toolId: string): boolean {

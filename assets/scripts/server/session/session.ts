@@ -160,17 +160,20 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         result: 'playing',
         paused: false,
     })
+    // `/cheatseed` on as the level starts counts every seed-slot upgrade as bought, for this level only.
+    const { baseSlots, maxSlots } = definitions.seedBank
+    const packetUpgrades = packet.cheatSeeds ? maxSlots - baseSlots : packet.packetUpgrades ?? 0
     world.resources.set(EconomyStateResource, {
         sun: Math.min(definitions.economy.maxSun, level.startingSun),
         money: packet.initialMoney,
         pendingSunSpend: 0,
-        packetUpgrades: packet.packetUpgrades ?? 0,
+        packetUpgrades,
         ownedUpgrades: packet.packetUpgrades ?? 0,
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
     world.resources.set(BoardSeedResource, packet.randomSeed)
-    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packet.packetUpgrades)
+    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
         packets: 'seeds' in bank ? bank.seeds.map(({ seedId, team }) => {

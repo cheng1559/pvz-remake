@@ -141,6 +141,8 @@ export class MenuService {
                 profile.adventureLevel = Math.max(profile.adventureLevel, level.adventureIndex + 1)
                 // The award seed is the player's from now on (the seed packet the level dropped).
                 if (level.award.kind === 'seed' && !profile.seeds.includes(level.award.id)) profile.seeds.push(level.award.id)
+                // As is its tool (the 1-4 shovel), on every level with tools (levelTools).
+                if (level.award.kind === 'tool' && !profile.tools.includes(level.award.id)) profile.tools.push(level.award.id)
                 if (level.award.kind === 'unlock' && level.award.unlocks && !profile.unlocks.includes(level.award.unlocks)) profile.unlocks.push(level.award.unlocks)
                 // AwardScreen::AwardScreen lists every earned achievement not shown yet and marks them shown.
                 const unshown = profile.earnedAchievements.filter(id => !profile.shownAchievements.includes(id))
@@ -239,7 +241,7 @@ export class MenuService {
         return {
             coins: profile.coins, packetUpgrades: owned, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile),
             nextPacketUpgradeCost: this.storeCatalog.itemCost(upgrade, next), declinedPacketUpgrades: profile.declinedPacketUpgrades,
-            ownedSeeds: this.ownedSeeds(profile),
+            ownedSeeds: this.ownedSeeds(profile), ownedTools: [...profile.tools],
         }
     }
 

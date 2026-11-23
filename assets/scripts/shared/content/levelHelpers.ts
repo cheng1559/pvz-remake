@@ -65,12 +65,14 @@ export function rowGroundY(board: BoardDefinition, row: number): number {
 }
 
 /**
- * The tools a game has: the ones levels award (the 1-4 shovel), from the level after on a first adventure and on
- * every level of a replay (CutScene::ShowShovel).
+ * The tools a level has: the ones levels award (the 1-4 shovel) that the profile records (`owned`), on any level but
+ * one with tools of its own (Whack a Zombie's none). CutScene::ShowShovel: the original shows the shovel from the
+ * level after the one that drops it; here the collected award records it. Without a player (`owned` absent) and with
+ * `/cheatseed` (`cheatSeeds`), every one counts as collected.
  */
-export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
+export function levelTools(levels: GameplayLevels, level: LevelDefinition, owned: readonly string[] | undefined, cheatSeeds: boolean): string[] {
     if (level.tools) return [...level.tools]
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
         .sort((a, b) => a.adventureIndex - b.adventureIndex)
-    return [...new Set(awards.filter(entry => !firstAdventure || entry.adventureIndex < level.adventureIndex).map(entry => entry.award.id))]
+    return [...new Set(awards.map(entry => entry.award.id).filter(id => owned === undefined || cheatSeeds || owned.includes(id)))]
 }

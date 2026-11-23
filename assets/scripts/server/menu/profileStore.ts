@@ -31,6 +31,8 @@ export interface PlayerProfile {
      * is won, and the store adds the plants it sells.
      */
     seeds: string[]
+    /** The tools collected from level awards (the 1-4 shovel), once the level is won. */
+    tools: string[]
     /** The main menu entries collected awards unlocked (`unlocks` of a level's unlock award). */
     unlocks: string[]
     playTimeActivePlayer: number
@@ -110,6 +112,7 @@ export function createProfileStore(storage: MenuStorage) {
             challengeRecords: [...profile.challengeRecords],
             purchases: { ...profile.purchases },
             seeds: [...profile.seeds],
+            tools: [...profile.tools],
             unlocks: [...profile.unlocks],
             pottedPlants: profile.pottedPlants.map((plant) => ({ ...plant })),
             earnedAchievements: [...profile.earnedAchievements],
@@ -137,6 +140,7 @@ export function createProfileStore(storage: MenuStorage) {
             challengeRecords: createArray(CHALLENGE_RECORD_COUNT, 0),
             purchases: {},
             seeds: [],
+            tools: [],
             unlocks: [],
             playTimeActivePlayer: 0,
             playTimeInactivePlayer: 0,
@@ -179,6 +183,7 @@ export function createProfileStore(storage: MenuStorage) {
         ]
         profile.purchases = purchases(raw.purchases)
         profile.seeds = ids(raw.seeds)
+        profile.tools = ids(raw.tools)
         profile.unlocks = ids(raw.unlocks)
         profile.playTimeActivePlayer = Number(raw.playTimeActivePlayer ?? 0) || 0
         profile.playTimeInactivePlayer = Number(raw.playTimeInactivePlayer ?? 0) || 0

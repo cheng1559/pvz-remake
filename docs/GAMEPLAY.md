@@ -90,7 +90,7 @@ Timing (`server/level/waves.ts`, `Board::UpdateZombieSpawning`):
 - **1-1** is played on row 3 alone with four waves of Zombies. On a first adventure the planting tutorial (`plantingTutorial`) holds the first wave and the sky sun back until the first plant. Award: Sunflower.
 - **1-2** uses rows 2–4. On a first adventure the Sunflower tutorial (`sunflowerTutorial`) prompts the player to plant Sunflowers. Award: Cherry Bomb.
 - **1-3** uses rows 2–4 and introduces the Conehead on waves 5 and 8. Award: Wall-nut.
-- **1-4** uses all five rows. Award: the Shovel, a tool award.
+- **1-4** uses all five rows. Award: the Shovel, a tool award. It records the shovel in the profile's `tools` when the level is won; from then on every level has it but one with tools of its own (Whack a Zombie has none) (the original's level 5, `CutScene::ShowShovel`).
 - On 1-3, 1-4, 1-6 and 1-7, on a first adventure, the more-sun reminder (`moreSunTutorial`, `Board::UpdateTutorial`) asks for more Sunflowers once five waves have come, while fewer than three are planted and a Sunflower packet is ready. It never delays the waves.
 
 #### 1-5: Wall-nut Bowling
@@ -327,7 +327,7 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 ### Bank size and when the chooser opens
 
 - A level's `conveyor` gives a belt and its `seedPackets` a fixed bank. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
-- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`). Levels list no slot count or candidate pool.
+- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`); a level started with `/cheatseed` on counts every upgrade as bought. Levels list no slot count or candidate pool.
 - The client builds `maxSlots` packets up front, so a slot bought during the intro only shows one more.
 - `server/seeds/seedChooser.ts` supplies the grid, validates the choices and the confirmation, and saves their order and opening recharges.
 - A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when `/cheatseed`'s Let's Rock starts with fewer cards than slots; a short bank from an older save gets its empty slots back when loaded.

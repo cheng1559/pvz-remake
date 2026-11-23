@@ -219,7 +219,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | `/cooldown` | Turns seed recharge on or off; turning it off makes every packet ready at once |
 | `/suncost` | Turns sun cost on or off |
 | `/plantinvincible` | Turns plant invincibility on or off |
-| `/cheatseed` | Turns cheat seeds on or off: more seeds in the seed chooser, and the whole almanac |
+| `/cheatseed` | Turns cheat seeds on or off: more seeds in the seed chooser, every slot and the shovel, and the whole almanac |
 | `/collect {auto\|click\|move}` | Sets how sun and coins are collected |
 
 In a level these commands change the level's rules and also keep the new state as a preference; every new level starts with the preferences. Outside a level they only set the preference. The preferences are saved on this device.
@@ -252,6 +252,11 @@ In the seed chooser:
 - Two yellow `(Prev Page)` and `(Next Page)` buttons turn the pages. They are drawn as the original's cheat-key `(Debug Play)` button (FONT_BRIANNETOD12 in 255,240,0, lit 200,200,255), where the DLC puts its arrows beside Let's Rock. The mouse wheel over the chooser turns them too, a notch a page, wrapping round at either end. Mods may restyle the two buttons (`LevelSeedChooser.pageTurners`).
 - The slots need not all be filled: Let's Rock starts with any number of cards chosen, at least one, and leaves the remaining slots empty.
 - These cards count towards the chooser's slots and towards whether it opens, so the early levels of a first Adventure open the chooser too.
+
+In a level:
+
+- A level started with it on has every slot (`seedBank.maxSlots`, 10): the seed-slot upgrades count as bought, for that level only, so Crazy Dave offers none. Turning it over later leaves the level's slots as they are.
+- The shovel, and any tool a level awards, counts as collected; a level with tools of its own still has only those (Whack a Zombie has none).
 
 In the almanac:
 

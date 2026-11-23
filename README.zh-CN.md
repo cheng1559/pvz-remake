@@ -311,7 +311,7 @@ export function register({ host, assets }) {
 | `/cooldown` | 开关种子冷却 |
 | `/suncost` | 开关阳光消耗 |
 | `/plantinvincible` | 开关植物无敌：植物不受伤害，但仍会被减速和冰冻 |
-| `/cheatseed` | 开关全卡模式：选卡界面和图鉴显示全部种子，包括模组种子与隐藏种子 |
+| `/cheatseed` | 开关全卡模式：选卡界面和图鉴显示全部种子，包括模组种子与隐藏种子，并开放全部卡槽和铁铲 |
 | `/collect {auto\|click\|move}` | 设定阳光和金币的收集方式：自动、点击或鼠标经过 |
 
 **显示与设备**

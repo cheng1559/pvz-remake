@@ -150,6 +150,8 @@ export interface PurseView {
     declinedPacketUpgrades: number
     /** The seeds the player owns (LawnApp::HasSeedType), for the level's chooser and bank. */
     ownedSeeds: string[]
+    /** The tools the player has collected from level awards, for the level's tool bar. */
+    ownedTools: string[]
 }
 export type MenuMethod = keyof MenuEndpoints
 export type MenuRequest = { [K in MenuMethod]: { method: K, args: MenuEndpoints[K]['args'] } }[MenuMethod]

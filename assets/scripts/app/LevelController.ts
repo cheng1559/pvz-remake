@@ -125,13 +125,15 @@ export function createLevelController(
             const playerName = profile?.name || 'Player'
             const earnedAchievements = profile ? (await menuApi.getAchievements()).items.filter(item => item.earned).map(item => item.id) : undefined
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
+            // The tools collected come from the profile, a loaded save's level too. Without a player every one is there.
+            const ownedTools = profile && 'ownedTools' in purse ? { ownedTools: purse.ownedTools } : {}
             const startOptions = save ? {
-                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements, ...ownedTools,
                 randomSeed: save.server.random.state, cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements, ...ownedTools,
                 randomSeed: Math.floor(Math.random() * 0x100000000), cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
                 // Without a player every seed is there, as on a replay.

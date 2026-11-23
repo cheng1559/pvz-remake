@@ -481,7 +481,7 @@ An item's look is in the presentation `store` table, by the same ID: `sprite`, `
 
 ### Tools
 
-Tools are in the gameplay `tools` table, from ID to `{ kind }`, where `kind` says what the tool does; for now there is only `shovel` (digs up the plant in a cell). A level's `tools` and awards with `kind: "tool"` must name existing tools, and every tool also needs its look in the presentation `tools`; a missing one is a load failure.
+Tools are in the gameplay `tools` table, from ID to `{ kind }`, where `kind` says what the tool does; for now there is only `shovel` (digs up the plant in a cell). A tool award records the tool in the profile when the level is won; from then on every level has it but one with `tools` of its own, which has only those. A level's `tools` and awards with `kind: "tool"` must name existing tools, and every tool also needs its look in the presentation `tools`; a missing one is a load failure.
 
 ## Resources
 

@@ -311,7 +311,7 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | `/cooldown` | Turns seed recharge on or off |
 | `/suncost` | Turns sun cost on or off |
 | `/plantinvincible` | Turns plant invincibility on or off: plants take no damage but can still be chilled and frozen |
-| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds |
+| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds, and the bank has every slot and the shovel |
 | `/collect {auto\|click\|move}` | Collects sun and coins automatically, by clicking or by moving the pointer over them |
 
 **Display and device**
