@@ -13,6 +13,18 @@ export const MIRRORED_SHIFT = 90
  */
 export const ZOMBIE_PIVOT = { x: 30, y: 120 } as const
 
+/**
+ * Zombie::RiseFromGrave's PARTICLE_ZOMBIE_RISE and Zombie::SummonBackupDancer's PARTICLE_DANCER_RISE: the dirt of a
+ * zombie coming up, (60, 110) from it. One walking right stands its feet where its shadow is (Zombie::DrawShadow's
+ * `backwardsX`, further left), and its dirt comes up as far over, turned round with it. The original leaves the dirt at
+ * 60 and unturned, off the feet of a mind-controlled Dancing Zombie's troupe.
+ */
+export function riseDirt(zombie: { readonly x: number, readonly y: number, readonly team?: string },
+    shadow: ZombiePresentationDefinition['shadow']): { x: number, y: number, mirrored: boolean } {
+    const mirrored = zombie.team === 'plants'
+    return { x: zombie.x + 60 + (mirrored ? (shadow.backwardsX ?? shadow.x) - shadow.x : 0), y: zombie.y + 110, mirrored }
+}
+
 /** What decides which body parts a zombie shows. */
 export interface ZombiePartState {
     hasHead: boolean

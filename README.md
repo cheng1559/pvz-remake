@@ -491,6 +491,7 @@ The following problems exist in the original 1.2.0.1096 and are fixed in this pr
 11. Fixed the Dancing Zombie facing the wrong way after eating during its moonwalk: for a frame, or walking backwards.
 12. Fixed zombies jumping a little to the left as a lawn mower runs them over.
 13. Fixed a headless zombie burned black keeping its shadow; like charred remains, it now has none.
+14. Fixed the dirt of the Backup Dancers a Dancing Zombie under a Hypno-shroom's control calls up coming up off their feet; it now comes up under them, turned round with them.
 
 ### Logic
 

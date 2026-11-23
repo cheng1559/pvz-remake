@@ -1231,17 +1231,19 @@ test('each flash event is heard once by its flash handler, before the frame is d
     }
 })
 
-test('the grave rise effect faces the same way as the zombie it raises', () => {
+test('the grave rise effect faces the same way as the zombie it raises, under its feet', () => {
     const { ZombieView } = loadClientModule('zombies/ZombieView', {
         '@/client/sound/SoundSystem': { SoundSystem: { playSounds() {} } },
     })
     const particles: unknown[][] = []
-    const stage = { graveRise: { particle: 'pvz:zombierise', sounds: [] }, particle: (...args: unknown[]) => particles.push(args) }
+    const stage = { graveRise: { particle: 'pvz:zombierise', sounds: [] }, particle: (...args: unknown[]) => particles.push(args),
+        content: { presentation: presentationFixture } }
     for (const team of [undefined, 'plants']) {
-        ZombieView.rose(stage, { data: { entityId: 1 } }, { zombies: [{ entityId: 1, x: 200, y: 100, row: 2, team }] })
+        ZombieView.rose(stage, { data: { entityId: 1 } }, { zombies: [{ entityId: 1, typeId: 'pvz:normal', x: 200, y: 100, row: 2, team }] })
     }
     const order = renderOrderModule.renderOrder('particle', 2)
-    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 260, 210, order, undefined, true]])
+    // Walking right, its shadow lies 12 further left (Zombie::DrawShadow's backwards place), and so does its dirt.
+    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 248, 210, order, undefined, true]])
 })
 
 test('a zombie with steps kicks up their effect under its feet as its walk comes to each mark, mirrored walking right', () => {

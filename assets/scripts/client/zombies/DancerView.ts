@@ -10,7 +10,7 @@ import { SoundSystem } from '@/client/sound/SoundSystem'
 import { DANCE_PHASES, type DancePhase } from '@/shared/content/zombieStates'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { type ShownZombie, ZombieView } from './ZombieView'
-import { ZOMBIE_PIVOT } from './zombieParts'
+import { riseDirt, ZOMBIE_PIVOT } from './zombieParts'
 
 /**
  * A dancer (ZombieDefinition.dance, the presentation's `dance`): it moonwalks in turned round, a leader stands in its
@@ -132,13 +132,17 @@ export class DancerView extends ZombieView {
         SoundSystem.stopChannel(DISCO_CHANNEL)
     }
 
-    /** Zombie::SummonBackupDancer: one called up into a troupe comes up with its own dirt and rumble (DancePresentation.rise). */
+    /**
+     * Zombie::SummonBackupDancer: one called up into a troupe comes up with its own dirt (riseDirt) and rumble
+     * (DancePresentation.rise).
+     */
     static readonly calledUp: StageEvent = (stage, event, world) => {
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
-        const rise = zombie && stage.content.presentation.zombies[zombie.typeId]?.dance?.rise
+        const presentation = zombie && stage.content.presentation.zombies[zombie.typeId], rise = presentation?.dance?.rise
         if (!rise) return
         void SoundSystem.playSounds(rise.sounds)
-        stage.particle(rise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
+        const dirt = riseDirt(zombie, presentation.shadow)
+        stage.particle(rise.particle, dirt.x, dirt.y, renderOrder('particle', zombie.row), undefined, dirt.mirrored)
     }
 }
 

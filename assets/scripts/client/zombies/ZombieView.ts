@@ -21,7 +21,7 @@ import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { MIRRORED_SHIFT, ZOMBIE_PIVOT, zombiePartVisibility } from './zombieParts'
+import { MIRRORED_SHIFT, riseDirt, ZOMBIE_PIVOT, zombiePartVisibility } from './zombieParts'
 import { IceTrapView } from '@/client/view/IceTrapView'
 
 /** Sprites a zombie swaps in as it takes damage, by ID: dented helms and shields, the bare arm, the enraged head. */
@@ -691,12 +691,13 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             renderOrder('projectile', zombie.row), tint ? new Color(...tint) : undefined, mirrored)
     }
 
-    /** Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer, with the grave's rumble. */
+    /** Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer (riseDirt), with the grave's rumble. */
     static readonly rose: StageEvent = (stage, event, world) => {
         void SoundSystem.playSounds(stage.graveRise.sounds)
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
-        if (zombie) stage.particle(stage.graveRise.particle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row),
-            undefined, zombie.team === 'plants')
+        if (!zombie) return
+        const dirt = riseDirt(zombie, stage.content.presentation.zombies[zombie.typeId].shadow)
+        stage.particle(stage.graveRise.particle, dirt.x, dirt.y, renderOrder('particle', zombie.row), undefined, dirt.mirrored)
     }
 
     /** Zombie::EatPlant and EatZombie gulp the last bite. */

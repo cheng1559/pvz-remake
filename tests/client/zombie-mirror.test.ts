@@ -25,3 +25,15 @@ test('the pole vaulter’s facing-right corrections follow from the original’s
         assert.ok(Math.abs(gameplay[id].facingRightOffsetX - (inFrame - dancer.turnedOffsetX)) < 0.01, `${id}: ${inFrame - dancer.turnedOffsetX}`)
     }
 })
+
+test('the dirt of a zombie coming up lies under its feet, where its shadow is, turned round with it on the plants side', async () => {
+    const { riseDirt } = await import('@/client/zombies/zombieParts')
+    const presentation = read('mods/pvz-base/presentation/definitions/zombies.json')
+    for (const id of ['pvz:normal', 'pvz:backup_dancer']) {
+        const { shadow } = presentation[id], at = { x: 100, y: 200 }
+        assert.deepEqual(riseDirt(at, shadow), { x: 160, y: 310, mirrored: false }, `${id}: where the original puts it`)
+        // Zombie::DrawShadow: walking right, its shadow lies 12 further left (backwardsX), and so does its dirt.
+        assert.deepEqual(riseDirt({ ...at, team: 'plants' }, shadow), { x: 160 + shadow.backwardsX - shadow.x, y: 310, mirrored: true }, id)
+        assert.equal(shadow.backwardsX - shadow.x, -12, id)
+    }
+})
