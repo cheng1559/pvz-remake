@@ -152,10 +152,11 @@ export class World {
     private nextEntity = 1
     /** Those on their way out (markDestroy), which no list shows any more. */
     private readonly pendingDestroy = new Set<EntityId>()
+    private readonly allLists: readonly EntityList<Entity>[] = [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
 
     /** Every list of the world. */
     lists(): readonly EntityList<Entity>[] {
-        return [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
+        return this.allLists
     }
 
     /** A new entity's id, for the object it will be in its list (insert). */
@@ -195,7 +196,11 @@ export class World {
     }
 
     hasEntity(entity: EntityId): boolean {
-        return !this.leaving(entity) && this.lists().some(list => list.holds(entity))
+        if (this.leaving(entity)) return false
+        // A loop, not `some`: it runs for many entities every tick, and makes nothing.
+        const lists = this.allLists
+        for (let i = 0; i < lists.length; i++) if (lists[i].holds(entity)) return true
+        return false
     }
 
     /** It is on its way out: no list shows it from now on, and the command buffer takes it out as it is flushed. */
