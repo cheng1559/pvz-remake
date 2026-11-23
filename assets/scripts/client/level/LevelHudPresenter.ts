@@ -116,7 +116,7 @@ export class LevelHudPresenter {
         this.tutorialLawnFlash = options.tutorialLawnFlash
         this.progress = new LevelProgressMeter(options.ui, options.level, {
             meter: options.progressMeter, fillClip: options.progressFillClip, fill: options.progressFill, head: options.progressHead, levelText: options.levelText,
-        })
+        }, options.presentation.nameKey)
         this.coinBank = new LevelCoinBank(options.content.definitions.items, options.coinBank)
         this.preview = new LevelPlantingPreview(options.content, options.level, options, options.levelRule)
         UIHoverManager.registerClient(this.hoverClient)

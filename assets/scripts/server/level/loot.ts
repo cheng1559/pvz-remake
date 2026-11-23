@@ -1,5 +1,5 @@
 import type { CommandBuffer, EntityRemover, World } from '@/server/state/World'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, pastAdventureLevel } from '@/shared/content/gameplay'
 import { EconomyStateResource, LevelStateResource, RandomResource, TutorialResource, WaveResource } from '../state/resources'
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
@@ -18,7 +18,7 @@ export function canDropLoot(world: World): boolean {
     // Bare system worlds (tests, previews) have no level progress and no loot.
     if (!world.resources.has(TutorialResource)) return false
     return !world.resources.get(TutorialResource).firstAdventure ||
-        world.resources.get(LevelStateResource).definition.adventureIndex >= FIRST_LOOT_LEVEL
+        pastAdventureLevel(world.resources.get(LevelStateResource).definition, FIRST_LOOT_LEVEL - 1)
 }
 
 /** Zombie::DropLoot: the award check comes first, then one roll per zombie. */

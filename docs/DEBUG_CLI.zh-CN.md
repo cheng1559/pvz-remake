@@ -57,7 +57,7 @@
 | 示例 | 作用 |
 | --- | --- |
 | `/level 1-1` | 重新开始冒险模式 1-1 |
-| `/level pvz:seed-chooser-test` | 进入选卡测试关 |
+| `/level pvz:sandbox-day` | 进入白天沙盒关 |
 | `/gamespeed 2` | 以两倍速运行游戏 |
 | `/sun set 999` | 把阳光设为 999 |
 | `/seed 1 snowpea` | 在第 1 个卡槽放入寒冰射手，立即可用 |
@@ -91,7 +91,9 @@
 | --- | --- |
 | `pvz:teams-demo` | 临时关卡，不发放成就。白天草坪，1000 阳光，固定的 8 张卡片。左侧每行预置植物方的向日葵和一株射手。右侧第 7–9 列预置 9 株面朝左的僵尸方植物（豌豆射手、双重射手、寒冰射手、坚果、大嘴花、土豆地雷、爆炸坚果）。双方互相攻击，同时有 4 波僵尸（普通僵尸、路障僵尸、铁桶僵尸，最后一波为旗帜波）从右侧穿过僵尸方植物进攻。可用 `/zombie normal 3 1 plants` 在这里放下植物方的僵尸。详见[阵营与迷糊菇](TEAMS.zh-CN.md)。 |
 | `pvz:stress-test` | 临时关卡，不发放成就。白天草坪，9990 阳光，预置 40 株植物（每行 8 株），正式开始时立即生成 1023 只僵尸。`/perf plants` 和 `/perf zombies` 可关闭或重新开启植物、僵尸的绘制，以单独排查渲染开销。 |
-| `pvz:seed-chooser-test` | 白天草坪上的关卡，50 阳光，3 波僵尸，不发放成就。它没有固定的种子栏，因此按原版规则决定种子栏：玩家拥有的种子多于卡槽数（6 个，加上购买的卡槽）时打开选卡界面，确认后开始关卡；否则种子栏直接放入全部已拥有的种子。它不是临时关卡：会替换关卡存档，获胜后奖励双重射手，并在冒险模式进度尚未超过 1-10 时把进度推进到 1-10。 |
+| `pvz:sandbox-day`、`pvz:sandbox-night` | 临时沙盒关卡，不发放成就，分别在白天和黑夜草坪：9990 阳光，10 个空卡槽供 `/seed` 填入，除了放下的僵尸外没有僵尸（不来波次，关卡也不会结束）。不播开场，直接进入游戏：镜头不移动，卡槽和小推车一开始就在位，也不播“准备、安放、植物”。 |
+
+测试关卡不属于冒险模式（没有 `adventureIndex`）：右下角显示关卡名，而不是关卡编号；首次冒险中，按关卡编号判断的规则对它们都按通关后重玩处理（例如会掉落金币）。
 
 ### 速度、波次与胜负
 
@@ -400,7 +402,7 @@
 
 | 类别 | 名称 |
 | --- | --- |
-| 关卡 | 冒险模式 `1-1` 至 `1-10`、`2-1` 至 `2-10`；`pvz:teams-demo`、`pvz:stress-test`、`pvz:seed-chooser-test` |
+| 关卡 | 冒险模式 `1-1` 至 `1-10`、`2-1` 至 `2-10`；`pvz:teams-demo`、`pvz:stress-test`、`pvz:sandbox-day`、`pvz:sandbox-night` |
 | 植物 | `peashooter`、`sunflower`、`cherrybomb`、`wallnut`、`potatomine`、`snowpea`、`chomper`、`repeater`、`puffshroom`、`sunshroom`、`fumeshroom`、`gravebuster`、`hypnoshroom`、`scaredyshroom`、`iceshroom`、`doomshroom`、`lilypad` |
 | 隐藏的植物种子 | `explodenut`（爆炸坚果），`bowling-wallnut` 与 `bowling-explodenut`（保龄球用的坚果） |
 | 僵尸与僵尸卡 | `normal`、`flag`、`conehead`、`pole_vaulter`、`buckethead`、`newspaper`、`screendoor`、`football`、`dancer`、`backup_dancer` |

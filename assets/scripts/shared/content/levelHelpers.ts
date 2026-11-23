@@ -11,6 +11,19 @@ export const LEVEL_AWARD = 'pvz:level-award'
 /** A seed packet's size (IMAGE_SEEDS' cel): in the bank, in the chooser, and a seed award's. */
 export const SEED_PACKET_SIZE = Object.freeze({ width: 50, height: 70 })
 
+/**
+ * The level comes after the Adventure's level `index` (Board::mLevel > index), as a level outside the Adventure
+ * (`adventureIndex` absent) always does: the original's other modes pass every check of the level number.
+ */
+export function pastAdventureLevel(level: LevelDefinition, index: number): boolean {
+    return level.adventureIndex === undefined || level.adventureIndex > index
+}
+
+/** The level has waves, listed or built by its rule: one without (the sandboxes) has none due and never ends. */
+export function levelHasWaves(level: LevelDefinition): boolean {
+    return level.waves !== undefined || level.rules !== undefined
+}
+
 /** The level award's size on the lawn (Coin::CoinInitialize's mWidth, mHeight): a seed award's is its packet's. */
 export function levelAwardSize(award: LevelDefinition['award']): { readonly width: number; readonly height: number } {
     return award.kind === 'seed' ? SEED_PACKET_SIZE : award
@@ -73,6 +86,6 @@ export function rowGroundY(board: BoardDefinition, row: number): number {
 export function levelTools(levels: GameplayLevels, level: LevelDefinition, owned: readonly string[] | undefined, cheatSeeds: boolean): string[] {
     if (level.tools) return [...level.tools]
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
-        .sort((a, b) => a.adventureIndex - b.adventureIndex)
+        .sort((a, b) => (a.adventureIndex ?? Number.MAX_SAFE_INTEGER) - (b.adventureIndex ?? Number.MAX_SAFE_INTEGER))
     return [...new Set(awards.map(entry => entry.award.id).filter(id => owned === undefined || cheatSeeds || owned.includes(id)))]
 }

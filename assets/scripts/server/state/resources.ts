@@ -32,8 +32,9 @@ export interface SeedBankState {
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: ConveyorPacketState[] }
     choosing?: boolean
     /**
-     * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice). While
-     * choosing, the chosen packets come one after another with no empty slots.
+     * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice) or one a
+     * fixed bank leaves empty (the sandboxes'). While choosing, the chosen packets come one after another with no empty
+     * slots.
      */
     packets: Array<SeedPacketState | null>
     /**

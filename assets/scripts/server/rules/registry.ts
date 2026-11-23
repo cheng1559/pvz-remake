@@ -92,10 +92,10 @@ export class LevelRuleRegistry {
 
     freeze(): void { this.rules.freeze() }
 
-    /** The level's waves before the random picks. */
+    /** The level's waves before the random picks; none for a level without waves. */
     draft(level: LevelDefinition, definitions: GameplayDefinitions): WaveDraft[] {
         if (!level.rules) {
-            return level.waves!.map(wave => ({ zombies: [...wave.zombies], ...(wave.flagWave ? { flagWave: true as const } : {}),
+            return (level.waves ?? []).map(wave => ({ zombies: [...wave.zombies], ...(wave.flagWave ? { flagWave: true as const } : {}),
                 points: wave.points === undefined ? 0 : wave.points - wave.zombies.reduce((sum, id) => sum + zombieValue(level, definitions, id), 0) }))
         }
         return this.get(level)!.draft(level.rules, level, definitions)

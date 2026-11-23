@@ -13,7 +13,6 @@
     "award": { "kind": "seed", "id": "pvz:sunflower" }
   },
   "pvz:stress-test": {
-    "adventureIndex": 9,
     "persistent": false,
     "achievements": false,
     "board": "pvz:day",
@@ -39,23 +38,7 @@
     "waves": [{"zombies": [], "points": 1023}, {"zombies": [], "points": 1}],
     "award": {"kind": "seed", "id": "pvz:repeater"}
   },
-  "pvz:seed-chooser-test": {
-    "adventureIndex": 9,
-    "achievements": false,
-    "board": "pvz:day",
-    "lawnMower": "pvz:lawnmower",
-    "skySun": "pvz:sun",
-    "activeRows": [0, 1, 2, 3, 4],
-    "startingSun": 50,
-    "waves": [
-      { "zombies": ["pvz:normal"] },
-      { "zombies": ["pvz:normal", "pvz:conehead"] },
-      { "zombies": ["pvz:normal", "pvz:flag", "pvz:normal"], "flagWave": true }
-    ],
-    "award": { "kind": "seed", "id": "pvz:repeater" }
-  },
   "pvz:teams-demo": {
-    "adventureIndex": 9,
     "persistent": false,
     "achievements": false,
     "board": "pvz:day",
@@ -77,6 +60,27 @@
       { "zombies": ["pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"] },
       { "zombies": ["pvz:flag", "pvz:normal", "pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"], "flagWave": true }
     ],
+    "award": { "kind": "seed", "id": "pvz:repeater" }
+  },
+  "pvz:sandbox-day": {
+    "persistent": false,
+    "achievements": false,
+    "board": "pvz:day",
+    "lawnMower": "pvz:lawnmower",
+    "skySun": "pvz:sun",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 9990,
+    "seedPackets": [null, null, null, null, null, null, null, null, null, null],
+    "award": { "kind": "seed", "id": "pvz:repeater" }
+  },
+  "pvz:sandbox-night": {
+    "persistent": false,
+    "achievements": false,
+    "board": "pvz:night",
+    "lawnMower": "pvz:lawnmower",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 9990,
+    "seedPackets": [null, null, null, null, null, null, null, null, null, null],
     "award": { "kind": "seed", "id": "pvz:repeater" }
   },
   "pvz:adventure-1-2": {

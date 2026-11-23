@@ -92,5 +92,9 @@
   "ALMANAC_PREVIOUS_PAGE": "PREVIOUS PAGE",
   "ALMANAC_NEXT_PAGE": "NEXT PAGE",
   "ALMANAC_HIDDEN_DESCRIPTION": "You shouldn't see this.",
-  "WAIT_TIME_NONE": "none"
+  "WAIT_TIME_NONE": "none",
+  "STRESS_TEST": "Stress Test",
+  "TEAMS_DEMO": "Teams Demo",
+  "SANDBOX_DAY": "Sandbox: Day",
+  "SANDBOX_NIGHT": "Sandbox: Night"
 }

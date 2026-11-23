@@ -12,7 +12,7 @@ The remake follows the 21 achievements of the original *Plants vs. Zombies* GOTY
   - *On the award page*: achievements judged when the level is won (the planting achievements) are not announced in the level. After the level, the award page first lists every achievement earned but not yet shown, then shows the usual award once **Continue** is clicked.
 - Winning a level does not clear the message bar, so an achievement earned from sun or coins collected after the award has dropped is still announced during the fade-out.
 - The Achievements page, opened from the main menu, shows every achievement; earned ones are drawn in full and the others faded. It looks only at whether an achievement is earned, not at whether it has been shown.
-- The test levels `pvz:stress-test`, `pvz:seed-chooser-test` and `pvz:teams-demo` grant no achievements.
+- The test levels `pvz:stress-test`, `pvz:teams-demo`, `pvz:sandbox-day` and `pvz:sandbox-night` grant no achievements.
 
 ## Achievement list
 
@@ -61,7 +61,7 @@ Notes on the table:
 6. **Award page.** On completing a level, the menu API `completeLevel` takes every achievement that is earned but not yet shown (not only this level's), in definition order, marks them shown and saves the profile; the award view carries them. `MenuScreen` then shows `AwardAchievements` (`client/screens/AwardAchievements.ts`) over the award page with the award's controls disabled, and **Continue** brings the usual award back. Temporary levels (`persistent: false`: the stress test and the teams demo) skip `completeLevel` and return to the main menu.
 7. **Achievements page.** `AchievementScreen` reads the definitions and the profile's earned IDs through `getAchievements()` (see [UI](UI.md)).
 
-A level definition's `achievements: false` makes the level grant no achievements at all, `/achievement give` included. The original has no such level; it is meant for debug levels such as the three test levels listed under [Basic rules](#basic-rules).
+A level definition's `achievements: false` makes the level grant no achievements at all, `/achievement give` included. The original has no such level; it is meant for debug levels such as the test levels listed under [Basic rules](#basic-rules).
 
 ### Trigger types
 

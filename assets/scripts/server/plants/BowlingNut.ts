@@ -1,5 +1,5 @@
 import type { EntityId, EntityRemover, SystemContext, World } from '@/server/state/World'
-import { cellPosition, type GameplayDefinitions, type PlantDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, pastAdventureLevel, type PlantDefinition } from '@/shared/content/gameplay'
 import { groundStep } from '@/shared/content/animation'
 import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
@@ -128,7 +128,7 @@ export class BowlingNut extends Plant {
         // Plant::UpdateBowling counts every impact (mLaunchCounter, for the coins and Roll Some Heads), except on a
         // first Adventure up to level 10 (1-5).
         const level = world.resources.get(LevelStateResource).definition
-        if (!world.resources.get(TutorialResource).firstAdventure || level.adventureIndex > 10) this.hits++
+        if (!world.resources.get(TutorialResource).firstAdventure || pastAdventureLevel(level, 10)) this.hits++
         emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
             entityId: struck, typeId: zombie.typeId, helm, shield: shieldType !== undefined, plantId: this.id, plantTypeId: this.typeId, hits: this.hits,
         })

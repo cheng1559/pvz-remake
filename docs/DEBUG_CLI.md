@@ -55,7 +55,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | Example | Effect |
 | --- | --- |
 | `/level 1-1` | Starts Adventure 1-1 afresh |
-| `/level pvz:seed-chooser-test` | Starts the seed chooser test level |
+| `/level pvz:sandbox-day` | Starts the day sandbox |
 | `/gamespeed 2` | Runs the game at double speed |
 | `/sun set 999` | Sets the sun to 999 |
 | `/seed 1 snowpea` | Puts a Snow Pea in seed slot 1, ready at once |
@@ -89,7 +89,9 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | --- | --- |
 | `pvz:teams-demo` | A temporary level that grants no achievements. Day lawn, 1000 sun and a fixed bank of 8 cards. On the left, every row has the plants' side's Sunflower and a shooter ready. Columns 7–9 on the right hold 9 zombies' side plants facing left (Peashooter, Repeater, Snow Pea, Wall-nut, Chomper, Potato Mine, Explode-o-nut). The two sides attack each other while 4 waves of zombies (Zombie, Conehead, Buckethead; the last is a flag wave) come from the right through the zombies' side plants. Put down a plants' side zombie there with `/zombie normal 3 1 plants`. See [Teams and the Hypno-shroom](TEAMS.md). |
 | `pvz:stress-test` | A temporary level that grants no achievements. Day lawn and 9990 sun, with 40 plants already placed (8 in each row) and 1023 zombies spawned as play begins. `/perf plants` and `/perf zombies` turn plant or zombie drawing off, and on again, to isolate rendering. |
-| `pvz:seed-chooser-test` | A level on the day lawn with 50 sun and 3 waves that grants no achievements. It has no fixed bank, so its bank starts by the original's rule: the seed chooser opens when the player owns more seeds than the bank has slots (6, plus any bought), and confirming starts the level; otherwise the bank holds every owned seed. It is not temporary: it replaces the level save, and winning it awards the Repeater and moves Adventure on to level 1-10 if it was not already past it. |
+| `pvz:sandbox-day`, `pvz:sandbox-night` | Temporary sandboxes that grant no achievements, on the day and the night lawn: 9990 sun, ten empty seed slots for `/seed` to fill, and no zombies but those put down (no waves come and the level never ends). They start in play, with no intro: no camera pan, the bank and the mowers in place, and no Ready, Set, Plant. |
+
+The test levels are outside the Adventure (they have no `adventureIndex`): each shows its name at the bottom right where an Adventure level shows its number, and on a first adventure it passes the checks of the level number as a replay does (coins drop, for one).
 
 ### Speed, waves and results
 
@@ -398,7 +400,7 @@ Content names complete only in a level. The base package of this version install
 
 | Kind | Names |
 | --- | --- |
-| Levels | Adventure `1-1` to `1-10` and `2-1` to `2-10`; `pvz:teams-demo`, `pvz:stress-test`, `pvz:seed-chooser-test` |
+| Levels | Adventure `1-1` to `1-10` and `2-1` to `2-10`; `pvz:teams-demo`, `pvz:stress-test`, `pvz:sandbox-day`, `pvz:sandbox-night` |
 | Plants | `peashooter`, `sunflower`, `cherrybomb`, `wallnut`, `potatomine`, `snowpea`, `chomper`, `repeater`, `puffshroom`, `sunshroom`, `fumeshroom`, `gravebuster`, `hypnoshroom`, `scaredyshroom`, `iceshroom`, `doomshroom`, `lilypad` |
 | Hidden plant seeds | `explodenut` (Explode-o-nut), `bowling-wallnut` and `bowling-explodenut` (the bowling nuts) |
 | Zombies and zombie seeds | `normal`, `flag`, `conehead`, `pole_vaulter`, `buckethead`, `newspaper`, `screendoor`, `football`, `dancer`, `backup_dancer` |

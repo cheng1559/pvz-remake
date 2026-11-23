@@ -718,7 +718,12 @@ export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: num
 export interface LevelRule { kind: string; count: number; settings: JsonObject }
 
 export interface LevelDefinition {
-    adventureIndex: number
+    /**
+     * Its number in the Adventure (1-1's 1, 2-1's 11): the HUD's "Level 1-1", and what the original's checks of the
+     * level number compare (Board::mLevel). A level outside the Adventure (the test levels) has none: it shows its name
+     * (its presentation's `nameKey`) and is past every such check, as the original's other modes are (pastAdventureLevel).
+     */
+    adventureIndex?: number
     /**
      * Coin::MouseHitTest in Whack-a-Zombie (IsWhackAZombieLevel): every item, the award too, takes clicks `size` further
      * around and `height` more below, where it has no `clickPadding` of its own.
@@ -731,10 +736,11 @@ export interface LevelDefinition {
     activeRows: number[]
     startingSun: number
     /**
-     * A fixed bank. Without it and a conveyor, the bank follows the original: the available seeds fill it when they
-     * fit (the first adventure's first seven levels), and the seed chooser opens when there are more.
+     * A fixed bank, `null` an empty slot (the sandboxes' ten, for `/seed` to fill). Without it and a conveyor, the bank
+     * follows the original: the available seeds fill it when they fit (the first adventure's first seven levels), and
+     * the seed chooser opens when there are more.
      */
-    seedPackets?: string[]
+    seedPackets?: Array<string | null>
     /** `team`: `zombies` places a plant on the zombies' side, facing left. */
     initialPlants?: Array<{ seedId: string; row: number; column: number; team?: Team }>
     /** Board::CanPlantAt on Wall-nut Bowling: the player plants nothing right of `column` (the red line). */
@@ -748,7 +754,10 @@ export interface LevelDefinition {
     /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, it comes
      *  from the zombies' `graveRise`; a lawn with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
-    /** The waves as listed; a level has these or `rules`. */
+    /**
+     * The waves as listed; a level has these or `rules`, or neither: a level without waves (the sandboxes) has no
+     * zombies but those put down, and never ends, its award never dropping.
+     */
     waves?: LevelWave[]
     /** The level rule that builds the waves when the level starts and may change the level's play. */
     rules?: LevelRule

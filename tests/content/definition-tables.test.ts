@@ -88,7 +88,8 @@ test("a level's tools, tool award and tutorial name what is installed, and a lev
     assert.throws(invalid('pvz:adventure-2-5', level => { level.tools = ['pvz:hammer'] }), /pvz:adventure-2-5\.tools\[0\] references unknown ID pvz:hammer/)
     assert.throws(invalid('pvz:adventure-1-4', level => { level.award.id = 'pvz:hammer' }), /pvz:adventure-1-4\.award\.id references unknown ID pvz:hammer/)
     assert.deepEqual(Object.keys(levels.levels).filter(id => levels.levels[id].tutorial === undefined),
-        ['pvz:stress-test', 'pvz:seed-chooser-test', 'pvz:teams-demo', 'pvz:adventure-1-8', 'pvz:adventure-1-9', 'pvz:adventure-1-10', 'pvz:adventure-2-10'])
+        ['pvz:stress-test', 'pvz:teams-demo', 'pvz:sandbox-day', 'pvz:sandbox-night', 'pvz:adventure-1-8', 'pvz:adventure-1-9',
+            'pvz:adventure-1-10', 'pvz:adventure-2-10'])
 
     const scripted = (tutorial: string) => {
         const value = source()

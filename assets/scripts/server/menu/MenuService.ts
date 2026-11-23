@@ -1,5 +1,5 @@
 import { type AchievementEntry, type AchievementView, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
-import type { GameplayDefinitions, GameplayLevels, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, type GameplayLevels, type LevelDefinition, pastAdventureLevel, type UnlockedEntry } from '@/shared/content/gameplay'
 import type { AlmanacCatalog } from './almanacCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
@@ -124,12 +124,17 @@ export class MenuService {
                 if (!levels?.[levelId]) throw new Error('The first adventure level is not installed')
                 let level = levels[levelId]
                 const visited = new Set([levelId])
-                while (level.adventureIndex < profile.adventureLevel && level.nextLevel && !visited.has(level.nextLevel)) {
+                // The Adventure's levels, one leading to the next, have their numbers.
+                const numberOf = (id: string, of: LevelDefinition) => {
+                    if (of.adventureIndex === undefined) throw new Error(`Adventure level ${id} has no adventureIndex`)
+                    return of.adventureIndex
+                }
+                while (numberOf(levelId, level) < profile.adventureLevel && level.nextLevel && !visited.has(level.nextLevel)) {
                     levelId = level.nextLevel
                     visited.add(levelId)
                     level = levels[levelId]
                 }
-                return { levelId, adventureIndex: level.adventureIndex }
+                return { levelId, adventureIndex: numberOf(levelId, level) }
             }
             case 'completeLevel': {
                 if (!this.canCompleteLevel()) throw new Error('Cannot complete a level before winning')
@@ -138,7 +143,8 @@ export class MenuService {
                 const profile = this.profiles.loadCurrentProfile()
                 if (!profile) throw new Error('Level completion requires a player profile')
                 const level = this.getLevel()!
-                profile.adventureLevel = Math.max(profile.adventureLevel, level.adventureIndex + 1)
+                // A level outside the Adventure does not move it on.
+                if (level.adventureIndex !== undefined) profile.adventureLevel = Math.max(profile.adventureLevel, level.adventureIndex + 1)
                 // The award seed is the player's from now on (the seed packet the level dropped).
                 if (level.award.kind === 'seed' && !profile.seeds.includes(level.award.id)) profile.seeds.push(level.award.id)
                 // As is its tool (the 1-4 shovel), on every level with tools (levelTools).
@@ -199,7 +205,7 @@ export class MenuService {
             nextLevelId: level.nextLevel ?? null, showMainMenu: true, achievements: this.awardAchievements,
         }
         if (level.award.kind === 'tool' || level.award.kind === 'unlock') return {
-            kind: level.award.kind, id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
+            kind: level.award.kind, id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: pastAdventureLevel(level, 2),
             achievements: this.awardAchievements,
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
             ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
@@ -208,7 +214,7 @@ export class MenuService {
         if (seed?.kind !== 'plant') throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
-            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3, achievements: this.awardAchievements,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: pastAdventureLevel(level, 2), achievements: this.awardAchievements,
             seed: level.award.id, cost: seed.sunCost,
         }
     }

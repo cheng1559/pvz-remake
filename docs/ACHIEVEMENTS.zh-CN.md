@@ -12,7 +12,7 @@
   - *奖励页面列出*：在关卡胜利时判定的成就（种植类成就）不在关卡内提示。关卡结束后，奖励页面先列出所有已获得但尚未显示过的成就，点击**继续**后再显示本关的奖励。
 - 关卡胜利不会清除提示栏，因此在奖励掉落后收集阳光或金币而获得的成就，仍会在关卡淡出时正常提示。
 - 主菜单进入的成就页面显示全部成就，已获得的完整显示，未获得的半透明显示。成就页面只看成就是否已获得，不看是否已显示过。
-- 测试关卡 `pvz:stress-test`、`pvz:seed-chooser-test` 和 `pvz:teams-demo` 不授予任何成就。
+- 测试关卡 `pvz:stress-test`、`pvz:teams-demo`、`pvz:sandbox-day` 和 `pvz:sandbox-night` 不授予任何成就。
 
 ## 成就一览
 
@@ -61,7 +61,7 @@
 6. **奖励页面。** 完成关卡时，菜单 API `completeLevel` 按定义顺序取出所有已获得但尚未显示的成就（不只是本关的），标记为已显示并保存档案；奖励视图携带这些成就。随后 `MenuScreen` 在奖励页面上方显示 `AwardAchievements`（`client/screens/AwardAchievements.ts`），奖励页面的控件暂时禁用，点击**继续**后恢复为正常奖励。临时关卡（`persistent: false`：压力测试关和阵营演示关）不调用 `completeLevel`，直接回到主菜单。
 7. **成就页面。** `AchievementScreen` 通过 `getAchievements()` 读取定义和档案中已获得的 ID（见 [UI](UI.zh-CN.md)）。
 
-关卡定义的 `achievements: false` 使该关卡不授予任何成就，包括 `/achievement give`。原版没有这样的关卡；它用于调试关卡，如[基本规则](#基本规则)中列出的三个测试关卡。
+关卡定义的 `achievements: false` 使该关卡不授予任何成就，包括 `/achievement give`。原版没有这样的关卡；它用于调试关卡，如[基本规则](#基本规则)中列出的测试关卡。
 
 ### 触发类型
 

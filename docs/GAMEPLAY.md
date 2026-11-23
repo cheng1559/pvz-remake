@@ -77,6 +77,7 @@ A zombie costs its `zombiePool` entry's points, otherwise its own `wave.points` 
 Timing (`server/level/waves.ts`, `Board::UpdateZombieSpawning`):
 
 - The first wave comes at the level's `firstWaveTicks`, 1800 when none is given (`ZOMBIE_COUNTDOWN_FIRST_WAVE`).
+- A level with neither `waves` nor `rules` (the sandboxes `pvz:sandbox-day` and `pvz:sandbox-night`) has no waves: no zombies come but those put down, its award never drops and it never ends.
 - The next wave comes 2500–3099 ticks after the last, or 4500 before a flag wave.
 - From 400 ticks after a wave comes, once its zombies are worn down to 50–65 % of their starting health (rolled for each wave), the next wave comes within 200 ticks; before a flag wave, only once they are all gone. A wave's health counts the body and the helm in full and a shield at 0.2 (`Board::TotalZombiesHealthInWave`), for its zombies on the zombies' side that are walking, eating or in the air.
 - A flag wave's huge-wave warning appears 5 ticks before it is due and then holds it for 751 ticks; its sound plays 25 ticks in, and the music bursts with 700 ticks left at night and 400 by day.
@@ -326,7 +327,7 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 
 ### Bank size and when the chooser opens
 
-- A level's `conveyor` gives a belt and its `seedPackets` a fixed bank. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
+- A level's `conveyor` gives a belt and its `seedPackets` a fixed bank, `null` an empty slot. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
 - Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`); a level started with `/cheatseed` on counts every upgrade as bought. An open chooser keeps its slots when fewer cards are offered later (`/cheatseed` turned off). Levels list no slot count or candidate pool.
 - The client builds `maxSlots` packets up front, so a slot bought during the intro only shows one more.
 - `server/seeds/seedChooser.ts` supplies the grid, validates the choices and the confirmation, and saves their order and opening recharges.
@@ -342,7 +343,7 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 - **Warnings.** Before the level starts, the chooser warns as the level script's `chooserWarnings` lists, in order (`SeedChooserScreen::OnStartButton`); then, without a sun producer in the bank, it gives the sun warning (`SEED_CHOOSER_SUN_WARNING`, or the script's `sunWarning`). Choosing to repick at any warning stops the start.
 - **Drawing order.** Chooser cards and their pictures are drawn in reading order, each over the one before, as `SeedChooserScreen::Draw` and `SeedBank::Draw` go left to right. `LevelSeedChooser` places each seed at its position, leaving the places of locked seeds empty, rather than by preview image indices, and runs its presentation on the shared clock.
 - **Mouse wheel.** The wheel over the level turns the chooser's pages while it is out (`/cheatseed`'s pages). The level root listens for it, because a node of its own listening for any mouse event would take every press over it (`NodeEventProcessor._handleMouseDown`), such as the Menu button's. Mods may restyle the page buttons (`LevelSeedChooser.pageTurners`) and wrap `LevelView.attachSeedChooser` to add to every chooser.
-- Use `/level pvz:seed-chooser-test` to test the chooser.
+- To test the chooser, start a level with `/cheatseed` on: every seed is offered, more than the slots, so the chooser opens on any level without a fixed bank or a conveyor.
 
 ### Repick
 
@@ -642,7 +643,7 @@ Coins follow `Board::DropLootPiece`.
 | 250 × *v* | Gold coin | 5 coins, shown as $50 | about 0.8 % |
 | 2500 × *v* | Silver coin | 1 coin, shown as $10 | 7.5 % |
 
-- **When coins drop.** Nothing drops once the award has. During the first adventure, coins drop from level 11 (2-1) on; after the adventure is finished, on every level (`Board::CanDropLoot`). Wall-nut Bowling drops none. No level setting is involved.
+- **When coins drop.** Nothing drops once the award has. During the first adventure, coins drop from level 11 (2-1) on; after the adventure is finished, on every level (`Board::CanDropLoot`). A level outside the Adventure, such as a test level, drops them on a first adventure too. Wall-nut Bowling drops none. No level setting is involved.
 - **2-1's first-adventure rules.** Its script adds `loot.firstCoinAfterWave`, which guarantees a first coin with a pickup arrow after wave 5, and `loot.savingsCap` (75 coins, the first slot's price), which stops any drop that would bring the coins, counting the ones in flight and a gold coin for each lawn mower still on the lawn, to the upgrade price.
 - **Collecting.** Coins are `kind: "money"` items that spin once landed and fly to the bottom-left coin bank. The bank shows for 1000 ticks and fades over its last 15; it also shows when the game is paused (not by the debug console's pause) and stands beside Crazy Dave while he is out.
 - **Lawn mowers.** From 200 ticks after the award, each unused lawn mower turns into a gold coin every 40 ticks, from the bottom row up, with a rising note.

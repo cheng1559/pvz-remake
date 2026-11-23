@@ -36,6 +36,8 @@ export interface LevelIntroContext {
 
 export interface LevelPresentation {
     createIntro(context: LevelIntroContext): Promise<LevelIntro>
+    /** The name a level outside the Adventure shows where an Adventure level shows its number (LevelProgressMeter). */
+    nameKey?: string
     advice: Readonly<Record<string, string>>
     adviceDuringIntro?: boolean
     adviceStyle?: 'hint-stay' | 'tutorial-level1-stay'

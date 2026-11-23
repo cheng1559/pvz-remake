@@ -854,8 +854,8 @@ function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefin
 
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exact(value, [
-        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'award',
-    ], name, ['tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
+        'board', 'lawnMower', 'activeRows', 'startingSun', 'award',
+    ], name, ['adventureIndex', 'tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
         'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools', 'itemClickPadding'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
@@ -875,8 +875,13 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     }
     if (new Set(activeRows).size !== activeRows.length) throw new Error(`${name}.activeRows must not contain duplicates`)
 
-    const seedPackets = source.seedPackets === undefined ? undefined : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
-    seedPackets?.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
+    // `null`: an empty slot.
+    const seedPackets = source.seedPackets === undefined ? undefined : array(source.seedPackets, `${name}.seedPackets`).map((value, index) => {
+        if (value === null) return null
+        const id = qualifiedId(value, `${name}.seedPackets[${index}]`)
+        reference(id, definitions.seeds, `${name}.seedPackets[${index}]`)
+        return id
+    })
     if (seedPackets && seedPackets.length > definitions.seedBank.maxSlots) throw new Error(`${name}.seedPackets exceeds the bank`)
     let conveyor: LevelDefinition['conveyor']
     if (source.conveyor !== undefined) {
@@ -918,12 +923,13 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     })
     const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
     if (seedPackets && conveyor) throw new Error(`${name} cannot combine a conveyor and fixed seed packets`)
-    if ((source.waves === undefined) === (source.rules === undefined)) throw new Error(`${name} needs either waves or rules`)
+    // Neither: a level without waves (LevelDefinition.waves).
+    if (source.waves !== undefined && source.rules !== undefined) throw new Error(`${name} cannot combine waves and rules`)
     const waves = source.waves === undefined ? undefined : parseLevelWaves(array(source.waves, `${name}.waves`), name, definitions)
     const rules = source.rules === undefined ? undefined : parseLevelRule(source.rules, `${name}.rules`)
     const zombiePool = source.zombiePool === undefined ? undefined : parseZombiePool(source.zombiePool, name, definitions)
     if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
-    const fills = rules !== undefined || waves!.some(wave => wave.points !== undefined)
+    const fills = rules !== undefined || !!waves?.some(wave => wave.points !== undefined)
     if (fills && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1 && (entry.firstWave ?? 1) === 1)) {
         throw new Error(`${name}.zombiePool must include a weighted one-point zombie`)
     }
@@ -999,7 +1005,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     } else throw new Error(`${name}.award.kind must be seed, tool, unlock or note`)
 
     return {
-        adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
+        ...(source.adventureIndex === undefined ? {} : { adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`) }),
         ...(source.persistent === undefined ? {} : { persistent: source.persistent as boolean }),
         ...(source.itemClickPadding === undefined ? {} : { itemClickPadding: (() => {
             const padding = exact(source.itemClickPadding, ['size', 'height'], `${name}.itemClickPadding`)

@@ -92,7 +92,9 @@ export class LevelProgressMeter {
         return { meter: progressMeter, fillClip: progressFillClip, fill: progressFill, head: progressHead, levelText }
     }
 
-    constructor(private readonly ui: UI, private readonly level: LevelDefinition, private readonly nodes: LevelProgressMeterNodes) {}
+    /** `nameKey`: the name a level outside the Adventure shows (its presentation's). */
+    constructor(private readonly ui: UI, private readonly level: LevelDefinition, private readonly nodes: LevelProgressMeterNodes,
+        private readonly nameKey?: string) {}
 
     snapshot(): Pick<LevelHudSnapshot, 'progressWave' | 'progressCountdownStart' | 'progressMeterWidth' | 'progressTick'> {
         return { progressWave: this.wave, progressCountdownStart: this.countdownStart, progressMeterWidth: this.width, progressTick: this.tick }
@@ -131,8 +133,9 @@ export class LevelProgressMeter {
         levelText.node.active = visible
         meter.active = visible && progress > 0
         if (!visible) return
-        // Board::DrawLevel: [LEVEL] followed by the stage.
-        const level = `${this.ui.text('LEVEL')} ${adventureStage(this.level.adventureIndex)}`
+        // Board::DrawLevel: in the Adventure [LEVEL] followed by the stage; in another mode its name (mChallengeName).
+        const index = this.level.adventureIndex
+        const level = index === undefined ? this.nameKey ? this.ui.text(this.nameKey) : '' : `${this.ui.text('LEVEL')} ${adventureStage(index)}`
         if (levelText.text !== level) levelText.text = level
         levelText.setPosition(progress > 0 ? 593 : 780, 595)
         if (progress <= 0) return

@@ -176,8 +176,9 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
-        packets: 'seeds' in bank ? bank.seeds.map(({ seedId, team }) => {
-            const cooldown = openingCooldown(world, definitions, seedId)
+        packets: 'seeds' in bank ? bank.seeds.map(card => {
+            if (!card) return null
+            const { seedId, team } = card, cooldown = openingCooldown(world, definitions, seedId)
             return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown, ...(team ? { team } : {}) }
         }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),

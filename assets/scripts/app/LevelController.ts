@@ -105,6 +105,8 @@ export function createLevelController(
         let scene: LevelScene | undefined
         try {
             const content = await loadIntegratedGameContent()
+            // A save of a level no longer installed (a removed test level, a Mod's) is one of other content.
+            if (save && !content.levels.levels[save.levelId]) throw new IncompatibleSaveError(`Level is not installed: ${save.levelId}`)
             if (!content.levels.levels[save?.levelId ?? levelId]) throw new Error(`Level is not installed: ${save?.levelId ?? levelId}`)
             const { base } = content
             if (save) {

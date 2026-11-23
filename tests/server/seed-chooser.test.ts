@@ -13,7 +13,7 @@ import { TICK_SECONDS } from '@/shared/protocol'
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
-const options = { levelId: 'pvz:seed-chooser-test', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
+const options = { levelId: 'pvz:adventure-1-9', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
 const seeds = chooserSeeds(definitions)
 const setup = (save?: JsonValue) => {
     const game = new LocalIntegratedGame(definitions, levels)
@@ -149,7 +149,7 @@ test("chooser levels share the original seeds' grid without a per-level pool, an
         readBaseContent().gameplay, [{
             ownerId: 'test', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
-                levels: { 'test:chooser': { ...levels.levels[options.levelId] } },
+                levels: { 'test:chooser': { ...source('levels').levels[options.levelId] } },
             },
         }],
     )

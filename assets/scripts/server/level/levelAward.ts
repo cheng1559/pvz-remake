@@ -1,5 +1,5 @@
 import type { EntityRemover, World } from '@/server/state/World'
-import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, LEVEL_AWARD, levelAwardSize, levelHasWaves } from '@/shared/content/gameplay'
 import { LevelStateResource, WaveResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { spawnItem } from '../items/itemSpawn'
@@ -25,6 +25,7 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     const level = world.resources.get(LevelStateResource)
     const waves = world.resources.get(WaveResource)
     if (level.result !== 'playing' || level.paused || waves.index < waves.plan.length) return
+    if (!levelHasWaves(level.definition)) return
     if (levelRule(world)?.holdsAward?.(world)) return
     if (levelAwardDropped(world)) return
     const zombies = [...world.zombies]

@@ -477,6 +477,11 @@ export interface AdventureIntroLayout {
 }
 export interface LevelPresentationDefinition {
     readonly music?: BoardPresentation['music']
+    /**
+     * A strings key: the name a level outside the Adventure (no `adventureIndex`) shows at the bottom right, as the
+     * original's other modes show theirs (Board::DrawLevel's mChallengeName).
+     */
+    readonly nameKey?: string
     readonly intro: AdventureIntroLayout
     readonly advice: Readonly<Record<string, string>>
     readonly adviceDuringIntro?: boolean
@@ -1026,6 +1031,7 @@ function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
     type Line = NonNullable<LevelPresentationDefinition['plantingLine']>
     return fields<LevelPresentationDefinition>(value, name, ['intro', 'advice', 'seedGuideSteps', 'lawnGuideSteps'], {
         music,
+        nameKey: nonEmptyString,
         intro: parseIntro,
         // An empty advice shows nothing at its step.
         advice: table((value, name) => {

@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/server/state/World'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, levelHasWaves } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource, SkySunResource, TutorialResource, WaveResource } from '../state/resources'
 import { updateSkySun } from './sun'
 import { getActiveTutorial, levelTutorial, skipTutorial } from '../tutorials'
@@ -28,7 +28,7 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
     if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,
-        nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? FIRST_WAVE_TICKS,
+        nextWaveAtTick: blocked || !levelHasWaves(level) ? undefined : level.firstWaveTicks ?? FIRST_WAVE_TICKS,
         plan: planWaves(rules.draft(level, definitions), level, world.resources.get(RandomResource)),
         zombieIds: [],
         healthToNextWave: 0,

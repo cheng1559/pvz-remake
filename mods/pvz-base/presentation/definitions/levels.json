@@ -8,15 +8,23 @@
     "advice": {"shovel-pickup": "ADVICE_CLICK_SHOVEL", "shovel-dig": "ADVICE_CLICK_PLANT", "shovel-keep-digging": "ADVICE_KEEP_DIGGING"}
   },
   "pvz:stress-test": {
+    "nameKey": "STRESS_TEST",
     "intro": {"sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "pan": false},
-    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
-  },
-  "pvz:seed-chooser-test": {
-    "intro": {"sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
     "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
   },
   "pvz:teams-demo": {
+    "nameKey": "TEAMS_DEMO",
     "intro": {"sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "pan": false},
+    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:sandbox-day": {
+    "nameKey": "SANDBOX_DAY",
+    "intro": {"sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": false, "pan": false, "entrance": false},
+    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:sandbox-night": {
+    "nameKey": "SANDBOX_NIGHT",
+    "intro": {"sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": false, "pan": false, "entrance": false},
     "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
   },
   "pvz:adventure-1-1": {

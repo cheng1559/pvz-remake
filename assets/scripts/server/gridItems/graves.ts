@@ -60,7 +60,7 @@ export function placeGrave(world: World, definitions: GameplayDefinitions, row: 
 export function createGraves(world: World): void {
     const { definition: level, board } = world.resources.get(LevelStateResource)
     const seed = world.resources.get(BoardSeedResource)
-    const random = new DeterministicRng((seed + level.adventureIndex) >>> 0)
+    const random = new DeterministicRng((seed + (level.adventureIndex ?? 0)) >>> 0)
     const rowCount = Math.max(6, board.rows) // 1096 also draws the reserved sixth row on five-row lawns.
     for (const { column, count } of level.graves ?? []) {
         const available = new Set(level.activeRows)

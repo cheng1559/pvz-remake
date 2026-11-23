@@ -79,15 +79,15 @@ export function bankSlots(definitions: GameplayDefinitions, offer: ChooserOffer,
 }
 
 /**
- * How the level's bank starts: its fixed packets, a conveyor, or the original's rule. Board::InitLevel fills a bank
- * the cards fit in with all of them in order, and Board::ChooseSeedsOnCurrentLevel opens the chooser otherwise (from
- * level 8 of a first adventure, the first with more seeds than slots, and on every replay). A Mod's entries count too,
- * so offering more cards can open the chooser earlier.
+ * How the level's bank starts: its fixed packets (`null` an empty slot), a conveyor, or the original's rule.
+ * Board::InitLevel fills a bank the cards fit in with all of them in order, and Board::ChooseSeedsOnCurrentLevel opens
+ * the chooser otherwise (from level 8 of a first adventure, the first with more seeds than slots, and on every replay).
+ * A Mod's entries count too, so offering more cards can open the chooser earlier.
  */
 export function seedBankStart(definitions: GameplayDefinitions, level: LevelDefinition, offer: ChooserOffer, packetUpgrades = 0):
-    { seeds: ChooserEntry[] } | { chooser: true } | { conveyor: true } {
+    { seeds: Array<ChooserEntry | null> } | { chooser: true } | { conveyor: true } {
     if (level.conveyor) return { conveyor: true }
-    if (level.seedPackets) return { seeds: level.seedPackets.map(seedId => ({ seedId })) }
+    if (level.seedPackets) return { seeds: level.seedPackets.map(seedId => seedId === null ? null : { seedId }) }
     const cards = offeredCards(offer)
     const slots = bankSlots(definitions, offer, packetUpgrades)
     return cards.length > slots ? { chooser: true } : { seeds: cards.slice(0, slots) }
