@@ -97,8 +97,8 @@ export interface LevelStage {
     /** A particle of the board (spawnParticle) goes to another draw order, as a projectile's trail does with its projectile. */
     reorderParticle(player: ParticlePlayer, order: number): void
     /**
-     * A node of the layer takes its place in the draw order until it is destroyed. `entityId`: among what else is at
-     * that order, it goes where that entity does.
+     * A node of the layer takes its place in the draw order until it is destroyed. Among what else is at that order it
+     * goes after the entities, or where the entity `entityId` does while the snapshot lists it.
      */
     addScenery(node: Node, order: number, entityId?: number): void
     /** An entity's node. */

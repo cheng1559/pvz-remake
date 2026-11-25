@@ -515,7 +515,7 @@ From `mods/pvz-base/gameplay/definitions/zombies.json`. Health is the body's; ar
 A zombie looks for something to eat on every 4th tick of its age, every 8th while chilled (`bite.cadenceTicks`, `Zombie::CheckIfPreyCaught`):
 
 - It looks only with its head on. A zombie without one goes on eating or walking as it was.
-- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant put down that it overlaps by 20.
+- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant in slot order that it overlaps by 20.
 - Finding one, it starts eating in that tick and bites it at once, for 4 (`bite.damage`). An awake Hypno-shroom is bitten without harm.
 - Finding nothing while it eats, it stops and walks on from the next tick. Between the ticks it looks on, it goes on as it was.
 - At each chew of its eat clip it looks again for the plant it chews, which flashes (`Zombie::AnimateChewSound`).

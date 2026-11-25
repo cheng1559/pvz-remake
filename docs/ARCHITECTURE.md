@@ -162,7 +162,7 @@ Where the level's shared logic lives:
 
 ### World and entities
 
-The world (`state/World.ts`) is typed lists, with no ECS components: `items`, `gridItems`, `plants`, `projectiles`, `mowers` and `zombies`, beside the world's `resources`. Each is an `EntityList` that holds the objects themselves by id and iterates them in id order.
+The world (`state/World.ts`) is typed lists, with no ECS components: `items`, `gridItems`, `plants`, `projectiles`, `mowers` and `zombies`, beside the world's `resources`. Each is an `EntityList` that holds the objects themselves in slots (the original's DataArray) and iterates them in slot order.
 
 An entity is its object in one of the lists:
 
@@ -614,7 +614,7 @@ The level's entities draw in the original's order, `Board::MakeRenderOrder`: `ro
 - Plants take `5 − x + 800` (further left draws later), and zombies 4.
 - Shadows lie on `ground` at 3, under every row's plants and zombies.
 - Dropped heads, arms and helms draw one above their zombie; other particles at the original's layer, or at their entity's order plus its offset.
-- Equal orders keep entities in creation order, with particles at an entity's order after it.
+- Equal orders keep a list's entities in slot order and the kinds in a fixed order, with the remains and particles at an entity's order after the entities.
 - Presentation data names layers (a plant's `layer`, an explosion's `layer`; rolling bowling nuts use `projectile`) instead of numbers.
 
 #### Saves and layout

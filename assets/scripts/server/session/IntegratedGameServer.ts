@@ -91,6 +91,8 @@ export class IntegratedGameServer {
     /** Advances one fixed tick without building a snapshot. */
     step(): void {
         const session = this.requireSession()
+        // LawnApp::UpdateFrames runs Board::ProcessDeleteQueue before each update, paused or not.
+        session.world.freeSlots()
         if (this.processBoundaryCommands()) return
         const level = session.world.resources.get(LevelStateResource)
         // Plant::Update: the plants on the lawn of such an intro go on as in play, while the level waits.

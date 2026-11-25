@@ -39,7 +39,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     })]))
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
-        schemaVersion: 5,
+        schemaVersion: 6,
         boardSeed: world.resources.get(BoardSeedResource),
         levelId: level.id,
         mods: mods.map(mod => ({ ...mod })),

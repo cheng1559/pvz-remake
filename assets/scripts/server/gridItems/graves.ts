@@ -25,7 +25,7 @@ export function graveCellLook(seed: number, row: number, column: number): Pick<G
     return { variant: value % GRAVE_VARIANTS, offsetX: offsets % 10 - 5, offsetY: Math.floor(offsets / 10) % 10 - 5 }
 }
 
-/** The graves on the lawn, in the order they were made. */
+/** The graves on the lawn, in slot order (EntityList). */
 export function graves(world: World): Grave[] {
     return [...world.gridItems].filter((item): item is Grave => item.typeId === GRAVE)
 }

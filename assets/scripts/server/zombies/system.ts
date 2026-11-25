@@ -243,7 +243,7 @@ function findZombieTarget(
 }
 
 /**
- * Zombie::FindPlantTarget: the first of the row's plants, in the order they were put down, that `attack` overlaps by 20
+ * Zombie::FindPlantTarget: the first of the row's plants, in slot order (EntityList), that `attack` overlaps by 20
  * from `x`, where the zombie stood as its tick began in whole pixels (Zombie::mX); a rolling nut by `rollingAttack`, and
  * none without it.
  */

@@ -784,7 +784,11 @@ Derive cosmetic effects from the authoritative tick and the snapshot rather than
 
 ### Entity data
 
-The world (`server/state/World`) is a set of lists separated by type: `plants`, `zombies`, `projectiles`, `mowers`, `gridItems` and `items`. Each holds the objects themselves by id and is iterated in id order, with no ECS components.
+The world (`server/state/World`) is a set of lists separated by type: `plants`, `zombies`, `projectiles`, `mowers`, `gridItems` and `items`. Each holds the objects themselves in slots and is iterated in slot order, with no ECS components.
+
+- A new object takes the slot freed last, or else a new one after the others; of those freed in one tick, the highest is taken first (`Board::ProcessDeleteQueue`).
+- A slot freed in a tick is taken again only from the next.
+- Ids are never reused.
 
 To keep data of your own on an entity, put it in the entity's `extensions[id]` (a JSON object), where `id` is a qualified ID in your own namespace, registered first with `registry.extensions.register(id, validate?)` (IDs in `pvz:` are refused).
 

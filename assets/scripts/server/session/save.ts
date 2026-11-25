@@ -1,4 +1,4 @@
-import type { EntityAllocatorSnapshot, EntityId, Position } from '@/server/state/World'
+import { ENTITY_LISTS, type EntityAllocatorSnapshot, type EntityId, type Position } from '@/server/state/World'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag, uint32 } from '@/shared/validate'
@@ -47,11 +47,11 @@ export interface SavedFields {
     items: SavedOfList<Item>
 }
 
-/** Each typed list as it is saved, its entities in id order: an entity's id is unique across them all. */
+/** Each typed list as it is saved, in slot order (EntityList): an entity's id is unique across them all. */
 export type SavedLists = { [K in keyof SavedFields]: (SavedEntity & SavedFields[K])[] }
 
 export interface ServerSaveSnapshot extends SavedLists {
-    schemaVersion: 5
+    schemaVersion: 6
     /** Recreates the board's per-cell artwork, including cells with no current grave. */
     boardSeed: number
     levelId: string
@@ -80,10 +80,23 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         'schemaVersion', 'boardSeed', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
         'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', ...SAVED_LISTS.map(list => list.key),
     ], 'server save', ['packetUpgradeOffer'])
-    if (save.schemaVersion !== 5) throw new TypeError('server save.schemaVersion must be 5')
+    if (save.schemaVersion !== 6) throw new TypeError('server save.schemaVersion must be 6')
 
-    const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
-    const allocator = { nextEntity: positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity') }
+    const allocatorSource = exact(save.allocator, ['nextEntity', 'slots'], 'server save.allocator')
+    const nextEntity = positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity')
+    // Each list's slots (EntityList): restoring checks they hold its entities.
+    const slotsSource = exact(allocatorSource.slots, [...ENTITY_LISTS], 'server save.allocator.slots')
+    const allocator = { nextEntity, slots: Object.fromEntries(ENTITY_LISTS.map(key => {
+        const name = `server save.allocator.slots.${key}`, source = exact(slotsSource[key], ['slots', 'free', 'freeing'], name)
+        const slots = array(source.slots, `${name}.slots`).map((id, slot) => id === null ? null : positiveInteger(id, `${name}.slots[${slot}]`))
+        if (slots.some(id => id !== null && id >= nextEntity)) throw new TypeError(`${name}.slots must hold entities below allocator.nextEntity`)
+        const empty = (field: 'free' | 'freeing') => array(source[field], `${name}.${field}`).map((slot, index) => {
+            const parsed = nonNegativeInteger(slot, `${name}.${field}[${index}]`)
+            if (parsed >= slots.length) throw new TypeError(`${name}.${field}[${index}] is past the slots`)
+            return parsed
+        })
+        return [key, { slots, free: empty('free'), freeing: empty('freeing') }]
+    })) as EntityAllocatorSnapshot['slots'] }
     const randomSource = exact(save.random, ['algorithm', 'state'], 'server save.random')
     const random = {
         algorithm: randomSource.algorithm,
@@ -140,7 +153,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     if (gameplayTick > tick) throw new TypeError('server save.gameplayTick must not exceed tick')
 
     return {
-        schemaVersion: 5,
+        schemaVersion: 6,
         boardSeed: uint32(save.boardSeed, 'server save.boardSeed'),
         levelId: nonEmptyString(save.levelId, 'server save.levelId'),
         mods,

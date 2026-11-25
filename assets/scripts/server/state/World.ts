@@ -17,8 +17,14 @@ export interface Position {
 /** Removes entities; systems pass their command buffer so queries stay consistent. */
 export interface EntityRemover { destroyEntity(entity: number): unknown }
 
+/** The world's lists, each a DataArray of the original (Board::mCoins, mGridItems, mPlants, mProjectiles, mLawnMowers, mZombies). */
+export const ENTITY_LISTS = ['items', 'gridItems', 'plants', 'projectiles', 'mowers', 'zombies'] as const
+export type EntityListKey = typeof ENTITY_LISTS[number]
+
 export interface EntityAllocatorSnapshot {
     nextEntity: EntityId
+    /** Each list's slots (EntityList). */
+    slots: Record<EntityListKey, EntitySlotsSnapshot>
 }
 
 export interface Resource<T> {
@@ -49,19 +55,42 @@ export interface Entity {
 }
 
 /**
- * The world's entities of one type, each an object with its id: iterated in id order. An iteration keeps the ones
- * there as it started: one removed meanwhile (or on its way out, World.markDestroy) is passed over, one added
- * meanwhile waits for the next.
+ * A list's slots as a save keeps them (EntityList): the entity in each slot or `null` for a free one, the free slots
+ * as a stack (the next to be taken last), and those freed this tick, free as the next starts.
+ */
+export interface EntitySlotsSnapshot {
+    slots: Array<EntityId | null>
+    free: number[]
+    freeing: number[]
+}
+
+/**
+ * The world's entities of one type, each an object with its id, in slots as the original's DataArray holds them
+ * (mPlants, mZombies and the others): one put in takes the slot freed last, or a new one after the rest; one taken out
+ * leaves its slot until the next tick starts (Board::ProcessDeleteQueue, World.freeSlots), which frees them in slot
+ * order, so of those the highest is taken first. The list is iterated in slot order, as the original goes over its
+ * arrays, and what looks for one takes the first it meets: what a zombie bites first, which zombie a plant aims at of
+ * two alike, who acts first in a tick. An iteration keeps the ones there as it started: one removed meanwhile (or on
+ * its way out, World.markDestroy) is passed over, one added meanwhile waits for the next.
  */
 export class EntityList<T extends Entity> implements Iterable<T> {
-    private readonly values = new Map<EntityId, T>()
-    private ordered: T[] | undefined
+    /** The slots (DataArray::mBlock), each holding one or none (free or freeing); as many as have been taken (mMaxUsedCount). */
+    private slots: Array<T | undefined> = []
+    /** Each one's slot, by its id. */
+    private readonly slotOf = new Map<EntityId, number>()
+    /** The free slots, the one taken next last (DataArray::mFreeListHead's list). */
+    private free: number[] = []
+    /** The slots of those taken out this tick, which freeSlots frees. */
+    private freeing: number[] = []
+    /** The slots as the last iteration found them, until one is put in or taken out. */
+    private iterated: Array<T | undefined> | undefined
 
     constructor(private readonly world: World) {}
 
     /** The one of `id`, unless it is gone or on its way out. */
     get(id: EntityId): T | undefined {
-        return this.world.leaving(id) ? undefined : this.values.get(id)
+        const slot = this.slotOf.get(id)
+        return slot === undefined || this.world.leaving(id) ? undefined : this.slots[slot]
     }
 
     has(id: EntityId): boolean {
@@ -69,25 +98,66 @@ export class EntityList<T extends Entity> implements Iterable<T> {
     }
 
     *[Symbol.iterator](): Iterator<T> {
-        const ordered = this.ordered ??= [...this.values.values()].sort((a, b) => a.id - b.id)
-        for (const value of ordered) if (this.values.get(value.id) === value && !this.world.leaving(value.id)) yield value
+        for (const value of this.iterated ??= this.slots.slice()) if (value && this.get(value.id) === value) yield value
     }
 
-    /** World.insert and CommandBuffer.insert put one in; World.destroyEntity takes it out. */
+    /** World.insert and CommandBuffer.insert put one in, a new one in a slot (DataArray::DataArrayAlloc); World.destroyEntity takes it out. */
     set(value: T): void {
-        this.values.set(value.id, value)
-        this.ordered = undefined
+        let slot = this.slotOf.get(value.id)
+        if (slot === undefined) this.slotOf.set(value.id, slot = this.free.pop() ?? this.slots.length)
+        this.slots[slot] = value
+        this.iterated = undefined
     }
 
     delete(id: EntityId): boolean {
-        if (!this.values.delete(id)) return false
-        this.ordered = undefined
+        const slot = this.slotOf.get(id)
+        if (slot === undefined) return false
+        this.slotOf.delete(id)
+        this.slots[slot] = undefined
+        this.freeing.push(slot)
+        this.iterated = undefined
         return true
+    }
+
+    /** Board::ProcessDeleteQueue: the slots of those taken out are free, freed in slot order (the highest taken next). */
+    freeSlots(): void {
+        if (!this.freeing.length) return
+        this.free.push(...this.freeing.sort((a, b) => a - b))
+        this.freeing = []
+    }
+
+    snapshotSlots(): EntitySlotsSnapshot {
+        return { slots: this.slots.map(value => value?.id ?? null), free: [...this.free], freeing: [...this.freeing] }
+    }
+
+    /**
+     * A restored list's slots, its entities in it already: each in its saved slot, the others as they were. A save
+     * edited by hand may lack some of its entities, whose slots are freed as the next tick starts, as if taken out, or
+     * have others, which take theirs as one put in does.
+     */
+    restoreSlots({ slots, free, freeing }: EntitySlotsSnapshot): void {
+        const listed = new Map<EntityId, T>()
+        for (const value of this.slots) if (value) listed.set(value.id, value)
+        const ids = slots.filter((id): id is EntityId => id !== null)
+        if (new Set(ids).size !== ids.length) throw new Error('Entity slots must hold each entity once')
+        const restored = slots.map(id => id === null ? undefined : listed.get(id))
+        const gone = slots.flatMap((id, slot) => id !== null && !restored[slot] ? [slot] : [])
+        const released = [...free, ...freeing, ...gone], empty = restored.filter(value => !value).length
+        if (released.length !== empty || new Set(released).size !== empty || released.some(slot => !(slot in restored) || restored[slot])) {
+            throw new Error('Entity slots must each be held, free or freeing once')
+        }
+        this.slots = restored
+        this.slotOf.clear()
+        restored.forEach((value, slot) => { if (value) this.slotOf.set(value.id, slot) })
+        this.free = [...free]
+        this.freeing = [...freeing, ...gone]
+        for (const value of listed.values()) if (!this.slotOf.has(value.id)) this.set(value)
+        this.iterated = undefined
     }
 
     /** Whether it holds `id`, even on its way out. */
     holds(id: EntityId): boolean {
-        return this.values.has(id)
+        return this.slotOf.has(id)
     }
 }
 
@@ -117,7 +187,7 @@ export class ResourceStore {
 
 /**
  * A level's world: what is on the board, each of its type's list (an entity is the object in it, by its id), and the
- * level's state (`resources`). Ids are never reused.
+ * level's state (`resources`). Ids are never reused; a list's slots are (EntityList).
  */
 export class World {
     readonly resources = new ResourceStore()
@@ -133,6 +203,8 @@ export class World {
     readonly mowers = new EntityList<Mower>(this)
     /** The zombies, each of its kind (Zombie). */
     readonly zombies = new EntityList<Zombie>(this)
+    /** Its lists, in ENTITY_LISTS' order, made once: after them, which they are made of. */
+    private readonly allLists: readonly EntityList<Entity>[] = ENTITY_LISTS.map(key => this[key] as EntityList<Entity>)
 
     private nextEntity = 1
     /** Those on their way out (markDestroy), which no list shows any more. */
@@ -140,7 +212,7 @@ export class World {
 
     /** Every list of the world. */
     lists(): readonly EntityList<Entity>[] {
-        return [this.items, this.gridItems, this.plants, this.projectiles, this.mowers, this.zombies]
+        return this.allLists
     }
 
     /** A new entity's id, for the object it will be in its list (insert). */
@@ -148,8 +220,16 @@ export class World {
         return this.nextEntity++
     }
 
+    /** Board::ProcessDeleteQueue, as each tick starts: the slots of what was taken out are free (EntityList.freeSlots). */
+    freeSlots(): void {
+        for (const list of this.lists()) list.freeSlots()
+    }
+
     snapshotEntityAllocator(): EntityAllocatorSnapshot {
-        return { nextEntity: this.nextEntity }
+        return {
+            nextEntity: this.nextEntity,
+            slots: Object.fromEntries(ENTITY_LISTS.map(key => [key, this[key].snapshotSlots()])) as Record<EntityListKey, EntitySlotsSnapshot>,
+        }
     }
 
     restoreEntityAllocator(snapshot: EntityAllocatorSnapshot): void {
@@ -163,6 +243,8 @@ export class World {
         if (this.lists().some(list => [...list].some(entity => entity.id >= nextEntity))) {
             throw new Error('Entity allocator nextEntity must exceed every active entity')
         }
+        // Its entities restored, each list takes back its slots.
+        for (const key of ENTITY_LISTS) this[key].restoreSlots(snapshot.slots[key])
         this.nextEntity = nextEntity
     }
 

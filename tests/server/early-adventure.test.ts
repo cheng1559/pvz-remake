@@ -174,7 +174,8 @@ test('early adventure wave plans obey points, reserve conehead introductions and
                     assert.deepEqual(restored.drainEvents(), server.drainEvents())
                 }
             }
-            assert.deepEqual(server.snapshot().zombies.map(zombie => zombie.typeId), plan[wave])
+            // In the order they came: their slots reuse those of the zombies the save left out.
+            assert.deepEqual(server.snapshot().zombies.sort((a, b) => a.entityId - b.entityId).map(zombie => zombie.typeId), plan[wave])
             for (const zombie of server.snapshot().zombies) rows.add(zombie.row)
         }
         assert.deepEqual([...rows].sort(), level.activeRows)

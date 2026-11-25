@@ -287,6 +287,42 @@ test('every particle of the board is drawn at its order among the entities, one 
     assert.equal(board.projectileOrder('test:mower', 1), renderOrderModule.renderOrder('lawnMower', 1), "a mower's by its type's layer")
 })
 
+test("an equal draw order goes as the original's: a list's entities in slot order, then the remains of those gone, then the particles", () => {
+    class Node {
+        isValid = true
+        parent?: Node
+        readonly children: Node[] = []
+        constructor(readonly name = '') {}
+        setParent(parent: Node) {
+            if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1)
+            parent.children.push(this)
+            this.parent = parent
+        }
+        setSiblingIndex(index: number) {
+            const siblings = this.parent!.children
+            siblings.splice(siblings.indexOf(this), 1)
+            siblings.splice(index, 0, this)
+        }
+    }
+    const layer = new Node('layer'), on = (name: string) => { const node = new Node(name); node.setParent(layer); return node }
+    const uiNode = (options: { name: string, parent: Node }) => ({ node: on(options.name) })
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', { '@/client/view/uiNode': { uiNode } })
+    const content = { levels: { levels: { 'test:level': {} } }, presentation: { plants: {}, zombies: {} }, views: { events: { of: () => [] } } }
+    const board = new LevelEntityRenderer(content, layer, {}, {}, { complete: true }, {})
+    // Sunflower 7 and zombie 9 took slots freed under those of sunflower 2 and zombie 5, so the snapshot lists them first.
+    const plants = [7, 2].map(entityId => ({ entityId, typeId: 'test:sunflower', row: 1, column: 2, x: 200, y: 0 }))
+    const zombies = [9, 5].map(entityId => ({ entityId, typeId: 'test:zombie', row: 2, x: 400, y: 0 }))
+    const order = board.zombieOrder(2), particles = board.particleLayer(order)
+    board.addScenery(on('remains'), order, 4)
+    board.addScenery(on('held'), order, 5)
+    for (const [kind, list] of [['zombie', zombies], ['plant', plants]] as const) {
+        for (const { entityId } of [...list].reverse()) board.entities.set(entityId, { kind, node: on(`${kind}-${entityId}`) })
+    }
+    board.syncLayerOrder({ levelId: 'test:level', plants, zombies, projectiles: [], items: [], mowers: [] })
+    assert.deepEqual(layer.children.map(node => node.name),
+        ['plant-7', 'plant-2', 'zombie-9', 'held', 'zombie-5', 'remains', particles.name])
+})
+
 test('removing an entity while its custom view loads disposes the completed plant or zombie view', async () => {
     for (const kind of ['plant', 'zombie']) {
         const node = { isValid: true, destroy() { this.isValid = false } }

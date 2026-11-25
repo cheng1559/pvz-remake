@@ -786,7 +786,11 @@ host.get('client/views').plants.registerView('example:beacon', BeaconView)
 
 ### 实体数据
 
-世界（`server/state/World`）是一组按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems` 和 `items`。每个列表按 id 保存对象本身，并按 id 顺序遍历，没有 ECS 组件。
+世界（`server/state/World`）是一组按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems` 和 `items`。每个列表按槽位保存对象本身，并按槽位顺序遍历，没有 ECS 组件。
+
+- 新对象占用最近释放的槽位，没有空槽时在末尾新开一个；同一逻辑步释放的几个，槽位高的先被占用（`Board::ProcessDeleteQueue`）。
+- 一个逻辑步里释放的槽位，下一步开始才能再被占用。
+- id 不会复用。
 
 要在实体上保存自己的数据，把它放在实体的 `extensions[id]`（一个 JSON 对象）中，其中 `id` 是自己命名空间中的限定 ID，需先用 `registry.extensions.register(id, validate?)` 注册（`pvz:` 下的 ID 会被拒绝）。
 

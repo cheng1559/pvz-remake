@@ -90,19 +90,17 @@ export class ProjectileSystem implements GameSystem {
     }
 
     /**
-     * What the projectile hits where it is, the nearest first (the leftmost for one flying right; on a tie a zombie,
-     * then the lower entity): on its row, the zombies or the plants of it, or only the one its motion aims at. Not
-     * what a piercing one has hit already.
+     * What the projectile hits where it is, the nearest first (the leftmost for one flying right; of those as near,
+     * the first met, as Projectile::FindCollisionTarget takes: the row's zombies before its plants, each in slot order):
+     * on its row, the zombies or the plants of it, or only the one its motion aims at. Not what a piercing one has hit
+     * already.
      */
     private targets(hit: ProjectileHit, aim: Exclude<MotionAim, 'none'>): ProjectileTarget[] {
         const { world, projectile } = hit, { position, definition } = projectile
         const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
         const candidates = typeof aim === 'number' ? this.rows.flat().filter(target => bodyOf(target).id === aim) : this.rows[position.row] ?? NONE
         const direction = teamDirection(projectileTeam(projectile))
-        const nearer = (a: ProjectileTarget, b: ProjectileTarget) => {
-            const first = bodyOf(a), second = bodyOf(b)
-            return direction * (first.position.x - second.position.x) || Number('zombie' in b) - Number('zombie' in a) || first.id - second.id
-        }
+        const nearer = (a: ProjectileTarget, b: ProjectileTarget) => direction * (bodyOf(a).position.x - bodyOf(b).position.x)
         let nearest: ProjectileTarget | undefined, all: ProjectileTarget[] | undefined
         // Runs for every projectile on every tick: the span overlap test comes before entity lookups, and a miss makes nothing.
         for (let i = 0; i < candidates.length; i++) {

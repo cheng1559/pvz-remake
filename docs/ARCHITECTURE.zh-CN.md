@@ -164,7 +164,7 @@ flowchart LR
 
 ### 世界与实体
 
-世界（`state/World.ts`）由若干类型化列表组成，不使用 ECS 组件：`items`、`gridItems`、`plants`、`projectiles`、`mowers` 和 `zombies`，与世界的 `resources` 并列。每个列表都是一个 `EntityList`，按 id 直接保存对象本身，并按 id 顺序遍历。
+世界（`state/World.ts`）由若干类型化列表组成，不使用 ECS 组件：`items`、`gridItems`、`plants`、`projectiles`、`mowers` 和 `zombies`，与世界的 `resources` 并列。每个列表都是一个 `EntityList`，按槽位保存对象本身（原版的 DataArray），并按槽位顺序遍历。
 
 实体就是它在某个列表中的对象：
 
@@ -616,7 +616,7 @@ flowchart LR
 - 植物的偏移为 `5 − x + 800`（越靠左越晚画），僵尸为 4。
 - 阴影位于 `ground` 层，偏移为 3，在所有行的植物和僵尸之下。
 - 掉落的头、手臂和头盔比所属僵尸高一级；其他粒子使用原版的渲染层，或所属实体的顺序加上其偏移。
-- 顺序相同的实体保持创建顺序，位于某实体顺序上的粒子画在该实体之后。
+- 顺序相同的实体按槽位顺序排列，不同种类之间按固定顺序；位于某实体顺序上的残骸和粒子画在实体之后。
 - 表现数据中用名称指定渲染层（植物的 `layer`、爆炸的 `layer`；滚动的保龄球坚果使用 `projectile`），而不是写数字。
 
 #### 存档与布局
