@@ -2,7 +2,9 @@ import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels, streetZombies } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels, streetZombies, type LevelDefinition } from '@/shared/content/gameplay'
+import { planWaves } from '@/server/rules/registry'
+import { DeterministicRng } from '@/server/state/DeterministicRng'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -158,6 +160,14 @@ test("the street's zombies hold the zombies' first slots through the intro, whic
     const [second, first] = server.snapshot().zombies.map(zombie => zombie.entityId)
     assert.ok(first < second, 'listed in slot order, the later one first')
     assert.deepEqual([first, second].map(id => slots(server).slots.indexOf(id)), [street - 1, street - 2])
+})
+
+test("a wave's random picks stop at the level's capacity, 50 unless it gives its own; the zombies it lists come all the same", () => {
+    const level = levels.levels['pvz:adventure-1-10']
+    const size = (level: LevelDefinition, zombies: string[]) => planWaves([{ zombies, points: 200 }], level, new DeterministicRng(1))[0].zombies.length
+    assert.equal(size(level, []), 50, 'Board::PickZombieWaves stops at MAX_ZOMBIES_IN_WAVE')
+    assert.equal(size({ ...level, waveCapacity: 5 }, []), 5)
+    assert.equal(size({ ...level, waveCapacity: 5 }, Array(8).fill('pvz:normal')), 8, 'none listed is left out')
 })
 
 test('early adventure wave plans obey points, reserve conehead introductions and survive save/restore', () => {

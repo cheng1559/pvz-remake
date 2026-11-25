@@ -102,12 +102,16 @@ export class LevelRuleRegistry {
     }
 }
 
-/** Board::PickZombieWaves: after the fixed zombies, spend the remaining points by weight. */
+/** Board::PickZombieWaves: the most zombies a wave's random picks fill it up to, where the level gives none (`waveCapacity`). */
+export const MAX_ZOMBIES_IN_WAVE = 50
+
+/** Board::PickZombieWaves: after the fixed zombies, spend the remaining points by weight while the wave has room. */
 export function planWaves(drafts: WaveDraft[], level: LevelDefinition, random: DeterministicRng): WavePlan[] {
+    const capacity = level.waveCapacity ?? MAX_ZOMBIES_IN_WAVE
     return drafts.map((draft, index) => {
         const zombies = [...draft.zombies]
         let remaining = draft.points
-        while (remaining > 0) {
+        while (remaining > 0 && zombies.length < capacity) {
             const choices = level.zombiePool!.filter(entry => entry.weight > 0 && entry.points <= remaining && index + 1 >= (entry.firstWave ?? 1))
             const picked = pickWeighted(choices, random)
             zombies.push(picked.id)

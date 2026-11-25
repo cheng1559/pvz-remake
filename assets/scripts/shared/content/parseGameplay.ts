@@ -855,7 +855,7 @@ function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefin
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exact(value, [
         'board', 'lawnMower', 'activeRows', 'startingSun', 'award',
-    ], name, ['adventureIndex', 'tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'previewCapacity', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
+    ], name, ['adventureIndex', 'tutorial', 'waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'previewCapacity', 'waveCapacity', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
         'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools', 'itemClickPadding'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
@@ -1031,6 +1031,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         ...(zombiePool === undefined ? {} : { zombiePool }),
         ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),
         ...(source.previewCapacity === undefined ? {} : { previewCapacity: positiveInteger(source.previewCapacity, `${name}.previewCapacity`) }),
+        ...(source.waveCapacity === undefined ? {} : { waveCapacity: positiveInteger(source.waveCapacity, `${name}.waveCapacity`) }),
         // The tutorial is a server script: GameplayRegistry checks it is installed (TutorialRegistry.validate).
         ...(source.tutorial === undefined ? {} : { tutorial: qualifiedId(source.tutorial, `${name}.tutorial`) }),
         award: parsedAward,

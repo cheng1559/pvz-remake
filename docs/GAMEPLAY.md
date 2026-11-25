@@ -70,7 +70,7 @@ The adventure rule (`server/rules/adventure.ts`) builds the waves as `Board::Pic
 3. **Level multiplier** (`pointsScale`): ×4 on Wall-nut Bowling (1-5), ×3 on the conveyor levels 1-10 and 2-10.
 4. **Introduced zombies** (`fixedZombies`) are put on their waves: the middle wave and the last.
 5. **The final wave** gets one of each weighted zombie in the level's pool that it does not have yet (`PutInMissingZombies`).
-6. **The rest** of the points is spent at random by the pool's weights, among the zombies that cost no more than what is left and are allowed on that wave (`firstWave`).
+6. **The rest** of the points is spent at random by the pool's weights, among the zombies that cost no more than what is left and are allowed on that wave (`firstWave`), until the wave holds 50 zombies (`MAX_ZOMBIES_IN_WAVE`; a level's `waveCapacity` gives its own).
 
 A zombie costs its `zombiePool` entry's points, otherwise its own `wave.points` (table in [Zombies](#zombies)). Each zombie of a wave picks its row as the original does: the last two picks are smoothed out, and a row whose lawn mower has just gone off is picked far less often for the next wave and half as often for the one after.
 

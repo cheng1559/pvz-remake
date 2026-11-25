@@ -29,6 +29,7 @@
       {"seedId":"pvz:sunflower","row":4,"column":0}, {"seedId":"pvz:peashooter","row":4,"column":1}, {"seedId":"pvz:repeater","row":4,"column":2}, {"seedId":"pvz:snowpea","row":4,"column":3}, {"seedId":"pvz:peashooter","row":4,"column":4}, {"seedId":"pvz:repeater","row":4,"column":5}, {"seedId":"pvz:snowpea","row":4,"column":6}, {"seedId":"pvz:wallnut","row":4,"column":7}
     ],
     "firstWaveTicks": 1,
+    "waveCapacity": 1023,
     "zombiePool": [
       {"id": "pvz:normal", "weight": 5},
       {"id": "pvz:conehead", "points": 1, "weight": 3},

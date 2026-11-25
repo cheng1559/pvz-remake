@@ -770,6 +770,11 @@ export interface LevelDefinition {
      * and 15 on level 25 (Big Trouble Little Zombie).
      */
     previewCapacity?: number
+    /**
+     * Board::PickZombieWaves: the most zombies a wave's random picks fill it up to, MAX_ZOMBIES_IN_WAVE (50) unless
+     * given (planWaves); the zombies a wave lists come whatever their number.
+     */
+    waveCapacity?: number
     conveyor?: {
         initialSeed?: string
         initialDelayTicks?: number
