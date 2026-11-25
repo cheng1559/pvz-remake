@@ -7,6 +7,7 @@ import type {
     WorldSnapshot,
 } from '@/shared/protocol/index'
 
+/** The entities a frame brought and took away, as its lists have them (each kind's in slot order). */
 export interface ClientWorldChanges {
     added: EntityId[]
     removed: EntityId[]
@@ -35,7 +36,7 @@ export class ClientWorld {
     restore(previous: WorldSnapshot | null, current: WorldSnapshot): ClientWorldChanges {
         this.previousValue = previous ?? undefined
         this.currentValue = current
-        return { added: [...entityIds(current)].sort((a, b) => a - b), removed: [] }
+        return { added: [...entityIds(current)], removed: [] }
     }
 
     accept(input: SnapshotInput): ClientWorldChanges {
@@ -52,8 +53,8 @@ export class ClientWorld {
         }
         this.currentValue = snapshot
         return {
-            added: [...after].filter(id => !before.has(id)).sort((a, b) => a - b),
-            removed: [...before].filter(id => !after.has(id)).sort((a, b) => a - b),
+            added: [...after].filter(id => !before.has(id)),
+            removed: [...before].filter(id => !after.has(id)),
         }
     }
 

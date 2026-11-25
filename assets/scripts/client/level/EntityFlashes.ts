@@ -94,10 +94,9 @@ export class EntityFlashes {
         this.countdowns.delete(entityId)
     }
 
-    /** The flashes of the entities `kept`, by entity, for a save. */
+    /** The flashes of the entities `kept`, each with its entity, for a save. */
     snapshot(kept: (entityId: number) => boolean): FlashSnapshot[] {
-        return [...this.flashes].filter(([entityId]) => kept(entityId)).sort(([left], [right]) => left - right)
-            .map(([entityId, flash]) => ({ entityId, ...flash }))
+        return [...this.flashes].filter(([entityId]) => kept(entityId)).map(([entityId, flash]) => ({ entityId, ...flash }))
     }
 
     /** A save's flashes in place of these; the producers' countdowns are seen anew from the next frame. */

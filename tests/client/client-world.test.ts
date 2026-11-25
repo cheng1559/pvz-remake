@@ -32,7 +32,7 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     const started: SessionStartedPacket = {
         protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot: first,
     }
-    assert.deepEqual(world.accept(started), { added: [1, 2, 4, 6, 7], removed: [] })
+    assert.deepEqual(world.accept(started), { added: [1, 2, 6, 7, 4], removed: [] })
     assert.equal(world.current, first)
 
     const second = snapshot(2)

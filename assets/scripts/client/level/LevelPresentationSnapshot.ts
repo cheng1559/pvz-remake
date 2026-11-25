@@ -309,7 +309,7 @@ function parseParticles(
         return { instanceId, owner, playback: parseParticlePlayerSnapshot(source.playback) }
     })
     unique(particles.map(particle => particle.instanceId), 'Level particle instance ID')
-    return particles.sort((left, right) => left.instanceId - right.instanceId)
+    return particles
 }
 
 function parseParticleOwner(value: unknown, particleName: string): LevelParticleOwnerSnapshot {
