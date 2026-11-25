@@ -49,7 +49,7 @@ interface TrackRenderOverride {
 const DEG_TO_RAD = Math.PI / 180
 
 /** A frame's texture with its untrimmed, top-left anchored rectangle and UVs, read once. */
-interface FrameGeometry {
+export interface FrameGeometry {
     frame: SpriteFrame
     texture: unknown
     /** left, right, bottom, top, then the four corner UVs. */
@@ -57,7 +57,7 @@ interface FrameGeometry {
 }
 const geometries = new WeakMap<SpriteFrame, FrameGeometry>()
 /** SpriteFrame properties are getters; reading them per image per frame is costly without a JIT. */
-function frameGeometry(frame: SpriteFrame): FrameGeometry {
+export function frameGeometry(frame: SpriteFrame): FrameGeometry {
     let geometry = geometries.get(frame)
     if (!geometry) {
         const border = frame.trimmedBorder, size = frame.originalSize, data = new Float64Array(12)
@@ -332,7 +332,7 @@ export class ReanimPlayer extends Component {
         this.onlyTracks = onlyTracks
         if (previous?.id !== id) {
             const views = new Map(this.views)
-            this.views.clear()
+            this.clearTrackViews()
             this.frameOverrides.clear()
             this.data = assets.data
             this.frames.clear()
@@ -462,9 +462,15 @@ export class ReanimPlayer extends Component {
         this.applyPose()
     }
 
-    /** Every track ID of the loaded clip. */
-    get trackIds(): string[] {
-        return [...this.views.keys()]
+    /** Every track ID of the loaded clip; the list is the player's own, made once for the clip and not to be changed. */
+    get trackIds(): readonly string[] {
+        return this.trackIdList ??= [...this.views.keys()]
+    }
+    private trackIdList?: string[]
+
+    private clearTrackViews(): void {
+        this.views.clear()
+        this.trackIdList = undefined
     }
 
     private trackIncluded(id: string): boolean {
@@ -799,7 +805,8 @@ export class ReanimPlayer extends Component {
         if (single?.node) { this.writeTrackNode(trackId!, single); return }
         const drawing = this.prepareDrawing()
         const state = drawing.state, color = this.drawColor, extra = this.drawExtraAdditiveColor
-        let matrix = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }, shown = this.visible
+        // Every animation every frame: what is made here is made that often, so the usual case makes nothing.
+        let matrix = IDENTITY, shown = this.visible
         if (shown && this.attachment) {
             const { parent, trackId: parentTrackId, basePose } = this.attachment
             const parentTrack = parent.requireData().tracks.find(candidate => candidate.id === parentTrackId)
@@ -816,51 +823,68 @@ export class ReanimPlayer extends Component {
         state[Header.RATIO] = this.blendDuration > 0 ? Math.min(1, this.blendElapsed / this.blendDuration) : 0
         state[Header.MATRIX_A] = matrix.a; state[Header.MATRIX_B] = matrix.b; state[Header.MATRIX_C] = matrix.c
         state[Header.MATRIX_D] = matrix.d; state[Header.MATRIX_X] = matrix.tx; state[Header.MATRIX_Y] = matrix.ty
-        const order: Array<{ node: Node, clipped: boolean }> = []
-        // A track node moved under another parent (the menu's wood sign) keeps that parent's order.
-        const ours = (node: Node) => node.parent === this.node || this.clipMasks.includes(node.parent!)
-        let used = 0
-        for (const segment of drawing.segments) {
-            const clipped = segment.clipped
+        // What draws, in drawing order, and whether each is clipped: the player's own two lists, filled anew.
+        const order = this.order ??= [], clips = this.orderClips ??= []
+        let count = 0, used = 0, anyClipped = false
+        const segments = drawing.segments
+        for (let index = 0; index < segments.length; index++) {
+            const segment = segments[index], clipped = segment.clipped
             if ('view' in segment) {
                 this.writeTrackNode(segment.trackId, segment.view)
-                if (ours(segment.view.node!)) order.push({ node: segment.view.node!, clipped })
-                for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
-            } else if ('followed' in segment) {
-                for (const node of this.followers.get(segment.trackId) ?? []) if (ours(node)) order.push({ node, clipped })
+                if (this.ours(segment.view.node!)) { order[count] = segment.view.node!; clips[count++] = clipped }
+            }
+            if ('view' in segment || 'followed' in segment) {
+                const followers = this.followers.get(segment.trackId)
+                if (followers) for (const node of followers) if (this.ours(node)) { order[count] = node; clips[count++] = clipped }
             } else if (shown) {
                 const batch = this.batchAt(used++)
-                // Room for every track and its extra additive image; the kernel clears unused quads.
+                // Room for every track and its extra additive image; only the quads written are drawn.
                 batch.setSource(segment.source, segment.frame.frame, (segment.end - segment.first) * 2)
-                order.push({ node: batch.node, clipped })
-            }
+                order[count] = batch.node
+                clips[count++] = clipped
+            } else continue
+            if (clipped) anyClipped = true
         }
+        // Nothing of an earlier, longer order is kept alive by the list.
+        order.length = count
         for (let i = used; i < this.batches.length; i++) this.batches[i].clear()
-        if (this.batches.length || this.followers.size || this.clipMasks.length) this.arrange(order)
+        if (!this.batches.length && !this.followers.size && !this.clipMasks.length) return
+        if (anyClipped || this.clipMasks.length) this.arrange(order, clips)
+        else place(this.node, order)
+    }
+
+    /** What draws, in drawing order, as writePose last listed it, and whether each is clipped. */
+    private order?: Node[]
+    private orderClips?: boolean[]
+
+    /** A node is this player's to put in order: one moved under another parent (the menu's wood sign) keeps that parent's. */
+    private ours(node: Node): boolean {
+        const parent = node.parent
+        return parent === this.node || this.clipMasks.includes(parent!)
     }
 
     /** Puts what draws in drawing order, each run of clipped ones under a clip mask of its own. */
-    private arrange(order: ReadonlyArray<{ node: Node, clipped: boolean }>): void {
+    private arrange(order: readonly Node[], clips: readonly boolean[]): void {
         const top: Node[] = [], runs: Node[][] = []
-        order.forEach(({ node, clipped }, index) => {
-            if (!clipped) { top.push(node); return }
-            if (!order[index - 1]?.clipped) top.push(this.clipMaskAt(runs.push([]) - 1))
+        for (let index = 0; index < order.length; index++) {
+            const node = order[index]
+            if (!clips[index]) { top.push(node); continue }
+            if (!index || !clips[index - 1]) top.push(this.clipMaskAt(runs.push([]) - 1))
             runs[runs.length - 1].push(node)
-        })
+        }
         for (let i = runs.length; i < this.clipMasks.length; i++) this.clipMasks[i].active = false
-        const place = (parent: Node, nodes: readonly Node[]) => nodes.forEach((node, index) => {
-            if (node.parent !== parent) node.setParent(parent)
-            if (parent.children[index] !== node) node.setSiblingIndex(index)
-        })
         place(this.node, top)
-        runs.forEach((nodes, index) => place(this.clipMasks[index], nodes))
+        for (let index = 0; index < runs.length; index++) place(this.clipMasks[index], runs[index])
     }
 
     /** Draws the batched tracks [first, end); the drawing state is the one prepared by the last pose write. */
-    private writeRun(first: number, end: number, positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number): number {
+    private writeRun(first: number, end: number, positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number,
+        placement?: Float64Array): number {
         const drawing = this.drawing
         if (!drawing) return 0
         const state = drawing.state
+        state[Header.PLACED] = placement ? 1 : 0
+        if (placement) state.set(placement, Header.PLACE)
         state[Header.OPACITY] = opacity
         state[Header.STRIDE] = stride
         state[Header.CAPACITY] = capacity
@@ -913,7 +937,9 @@ export class ReanimPlayer extends Component {
             else if (image) {
                 const segment: Extract<Segment, { first: number }> = {
                     first: index, end: index + 1, frame: image, clipped,
-                    source: { writeQuads: (...target) => this.writeRun(segment.first, segment.end, ...target) },
+                    // Called for every batch every frame: its arguments one by one, where a rest would make an array of them.
+                    source: { writeQuads: (positions, vertices, opacity, stride, capacity, placement) =>
+                        this.writeRun(segment.first, segment.end, positions, vertices, opacity, stride, capacity, placement) },
                 }
                 run = segment
                 segments.push(segment)
@@ -936,6 +962,7 @@ export class ReanimPlayer extends Component {
         images.forEach((image, slot) => { if (image) state.set(image.data, imageStart + slot * IMAGE) })
         state[Header.TRACKS] = views.length
         state[Header.IMAGES] = images.length
+        state[Header.RATE] = data.fps
         return this.drawing = { keys: clip.keys, tracks, state, segments }
     }
 
@@ -1034,7 +1061,7 @@ export class ReanimPlayer extends Component {
     private clearViews(): void {
         this.followers.clear()
         for (const view of this.views.values()) if (isValid(view.node, true)) view.node!.destroy()
-        this.views.clear()
+        this.clearTrackViews()
         for (const batch of this.batches) if (isValid(batch.node, true)) batch.node.destroy()
         this.batches = []
         this.releaseDrawing()
@@ -1088,6 +1115,22 @@ function positiveFinite(value: number, name: string): number {
 }
 
 let blendFrom: Float64Array | undefined, blendTo: Float64Array | undefined
+
+/** The matrix of a player on no part of another: its poses as they are. */
+const IDENTITY: ReturnType<typeof attachmentMatrix> = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }
+
+/** Has `nodes` the first children of `parent`, in their order. */
+function place(parent: Node, nodes: readonly Node[]): void {
+    const children = parent.children
+    for (let index = 0; index < nodes.length; index++) {
+        const node = nodes[index]
+        // In its place among the parent's children, it is the parent's: every frame's case, for which the node is
+        // not asked for its parent, a call into the native engine each time.
+        if (children[index] === node) continue
+        if (node.parent !== parent) node.setParent(parent)
+        if (parent.children[index] !== node) node.setSiblingIndex(index)
+    }
+}
 
 /** The time of a clip's last picture, of any track: what its pictures span. */
 const lastKeyTimes = new WeakMap<Reanim, number>()

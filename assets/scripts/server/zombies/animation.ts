@@ -41,9 +41,14 @@ export function playZombie(zombie: Zombie, animation: AnimationDefinition, clip:
     return zombie.animations[ZOMBIE_BODY_LAYER] = startLayer(clip === ZOMBIE_CLIPS.mowered ? MOWERED_ANIMATION : animation, zombie, clip, random)
 }
 
+/** The zombie whose animation is stepping, for PACED: every zombie steps every tick, without a closure made for each. */
+let stepping: Zombie
+const PACED = { slowed: (layer: string) => zombiePace(stepping, layer) }
+
 /** A tick of its animation, at its pace. */
 export function stepZombie(zombie: Zombie, animation: AnimationDefinition, random: AnimationRandom): void {
-    stepLayers(zombie.state === 'mowered' ? MOWERED_ANIMATION : animation, zombie, random, { slowed: layer => zombiePace(zombie, layer) })
+    stepping = zombie
+    stepLayers(zombie.state === 'mowered' ? MOWERED_ANIMATION : animation, zombie, random, PACED)
 }
 
 /**

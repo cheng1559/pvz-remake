@@ -138,16 +138,27 @@ export function stepLayers(animation: AnimationDefinition, entity: Animated, ran
     on: { slowed?: (layer: string) => number, before?: (state: LayerState, clip: AnimationClip) => void } = {}): void {
     const layers = entity.animations
     if (!layers) return
-    for (const [layer, state] of Object.entries(layers)) {
-        // A clip shown off the board in place of the animation's is a loop.
-        const clip: AnimationClip | undefined = animation.clips[state.clip]
-        if (clip) on.before?.(state, clip)
-        state.time += state.rate * (on.slowed?.(layer) ?? 1) / TICKS_PER_SECOND
-        if (!clip || state.time < clip.frames - END) continue
-        if (clip.once) delete layers[layer]
-        else if (clip.next !== undefined) layers[layer] = startLayer(animation, entity, clip.next, random)
-        else if (clip.hold) state.time = clip.frames
+    // The layers as the tick began, each on what it then played: one that another's clip starts or ends meanwhile is
+    // still stepped as it was. Most have one layer, which takes no list of them.
+    const names = Object.keys(layers)
+    if (names.length === 1) {
+        stepLayer(animation, entity, random, on, layers, names[0], layers[names[0]])
+        return
     }
+    const states = names.map(name => layers[name])
+    for (let index = 0; index < names.length; index++) stepLayer(animation, entity, random, on, layers, names[index], states[index])
+}
+
+function stepLayer(animation: AnimationDefinition, entity: Animated, random: AnimationRandom, on: Parameters<typeof stepLayers>[3] & object,
+    layers: NonNullable<Animated['animations']>, layer: string, state: LayerState): void {
+    // A clip shown off the board in place of the animation's is a loop.
+    const clip: AnimationClip | undefined = animation.clips[state.clip]
+    if (clip) on.before?.(state, clip)
+    state.time += state.rate * (on.slowed?.(layer) ?? 1) / TICKS_PER_SECOND
+    if (!clip || state.time < clip.frames - END) return
+    if (clip.once) delete layers[layer]
+    else if (clip.next !== undefined) layers[layer] = startLayer(animation, entity, clip.next, random)
+    else if (clip.hold) state.time = clip.frames
 }
 
 /**

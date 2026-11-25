@@ -9,12 +9,18 @@ export interface Kernel {
     /** Arrays the kernel reads and writes without copying; release them when discarded. */
     f64(length: number): Float64Array
     i32(length: number): Int32Array
-    release(array: Float64Array | Int32Array): void
+    f32(length: number): Float32Array
+    release(array: Float64Array | Int32Array | Float32Array): void
     /** Writes x, y, scaleX, scaleY, skewX, skewY and alpha; returns the keyframe index, or -1 before the first. */
     sample(keys: Float64Array, first: number, count: number, time: number, pose: Float64Array): number
     /** Blends pose towards itself from a captured pose, in place. */
     blend(from: Float64Array, ratio: number, pose: Float64Array): void
     writeReanim(keys: Float64Array, tracks: Int32Array, state: Float64Array, positions: Float32Array, vertices: Float32Array): number
+    /**
+     * Places the first `quads` of vertices written at local positions in the world, in place: each position goes through
+     * the matrix, given as the x, y and z of its x axis, of its y axis and of its origin.
+     */
+    placeQuads(vertices: Float32Array, quads: number, stride: number, matrix: Float64Array): void
     particlesCreate(definition: Float64Array, seed: number): number
     particlesStep(handle: number, ticks: number, motion: Float64Array): number
     particlesInfo(handle: number, output: Float64Array): number
@@ -23,6 +29,8 @@ export interface Kernel {
     /** It launches no more particles; each emitter is dead with its last one. */
     particlesStop(handle: number): void
     particlesDestroy(handle: number): void
+    /** TodParticleHolder's particles: how many may be alive across all systems at once; more are not spawned. */
+    particlesLimit(count: number): void
     /** Decodes a premultiplied RGBA8 PNG into the start of output, which holds (width * 4 + 1) * height bytes; see PngResult. */
     decodePng(png: Uint8Array, output: Uint8Array): number
     /**
@@ -45,7 +53,11 @@ const SAND_BAND = 4 << 20
 export const Header = {
     TIME: 0, RED: 1, GREEN: 2, BLUE: 3, ALPHA: 4, EXTRA: 5, EXTRA_RED: 6, EXTRA_GREEN: 7, EXTRA_BLUE: 8, EXTRA_ALPHA: 9,
     OPACITY: 10, STRIDE: 11, TRACKS: 12, CAPACITY: 13, TINTED: 14, IMAGES: 15, BLENDING: 16, RATIO: 17,
-    MATRIX_A: 18, MATRIX_B: 19, MATRIX_C: 20, MATRIX_D: 21, MATRIX_X: 22, MATRIX_Y: 23, FIRST: 24, END: 25, SIZE: 26,
+    MATRIX_A: 18, MATRIX_B: 19, MATRIX_C: 20, MATRIX_D: 21, MATRIX_X: 22, MATRIX_Y: 23, FIRST: 24, END: 25,
+    /** Keyframes a second where a track has one for every frame: where the one a time has reached is looked for first. */
+    RATE: 26,
+    /** Not 0: the quads go out placed in the world by the nine numbers from PLACE (placeQuads), the rest of the capacity left as it was. */
+    PLACED: 27, PLACE: 28, SIZE: 37,
 } as const
 
 type Native = {
@@ -55,19 +67,22 @@ type Native = {
     __pvzParticlesWrite?: Kernel['particlesWrite']
     __pvzParticlesStop?: Kernel['particlesStop']
     __pvzParticlesDestroy?: Kernel['particlesDestroy']
+    __pvzParticlesLimit?: Kernel['particlesLimit']
     __pvzKernelSample?: Kernel['sample']
     __pvzKernelBlend?: Kernel['blend']
     __pvzKernelWriteReanim?: Kernel['writeReanim']
+    __pvzKernelPlaceQuads?: Kernel['placeQuads']
     __pvzKernelDecodePng?: Kernel['decodePng']
     __pvzKernelSandAlphaEdges?: Kernel['sandAlphaEdges']
 }
 
 function nativeKernel(): Kernel | null {
     const native = globalThis as Native
-    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesStop || !native.__pvzParticlesDestroy || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelDecodePng || !native.__pvzKernelSandAlphaEdges) return null
+    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesStop || !native.__pvzParticlesDestroy || !native.__pvzParticlesLimit || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelPlaceQuads || !native.__pvzKernelDecodePng || !native.__pvzKernelSandAlphaEdges) return null
     return {
         f64: length => new Float64Array(length),
         i32: length => new Int32Array(length),
+        f32: length => new Float32Array(length),
         release() {},
         particlesCreate: native.__pvzParticlesCreate,
         particlesStep: native.__pvzParticlesStep,
@@ -75,9 +90,11 @@ function nativeKernel(): Kernel | null {
         particlesWrite: native.__pvzParticlesWrite,
         particlesStop: native.__pvzParticlesStop,
         particlesDestroy: native.__pvzParticlesDestroy,
+        particlesLimit: native.__pvzParticlesLimit,
         sample: native.__pvzKernelSample,
         blend: native.__pvzKernelBlend,
         writeReanim: native.__pvzKernelWriteReanim,
+        placeQuads: native.__pvzKernelPlaceQuads,
         decodePng: native.__pvzKernelDecodePng,
         sandAlphaEdges: native.__pvzKernelSandAlphaEdges,
     }
@@ -91,6 +108,7 @@ interface WasmExports {
         positions: number, positionCount: number, vertices: number, vertexCount: number): number
     pvz_particles_stop(handle: number): void
     pvz_particles_destroy(handle: number): void
+    pvz_particles_limit(count: number): void
     pvz_png_decode_premultiplied(png: number, length: number, output: number, outputLength: number): number
     pvz_sand_alpha_edges(rgba: number, width: number, height: number): void
     _initialize?(): void
@@ -101,6 +119,7 @@ interface WasmExports {
     pvz_blend(from: number, ratio: number, pose: number): void
     pvz_write_reanim(keys: number, keyCount: number, tracks: number, trackCount: number, state: number, stateCount: number,
         positions: number, positionCount: number, vertices: number, vertexCount: number): number
+    pvz_place_quads(vertices: number, vertexCount: number, quads: number, stride: number, matrix: number): void
 }
 
 function wasmKernel(instance: WebAssembly.Instance): Kernel {
@@ -120,13 +139,17 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
         copy.set(array)
         return address
     }
-    const done = (outputs: Array<[View, number]> = []) => {
-        for (const [array, address] of outputs) {
-            if (array.buffer !== buffer) array.set(new (array.constructor as new (buffer: ArrayBuffer, offset: number, length: number) => View)(buffer, address, array.length))
-        }
-        for (const address of temporary.splice(0)) wasm.free(address)
+    /** Copies an output back to an array outside kernel memory. */
+    const read = (array: View, address: number) => {
+        if (array.buffer !== buffer) array.set(new (array.constructor as new (buffer: ArrayBuffer, offset: number, length: number) => View)(buffer, address, array.length))
     }
-    const allocate = <T extends Float64Array | Int32Array>(type: new (buffer: ArrayBuffer, offset: number, length: number) => T,
+    /** Frees the copies made for the call; none when its arrays were the kernel's own, as every frame's are. */
+    const done = () => {
+        if (!temporary.length) return
+        for (const address of temporary) wasm.free(address)
+        temporary.length = 0
+    }
+    const allocate = <T extends Float64Array | Int32Array | Float32Array>(type: new (buffer: ArrayBuffer, offset: number, length: number) => T,
         fallback: new (length: number) => T, bytes: number, length: number): T => {
         const address = length ? wasm.malloc(length * bytes) : 0
         if (length && !address) throw new Error('drawing kernel is out of memory')
@@ -138,6 +161,7 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
     return {
         f64: length => allocate(Float64Array, Float64Array, 8, length),
         i32: length => allocate(Int32Array, Int32Array, 4, length),
+        f32: length => allocate(Float32Array, Float32Array, 4, length),
         release(array) { if (array.buffer === buffer && array.length) wasm.free(array.byteOffset) },
         particlesCreate(definition, seed) {
             try { return wasm.pvz_particles_create(pointer(definition), definition.length, seed) }
@@ -150,21 +174,25 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
         particlesInfo(handle, output) {
             const address = pointer(output)
             try { return wasm.pvz_particles_info(handle, address, output.length) }
-            finally { done([[output, address]]) }
+            finally { read(output, address); done() }
         },
         particlesWrite(handle, emitter, geometry, options, positions, vertices) {
             const positionAddress = pointer(positions), vertexAddress = vertices === positions ? positionAddress : pointer(vertices)
             const written = wasm.pvz_particles_write(handle, emitter, pointer(geometry), geometry.length, pointer(options), options.length,
                 positionAddress, positions.length, vertexAddress, vertices.length)
-            done(vertices === positions ? [[positions, positionAddress]] : [[positions, positionAddress], [vertices, vertexAddress]])
+            read(positions, positionAddress)
+            if (vertices !== positions) read(vertices, vertexAddress)
+            done()
             return written
         },
         particlesStop(handle) { wasm.pvz_particles_stop(handle) },
         particlesDestroy(handle) { wasm.pvz_particles_destroy(handle) },
+        particlesLimit(count) { wasm.pvz_particles_limit(count) },
         decodePng(png, output) {
             const address = pointer(output)
             const result = wasm.pvz_png_decode_premultiplied(pointer(png), png.length, address, output.length)
-            done([[output, address]])
+            read(output, address)
+            done()
             return result
         },
         sandAlphaEdges(rgba, width, height) {
@@ -187,20 +215,30 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
             if (first < 0 || count < 0 || (first + count) * KEY > keys.length || pose.length < 7) return -1
             const keyAddress = pointer(keys), poseAddress = pointer(pose)
             const index = wasm.pvz_sample(keyAddress + first * KEY * 8, count, time, poseAddress)
-            done([[pose, poseAddress]])
+            read(pose, poseAddress)
+            done()
             return index
         },
         blend(from, ratio, pose) {
             const fromAddress = pointer(from), poseAddress = pointer(pose)
             wasm.pvz_blend(fromAddress, ratio, poseAddress)
-            done([[pose, poseAddress]])
+            read(pose, poseAddress)
+            done()
         },
         writeReanim(keys, tracks, state, positions, vertices) {
             const positionAddress = pointer(positions), vertexAddress = vertices === positions ? positionAddress : pointer(vertices)
             const written = wasm.pvz_write_reanim(pointer(keys), keys.length, pointer(tracks), tracks.length, pointer(state), state.length,
                 positionAddress, positions.length, vertexAddress, vertices.length)
-            done(vertices === positions ? [[positions, positionAddress]] : [[positions, positionAddress], [vertices, vertexAddress]])
+            read(positions, positionAddress)
+            if (vertices !== positions) read(vertices, vertexAddress)
+            done()
             return written
+        },
+        placeQuads(vertices, quads, stride, matrix) {
+            const address = pointer(vertices)
+            wasm.pvz_place_quads(address, vertices.length, quads, stride, pointer(matrix))
+            read(vertices, address)
+            done()
         },
     }
 }

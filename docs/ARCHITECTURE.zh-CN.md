@@ -102,7 +102,7 @@ flowchart LR
 
 服务端数据包按类型处理：
 
-- **帧**是最频繁的数据包，服务端用新建的对象构造其中的每个快照和事件。因此帧只经过校验（`validateServerPacket`）就直接交出，不做复制。
+- **帧**是最频繁的数据包，服务端用新建的对象构造其中的每个快照和事件。因此帧直接交出，不做复制。交出时会校验（`validateServerPacket`）：调试构建每帧都校验，发布构建每秒校验一帧（`LocalGameChannel` 的 `frameChecks`），因为每个 tick 检查每个实体的每个字段，花的时间超过了它能发现的问题。
 - **其他服务端数据包**可能引用服务端状态。`copyServerPacket` 在一次遍历中检查其 JSON 安全性并做深拷贝，然后再进行协议的结构检查。
 
 嵌套的模组状态、扩展数据和事件也以同样方式复制或检查，客户端修改自己持有的数据不会影响服务端或其他快照。客户端请求、外部数据包解析和存档格式各自遵循自己的规则。
@@ -421,7 +421,7 @@ flowchart LR
 
 玩法定义的编写表位于 `mods/pvz-base/gameplay/definitions/`，拆分为植物、僵尸、种子、场地、子弹、物品、成就、工具、商店、商店页面和图鉴。`gameplay/settings.json` 包含全局默认值，`gameplay/levels.json` 包含关卡。
 
-表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。
+表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。`presentation/settings.json` 包含客户端自己的全局设置，与服务端读取的玩法设置分开。
 
 根目录的 `mods/pvz-base/content.json` 以与模组源码相同的格式索引所有表。打包（`npm run mod:pack`，`tools/mod/cli.ts`）把它们合并为包内的 `assets/gameplay.json` 和 `assets/presentation.json`，结构与模组包相同，不增加额外的资源请求。基础内容包发布到 `assets/resources/base.zip`（`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`，`npm run build:content` 也会执行这一步）。无界面工具和测试读取同一套源表（`tools/mod/content.ts`）。
 
@@ -647,7 +647,7 @@ flowchart LR
 - **同步**：在场地上，`sync(entity, world)` 每帧执行一次，由视图自己摆放节点。新建的视图会立即用当时的快照同步一次。
 - **场地外**：植物、僵尸、格子物品和子弹也可以在场地外绘制（`client/view/offBoard.ts`）。它们由同样的注册表创建，上下文中没有 `stage`，从 `initialize` 起按上下文绘制，从不同步，用完后调用 `destroy`。
 - **存档**：需要跨存档保留的内容由视图自己通过 `snapshot` / `restore` 保存：僵尸的身体动画和推车驾驶员动画、阳光和金币的旋转。存档条目按类别区分（`zombie`、`item`）。植物和僵尸的受击闪光属于场地（`stage.flashes`，`EntityFlashes`），随渲染器的状态保存在关卡表现存档的 `flashes` 中，而不是由各视图保存。
-- **阴影**：位于视图自身节点之外的阴影节点（僵尸、子弹、小推车）是视图的 `shadowNode`，由渲染器放到地面层。设置 `draw.shadow: false` 时，植物和僵尸都不创建阴影。
+- **阴影**：位于视图自身节点之外的阴影节点（子弹、小推车，以及场地外的僵尸）是视图的 `shadowNode`，由渲染器放到地面层。场地上的僵尸没有阴影节点：它的阴影属于场地（`stage.shadows`，`BoardShadows`），同一行的阴影由一个批次一起绘制；视图通过 `shadow` 设置它的位置、大小、所在行以及是否显示。设置 `draw.shadow: false` 时，植物和僵尸都不创建阴影。
 
 植物或僵尸的表现定义可以省略 `view`（默认分别为 `plant` / `zombie`）。
 
@@ -781,6 +781,7 @@ Release 版本启动时会预热共享的 ZIP 缓存，并准备好所有 Reanim
 - 多个模拟步在一次调用中进入内核，只渲染最后的状态。
 - 存档保留种子和年龄，以便确定性重放。销毁或重启播放器会释放其内核状态。
 - 已用完固定发射上限的空系统会推迟剩余的模拟步并跳过空渲染，同时保持原有的寿命和存档年龄。
+- 表现层设置的 `particles` 规定原版粒子池（TodParticleHolder）的上限。`ParticlePlayer` 统计存活的特效和发射器，放不下的特效不会启动；内核统计所有系统的粒子，超过上限就不再生成，并且不为它取随机数。
 
 ### 游戏时钟
 

@@ -543,6 +543,7 @@ test('focus loss pauses once, hides silently, mutes without auto-pause only when
             play() { assert.fail('unexpected pause sound') },
         } },
         '@/client/dialogs/MenuDialog': { showMenuDialog() { dialogs++; return { node: {} } } },
+        './Benchmark': { benchmarkRunning: () => false, launchBenchmarkRequest: () => null },
     }
     const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => modules[id] ?? {}, {
         window: { addEventListener: events.on, removeEventListener: events.off },

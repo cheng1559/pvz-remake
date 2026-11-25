@@ -22,6 +22,8 @@
         "check:preview": "tsx tools/preview/check-imports.ts",
         "build:web:debug": "cocos build --project . --platform web-mobile --build-config build-configs/debug.json --no-interactive",
         "build:web:release": "cocos build --project . --platform web-mobile --build-config build-configs/release.json --no-interactive",
+        "build:web:benchmark": "cocos build --project . --platform web-mobile --build-config build-configs/web-benchmark.json --no-interactive",
+        "bench": "tsx tools/bench/compare.ts",
         "package:pages": "tsx tools/installer/package-pages.ts",
         "verify:pages": "tsx tools/installer/verify-pages.ts",
         "build:macos:debug": "tsx tools/build/clean-native-assets.ts build/mac && cocos build --project . --platform mac --build-config build-configs/macos-debug.json --no-interactive",

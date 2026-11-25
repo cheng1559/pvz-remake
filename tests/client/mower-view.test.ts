@@ -37,8 +37,11 @@ class Player {
     node!: Node
     playing = false
     fps = 0
+    /** Where it is in its animation: it has played a while by the time it is held. */
+    timeSeconds = 0
     change() {}
-    play(options: { fps: number }) { this.playing = true; this.fps = options.fps }
+    play(options: { fps: number }) { this.playing = true; this.fps = options.fps; this.timeSeconds = 0.3 }
+    seek(timeSeconds: number) { this.timeSeconds = timeSeconds }
     pause() { this.playing = false }
 }
 
@@ -81,7 +84,8 @@ test("a row's mower waiting is rolled in by the intro's time and held where it w
     const shadow = stage.layer.children[0], animation = node.children.find(child => child.name === 'ProjectileAnimation')!
     view.sync(ready)
     assert.deepEqual([node.active, shadow.active], [false, false], 'nothing shows before the intro brings it on')
-    assert.deepEqual([animation.position, animation.component!.playing], [{ x: -4, y: -19 }, false], 'held on its first frame where the cached frame is')
+    assert.deepEqual([animation.position, animation.component!.playing, animation.component!.timeSeconds], [{ x: -4, y: -19 }, false, 0],
+        'held on its first frame where the cached frame is, however long it played while loading')
     // CutScene::UpdateIntro: CalcPosition(start, start + TimeLawnMowerDuration, -80, -21), at whole pixels.
     for (let tick = 0; tick <= 25; tick += 0.5) {
         intro.arrival = tick / 25
@@ -111,6 +115,7 @@ test("the board makes a waiting mower's view by the mowers' registry, syncs it w
         '@/client/view/uiNode': { uiNode: () => ({ node }) },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfPlantsVisible: true, perfZombiesVisible: true } },
         './EntityFlashes': load('level/EntityFlashes'),
+        './BoardShadows': load('level/BoardShadows'),
         './LevelStage': { boardToLayer: (x: number, y: number) => ({ x, y }) },
     })
     const made: any[] = [], synced: number[] = []

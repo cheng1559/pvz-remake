@@ -7,6 +7,7 @@ import type { ParticlePlayer, ParticleSpawnArgs } from '@/client/particle/Partic
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationSound } from '@/shared/content/presentation'
 import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { BoardShadows } from './BoardShadows'
 import type { EntityFlashes } from './EntityFlashes'
 import type { LevelIntro } from './LevelIntro'
 import type { LevelEntitySnapshot } from './LevelPresentationSnapshot'
@@ -42,7 +43,10 @@ export interface EntityView<Entity = unknown> {
     restore?(snapshot: LevelEntitySnapshot): void | Promise<void>
     /** What the view made outside its node goes with it. */
     destroy?(): void
-    /** Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. */
+    /**
+     * Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. A
+     * zombie's on the board is one of the board's instead (LevelStage.shadows).
+     */
     readonly shadowNode?: Node
     /** The nodes of its own that particles go under, by name: a save keeps a particle's place by them. */
     readonly particleAnchors?: Readonly<Record<string, Node>>
@@ -60,6 +64,8 @@ export type ViewType<V> = abstract new (...args: never[]) => V
 export interface LevelStage {
     /** The layer the board's entities and effects are in. */
     readonly layer: Node
+    /** The shadows on the board's ground that are drawn a row at a time: its zombies'. */
+    readonly shadows: BoardShadows
     readonly content: Content
     readonly intro: LevelIntro
     /** The level being played, and the gameplay tick of the frame being drawn. */
@@ -91,9 +97,10 @@ export interface LevelStage {
     particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored?: boolean): void
     /**
      * A particle effect on the board at a draw order, in the layer's coordinates, played as `args` say. Every particle
-     * of the board is drawn at its order among the rest this way, and a save puts it back the same way.
+     * of the board is drawn at its order among the rest this way, and a save puts it back the same way. None while
+     * the particle pools are full (ParticlePlayer.spawn).
      */
-    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer | null
     /** A particle of the board (spawnParticle) goes to another draw order, as a projectile's trail does with its projectile. */
     reorderParticle(player: ParticlePlayer, order: number): void
     /**

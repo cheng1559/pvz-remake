@@ -48,6 +48,8 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
     /** Its animation, for one its presentation animates (a mower's), once loaded. */
     protected animation?: ReanimPlayer
     private trail?: ParticlePlayer
+    /** It asked for its trail when the particle pools were full, and has none. */
+    private trailRefused = false
 
     constructor(protected readonly context: ProjectileViewContext) {}
 
@@ -151,10 +153,16 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         // after a load.
         if (trail && node.isValid) {
             const order = stage.projectileOrder(projectile.typeId, projectile.row)
-            if (!this.trail?.isValid) this.trail = stage.spawnParticle(order, { ...trail, unsaved: true })
-            else stage.reorderParticle(this.trail, order)
-            this.trail.node.setPosition(left(trail.x), top + trail.y)
-            this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
+            if (this.trail?.isValid) stage.reorderParticle(this.trail, order)
+            else if (!this.trailRefused) {
+                this.trail = stage.spawnParticle(order, { ...trail, unsaved: true }) ?? undefined
+                // The particle pools were full, as Projectile::ProjectileInitialize's may be: it goes without one.
+                this.trailRefused = !this.trail
+            }
+            if (this.trail?.isValid) {
+                this.trail.node.setPosition(left(trail.x), top + trail.y)
+                this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
+            }
         }
     }
 

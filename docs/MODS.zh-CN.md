@@ -247,7 +247,7 @@ my-mod/
 
 模组可以添加内容的表现表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`clips`、`levels`、`rules`、`challenges`、`store` 和 `almanac`。其中 `items` 以掉落物 ID 为键，`awards` 以关卡奖励 ID 为键，`rules` 以关卡规则的 `kind` 为键，`store` 以商店物品 ID 为键，`almanac` 以图鉴所展示的植物或僵尸 ID 为键。
 
-两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，写在别人 ID 下的条目会修改它。基础内容包还有一些不属于这些表的设置：玩法侧的 `settings`，以及表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。模组写同样的键来修改它们。写入其他顶层键都会报错。
+两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，写在别人 ID 下的条目会修改它。基础内容包还有一些不属于这些表的设置：玩法侧的 `settings`，以及表现侧的 `settings`、`mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。模组写同样的键来修改它们。写入其他顶层键都会报错。
 
 表现定义与玩法定义一样严格：每个对象只接受自己的字段，多出、拼错或放错位置的字段（如写在僵尸表现中的 `vault`）会报告 `... is not supported`。
 
@@ -255,7 +255,7 @@ my-mod/
 
 ### 修改已有定义
 
-模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
+模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `settings`、`mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
 
 ```json
 {
@@ -589,6 +589,8 @@ my-mod/
 XML 转换始终经由 `tools/pvz/particles.py`。对于基础内容包，它会临时解包 PAK，直接转换到 `mods/pvz-base/assets/particles/` 并把文件登记到资源列表中，再由通用的模组打包器打包。转换会保留原版的曲线和随机分布，由共享的粒子内核计算。
 
 脚本用 `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })` 播放粒子，所有平台使用同一个 C++ 核心。`whenReady()` 等待加载完成；`snapshot()` 和 `ParticlePlayer.restore()` 使用相同的存档结构。
+
+基础表现层 `settings` 中的 `particles` 规定同时存活的粒子特效、发射器和粒子各有多少，和原版的粒子池一样（各 1024 个）。特效放不下时，`ParticlePlayer.spawn` 和棋盘的 `spawnParticle` 返回 `null`，什么也不播放；粒子放不下时不会生成。`ParticlePlayer.restore()` 总会恢复存档中保存的粒子。
 
 旧的粒子格式和旧的粒子存档已不再接受；现有模组的粒子资源需要重新转换并打包。
 
@@ -949,7 +951,7 @@ npm run mod:hosts                      # 重新生成宿主模块列表
 
 - 基础内容包总是最先加载，不能禁用或卸载。
 - 其源码 `mods/pvz-base/content.json` 像模组一样索引按类别拆分的 JSON，打包时合并为 `assets/gameplay.json` 和 `assets/presentation.json`。
-- 基础玩法还提供 `settings`（schemaVersion、阳光与金钱上限 `economy`、种子栏 `seedBank`、旗帜波的 `flagWave` 和休闲花园的 `zenGarden`）、全部关卡、默认文本和种子目录。之后加载的模组在各自的命名空间中添加内容。
+- 基础玩法还提供 `settings`（schemaVersion、阳光与金钱上限 `economy`、种子栏 `seedBank`、旗帜波的 `flagWave` 和休闲花园的 `zenGarden`），由服务端读取；以及表现层的 `settings`（粒子上限 `particles`），只由客户端读取；还有全部关卡、默认文本和种子目录。之后加载的模组在各自的命名空间中添加内容。
 - 每个资源（包括粒子）都在源码 `content.json` 的 `resources` 中显式登记；打包时不会扫描遗漏的资源。
 
 打包与发布：

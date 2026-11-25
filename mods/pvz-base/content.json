@@ -15,6 +15,7 @@
     "levels": "gameplay/levels.json"
   },
   "presentation": {
+    "settings": "presentation/settings.json",
     "clips": "presentation/definitions/clips.json",
     "screens": "presentation/definitions/screens.json",
     "conveyor": "presentation/definitions/conveyor.json",

@@ -145,6 +145,8 @@ The layout of `tools/` and its entry points are in [Development Scripts](../tool
 | **Preview and builds** | |
 | `npm run preview:debug`, `npm run preview:release` | Starts the preview server, with or without debug mode |
 | `npm run build:web:debug` | Debug web build |
+| `npm run build:web:benchmark` | Release web build for benchmarks; see [Benchmarks](#benchmarks) |
+| `npm run bench -- <A> [<B>]` | Compares the benchmark on built games; see [Benchmarks](#benchmarks) |
 | `npm run compile:{platform}:release` | Release native build; see [Release builds](#release-builds) |
 
 `build:kernel` writes the generated module to `assets/scripts/shared/kernel/binary.ts`, which is committed, so other builds do not need Emscripten. Native builds compile the same kernel source directly.
@@ -275,7 +277,25 @@ The script's arguments are the forwarded endpoint (default `http://127.0.0.1:160
 
 ### High-load comparisons
 
-Use `/level pvz:stress-test` with `/fps` on: 40 plants against 160 zombies. `/perf {plants|zombies|particles|sfx|logic}` turns one part off at a time; see [Debug Console](DEBUG_CLI.md#performance-switches).
+Use `/level pvz:stress-test` with `/fps` on: 40 plants against 1023 zombies. `/perf {plants|zombies|particles|sfx|logic}` turns one part off at a time; see [Debug Console](DEBUG_CLI.md#performance-switches).
+
+### Benchmarks
+
+The benchmark (`app/Benchmark.ts`) plays the stress test the same way on every run and times the work:
+
+1. `npm run build:web:benchmark` makes a Release web build in `build/web-benchmark/` whose scripts target Chrome 110 and later.
+2. `npm run bench -- <A> [<B>]` runs the benchmark on one or two builds several times and prints each one's median over the runs with their range. For two builds it adds the change from A to B, marked "~" when it is within the runs' spread.
+
+A target is a web build folder, opened in a fresh headless Chrome, or a native executable or macOS app. Two targets take turns (A then B, then B then A), each run in a fresh browser or process. Options:
+
+- `--scenario steady` (the default) times the views, animations and drawing of the stress test after 10 seconds of play, the server then standing still; `--scenario combat` plays it from the start, the server included. In both the plants are invincible, so the zombies eat them to the end.
+- `--frames 1200` and `--rounds 3` set the frames each run times, after 120 frames of warm-up, and the runs of each target.
+- `--screenshots <folder>` saves each web run's last frame and counts the pixels that differ from the first run's.
+- `--chrome <path>` names the browser.
+
+Every run plays the same game: the level starts with a fixed seed, each frame advances the game by 1/60 s whatever time it took, and the client's `Math.random` is seeded from the frame's number. A run reports the whole frame (mean, median, p99 and 1% low, the mean of the slowest 1% of frames), the updates, the server's ticks within them, the engine's drawing, the draw calls, and a checksum of the server's last snapshot. Runs with the same checksum played the same game.
+
+The game runs the benchmark when it is launched with `?benchmark=combat&frames=1200` in the web page's address, or `--benchmark=combat --frames=1200 --benchmark-out=<file>` on a native command line. It starts once the loading screen has loaded everything. A fresh browser or install has no player, so it creates one named Benchmark. The result goes to the console and to `globalThis.pvzBenchmark`; a native build also writes it to the file (by default `benchmark.json` in the game's data folder) and then quits.
 
 ### Debug builds
 

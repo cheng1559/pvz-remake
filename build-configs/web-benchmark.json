@@ -1,0 +1,12 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "useSplashScreen": false,
+    "outputName": "web-benchmark",
+    "buildScriptTargets": "chrome 110",
+    "packages": {
+        "web-mobile": {
+            "orientation": "landscape"
+        }
+    }
+}

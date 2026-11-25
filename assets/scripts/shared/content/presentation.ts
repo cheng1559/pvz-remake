@@ -721,7 +721,20 @@ export interface PresentationDefinitions {
         /** A plant's picture in its packet, unless the plant has its own (`packet.placement`), or a thing of a cell its own. */
         readonly defaultPlacement: SeedPacketPlacement
     }
+    /** The client's own settings, apart from the gameplay settings the server reads; only the base package gives them. */
+    readonly settings: PresentationSettings
 }
+
+export interface PresentationSettings {
+    /**
+     * TodParticleHolder's pools: how many particle effects (its particle systems), emitters and particles may be alive
+     * at once, all over the game. An effect is not started while its emitters would not all fit, and a particle is not
+     * spawned while there are as many as the limit.
+     */
+    readonly particles: ParticleLimits
+}
+
+export interface ParticleLimits { readonly systems: number; readonly emitters: number; readonly particles: number }
 
 /**
  * Reading the presentation definitions, each checked as it is read, as the gameplay ones are (parseGameplay): a field
@@ -730,7 +743,7 @@ export interface PresentationDefinitions {
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const definitions = fields<PresentationDefinitions>(value, 'presentation', [
         'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'iceTrap', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
-        'gridItems', 'seedPackets', 'clips',
+        'gridItems', 'seedPackets', 'clips', 'settings',
     ], {
         mainMenu: parseMainMenu,
         conveyor: (value, name) => allFields<PresentationDefinitions['conveyor']>(value, name, {
@@ -773,6 +786,9 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             flash: (value, name) => allFields<PresentationDefinitions['seedPackets']['flash']>(value, name, { id: nonEmptyString }),
             selection: (value, name) => allFields<PresentationDefinitions['seedPackets']['selection']>(value, name, { color }),
             defaultPlacement: placement,
+        }),
+        settings: (value, name) => allFields<PresentationSettings>(value, name, {
+            particles: (value, name) => allFields<ParticleLimits>(value, name, { systems: positiveInteger, emitters: positiveInteger, particles: positiveInteger }),
         }),
     })
     const { plants, zombies } = definitions

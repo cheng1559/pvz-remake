@@ -89,20 +89,44 @@ export class EntityList<T extends Entity> implements Iterable<T> {
     /** The slots as the last iteration found them, until one is put in or taken out. */
     private iterated: Array<T | undefined> | undefined
 
-    constructor(private readonly world: World) {}
+    /** `leaving`: the world's entities on their way out (World.markDestroy), which no list shows. */
+    constructor(private readonly leaving: ReadonlySet<EntityId>) {}
 
     /** The one of `id`, unless it is gone or on its way out. */
     get(id: EntityId): T | undefined {
         const slot = this.slotOf.get(id)
-        return slot === undefined || this.world.leaving(id) ? undefined : this.slots[slot]
+        return slot === undefined || this.leaving.size > 0 && this.leaving.has(id) ? undefined : this.slots[slot]
     }
 
     has(id: EntityId): boolean {
         return this.get(id) !== undefined
     }
 
-    *[Symbol.iterator](): Iterator<T> {
-        for (const value of this.iterated ??= this.slots.slice()) if (value && this.get(value.id) === value) yield value
+    /**
+     * Every system goes through its lists every tick: an iterator written out, which costs less than a generator, and
+     * which looks an entity up only once the list has changed since the iteration began. It gives every step in one
+     * result, which a for-of or a spread reads at once, rather than making one for each entity.
+     */
+    [Symbol.iterator](): Iterator<T> {
+        const iterated = this.iterated ??= this.slots.slice()
+        const list = this, { leaving } = this
+        const result: { done: boolean, value: T | undefined } = { done: false, value: undefined }
+        let index = 0
+        return {
+            next(): IteratorResult<T> {
+                while (index < iterated.length) {
+                    const value = iterated[index++]
+                    // Unchanged, the list still holds every one it had in its slots.
+                    if (value && (list.iterated === iterated ? !(leaving.size > 0 && leaving.has(value.id)) : list.get(value.id) === value)) {
+                        result.value = value
+                        return result as IteratorResult<T>
+                    }
+                }
+                result.done = true
+                result.value = undefined
+                return result as IteratorResult<T>
+            },
+        }
     }
 
     /** World.insert and CommandBuffer.insert put one in, a new one in a slot (DataArray::DataArrayAlloc); World.destroyEntity takes it out. */
@@ -219,24 +243,24 @@ export class ResourceStore {
  */
 export class World {
     readonly resources = new ResourceStore()
+    /** Those on their way out (markDestroy), which no list shows any more: before the lists, which are made with them. */
+    private readonly pendingDestroy = new Set<EntityId>()
     /** The sun, coins and the level's award (Coin). */
-    readonly items = new EntityList<Item>(this)
+    readonly items = new EntityList<Item>(this.pendingDestroy)
     /** The things of a cell: graves and craters (GridItem). */
-    readonly gridItems = new EntityList<GridItem>(this)
+    readonly gridItems = new EntityList<GridItem>(this.pendingDestroy)
     /** The plants, of their kinds (Plant), a mowed one too until it is squashed (Plant.state; lawn.plantsInPlay). */
-    readonly plants = new EntityList<Plant>(this)
+    readonly plants = new EntityList<Plant>(this.pendingDestroy)
     /** What flies, of its kind (Projectile): a mower set off runs as one (MowingProjectile). */
-    readonly projectiles = new EntityList<Projectile>(this)
+    readonly projectiles = new EntityList<Projectile>(this.pendingDestroy)
     /** The rows' lawn mowers waiting at their house ends (Mower). */
-    readonly mowers = new EntityList<Mower>(this)
+    readonly mowers = new EntityList<Mower>(this.pendingDestroy)
     /** The zombies, each of its kind (Zombie). */
-    readonly zombies = new EntityList<Zombie>(this)
+    readonly zombies = new EntityList<Zombie>(this.pendingDestroy)
     /** Its lists, in ENTITY_LISTS' order, made once: after them, which they are made of. */
     private readonly allLists: readonly EntityList<Entity>[] = ENTITY_LISTS.map(key => this[key] as EntityList<Entity>)
 
     private nextEntity = 1
-    /** Those on their way out (markDestroy), which no list shows any more. */
-    private readonly pendingDestroy = new Set<EntityId>()
 
     /** Every list of the world. */
     lists(): readonly EntityList<Entity>[] {
@@ -290,7 +314,11 @@ export class World {
     }
 
     hasEntity(entity: EntityId): boolean {
-        return !this.leaving(entity) && this.lists().some(list => list.holds(entity))
+        if (this.leaving(entity)) return false
+        // A loop, not `some`: it runs for many entities every tick, and makes nothing.
+        const lists = this.allLists
+        for (let i = 0; i < lists.length; i++) if (lists[i].holds(entity)) return true
+        return false
     }
 
     /** It is on its way out: no list shows it from now on, and the command buffer takes it out as it is flushed. */
@@ -300,7 +328,7 @@ export class World {
 
     /** Whether it is on its way out (markDestroy). */
     leaving(entity: EntityId): boolean {
-        return this.pendingDestroy.has(entity)
+        return this.pendingDestroy.size > 0 && this.pendingDestroy.has(entity)
     }
 }
 

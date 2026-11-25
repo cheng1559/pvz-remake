@@ -59,23 +59,47 @@ bool blendBinding(se::State &s) {
 }
 SE_BIND_FUNC(blendBinding)
 
+// A typed array of the kind `matches` says it is, read straight from V8.
+template <typename T>
+bool rawArray(v8::Local<v8::Value> value, bool matches, T *&data, int32_t &count) {
+    if (!matches) return false;
+    const v8::Local<v8::TypedArray> array = value.As<v8::TypedArray>();
+    data = reinterpret_cast<T *>(static_cast<uint8_t *>(array->Buffer()->Data()) + array->ByteOffset());
+    count = static_cast<int32_t>(array->Length());
+    return true;
+}
+
 // (keys, tracks, state, positions, vertices) -> quads drawn or -1
-bool writeReanimBinding(se::State &s) {
-    const auto &args = s.args();
+// Called for every batch of every animation every frame. The engine's wrapper makes an object and a handle for each
+// array of a call, which for these five took longer than the drawing itself: this one is called by V8 directly.
+void writeReanimBindingRegistry(const v8::FunctionCallbackInfo<v8::Value> &args) {
     const double *keys = nullptr, *state = nullptr;
     const int32_t *tracks = nullptr;
     float *positions = nullptr, *vertices = nullptr;
     int32_t keyCount = 0, trackCount = 0, stateCount = 0, positionCount = 0, vertexCount = 0;
-    if (args.size() != 5 || !typedArray(args[0], Type::FLOAT64, keys, keyCount) || !typedArray(args[1], Type::INT32, tracks, trackCount) ||
-        !typedArray(args[2], Type::FLOAT64, state, stateCount) || !typedArray(args[3], Type::FLOAT32, positions, positionCount) ||
-        !typedArray(args[4], Type::FLOAT32, vertices, vertexCount)) {
-        s.rval().setInt32(-1);
-        return true;
+    if (args.Length() != 5 || !rawArray(args[0], args[0]->IsFloat64Array(), keys, keyCount) ||
+        !rawArray(args[1], args[1]->IsInt32Array(), tracks, trackCount) || !rawArray(args[2], args[2]->IsFloat64Array(), state, stateCount) ||
+        !rawArray(args[3], args[3]->IsFloat32Array(), positions, positionCount) ||
+        !rawArray(args[4], args[4]->IsFloat32Array(), vertices, vertexCount)) {
+        args.GetReturnValue().Set(-1);
+        return;
     }
-    s.rval().setInt32(pvz_write_reanim(keys, keyCount, tracks, trackCount, state, stateCount, positions, positionCount, vertices, vertexCount));
+    args.GetReturnValue().Set(pvz_write_reanim(keys, keyCount, tracks, trackCount, state, stateCount, positions, positionCount, vertices, vertexCount));
+}
+
+// (vertices, quads, stride, matrix): places the first quads in the world, in place
+bool placeQuadsBinding(se::State &s) {
+    const auto &args = s.args();
+    float *vertices = nullptr;
+    const double *matrix = nullptr;
+    int32_t vertexCount = 0, matrixCount = 0;
+    if (args.size() == 4 && typedArray(args[0], Type::FLOAT32, vertices, vertexCount) && args[1].isNumber() && args[2].isNumber() &&
+        typedArray(args[3], Type::FLOAT64, matrix, matrixCount) && matrixCount >= 9) {
+        pvz_place_quads(vertices, vertexCount, args[1].toInt32(), args[2].toInt32(), matrix);
+    }
     return true;
 }
-SE_BIND_FUNC(writeReanimBinding)
+SE_BIND_FUNC(placeQuadsBinding)
 
 bool particlesCreateBinding(se::State &s) {
     const auto &a = s.args();
@@ -133,6 +157,13 @@ bool particlesDestroyBinding(se::State &s) {
 }
 SE_BIND_FUNC(particlesDestroyBinding)
 
+bool particlesLimitBinding(se::State &s) {
+    const auto &a = s.args();
+    if (a.size() == 1 && a[0].isNumber()) pvz_particles_limit(a[0].toInt32());
+    return true;
+}
+SE_BIND_FUNC(particlesLimitBinding)
+
 // (png, output) -> PvzPngResult
 bool decodePngBinding(se::State &s) {
     const auto &a = s.args();
@@ -172,9 +203,11 @@ bool registerPvzKernel(se::Object *global) {
            global->defineFunction("__pvzParticlesWrite", _SE(particlesWriteBinding)) &&
            global->defineFunction("__pvzParticlesStop", _SE(particlesStopBinding)) &&
            global->defineFunction("__pvzParticlesDestroy", _SE(particlesDestroyBinding)) &&
+           global->defineFunction("__pvzParticlesLimit", _SE(particlesLimitBinding)) &&
            global->defineFunction("__pvzKernelSample", _SE(sampleBinding)) &&
            global->defineFunction("__pvzKernelBlend", _SE(blendBinding)) &&
            global->defineFunction("__pvzKernelWriteReanim", _SE(writeReanimBinding)) &&
+           global->defineFunction("__pvzKernelPlaceQuads", _SE(placeQuadsBinding)) &&
            global->defineFunction("__pvzKernelDecodePng", _SE(decodePngBinding)) &&
            global->defineFunction("__pvzKernelSandAlphaEdges", _SE(sandAlphaEdgesBinding));
 }

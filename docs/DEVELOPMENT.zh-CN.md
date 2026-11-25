@@ -145,6 +145,8 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 | **预览与构建** | |
 | `npm run preview:debug`、`npm run preview:release` | 以调试或非调试模式启动预览服务器 |
 | `npm run build:web:debug` | 调试版网页构建 |
+| `npm run build:web:benchmark` | 用于性能基准的发布版网页构建，见[性能基准](#性能基准) |
+| `npm run bench -- <A> [<B>]` | 在已构建的游戏上对比性能基准，见[性能基准](#性能基准) |
 | `npm run compile:{platform}:release` | 原生平台的发布构建，见[构建发布版本](#构建发布版本) |
 
 `build:kernel` 把生成的模块写入 `assets/scripts/shared/kernel/binary.ts`，该文件已提交到仓库，因此其他构建不需要 Emscripten。原生构建直接编译同一份内核源码。
@@ -275,7 +277,25 @@ iOS 禁止 JIT，V8 只能以解释器方式运行，JavaScript 的开销远高�
 
 ### 高负载对比
 
-使用 `/level pvz:stress-test` 并开启 `/fps`：40 株植物对 160 只僵尸。`/perf {plants|zombies|particles|sfx|logic}` 可以每次关闭一部分，见[调试指令文档](DEBUG_CLI.zh-CN.md#性能开关)。
+使用 `/level pvz:stress-test` 并开启 `/fps`：40 株植物对 1023 只僵尸。`/perf {plants|zombies|particles|sfx|logic}` 可以每次关闭一部分，见[调试指令文档](DEBUG_CLI.zh-CN.md#性能开关)。
+
+### 性能基准
+
+性能基准（`app/Benchmark.ts`）每次都以完全相同的方式运行压力测试，并测量其中的耗时：
+
+1. `npm run build:web:benchmark` 生成 Release 网页版，输出到 `build/web-benchmark/`，脚本以 Chrome 110 及以上版本为目标。
+2. `npm run bench -- <A> [<B>]` 在一个或两个构建上多次运行基准，输出每个构建在各次运行中的中位数和范围。对比两个构建时，还给出 B 相对于 A 的变化，变化处于各次运行的波动范围内时标记为“~”。
+
+目标可以是网页构建目录（用全新的无头 Chrome 打开），也可以是原生可执行文件或 macOS 应用。两个目标轮流运行（先 A 后 B，再先 B 后 A），每次都使用全新的浏览器或进程。可用选项：
+
+- `--scenario steady`（默认）测量压力测试开局 10 秒后的视图、动画和绘制，此后服务端静止；`--scenario combat` 从正式开始起运行，包括服务端。两个场景中植物都无敌，僵尸会一直啃食到结束。
+- `--frames 1200` 和 `--rounds 3` 分别设置每次运行计时的帧数（计时前先预热 120 帧）和每个目标的运行次数。
+- `--screenshots <目录>` 保存每次网页运行的最后一帧，并统计它与第一次运行的画面相差的像素数。
+- `--chrome <路径>` 指定浏览器。
+
+每次运行的都是同一局游戏：关卡使用固定种子；无论一帧实际花了多久，每帧都让游戏推进 1/60 秒；客户端的 `Math.random` 按帧号设定种子。每次运行给出整帧（平均值、中位数、p99 和 1% low，即最慢的 1% 帧的平均值）、更新、更新中服务端的逻辑步、引擎的绘制、绘制调用数，以及服务端最后一个快照的校验值。校验值相同说明两次运行的是同一局游戏。
+
+网页版在地址中加 `?benchmark=combat&frames=1200`，或原生版在命令行中加 `--benchmark=combat --frames=1200 --benchmark-out=<文件>` 启动时，游戏会运行基准，在加载界面加载完所有资源后开始。全新的浏览器或安装中没有玩家档案，它会创建名为 Benchmark 的玩家。结果输出到控制台和 `globalThis.pvzBenchmark`；原生版还会写入该文件（默认为游戏数据目录中的 `benchmark.json`），然后退出游戏。
 
 ### 调试版本
 

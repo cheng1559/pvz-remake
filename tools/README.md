@@ -6,6 +6,7 @@ Directories are split by purpose. The root holds only this guide, the Node modul
 
 ```text
 tools/
+├── bench/compare.ts            # Runs the in-game benchmark on built games and compares them
 ├── build/
 │   └── clean-native-assets.ts  # Clears old data/assets, and the built Xcode apps, from the output directory before a native build (called by the Windows, macOS and iOS build commands)
 ├── installer/                  # Installers: package-windows.ts makes the Windows installer (windows.iss, Inno Setup) and zip, package-macos.ts makes a macOS disk image per architecture
@@ -39,6 +40,7 @@ Common entry points:
 | Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
 | iOS JS performance sampling | `npx tsx tools/profile/ios.ts ...` |
+| Compare built games with the benchmark | `npm run bench -- <A> [<B>]` |
 | Tests of the resource conversion tools | `npm run test:tools` |
 
 Run Python commands from the project root. `npm run build:content` calls `python3 -m tools.pvz`; the conversion is implemented in `pvz/`:

@@ -27,6 +27,7 @@ import {
 } from './LevelController'
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
+import { benchmarkRunning, launchBenchmarkRequest, runLaunchedBenchmark } from './Benchmark'
 import { createProfileStore } from '@/server/menu/profileStore'
 import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
@@ -132,7 +133,15 @@ export class GameApp extends Component {
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
         // Animations and particles draw through the kernel and its material; the kernel may compile asynchronously on the web.
-        void Promise.all([loadKernel(), loadKernelMaterial()]).then(() => this.node?.isValid && this.navigate('splash'))
+        const benchmark = launchBenchmarkRequest()
+        void Promise.all([loadKernel(), loadKernelMaterial()]).then(async () => {
+            if (!this.node?.isValid) return
+            await this.navigate('splash')
+            if (!benchmark || !this.controller) return
+            // Once the loading screen has loaded everything, as for play: its loading would go on under the frames measured.
+            await this.menu?.entered
+            await runLaunchedBenchmark(benchmark, this.controller, levelId => this.navigate('restart', levelId))
+        })
         void UI.load().then(ui => {
             if (!this.canShowGameUI) return
             initializeViewport()
@@ -157,7 +166,7 @@ export class GameApp extends Component {
             active = next
             if (active) { savedOnLoss = false; return }
             this.spacePressed = false
-            if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading &&
+            if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading && !benchmarkRunning() &&
                 !this.dialog && !this.debugCliOpen && !UIDialog.isOpen && this.controller?.canPause('focusLoss')) {
                 savedOnLoss = true
                 void this.openDialog('pause', 'focusLoss')

@@ -138,7 +138,7 @@ export function buildPresentationDefinitions(value: unknown, sources: readonly D
         'store', 'almanac']
     const registry = new DefinitionRegistry(kinds)
     registry.register(BASE_MOD_ID, Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)
-    // The presentation's settings are every block of the base outside the tables: its `mainMenu`, `conveyor`...
+    // The presentation's settings are every block of the base outside the tables: its `settings`, `mainMenu`, `conveyor`...
     const settings = Object.keys(base).filter(key => !kinds.includes(key))
     const blocks = layer(registry, { ...base, ...Object.fromEntries(kinds.map(kind => [kind, registry.values(kind)])) }, kinds, settings, sources)
     const result = parsePresentationDefinitions(blocks)

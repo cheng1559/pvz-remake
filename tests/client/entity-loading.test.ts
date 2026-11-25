@@ -62,6 +62,7 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
 clientStubs['@/client/reanim/clips'] = loadClientModule('reanim/clips', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
+clientStubs['./BoardShadows'] = clientStubs['@/client/level/BoardShadows'] = loadClientModule('level/BoardShadows', {})
 clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
 clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
 
@@ -481,14 +482,16 @@ test('a mowed zombie keeps its shadow; one falling, vaulting, coming up or burne
         [true, true, false, false, false, false])
 })
 
-test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
+test('the presentation is built once from the base archive and the running Mods, its foley goes to the sound system and its particle limits to the particle players', async () => {
     const base = { content: { presentation: 'presentation.json' },
         files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
     let builds = 0, foley = 0
+    const limits: unknown[] = []
     const load = (archive: object) => loadClientModule('content/loadPresentationDefinitions', {
         './ModResources': { modResources: { baseContent: async () => archive } },
         './installedMods': { installedMods: async () => ({ presentationDefinitions: [] }) },
         '@/client/sound/SoundSystem': { SoundSystem: { useFoley() { foley++ } } },
+        '@/client/particle/ParticlePlayer': { ParticlePlayer: { useLimits(value: unknown) { limits.push(value) } } },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions: (...args: Parameters<typeof buildPresentationDefinitions>) => {
             builds++
             return buildPresentationDefinitions(...args)
@@ -500,6 +503,7 @@ test('the presentation is built once from the base archive and the running Mods,
     assert.deepEqual(presentation, presentationFixture)
     assert.equal(await loadPresentation(), presentation, 'the UI and the game draw with the same one')
     assert.deepEqual([builds, foley], [1, 1])
+    assert.deepEqual(limits, [{ systems: 1024, emitters: 1024, particles: 1024 }], 'TodParticleHolder::InitializeHolder')
     await assert.rejects(load({ ...base, content: {} })(), /does not define presentation/)
 })
 
@@ -778,6 +782,26 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     view.applyParts({ ...zombie, shieldHealth: 0, hasArm: false })
     assert.deepEqual(visible('anim_screendoor', 'Zombie_innerarm_screendoor', 'Zombie_outerarm_hand', 'Zombie_outerarm_lower', 'Zombie_outerarm_upper', 'anim_innerarm2'),
         [false, false, false, false, true, true], 'DetachShield restores the arms, except the lost lower arm and hand')
+})
+
+test('a screen door zombie sets its shield\'s colors once for a flash, and again when its body changes to another Reanim', () => {
+    class Color {
+        static WHITE = new Color(255, 255, 255)
+        static BLACK = new Color(0, 0, 0)
+        constructor(readonly r: number, readonly g: number, readonly b: number, readonly a = 255) {}
+    }
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { cc: { Color } })
+    const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
+    const overrides: string[] = []
+    const player = { loadedId: 'pvz:door_zombie_eat', setExtraAdditiveDraw() {}, setTrackRenderOverride(track: string) { overrides.push(track) } }
+    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, presentation, flash: { flash: 0, through: false, past: false } })
+    const zombie = { shieldHealth: 1100, state: 'eating' }
+    view.applyHitFlash(zombie)
+    view.applyHitFlash(zombie)
+    assert.deepEqual(overrides, ['anim_screendoor'], 'the same flash is not set again')
+    // The body's new Reanim has its tracks anew, without the override (ZombieView.pose).
+    view.applyHitFlash(zombie, true)
+    assert.deepEqual(overrides, ['anim_screendoor', 'anim_screendoor'])
 })
 
 test('a player changes to another clip of its body in place: its batches stay, and it blends from the pose it showed', async () => {

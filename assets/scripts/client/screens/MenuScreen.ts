@@ -28,7 +28,8 @@ export interface PreparedMenuPage {
     id: MenuPageId
     root: Node
     retainPrevious?: boolean
-    enter?: () => void
+    /** What it does as it comes up; the loading screen's is its loading, over when this resolves. */
+    enter?: () => void | Promise<void>
 }
 
 @ccclass('MenuScreen')
@@ -208,12 +209,15 @@ export class MenuScreen extends Component {
         }
     }
 
+    /** Over once the page shown last has done what it does as it comes up (PreparedMenuPage.enter). */
+    entered: Promise<void> = Promise.resolve()
+
     /** `music`: the page plays its own tune; not over a paused level, whose music waits with it. */
     async show(page: PreparedMenuPage, animate?: (previous: Node, next: Node) => Promise<void>, music = true): Promise<void> {
         page.root.active = true
         const tune = MENU_PAGES[page.id].music
         if (tune && music) void MusicSystem.playTune(tune)
-        page.enter?.()
+        this.entered = Promise.resolve(page.enter?.())
         if (animate && this.page?.root.isValid && this.page.root !== page.root) await animate(this.page.root, page.root)
         if (this.node?.isValid) this.replacePage(page)
     }

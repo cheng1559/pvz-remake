@@ -8,7 +8,7 @@ import { projectileTeam, teamDirection } from '@/shared/content/teams'
 import { plantRect, zombieRect } from '../combat/targets'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
-import { bodyOf, type Projectile, type ProjectileBody, type ProjectileHit, type ProjectileTarget } from './Projectile'
+import { bodyOf, Projectile, type ProjectileHit, type ProjectileTarget } from './Projectile'
 
 /** How far above or below the screen a projectile is gone, as one that lost what it homed on. */
 const OFF_BOARD_Y = 200
@@ -28,16 +28,16 @@ export class ProjectileSystem implements GameSystem {
         const level = world.resources.get(LevelStateResource)
         if (level.result === 'lost' || level.paused) return
         this.rows = []
-        const add = (target: ProjectileBody, left: number, width: number) => {
-            ;(this.rows[bodyOf(target).position.row] ??= []).push({ ...target, left, right: left + width })
-        }
+        // Made for every zombie and plant every tick, and read by every projectile of the row: each written out whole.
+        // One put together from another with a spread is many times as slow to make and to read on the native builds.
+        const rows = this.rows
         for (const zombie of world.zombies) {
-            const rect = zombieRect(world, definitions, zombie)
-            add({ zombie }, rect.x, rect.width)
+            const body = zombieRect(world, definitions, zombie)
+            ;(rows[zombie.position.row] ??= []).push({ zombie, left: body.x, right: body.x + body.width })
         }
         for (const plant of plantsInPlay(world)) {
             const definition = definitions.plants[plant.typeId], body = plantRect(definitions, plant)
-            add({ plant, low: definition.low === true }, body.x, body.width)
+            ;(rows[plant.position.row] ??= []).push({ plant, low: definition.low === true, left: body.x, right: body.x + body.width })
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
         const mowers: Projectile[] = []
@@ -108,9 +108,13 @@ export class ProjectileSystem implements GameSystem {
         // Projectile::FindCollisionTarget goes by where each stands in whole pixels (Zombie::mX).
         const nearer = (a: ProjectileTarget, b: ProjectileTarget) => direction * (Math.trunc(bodyOf(a).position.x) - Math.trunc(bodyOf(b).position.x))
         let nearest: ProjectileTarget | undefined, all: ProjectileTarget[] | undefined
+        // The base kinds' canHit hits nothing they do not overlap: one of them passes over a target clear of it before
+        // anything else. A kind with a canHit of its own is asked of every target.
+        const overlapping = projectile.canHit === Projectile.prototype.canHit || projectile.canHit === MowingProjectile.prototype.canHit
         // Runs for every projectile on every tick: the span overlap test comes before entity lookups, and a miss makes nothing.
         for (let i = 0; i < candidates.length; i++) {
             const target = candidates[i]
+            if (overlapping && (right <= target.left || target.right <= left)) continue
             const overlap = Math.min(right, target.right) - Math.max(left, target.left)
             if (aim === ('zombie' in target ? 'plants' : 'zombies')) continue
             const body = bodyOf(target)

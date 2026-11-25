@@ -9,6 +9,7 @@ import { KernelParticles } from '@/shared/kernel/particles'
 import { ParticleAssets, type LoadedParticle, type ParticleEmitterAssets } from './ParticleAssets'
 import { nextParticleSeed, parseParticlePlayerSnapshot, type ParticlePlayerSnapshot } from './ParticlePlayerSnapshot'
 import { renderOrder } from '@/shared/content/renderOrder'
+import type { ParticleLimits } from '@/shared/content/presentation'
 export type { ParticlePlayerSnapshot } from './ParticlePlayerSnapshot'
 const { ccclass } = _decorator
 
@@ -46,13 +47,14 @@ class ParticleEmitterView implements KernelQuadSource {
         else this.batch.clear()
     }
 
-    writeQuads(positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number): number {
+    writeQuads(positions: Float32Array, vertices: Float32Array, opacity: number, stride: number, capacity: number, placement?: Float64Array): number {
         if (!this.system) return 0
         this.options[ParticleOption.OPACITY] = opacity
         this.options[ParticleOption.STRIDE] = stride
         this.options[ParticleOption.CAPACITY] = capacity
         const written = this.system.write(this.index, this.geometry, this.options, positions, vertices)
         if (this.fullScreen && written > 0) fillScreen(this.batch.node, positions, stride, written)
+        if (placement && written > 0) kernel().placeQuads(positions, written, stride, placement)
         return written
     }
 
@@ -121,9 +123,24 @@ const idlePlayers = new WeakMap<Node, Map<string, ParticlePlayer[]>>()
 const IDLE_LIMIT = 16
 const idleKey = (id: string, sprite?: string | null) => `${id}|${sprite ?? ''}`
 
+/**
+ * TodParticleHolder's pools (the presentation settings' `particles`), shared by every player: the effects alive and
+ * the emitters they hold. Until the settings give the limits, nothing is limited.
+ */
+let limits: ParticleLimits = { systems: Infinity, emitters: Infinity, particles: Infinity }
+let liveSystems = 0, liveEmitters = 0
+/** The particle limit the kernel was last given. */
+let kernelLimit: number | undefined
+
 /** The only particle player: one loader, one batch renderer and one C++ simulation on every platform. */
 @ccclass('ParticlePlayer')
 export class ParticlePlayer extends Component {
+    /** The pools' limits, from the presentation settings (`particles`), for every effect from now on. */
+    static useLimits(value: ParticleLimits): void { limits = value }
+
+    /** What the effects alive hold of the pools. */
+    static get alive(): { readonly systems: number, readonly emitters: number } { return { systems: liveSystems, emitters: liveEmitters } }
+
     /** Board::MakeRenderOrder; the board's top layer unless the caller says. */
     public renderOrder = renderOrder('top')
     public id = ''
@@ -152,8 +169,22 @@ export class ParticlePlayer extends Component {
     public unsaved = false
     /** The parent's pool this finished player waits in; see ParticleSpawnArgs.recycle. */
     private idlePool: ParticlePlayer[] | null = null
+    /** It holds a place in the pools (and its emitters', once loaded) from when it starts until it is done. */
+    private counted = false
+    private heldEmitters = 0
+    /** Brought back from a save, which had room for it. */
+    private restored = false
 
-    static spawn(args: ParticleSpawnArgs): ParticlePlayer { return this.create(args) }
+    /**
+     * Starts an effect (LawnApp::AddTodParticle, TodParticleHolder::AllocParticleSystem), or none while the pools are
+     * full: as many effects as the limit are alive, or its emitters would not all fit. An effect not loaded yet is
+     * checked for its emitters once it is, and is gone at once if they do not fit.
+     */
+    static spawn(args: ParticleSpawnArgs): ParticlePlayer | null {
+        const emitters = ParticleAssets.get(args.id, args.spriteOverride)?.emitters.length ?? 0
+        if (liveSystems >= limits.systems || liveEmitters + emitters > limits.emitters) return null
+        return this.create(args)
+    }
 
     static restore(args: { parent: Node; x: number; y: number; z?: number; snapshot: unknown }): ParticlePlayer {
         const saved = parseParticlePlayerSnapshot(args.snapshot)
@@ -170,6 +201,8 @@ export class ParticlePlayer extends Component {
         const node = uiNode({ name: `Particle_${args.id}`, parent: args.parent, layer: args.parent.layer,
             anchor: { x: 0, y: 1 }, position: { x: args.x, y: args.y, z: args.z ?? 0 } }).node
         const player = node.addComponent(ParticlePlayer)
+        player.count()
+        player.restored = !!saved
         player.id = args.id
         player.spriteOverride = args.spriteOverride ?? null
         player.recycle = args.recycle ?? false
@@ -206,6 +239,7 @@ export class ParticlePlayer extends Component {
         const player = assets ? idlePlayers.get(args.parent)?.get(idleKey(args.id, args.spriteOverride))?.pop() : undefined
         if (!assets || !player) return null
         player.idlePool = null
+        player.count()
         player.node.setPosition(args.x, args.y, args.z ?? 0)
         player.configure(args)
         player.ticks = player.accumulator = 0
@@ -273,6 +307,12 @@ export class ParticlePlayer extends Component {
     }
 
     private initialize(assets: LoadedParticle): void {
+        if (this.counted && !this.heldEmitters && assets.emitters.length) {
+            // A save had room for what it kept.
+            if (!this.restored && liveEmitters + assets.emitters.length > limits.emitters) { this.node.destroy(); return }
+            liveEmitters += this.heldEmitters = assets.emitters.length
+        }
+        if (Number.isFinite(limits.particles) && kernelLimit !== limits.particles) kernel().particlesLimit(kernelLimit = limits.particles)
         this.simulation = new KernelParticles(assets.packed, this.seed, assets.emitters.length)
         // A recycled player plays the same effect again with its existing emitter batches.
         if (!this.emitters.length) this.emitters = assets.emitters.map((emitter, index) => new ParticleEmitterView(this.node, index, emitter))
@@ -280,7 +320,24 @@ export class ParticlePlayer extends Component {
         if (this.step(1, false)) this.render()
     }
 
+    /** It takes its place in the pools. */
+    private count(): void {
+        if (this.counted) return
+        this.counted = true
+        liveSystems++
+    }
+
+    /** It gives its places in the pools back. */
+    private uncount(): void {
+        if (!this.counted) return
+        this.counted = false
+        liveSystems--
+        liveEmitters -= this.heldEmitters
+        this.heldEmitters = 0
+    }
+
     private release(): void {
+        this.uncount()
         this.idlePool?.splice(this.idlePool.indexOf(this), 1)
         this.idlePool = null
         this.simulation?.dispose()
@@ -321,6 +378,7 @@ export class ParticlePlayer extends Component {
     }
 
     private finish(): void {
+        this.uncount()
         const parent = this.node.parent
         if (!this.recycle || !parent) { this.node.destroy(); return }
         let pools = idlePlayers.get(parent)

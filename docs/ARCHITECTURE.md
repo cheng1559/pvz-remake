@@ -100,7 +100,7 @@ The local channel (`shared/channel`) parses every client packet after a JSON rou
 
 Server packets are handled by type:
 
-- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore validated (`validateServerPacket`) and handed over without a copy.
+- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore handed over without a copy. It is validated (`validateServerPacket`) on the way: every frame in a debug build, one a second in a release build (`LocalGameChannel`'s `frameChecks`), where checking every field of every entity each tick cost more than it caught.
 - **Every other server packet** may reference server state. `copyServerPacket` checks its JSON safety and deep-copies it in one traversal, before the protocol's structure checks.
 
 Nested Mod state, extensions and events are copied or checked the same way, so a client changing what it holds cannot reach the server or other snapshots. Client requests, external packet parsing and save formats keep their own rules.
@@ -419,7 +419,7 @@ A huge wave's message is the level's advice (`AdviceWidget`, style `huge-wave`, 
 
 Gameplay authoring tables live under `mods/pvz-base/gameplay/definitions/`, split into plants, zombies, seeds, boards, projectiles, items, achievements, tools, the store, its pages and the almanac. `gameplay/settings.json` contains the global defaults, and `gameplay/levels.json` the levels.
 
-Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more.
+Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more. `presentation/settings.json` contains the client's own global settings, apart from the gameplay settings the server reads.
 
 The root `mods/pvz-base/content.json` indexes every table, in the same format as Mod sources. Packing (`npm run mod:pack`, `tools/mod/cli.ts`) merges them into the package's `assets/gameplay.json` and `assets/presentation.json`, using the same structure as Mod packages and adding no resource requests. The base package is published to `assets/resources/base.zip` (`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`, which `npm run build:content` also runs). Headless tools and tests read the same source tables (`tools/mod/content.ts`).
 
@@ -645,7 +645,7 @@ The six kinds of view keep one contract (`EntityView` in `LevelStage.ts`):
 - **Sync**: on the board `sync(entity, world)` runs every frame, and the view places its node itself. A new view is synced once with the snapshot of the moment as soon as it is made.
 - **Off the board**: plants, zombies, grid items and projectiles can also be drawn off the board (`client/view/offBoard.ts`). They are created by the same registries with no `stage` in the context, drawn as the context has them from `initialize` on, never synced, and `destroy`ed when done.
 - **Saves**: what must survive a save a view keeps itself through `snapshot` / `restore`: a zombie's body and mower-driver animation, the sun's and coins' spin. Save entries are told apart by kind (`zombie`, `item`). Plant and zombie hit flashes are the board's (`stage.flashes`, `EntityFlashes`), saved with the renderer's state in the level presentation save's `flashes`, not by each view.
-- **Shadows**: a shadow node outside the view's own (zombies, projectiles, mowers) is its `shadowNode`, which the renderer puts on the ground layer. With `draw.shadow: false` neither a plant nor a zombie builds one.
+- **Shadows**: a shadow node outside the view's own (projectiles, mowers, and a zombie off the board) is its `shadowNode`, which the renderer puts on the ground layer. A zombie on the board has no node for its shadow: it is one of the board's (`stage.shadows`, `BoardShadows`), which draws a whole row's in one batch; the view sets its `shadow`'s place, size, row and whether it shows. With `draw.shadow: false` neither a plant nor a zombie builds one.
 
 A plant's or zombie's presentation may leave out `view` (`plant` / `zombie` by default).
 
@@ -777,6 +777,7 @@ Particles:
 - Multiple simulation ticks enter the kernel in one call, and only the last state is rendered.
 - Saves retain the seed and age for deterministic replay. Destroying or restarting a player releases its kernel state.
 - Empty systems that have exhausted a fixed launch cap defer their remaining ticks and skip empty rendering, preserving their original lifetime and save age.
+- The presentation settings' `particles` gives the limits of the original's pools (TodParticleHolder). `ParticlePlayer` counts the effects and emitters alive and starts none that would not fit; the kernel counts the particles of all systems and spawns none past the limit, before drawing any random number for it.
 
 ### Game clock
 

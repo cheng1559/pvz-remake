@@ -14,7 +14,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from .upscale_fonts import Upscaler
 
@@ -110,13 +110,36 @@ def write_manifest(path, manifest):
     temporary.replace(path)
 
 
+# The faintest alpha kept where the source draws nothing; the haze the recovery of alpha leaves is fainter.
+EDGE_ALPHA = 16
+
+
+def keep_transparent(result, source):
+    """What the source leaves fully transparent stays so.
+
+    Alpha is recovered from two inferences, over black and over white, and their difference is never exactly nothing:
+    the empty parts of an image come out at 1 to 15 of 255 all over. One such image shows nothing, but a few hundred
+    zombies standing in one place draw a square shade around themselves. Where the source draws nothing, a texel
+    keeps its alpha only as part of an outline: within one source pixel of what the source draws, and no fainter than
+    EDGE_ALPHA.
+    """
+    drawn = source.getchannel("A").point(lambda value: 255 if value else 0)
+    own = drawn.resize(result.size, Image.Resampling.NEAREST)
+    near = drawn.filter(ImageFilter.MaxFilter(3)).resize(result.size, Image.Resampling.NEAREST)
+    alpha = result.getchannel("A")
+    edge = Image.composite(alpha.point(lambda value: value if value >= EDGE_ALPHA else 0), Image.new("L", result.size), near)
+    result.putalpha(Image.composite(alpha, edge, own))
+    return result
+
+
 def upscale(image, model):
     # Opaque backgrounds need only one inference. RGBA icons use the existing
     # black/white composite method to preserve transparency without black halos.
     image = image.convert("RGBA")
     opaque = image.getextrema()[3] == (255, 255)
     result = model.rgb(image) if opaque else model.rgba(image)
-    return result.convert("RGBA").resize((image.width * SCALE, image.height * SCALE), Image.Resampling.LANCZOS)
+    result = result.convert("RGBA").resize((image.width * SCALE, image.height * SCALE), Image.Resampling.LANCZOS)
+    return result if opaque else keep_transparent(result, image)
 
 
 def upscale_sheet(image, cell, model):
