@@ -791,6 +791,7 @@ host.get('client/views').plants.registerView('example:beacon', BeaconView)
 - 新对象占用最近释放的槽位，没有空槽时在末尾新开一个；同一逻辑步释放的几个，槽位高的先被占用（`Board::ProcessDeleteQueue`）。
 - 一个逻辑步里释放的槽位，下一步开始才能再被占用。
 - id 不会复用。
+- 开场时街上的僵尸在开场结束前占着 `zombies` 最前面的槽位（`CutScene::PlaceStreetZombies`），关卡最先出场的僵尸接着使用这些槽位。
 
 要在实体上保存自己的数据，把它放在实体的 `extensions[id]`（一个 JSON 对象）中，其中 `id` 是自己命名空间中的限定 ID，需先用 `registry.extensions.register(id, validate?)` 注册（`pvz:` 下的 ID 会被拒绝）。
 

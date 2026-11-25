@@ -70,7 +70,7 @@ test("EntityList keeps the original DataArray's slots: one freed is taken again 
     const broken = { ...saved, slots: { ...saved.slots, items: { ...saved.slots.items, free: [saved.slots.items.slots.indexOf(kept)] } } }
     const twice = new World()
     for (const id of order()) twice.insert(twice.items, item(id))
-    assert.throws(() => twice.restoreEntityAllocator(broken), /each be held, free or freeing once/)
+    assert.throws(() => twice.restoreEntityAllocator(broken), /each be held, reserved, free or freeing once/)
 })
 
 test('World restores its allocator without reusing a destroyed highest EntityId', () => {

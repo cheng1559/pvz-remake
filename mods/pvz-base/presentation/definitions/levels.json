@@ -113,7 +113,6 @@
   },
   "pvz:adventure-1-10": {
     "intro": {
-      "previewCapacity": 18,
       "sod": "pvz:background1",
       "x": 12,
       "y": 0,
@@ -187,7 +186,7 @@
     "advice": {}
   },
   "pvz:adventure-2-10": {
-    "intro": {"previewCapacity": 18, "sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
+    "intro": {"sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
     "music": {"choosing": "choose_seeds", "gameplay": "conveyer"},
     "seedGuideSteps": [],
     "lawnGuideSteps": [],

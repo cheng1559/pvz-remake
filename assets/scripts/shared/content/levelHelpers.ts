@@ -24,6 +24,23 @@ export function levelHasWaves(level: LevelDefinition): boolean {
     return level.waves !== undefined || level.rules !== undefined
 }
 
+/** CutScene::PlaceStreetZombies: the street's slots for a level's zombies, where the level gives none (`previewCapacity`). */
+export const STREET_CAPACITY = 10
+
+/**
+ * CutScene::PlaceStreetZombies: the zombies standing in the street as the level opens, the level's slots apportioned
+ * from the counts of its waves' zombies, leaving out the zombie that leads the flag waves (`flagZombie`:
+ * GameplayDefinitions.flagWave's, the flag zombie). The original makes each a zombie of its list (ZOMBIE_WAVE_CUTSCENE),
+ * whose slots the level's first zombies take once the intro is over (Board::RemoveCutsceneZombies): the server holds as
+ * many (EntityList.reserve), and the client draws them.
+ */
+export function streetZombies(level: LevelDefinition, counts: Readonly<Record<string, number>>, flagZombie: string): string[] {
+    const capacity = level.previewCapacity ?? STREET_CAPACITY
+    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && id !== flagZombie)
+    const total = entries.reduce((sum, [, count]) => sum + count, 0)
+    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
+}
+
 /** The level award's size on the lawn (Coin::CoinInitialize's mWidth, mHeight): a seed award's is its packet's. */
 export function levelAwardSize(award: LevelDefinition['award']): { readonly width: number; readonly height: number } {
     return award.kind === 'seed' ? SEED_PACKET_SIZE : award

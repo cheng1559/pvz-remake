@@ -6,7 +6,7 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as protocolModule from '@/shared/protocol'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as teamsModule from '@/shared/content/teams'
-import { MOWER_INTRO_X, MOWER_READY_X } from '@/shared/content/gameplay'
+import { MOWER_INTRO_X, MOWER_READY_X, streetZombies, type LevelDefinition } from '@/shared/content/gameplay'
 
 /** A client module run with `modules` for its imports, the shared ones real and the rest empty. */
 function load(path: string, modules: Record<string, unknown> = {}): Record<string, any> {
@@ -181,9 +181,8 @@ test("the intro brings each row's mower on as CutScene::UpdateIntro does: the hi
 })
 
 test("the street before an adventure level leaves out the zombie that leads the flag waves (CutScene::PlaceStreetZombies)", () => {
-    const { adventurePreviewTypes } = load('level/adventure/AdventureIntro')
-    const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }
-    assert.deepEqual(JSON.parse(JSON.stringify(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:flag' } }, 4))),
-        ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
-    assert.ok(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:conehead' } }, 4).includes('pvz:flag'), 'whichever zombie the settings name')
+    const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }, level = { previewCapacity: 4 } as LevelDefinition
+    assert.deepEqual(streetZombies(level, counts, 'pvz:flag'), ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
+    assert.ok(streetZombies(level, counts, 'pvz:conehead').includes('pvz:flag'), 'whichever zombie the settings name')
+    assert.equal(streetZombies({} as LevelDefinition, { 'pvz:normal': 20 }, 'pvz:flag').length, 10, 'ten slots unless the level gives its own')
 })

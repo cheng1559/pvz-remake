@@ -21,7 +21,7 @@ import type { ZombieView } from '@/client/zombies/ZombieView'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { streetZombies, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 
 const WIDTH = 800
@@ -44,18 +44,6 @@ const SEED_BANK_DURATION = 25
 const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
-/** CutScene::PlaceStreetZombies: the street's slots, where a level's layout gives none (`previewCapacity`). */
-const PREVIEW_CAPACITY = 10
-
-/**
- * CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster, leaving out the zombie that
- * leads the flag waves (GameplayDefinitions.flagWave, the flag zombie).
- */
-export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: Pick<GameplayDefinitions, 'flagWave'>, capacity: number): string[] {
-    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && id !== definitions.flagWave.zombie)
-    const total = entries.reduce((sum, [, count]) => sum + count, 0)
-    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
-}
 
 /**
  * A street's zombie, drawn by its view as it stands off the board (CutScene::PlaceAZombie makes a zombie of
@@ -129,7 +117,7 @@ export class AdventureIntro implements LevelIntro {
             ready.pause()
         }
         const previewTypes = new Map<Node, string>()
-        const types = layout.pan === false ? [] : adventurePreviewTypes(previewZombies, content.definitions, layout.previewCapacity ?? PREVIEW_CAPACITY)
+        const types = layout.pan === false ? [] : streetZombies(level, previewZombies, content.definitions.flagWave.zombie)
         const introPositions: Array<{ x: number, y: number, order: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),

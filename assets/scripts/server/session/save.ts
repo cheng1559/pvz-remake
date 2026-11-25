@@ -87,15 +87,15 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     // Each list's slots (EntityList): restoring checks they hold its entities.
     const slotsSource = exact(allocatorSource.slots, [...ENTITY_LISTS], 'server save.allocator.slots')
     const allocator = { nextEntity, slots: Object.fromEntries(ENTITY_LISTS.map(key => {
-        const name = `server save.allocator.slots.${key}`, source = exact(slotsSource[key], ['slots', 'free', 'freeing'], name)
+        const name = `server save.allocator.slots.${key}`, source = exact(slotsSource[key], ['slots', 'free', 'freeing', 'reserved'], name)
         const slots = array(source.slots, `${name}.slots`).map((id, slot) => id === null ? null : positiveInteger(id, `${name}.slots[${slot}]`))
         if (slots.some(id => id !== null && id >= nextEntity)) throw new TypeError(`${name}.slots must hold entities below allocator.nextEntity`)
-        const empty = (field: 'free' | 'freeing') => array(source[field], `${name}.${field}`).map((slot, index) => {
+        const empty = (field: 'free' | 'freeing' | 'reserved') => array(source[field], `${name}.${field}`).map((slot, index) => {
             const parsed = nonNegativeInteger(slot, `${name}.${field}[${index}]`)
             if (parsed >= slots.length) throw new TypeError(`${name}.${field}[${index}] is past the slots`)
             return parsed
         })
-        return [key, { slots, free: empty('free'), freeing: empty('freeing') }]
+        return [key, { slots, free: empty('free'), freeing: empty('freeing'), reserved: empty('reserved') }]
     })) as EntityAllocatorSnapshot['slots'] }
     const randomSource = exact(save.random, ['algorithm', 'state'], 'server save.random')
     const random = {

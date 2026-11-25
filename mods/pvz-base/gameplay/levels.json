@@ -216,6 +216,7 @@
   "pvz:adventure-1-10": {
     "nextLevel": "pvz:adventure-2-1",
     "adventureIndex": 10,
+    "previewCapacity": 18,
     "board": "pvz:day",
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],
@@ -425,6 +426,7 @@
   },
   "pvz:adventure-2-10": {
     "adventureIndex": 20,
+    "previewCapacity": 18,
     "board": "pvz:night",
     "lawnMower": "pvz:lawnmower",
     "activeRows": [0, 1, 2, 3, 4],

@@ -789,6 +789,7 @@ The world (`server/state/World`) is a set of lists separated by type: `plants`, 
 - A new object takes the slot freed last, or else a new one after the others; of those freed in one tick, the highest is taken first (`Board::ProcessDeleteQueue`).
 - A slot freed in a tick is taken again only from the next.
 - Ids are never reused.
+- The zombies in the street as a level opens hold the first slots of `zombies` until the intro is over (`CutScene::PlaceStreetZombies`), and the level's first zombies take them.
 
 To keep data of your own on an entity, put it in the entity's `extensions[id]` (a JSON object), where `id` is a qualified ID in your own namespace, registered first with `registry.extensions.register(id, validate?)` (IDs in `pvz:` are refused).
 

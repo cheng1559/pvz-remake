@@ -55,13 +55,15 @@ export interface Entity {
 }
 
 /**
- * A list's slots as a save keeps them (EntityList): the entity in each slot or `null` for a free one, the free slots
- * as a stack (the next to be taken last), and those freed this tick, free as the next starts.
+ * A list's slots as a save keeps them (EntityList): the entity in each slot or `null` for one no entity holds, the
+ * free slots as a stack (the next to be taken last), those freed this tick, free as the next starts, and those
+ * reserved (EntityList.reserve).
  */
 export interface EntitySlotsSnapshot {
     slots: Array<EntityId | null>
     free: number[]
     freeing: number[]
+    reserved: number[]
 }
 
 /**
@@ -74,7 +76,7 @@ export interface EntitySlotsSnapshot {
  * its way out, World.markDestroy) is passed over, one added meanwhile waits for the next.
  */
 export class EntityList<T extends Entity> implements Iterable<T> {
-    /** The slots (DataArray::mBlock), each holding one or none (free or freeing); as many as have been taken (mMaxUsedCount). */
+    /** The slots (DataArray::mBlock), each holding one or none (free, freeing or reserved); as many as have been taken (mMaxUsedCount). */
     private slots: Array<T | undefined> = []
     /** Each one's slot, by its id. */
     private readonly slotOf = new Map<EntityId, number>()
@@ -82,6 +84,8 @@ export class EntityList<T extends Entity> implements Iterable<T> {
     private free: number[] = []
     /** The slots of those taken out this tick, which freeSlots frees. */
     private freeing: number[] = []
+    /** The slots taken by what the world does not keep (reserve). */
+    private reserved: number[] = []
     /** The slots as the last iteration found them, until one is put in or taken out. */
     private iterated: Array<T | undefined> | undefined
 
@@ -126,8 +130,26 @@ export class EntityList<T extends Entity> implements Iterable<T> {
         this.freeing = []
     }
 
+    /**
+     * `count` slots are taken, as by ones put in, for what the original keeps in its list and the world does not: the
+     * street's zombies of the intro (CutScene::PlaceStreetZombies), which only the client draws.
+     */
+    reserve(count: number): void {
+        for (let i = 0; i < count; i++) {
+            const slot = this.free.pop() ?? this.slots.length
+            this.slots[slot] = undefined
+            this.reserved.push(slot)
+        }
+    }
+
+    /** What the slots were reserved for is gone (Board::RemoveCutsceneZombies): they are freed as the next tick starts. */
+    release(): void {
+        this.freeing.push(...this.reserved)
+        this.reserved = []
+    }
+
     snapshotSlots(): EntitySlotsSnapshot {
-        return { slots: this.slots.map(value => value?.id ?? null), free: [...this.free], freeing: [...this.freeing] }
+        return { slots: this.slots.map(value => value?.id ?? null), free: [...this.free], freeing: [...this.freeing], reserved: [...this.reserved] }
     }
 
     /**
@@ -135,22 +157,23 @@ export class EntityList<T extends Entity> implements Iterable<T> {
      * edited by hand may lack some of its entities, whose slots are freed as the next tick starts, as if taken out, or
      * have others, which take theirs as one put in does.
      */
-    restoreSlots({ slots, free, freeing }: EntitySlotsSnapshot): void {
+    restoreSlots({ slots, free, freeing, reserved }: EntitySlotsSnapshot): void {
         const listed = new Map<EntityId, T>()
         for (const value of this.slots) if (value) listed.set(value.id, value)
         const ids = slots.filter((id): id is EntityId => id !== null)
         if (new Set(ids).size !== ids.length) throw new Error('Entity slots must hold each entity once')
         const restored = slots.map(id => id === null ? undefined : listed.get(id))
         const gone = slots.flatMap((id, slot) => id !== null && !restored[slot] ? [slot] : [])
-        const released = [...free, ...freeing, ...gone], empty = restored.filter(value => !value).length
+        const released = [...free, ...freeing, ...reserved, ...gone], empty = restored.filter(value => !value).length
         if (released.length !== empty || new Set(released).size !== empty || released.some(slot => !(slot in restored) || restored[slot])) {
-            throw new Error('Entity slots must each be held, free or freeing once')
+            throw new Error('Entity slots must each be held, reserved, free or freeing once')
         }
         this.slots = restored
         this.slotOf.clear()
         restored.forEach((value, slot) => { if (value) this.slotOf.set(value.id, slot) })
         this.free = [...free]
         this.freeing = [...freeing, ...gone]
+        this.reserved = [...reserved]
         for (const value of listed.values()) if (!this.slotOf.has(value.id)) this.set(value)
         this.iterated = undefined
     }

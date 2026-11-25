@@ -2,7 +2,7 @@ import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { LEVEL_AWARD, parseGameplayDefinitions, parseGameplayLevels, streetZombies } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
@@ -139,6 +139,25 @@ test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original
         assert.equal(server.snapshot().zombies[0].typeId, 'pvz:normal')
         assert.equal(server.snapshot().tutorial.step, 'waiting-for-sunflowers')
     }
+})
+
+test("the street's zombies hold the zombies' first slots through the intro, which the level's first zombies take back, the highest first", () => {
+    const server = game(3, true)
+    const street = streetZombies(levels.levels[options(3).levelId], server.snapshot().wave.previewZombies!, definitions.flagWave.zombie).length
+    assert.ok(street > 1)
+    const slots = (of: IntegratedGameServer) => of.save().allocator.slots.zombies
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.start({ ...options(3), save: server.save() as unknown as JsonValue })
+    for (const of of [server, restored]) {
+        assert.deepEqual(slots(of), { slots: Array(street).fill(null), free: [], freeing: [], reserved: [...Array(street).keys()] }, 'a save of the intro keeps them')
+    }
+    runCommand(server, { type: 'completeIntro' })
+    server.tick()
+    debug(server, '/zombie normal 2 8')
+    debug(server, '/zombie normal 2 8')
+    const [second, first] = server.snapshot().zombies.map(zombie => zombie.entityId)
+    assert.ok(first < second, 'listed in slot order, the later one first')
+    assert.deepEqual([first, second].map(id => slots(server).slots.indexOf(id)), [street - 1, street - 2])
 })
 
 test('early adventure wave plans obey points, reserve conehead introductions and survive save/restore', () => {

@@ -764,6 +764,12 @@ export interface LevelDefinition {
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     /** Ticks to the first wave; 1800 when omitted (ZOMBIE_COUNTDOWN_FIRST_WAVE). */
     firstWaveTicks?: number
+    /**
+     * CutScene::PlaceStreetZombies: the street's slots for the level's zombies, STREET_CAPACITY (10) unless given
+     * (streetZombies). The original gives 18 on its levels 10, 20, 30 and 40 (the conveyor belt levels and Stormy Night)
+     * and 15 on level 25 (Big Trouble Little Zombie).
+     */
+    previewCapacity?: number
     conveyor?: {
         initialSeed?: string
         initialDelayTicks?: number

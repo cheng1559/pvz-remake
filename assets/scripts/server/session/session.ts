@@ -1,5 +1,5 @@
 import { Schedule, World } from '@/server/state/World'
-import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
+import { streetZombies, type GameplayDefinitions, type GameplayLevels } from '@/shared/content/gameplay'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -26,7 +26,7 @@ import { PlantFactoryResource } from '../plants/Plant'
 import { createProjectileSystem } from '../projectiles/projectiles'
 import { ProjectileMotionsResource } from '../projectiles/motions'
 import { ProjectileFactoryResource } from '../projectiles/Projectile'
-import { createWaveSystem } from '../level/waves'
+import { createWaveSystem, waveZombieCounts } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieFactoryResource } from '../zombies/Zombie'
@@ -196,5 +196,8 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     if (packet.firstAdventure) for (const plant of levelTutorial(world)?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
     // CutScene::PlaceLawnItems: a mower for every row in play (Board::InitLawnMowers), which the intro rolls in.
     for (const row of level.activeRows) createMower(world, row)
+    // CutScene::PlaceStreetZombies: the street's zombies, which only the client draws, hold slots of the zombies' list
+    // until the intro is over (completeIntro), as the original's do.
+    world.zombies.reserve(streetZombies(level, waveZombieCounts(world), definitions.flagWave.zombie).length)
     return session
 }

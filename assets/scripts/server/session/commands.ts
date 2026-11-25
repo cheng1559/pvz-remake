@@ -23,6 +23,8 @@ export const commands = {
             if (world.resources.get(SeedBankResource).choosing) return 'seed-choice-incomplete'
             if (getActiveTutorial(world)?.blocksIntro && world.resources.get(TutorialResource).step !== 'complete') return 'intro-not-complete'
             level.phase = 'gameplay'
+            // Board::RemoveCutsceneZombies: the street's zombies are gone, their slots free as the next tick starts.
+            world.zombies.release()
             startConveyor(world)
             return
         }
