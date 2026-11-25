@@ -382,7 +382,7 @@ A zombie's `dance` makes it dance to the board's shared beat (`DANCE_BEAT`): on 
 
 #### Rising out of the ground
 
-A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises.
+A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises. Which zombies rise from graves is the level's `graveZombies`, or else its board's `graveZombies` that the level's waves or pool bring, all of them on a level that names no zombies.
 
 #### Projectile range
 

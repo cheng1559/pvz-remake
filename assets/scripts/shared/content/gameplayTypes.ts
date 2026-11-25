@@ -146,6 +146,9 @@ export interface BoardDefinition {
     cell: { width: number; height: number }
     /** How a zombie comes up out of a grave on it (Zombie::UpdateZombieRiseFromGrave). */
     riseFromGrave: ZombieRise
+    /** Board::PickGraveRisingZombieType: the zombies that rise from graves on it, by weight, for a level that names none
+     *  of its own (LevelDefinition.graveZombies). */
+    graveZombies?: Array<{ id: string; weight: number }>
 }
 
 interface SeedCommon {
@@ -523,9 +526,6 @@ export interface ZombieDefinition {
      * Every zombie has them: its value also sets the odds of the loot it drops (Zombie::DropLoot).
      */
     wave: { points: number; weight: number; firstWave?: number }
-    /** Board::PickGraveRisingZombieType: rises with its wave weight from the graves of levels that allow it; levels
-     *  with their own graves name their zombies instead. */
-    graveRise?: boolean
     /** Runs at the first plant (its `run` clip) and vaults over it once (its `jump`). */
     vault?: {
         runSpeedPerTick: { min: number; max: number }
@@ -771,8 +771,9 @@ export interface LevelDefinition {
     skySun?: string
     /** Board::AddGraveStones: per column, graves on random free rows. */
     graves?: Array<{ column: number; count: number }>
-    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, it comes
-     *  from the zombies' `graveRise`; a lawn with graves must end up with some. */
+    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, its
+     *  board's that the level's waves or pool bring (mZombieAllowed), all of them where it names no zombies; a lawn
+     *  with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
     /**
      * The waves as listed; a level has these or `rules`, or neither: a level without waves (the sandboxes) has no

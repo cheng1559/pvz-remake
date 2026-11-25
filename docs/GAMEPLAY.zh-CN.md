@@ -153,7 +153,7 @@
 **最后一波之后。**
 
 - 最后一波出现 200 逻辑步后，草坪上每一座已完全升起的墓碑（不限于本关开局的墓碑）都会召唤一只僵尸，按关卡 `graveZombies` 的权重抽取，用 150 逻辑步爬出地面。奖励掉落后不再有僵尸爬出。墓碑召唤的僵尸属于墓碑所在的阵营。
-- `graveZombies` 列出的僵尸使用各自的出怪权重；未指定时，使用出怪池中可以从墓碑爬出的僵尸（`graveRise`：普通、路障、铁桶僵尸）。
+- `graveZombies` 列出的僵尸使用各自的出怪权重。关卡未指定时，取所在场地 `graveZombies` 中本关波次或出怪池出现过的僵尸（`Board::PickGraveRisingZombieType`、`mZombieAllowed`）；关卡完全没有写僵尸时（如沙盒关）取全部：白天场地为普通、路障、铁桶僵尸，夜晚场地为普通、路障僵尸。
 - 僵尸按所在场地的 `riseFromGrave` 爬出（`Zombie::UpdateZombieRiseFromGrave`、`GetDrawPos`）：身体框和攻击框随身体上升，不含被地面遮住的部分。`GraveView` 绘制原版的墓碑与土堆图集，`ZombieView` 按表现定义中的 `graves.zombie.clip` 裁剪正在爬出的身体，取自原版 `DrawReanim` 中的数值。裁剪以棋盘像素计，与僵尸的缩放无关。资源包可以修改裁剪范围。
 
 #### 2-1

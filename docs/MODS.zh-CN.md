@@ -384,7 +384,7 @@ my-mod/
 
 #### 从地下升起
 
-从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。
+从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。从墓碑爬出哪些僵尸由关卡的 `graveZombies` 决定；关卡未指定时，取所在场地 `graveZombies` 中本关波次或出怪池出现过的僵尸，关卡完全没有写僵尸时取全部。
 
 #### 子弹射程
 

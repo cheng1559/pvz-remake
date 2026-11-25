@@ -41,13 +41,15 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const zenGarden = exact(source.zenGarden, ['columns', 'capacity', 'template'], 'gameplay definitions.zenGarden')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
+    // Before the boards, which name the zombies that rise from their graves.
+    const zombies = mapped(withFrom(record(source.zombies, 'zombies'), 'animation', 'zombies'), 'zombies', parseZombie)
     const definitions: GameplayDefinitions = {
         schemaVersion: 2,
         economy: { maxSun: positiveInteger(economy.maxSun, 'economy.maxSun'), maxMoney: positiveInteger(economy.maxMoney, 'economy.maxMoney') },
-        boards: mapped(source.boards, 'boards', parseBoard),
+        boards: mapped(source.boards, 'boards', (value, name) => parseBoard(value, name, zombies)),
         seeds: mapped(source.seeds, 'seeds', parseSeed),
         plants: mapped(withFrom(record(source.plants, 'plants'), 'animation', 'plants'), 'plants', parsePlant),
-        zombies: mapped(withFrom(record(source.zombies, 'zombies'), 'animation', 'zombies'), 'zombies', parseZombie),
+        zombies,
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         achievements: mapped(source.achievements, 'achievements', parseAchievement),
@@ -124,8 +126,8 @@ export function parseGameplayLevels(
 
 const UNLOCKED_ENTRIES: readonly string[] = ['almanac', 'store', 'garden'] satisfies UnlockedEntry[]
 
-function parseBoard(value: unknown, name: string): BoardDefinition {
-    const source = exact(value, ['rows', 'columns', 'origin', 'cell', 'bounds', 'riseFromGrave'], name, ['night'])
+function parseBoard(value: unknown, name: string, zombies: Record<string, ZombieDefinition>): BoardDefinition {
+    const source = exact(value, ['rows', 'columns', 'origin', 'cell', 'bounds', 'riseFromGrave'], name, ['night', 'graveZombies'])
     if (source.night !== undefined && typeof source.night !== 'boolean') throw new Error(`${name}.night must be boolean`)
     const bounds = exact(source.bounds, ['left', 'right'], `${name}.bounds`)
     const left = finite(bounds.left, `${name}.bounds.left`), right = finite(bounds.right, `${name}.bounds.right`)
@@ -142,6 +144,7 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
             height: positiveFinite(cell.height, `${name}.cell.height`),
         },
         riseFromGrave: zombieRise(source.riseFromGrave, `${name}.riseFromGrave`),
+        ...(source.graveZombies === undefined ? {} : { graveZombies: graveZombieList(source.graveZombies, `${name}.graveZombies`, zombies) }),
     }
 }
 
@@ -414,7 +417,7 @@ function freeze(value: unknown, name: string): FreezeDefinition {
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
     const [fields, mods] = modFields(value, name)
-    const source = exact(fields, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['kind', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'graveRise', 'facingRightOffsetX', 'unchillable', 'unfreezable', 'scale', 'dance'])
+    const source = exact(fields, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['kind', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'facingRightOffsetX', 'unchillable', 'unfreezable', 'scale', 'dance'])
     const spawn = exact(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -446,11 +449,6 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
     for (const key of ['unchillable', 'unfreezable'] as const) {
         if (source[key] !== undefined) result[key] = coldStates(source[key], `${name}.${key}`, ZOMBIE_STATES)
-    }
-    if (source.graveRise !== undefined) {
-        if (typeof source.graveRise !== 'boolean') throw new Error(`${name}.graveRise must be boolean`)
-        if (source.graveRise && !result.wave.weight) throw new Error(`${name}.graveRise needs a weighted wave`)
-        result.graveRise = source.graveRise
     }
     if (source.targetingInsets !== undefined) {
         result.targetingInsets = mapped(source.targetingInsets, `${name}.targetingInsets`, nonNegativeFinite)
@@ -852,15 +850,28 @@ function parseZombiePool(value: unknown, name: string, definitions: GameplayDefi
 }
 
 /**
- * Board::PickGraveRisingZombieType for a level without graves of its own (they come from /griditem grave): the zombies with
- * `graveRise` that the level allows (mZombieAllowed), in definition order.
+ * Board::PickGraveRisingZombieType for a level that names none of its own: its board's `graveZombies` that its waves or
+ * pool bring (mZombieAllowed), all of them on a level that names no zombies (the sandboxes).
  */
-function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefinition['waves'],
+function boardGraveZombies(board: BoardDefinition, waves: LevelDefinition['waves'],
     zombiePool: Array<{ id: string }> | undefined): LevelDefinition['graveZombies'] {
-    const allowed = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...waves?.flatMap(wave => wave.zombies) ?? []])
-    const picks = Object.entries(definitions.zombies).flatMap(([id, { graveRise, wave }]) =>
-        graveRise && allowed.has(id) ? [{ id, weight: wave.weight }] : [])
-    return picks.length ? picks : undefined
+    const named = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...waves?.flatMap(wave => wave.zombies) ?? []])
+    const picks = named.size ? board.graveZombies?.filter(entry => named.has(entry.id)) : board.graveZombies
+    return picks?.length ? picks : undefined
+}
+
+/** A board's or a level's `graveZombies`: each a zombie ID taking its wave weight, or {id, weight}; never none. */
+function graveZombieList(value: unknown, name: string,
+    zombies: Record<string, ZombieDefinition>): NonNullable<LevelDefinition['graveZombies']> {
+    const list = array(value, name).map((value, index) => {
+        const entryName = `${name}[${index}]`
+        const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exact(value, ['id'], entryName, ['weight'])
+        const id = qualifiedId(entry.id, `${entryName}.id`)
+        const { wave } = reference(id, zombies, `${entryName}.id`)
+        return { id, weight: positiveInteger(entry.weight ?? wave.weight, `${entryName}.weight`) }
+    })
+    if (!list.length) throw new Error(`${name} must not be empty`)
+    return list
 }
 
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
@@ -969,17 +980,9 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         return { column, count }
     })
     if (graves && new Set(graves.map(grave => grave.column)).size !== graves.length) throw new Error(`${name}.graves must contain unique columns`)
-    if (graves?.length && source.graveZombies === undefined) throw new Error(`${name}.graves need graveZombies`)
-    // An entry is a zombie id taking its wave weight, or {id, weight}.
-    const graveZombies = source.graveZombies === undefined ? defaultGraveZombies(definitions, waves, zombiePool)
-        : array(source.graveZombies, `${name}.graveZombies`).map((value, index) => {
-            const entryName = `${name}.graveZombies[${index}]`
-            const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exact(value, ['id'], entryName, ['weight'])
-            const id = qualifiedId(entry.id, `${entryName}.id`)
-            const { wave } = reference(id, definitions.zombies, `${entryName}.id`)
-            return { id, weight: positiveInteger(entry.weight ?? wave.weight, `${entryName}.weight`) }
-        })
-    if (source.graveZombies !== undefined && !graveZombies?.length) throw new Error(`${name}.graveZombies must not be empty`)
+    const graveZombies = source.graveZombies === undefined ? boardGraveZombies(board, waves, zombiePool)
+        : graveZombieList(source.graveZombies, `${name}.graveZombies`, definitions.zombies)
+    if (graves?.length && !graveZombies) throw new Error(`${name}.graves need graveZombies, its own or its board's`)
     const award = record(source.award, `${name}.award`)
     let parsedAward: LevelDefinition['award']
     if (award.kind === 'seed') {

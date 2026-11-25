@@ -40,13 +40,16 @@ function restore(save: ReturnType<IntegratedGameServer['save']>) {
     return server
 }
 
-test('grave zombies default to Board::PickGraveRisingZombieType over the zombies each level allows, and lawns with graves name theirs', () => {
+test("grave zombies default to Board::PickGraveRisingZombieType: the board's that each level's zombies include (mZombieAllowed)", () => {
     const picks = (id: string) => levels.levels[`pvz:adventure-${id}`].graveZombies!.map(entry => `${entry.id.slice(4)}:${entry.weight}`)
     assert.deepEqual(picks('1-1'), ['normal:4000'], '1-1 allows only normal zombies')
     assert.deepEqual(picks('1-3'), ['normal:4000', 'conehead:4000'])
     assert.deepEqual(picks('1-8'), ['normal:4000', 'conehead:4000', 'buckethead:3000'])
+    // At night no buckethead rises (StageHasGraveStones), though 2-2's waves bring them; 2-1's bring no conehead.
     assert.deepEqual(picks('2-1'), ['normal:4000'])
-    assert.deepEqual(picks('2-2'), ['normal:4000', 'conehead:4000'], '2-2 names no bucketheads for its own graves')
+    for (const id of ['2-2', '2-3', '2-4', '2-5', '2-6', '2-7', '2-8', '2-9', '2-10']) {
+        assert.deepEqual(picks(id), ['normal:4000', 'conehead:4000'], id)
+    }
 })
 
 test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores the delayed final-wave emergence', () => {

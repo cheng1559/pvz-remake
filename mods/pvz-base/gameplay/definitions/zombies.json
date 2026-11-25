@@ -46,8 +46,7 @@
       "layers": {"body": "walk"}
     },
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:conehead": {
     "wave": {"points": 2, "weight": 4000},
@@ -61,8 +60,7 @@
     "helm": {"type": "cone", "health": 370},
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:buckethead": {
     "wave": {"points": 4, "weight": 3000},
@@ -76,8 +74,7 @@
     "helm": {"type": "bucket", "health": 1100},
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:pole_vaulter": {
     "kind": "polevaulter",

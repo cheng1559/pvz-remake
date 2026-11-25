@@ -153,7 +153,7 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 **After the last wave.**
 
 - 200 ticks after the final wave, every fully risen grave on the lawn (not only the level's own) raises one zombie, picked by the level's `graveZombies` weights, over 150 ticks. None rises once the award has dropped. A grave raises its zombies on its own side.
-- `graveZombies` names the zombies at their wave weights; with none given, the pool's zombies that can rise from graves (`graveRise`: Zombie, Conehead, Buckethead) are used.
+- `graveZombies` names the zombies at their wave weights. A level that names none takes its board's `graveZombies` that its waves or pool bring (`Board::PickGraveRisingZombieType`, `mZombieAllowed`), and all of them if it names no zombies, as the sandboxes: Zombie, Conehead and Buckethead by day, Zombie and Conehead at night.
 - A zombie comes up as its board's `riseFromGrave` has it (`Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos`): its body and attack rects come up with it, less what the ground hides. `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie.clip`, the original's `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change it.
 
 #### 2-1

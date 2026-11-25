@@ -39,6 +39,19 @@ for (const [levelId, board] of [['pvz:sandbox-day', 'pvz:day'], ['pvz:sandbox-ni
         assert.deepEqual(restored.render().seedPackets.map(packet => packet?.seedId ?? null),
             [null, null, 'pvz:peashooter', null, null, null, null, null, null, null])
     })
+
+    test(`${levelId}'s graves raise any of its board's grave zombies, as it names no zombies`, () => {
+        assert.deepEqual(levels.levels[levelId].graveZombies, definitions.boards[board].graveZombies)
+        const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+        game.start({ ...options, levelId })
+        game.command({ type: 'completeIntro' })
+        game.update(0)
+        assert.ok(game.debugCommand('/griditem grave 3 5').ok)
+        const raised = game.debugCommand('/gravezombies')
+        assert.equal(raised.ok && raised.message, 'Raised 1 zombie(s) from graves')
+        game.update(TICK_SECONDS)
+        assert.equal(game.render().zombies.length, 1)
+    })
 }
 
 test("the test levels are outside the Adventure, past the first adventure's checks of the level number", () => {
