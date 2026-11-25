@@ -1,4 +1,5 @@
 import type { ZombiePresentationDefinition } from '@/shared/content/presentation'
+import { mirrorX } from '@/shared/content/teams'
 
 /**
  * Where a zombie walking right is drawn: Zombie::UpdateReanim's 90 further, flipped, whatever the clip's offset, and its
@@ -15,14 +16,20 @@ export const ZOMBIE_PIVOT = { x: 30, y: 120 } as const
 
 /**
  * Zombie::RiseFromGrave's PARTICLE_ZOMBIE_RISE and Zombie::SummonBackupDancer's PARTICLE_DANCER_RISE: the dirt of a
- * zombie coming up, (60, 110) from it. One walking right stands its feet where its shadow is (Zombie::DrawShadow's
- * `backwardsX`, further left), and its dirt comes up as far over, turned round with it. The original leaves the dirt at
- * 60 and unturned, off the feet of a mind-controlled Dancing Zombie's troupe.
+ * zombie coming up, (60, 110) from it, turned round with one walking right. One out of a grave (`graveOffsetX`: the
+ * grave's own offset in its cell) comes up through the grave's dirt, turned round with a stone of the plants' side
+ * (GraveView) about the stone's middle, 64 right of the zombie by that offset: the zombie comes up 25 left of the cell,
+ * the stone's corner is 4 left of it, and the stone is 86 wide. So it lies under the stone of either side. Elsewhere
+ * one walking right stands its feet where its shadow is (Zombie::DrawShadow's `backwardsX`, further left), and its
+ * dirt comes up as far over. The original leaves the dirt at 60 and unturned, off the feet of a mind-controlled
+ * Dancing Zombie's troupe.
  */
 export function riseDirt(zombie: { readonly x: number, readonly y: number, readonly team?: string },
-    shadow: ZombiePresentationDefinition['shadow']): { x: number, y: number, mirrored: boolean } {
+    shadow: ZombiePresentationDefinition['shadow'], graveOffsetX?: number): { x: number, y: number, mirrored: boolean } {
     const mirrored = zombie.team === 'plants'
-    return { x: zombie.x + 60 + (mirrored ? (shadow.backwardsX ?? shadow.x) - shadow.x : 0), y: zombie.y + 110, mirrored }
+    const x = graveOffsetX !== undefined ? mirrorX(60, 128 + 2 * graveOffsetX, mirrored)
+        : 60 + (mirrored ? (shadow.backwardsX ?? shadow.x) - shadow.x : 0)
+    return { x: zombie.x + x, y: zombie.y + 110, mirrored }
 }
 
 /** What decides which body parts a zombie shows. */

@@ -153,7 +153,9 @@ test('CLI grave zombies rise from newly placed graves on their own side, even wh
     const risen = game.render().zombies.filter(zombie => zombie.riseTicks !== undefined)
     assert.deepEqual(risen.map(zombie => [zombie.typeId, zombie.team, zombie.riseTicks]),
         [['pvz:normal', 'plants', 150], ['pvz:normal', undefined, 150]])
-    assert.equal(game.drainEvents().filter(event => event.type === 'zombieRoseFromGrave').length, 2)
+    // Each names the cell of the grave it comes up through, whose dirt turns with the grave.
+    assert.deepEqual(game.drainEvents().filter(event => event.type === 'zombieRoseFromGrave').map(event => [event.data.row, event.data.column]),
+        [[2, 1], [2, 3]])
 })
 
 test('each /item award adds a collectible reward at the current wave and tutorial step', () => {

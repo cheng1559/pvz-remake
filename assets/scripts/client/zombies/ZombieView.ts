@@ -12,7 +12,8 @@ import { clipNamed, prepareClips, showClip } from '@/client/reanim/clips'
 import { entityTint } from '@/client/view/tints'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
+import { type GraveSnapshot, jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
+import { graveAt } from '@/shared/content/graves'
 import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/LevelPresentationSnapshot'
 import { exact } from '@/shared/validate'
 import { attachmentTrack, type GraveZombiePresentation, type ZombiePresentationDefinition } from '@/shared/content/presentation'
@@ -783,12 +784,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             renderOrder('projectile', zombie.row), tint ? new Color(...tint) : undefined, mirrored)
     }
 
-    /** Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer (riseDirt), with the grave's rumble. */
+    /**
+     * Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer (riseDirt), through the dirt of the grave in
+     * the event's cell, with the grave's rumble.
+     */
     static readonly rose: StageEvent = (stage, event, world) => {
         void SoundSystem.playSounds(stage.graveRise.sounds)
         const zombie = world.zombies.find(candidate => candidate.entityId === event.data.entityId)
         if (!zombie) return
-        const dirt = riseDirt(zombie, stage.content.presentation.zombies[zombie.typeId].shadow)
+        const grave = graveAt(world.gridItems, zombie.row, Number(event.data.column)) as GraveSnapshot | undefined
+        const dirt = riseDirt(zombie, stage.content.presentation.zombies[zombie.typeId].shadow, grave?.offsetX ?? 0)
         stage.particle(stage.graveRise.particle, dirt.x, dirt.y, renderOrder('particle', zombie.row), undefined, dirt.mirrored)
     }
 

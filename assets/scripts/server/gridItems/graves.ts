@@ -82,7 +82,8 @@ export function pickSpecialGrave(world: World): void {
 
 /**
  * Zombie::RiseFromGrave: a zombie comes up out of a grave over `riseTicks`, on the grave's side: one of the plants' side
- * raises its zombies on that side. Every zombie a grave raises comes this way.
+ * raises its zombies on that side. Every zombie a grave raises comes this way; its event names the grave's cell, whose
+ * dirt it comes up through (ZombieView.rose).
  */
 export function raiseZombieFromGrave(world: World, definitions: GameplayDefinitions, grave: Pick<Grave, 'row' | 'column' | 'team'>,
     typeId: string, riseTicks: number): EntityId {
@@ -92,7 +93,7 @@ export function raiseZombieFromGrave(world: World, definitions: GameplayDefiniti
     const zombie = world.zombies.get(entityId)!
     zombie.riseTicks = riseTicks
     if (grave.team) zombie.team = grave.team
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieRoseFromGrave', { entityId, row: grave.row })
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieRoseFromGrave', { entityId, row: grave.row, column: grave.column })
     return entityId
 }
 

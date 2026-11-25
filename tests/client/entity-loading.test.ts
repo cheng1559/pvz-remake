@@ -64,7 +64,7 @@ clientStubs['@/client/reanim/clips'] = loadClientModule('reanim/clips', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
 clientStubs['./BoardShadows'] = clientStubs['@/client/level/BoardShadows'] = loadClientModule('level/BoardShadows', {})
 clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
-clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
+clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', { '@/shared/content/teams': teamsModule })
 
 /** The board of a test: a level whose award is the sunflower, and the views it is given, with no event handled. */
 function renderer(LevelEntityRenderer: any, views: object, intro: object = { complete: true }) {
@@ -1323,19 +1323,21 @@ test('each flash event is heard once by its flash handler, before the frame is d
     }
 })
 
-test('the grave rise effect faces the same way as the zombie it raises, under its feet', () => {
+test('the grave rise effect faces the same way as the zombie it raises, under the stone of its grave', () => {
     const { ZombieView } = loadClientModule('zombies/ZombieView', {
         '@/client/sound/SoundSystem': { SoundSystem: { playSounds() {} } },
     })
     const particles: unknown[][] = []
     const stage = { graveRise: { particle: 'pvz:zombierise', sounds: [] }, particle: (...args: unknown[]) => particles.push(args),
         content: { presentation: presentationFixture } }
+    const gridItems = [{ entityId: 5, typeId: 'pvz:grave', row: 2, column: 3, offsetX: 3 }]
     for (const team of [undefined, 'plants']) {
-        ZombieView.rose(stage, { data: { entityId: 1 } }, { zombies: [{ entityId: 1, typeId: 'pvz:normal', x: 200, y: 100, row: 2, team }] })
+        ZombieView.rose(stage, { data: { entityId: 1, row: 2, column: 3 } },
+            { zombies: [{ entityId: 1, typeId: 'pvz:normal', x: 200, y: 100, row: 2, team }], gridItems })
     }
     const order = renderOrderModule.renderOrder('particle', 2)
-    // Walking right, its shadow lies 12 further left (Zombie::DrawShadow's backwards place), and so does its dirt.
-    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 248, 210, order, undefined, true]])
+    // Where the original puts it, and turned round about the stone's middle, 64 right of the zombie by the grave's 3.
+    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 200 + 2 * 67 - 60, 210, order, undefined, true]])
 })
 
 test('a zombie with steps kicks up their effect under its feet as its walk comes to each mark, mirrored walking right', () => {

@@ -107,6 +107,7 @@ The shovel can dig up only plants of the `plants` team (`canShovel` in `shared/c
 ### Graves, craters and backup dancers
 
 - A grave raises its zombies on its own team (`raiseZombieFromGrave`). A grave-placed plant (the Grave Buster) needs a grave of a hostile team to eat; a grave of its own team refuses it (`cell-has-own-grave`). Only a Grave Buster of the `plants` team drops the grave's loot.
+- A grave of the `plants` team is drawn turned round within its stone's width (`GraveView`). The dirt its zombies come up through turns with it about the stone's middle, by the grave's own offset in its cell (`riseDirt`), so it lies under the stone as under a `zombies` grave's.
 - A crater's team only decides which way it is drawn (`CraterView`). No side's plants can be planted on a crater (`Board::CanPlantAt`). The crater card belongs to the plants by default, and a crater a Doom-shroom leaves belongs to that Doom-shroom's side.
 - The backup dancers a Dancing Zombie calls up take on its team and its mind-control flag (the original copies only the mind-control flag), and their places flip left and right with its facing. A mind-controlled Dancing Zombie lets its old backup dancers go and from then on calls up its own side's, and a mind-controlled backup dancer leaves its old Dancing Zombie (`Zombie.changedSides`, `server/zombies/Dancer.ts`).
 

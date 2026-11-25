@@ -36,4 +36,15 @@ test('the dirt of a zombie coming up lies under its feet, where its shadow is, t
         assert.deepEqual(riseDirt({ ...at, team: 'plants' }, shadow), { x: 160 + shadow.backwardsX - shadow.x, y: 310, mirrored: true }, id)
         assert.equal(shadow.backwardsX - shadow.x, -12, id)
     }
+    // Out of a grave, through its dirt where the original puts it, turned round with a stone of the plants' side about
+    // the stone's middle, whatever its shadow: the zombie comes up 25 left of the cell, and the stone's corner (its
+    // presentation's `cell`) and width (a fifth of its atlas) are the base game's.
+    const { shadow } = presentation['pvz:normal'], at = { x: 100, y: 200 }
+    const [cornerX] = read('mods/pvz-base/presentation/definitions/grid-items.json')['pvz:grave'].cell
+    const width = read('mods/pvz-base/content.json').resources.sprites['pvz:tombstones'].width / 5
+    for (const offsetX of [-5, 0, 4]) {
+        const middle = at.x + 25 + offsetX + cornerX + width / 2
+        assert.deepEqual(riseDirt({ ...at, team: 'plants' }, shadow, offsetX), { x: 2 * middle - 160, y: 310, mirrored: true }, `${offsetX}`)
+        assert.deepEqual(riseDirt(at, shadow, offsetX), { x: 160, y: 310, mirrored: false }, `${offsetX}`)
+    }
 })
