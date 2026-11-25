@@ -606,6 +606,8 @@ Client scripts play effects through `SoundSystem.play(id, options)` (`client/sou
 
 For example, `SoundSystem.play(id, { channel: 'dancer', ifBusy: 'keep', pauseWithGame: true })` plays one disco effect across all dancers. Use `isChannelActive(channel)` to check occupancy and `stopChannel(channel)` to cancel playback or a pending load. Pass a presentation sound list directly to `SoundSystem.playSounds(sounds)`.
 
+When the game window is hidden, a sound that does not loop and does not pause with the game stops. Looping sounds and those that pause with the game go on when the window comes back.
+
 ## Scripting
 
 ### Entry points

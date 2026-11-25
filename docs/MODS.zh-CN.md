@@ -608,6 +608,8 @@ XML 转换始终经由 `tools/pvz/particles.py`。对于基础内容包，它会
 
 例如 `SoundSystem.play(id, { channel: 'dancer', ifBusy: 'keep', pauseWithGame: true })` 让所有舞者共用一个迪斯科音效。用 `isChannelActive(channel)` 检查通道是否被占用，用 `stopChannel(channel)` 取消播放或尚未完成的加载。表现定义中的音效列表可以直接传给 `SoundSystem.playSounds(sounds)`。
 
+游戏窗口隐藏时，不循环、也不跟随场地暂停的音效会停止。循环音效和跟随场地暂停的音效在窗口恢复后继续播放。
+
 ## 脚本
 
 ### 入口

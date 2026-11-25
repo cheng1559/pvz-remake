@@ -177,6 +177,7 @@ export class GameApp extends Component {
         const hide = () => {
             hidden = true
             sync()
+            SoundSystem.windowHidden()
             if (!savedOnLoss) { savedOnLoss = true; this.save() }
         }
         const show = () => {

@@ -714,6 +714,25 @@ test('focus mute affects active and late sounds and restores the current volume 
     assert.deepEqual(resumed, [2])
 })
 
+test('a hidden window stops the sounds that play once and not with the game, and keeps looping ones and the game\'s', async () => {
+    const urls: string[] = [], stopped: string[] = []
+    const engine = {
+        play2d(url: string) { urls.push(url); return urls.length },
+        stop(id: number) { stopped.push(urls[id - 1]) }, pause() {}, resume() {}, setVolume() {}, setFinishCallback() {},
+    }
+    const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
+        cc: { sys: { isNative: true } }, '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
+    }[id]), { jsb: { AudioEngine: engine } })
+    SoundSystem.load = async (id: string) => ({ nativeUrl: id })
+    await SoundSystem.play('awooga')
+    await SoundSystem.play('dave', { channel: 'crazyDave' })
+    await SoundSystem.play('chomp', { channel: 'chewing', pauseWithGame: true })
+    await SoundSystem.play('sod', { channel: 'sodRoll', loop: true })
+    SoundSystem.windowHidden()
+    assert.deepEqual(stopped, ['awooga', 'dave'])
+    assert.deepEqual(['crazyDave', 'chewing', 'sodRoll'].map(channel => SoundSystem.isChannelActive(channel)), [false, true, true])
+})
+
 test('sound channels reserve during loading, keep or replace requests, and release on completion', async () => {
     const played: string[] = [], stopped: number[] = [], paused: number[] = [], resumed: number[] = []
     const ended = new Map<number, () => void>()
