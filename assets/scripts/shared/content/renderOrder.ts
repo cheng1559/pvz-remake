@@ -36,6 +36,12 @@ export function renderOrder(layer: RenderLayer, row = 0, offset = 0): number {
     return (RENDER_LAYERS[layer] < RENDER_LAYERS.top ? row * ROW_OFFSET : 0) + RENDER_LAYERS[layer] + offset
 }
 
+/**
+ * Where `/hitboxes` and `/hp` draw among the board's entities: over every row's particles and under what is drawn from
+ * `top` up, at the particle layer of a row past any board's.
+ */
+export const DEBUG_OVERLAY_ORDER = renderOrder('particle', 9)
+
 /** Plant::CalcRenderOrder's offset for a plant at board x (PLANT_ORDER_NORMAL): a plant further left draws later. */
 export function plantRenderOffset(x: number): number {
     return 5 - Math.trunc(x) + 800

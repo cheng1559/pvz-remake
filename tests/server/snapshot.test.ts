@@ -95,6 +95,6 @@ test("a plant's snapshot lists its own fields: the server's counters, and anythi
     Object.assign(plant, { chilledTicks: 30, blinkTicks: 400, recentlyEatenCounter: 5, serverOnly: 1 })
     const [shown] = received(server.snapshot()).plants
     assert.deepEqual(Object.keys(shown).sort(),
-        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'state', 'typeId', 'x', 'y'])
+        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'slot', 'state', 'typeId', 'x', 'y'])
     assert.equal(shown.chilledTicks, 30)
 })

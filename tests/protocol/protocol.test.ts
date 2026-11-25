@@ -115,11 +115,11 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         }],
         conveyorPackets: [],
         plants: [{
-            entityId: 2, typeId: 'pvz:peashooter', state: 'idle',
+            entityId: 2, slot: 0, typeId: 'pvz:peashooter', state: 'idle',
             x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
-            entityId: 3, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
+            entityId: 3, slot: 0, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
             state: 'walking', health: 270, maxHealth: 270,
             animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             alpha: 255, hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 0,

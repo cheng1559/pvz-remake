@@ -275,6 +275,8 @@ The switch is off by default and persists locally. It turns in any state of a le
 | --- | --- |
 | `/fps` | Shows or hides the frame rate |
 | `/hitboxes` | Shows or hides hitboxes on the lawn |
+| `/hp` | Shows or hides health bars on the lawn |
+| `/id` | Shows or hides slot numbers on the lawn |
 | `/highresolution` | Draws the game at the window's own pixels instead of the original's |
 | `/sharpness {0-1}` | Sets how crisp an enlarged pixel is; 0.5 by default |
 | `/tilted` | Enlarges and tilts the pictures in seed packets |
@@ -311,10 +313,12 @@ The switch is off by default and persists locally. It turns in any state of a le
 - `npm run build:content` extracts the cursor images from the original executable into the base content; resource packs may replace them by ID.
 - It is on by default and saved locally.
 
-#### Frame rate and hitboxes
+#### Frame rate, hitboxes, health bars and slot numbers
 
 - `/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. The counter measures drawn frames against real time, independently of the game's pause or speed. It is off by default and saved locally.
-- `/hitboxes` outlines on the lawn the plants' bodies (green), the zombies' bodies (red) and bite areas (yellow), and the hitboxes of projectiles and lawn mowers (cyan; a waiting lawn mower's is the area where a zombie sets it off). It is off by default and saved locally.
+- `/hitboxes` outlines on the lawn, a pixel wide in whole pixels, the plants' bodies (green) and attack areas (red: a Chomper's, a Potato Mine's, a bowled nut's, a Puff-shroom's or Fume-shroom's reach), the bodies (green) and bite areas (red) of zombies not dead or dying, and the hitboxes of projectiles and lawn mowers (red; a waiting lawn mower's is the area where a zombie sets it off). It is off by default and saved locally.
+- `/hp` shows health bars over the plants' and zombies' hitboxes: green for a plant; for a zombie, its body (red), then its helm (yellow) and its shield (blue), out of all three at their full. It is off by default and saved locally.
+- `/id` shows the plants' and zombies' slot numbers in their lists in the bottom left of their hitboxes (see [Entity data](MODS.md#entity-data)). It is off by default and saved locally.
 
 #### Focus, haptics, controls, full screen and volume
 
@@ -367,7 +371,7 @@ Hotkeys work only in a level, while no dialog covers the board. `F` works whenev
 
 ## Switches and saved settings
 
-The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen`, `/resize` and `/perf {category}`.
+The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/hp`, `/id`, `/mobile`, `/fullscreen`, `/resize` and `/perf {category}`.
 
 | Setting | Command | Default | Kept |
 | --- | --- | --- | --- |
@@ -378,6 +382,8 @@ The switches take no argument: each run turns its switch over and shows where it
 | Collection | `/collect` | `click` | On this device |
 | Frame rate | `/fps` | Off | On this device |
 | Hitboxes | `/hitboxes` | Off | On this device |
+| HP | `/hp` | Off | On this device |
+| Slot numbers | `/id` | Off | On this device |
 | High resolution | `/highresolution` | Off | On this device |
 | Sharpness | `/sharpness` | 0.5 | On this device |
 | Tilted seed packets | `/tilted` | Off | On this device |

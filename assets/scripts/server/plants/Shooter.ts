@@ -1,6 +1,6 @@
 import type { SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
-import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantFacingX, plantTeam, shooterFront, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'
 import { getBoardBounds } from '../combat/collision'
 import { ProjectileMotionsResource } from '../projectiles/motions'
@@ -146,7 +146,7 @@ function targets(
     const plantPosition = plant.position, { body: plantBody, shooter } = definitions.plants[plant.typeId]
     const team = plantTeam(plant), direction = teamDirection(team), anywhere = shooter?.type === 'seeker'
     const bounds = getBoardBounds(world), reach = shooter?.range ?? Infinity
-    const front = plantPosition.x + plantFacingX(plantBody.width, team)
+    const front = plantPosition.x + shooterFront(plantBody, team)
     const ahead = (left: number, width: number) => direction > 0
         ? left < Math.min(bounds.right, front + reach) && left + width >= front
         : left < bounds.right && left + width > Math.max(bounds.left, front - reach) && left <= front

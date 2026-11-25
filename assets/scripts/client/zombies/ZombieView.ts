@@ -45,7 +45,7 @@ export interface ZombieDraw {
  * is no entity, whole and at rest, playing what whoever shows it has it play. Off the board it stands (`standing`:
  * Zombie::LoadReanim not on the board), which no zombie on it does.
  */
-export type ShownZombie = Omit<ZombieSnapshot, 'entityId' | 'state'> & { state: ZombieSnapshot['state'] | 'standing' }
+export type ShownZombie = Omit<ZombieSnapshot, 'entityId' | 'slot' | 'state'> & { state: ZombieSnapshot['state'] | 'standing' }
 
 export interface ZombieViewContext {
     node: Node

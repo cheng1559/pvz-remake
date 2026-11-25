@@ -150,6 +150,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
     // The row's mower is the level's first entity (Board::InitLawnMowers), the plant the next.
     assert.deepEqual([peashooter], [{
         entityId: 2,
+        slot: 0,
         typeId: 'pvz:peashooter',
         state: 'idle',
         column: 0,
@@ -248,7 +249,6 @@ test('a plant blinks on the server, and a save keeps its animation', () => {
         assert.equal(snapshot.plants[0].animations!.blink !== undefined, tick < 20, `tick ${tick}`)
     }
 })
-
 
 test('1-1 tutorial collects two suns and starts its first wave 99 ticks after the second plant', () => {
     const server = new IntegratedGameServer(definitions, levels)

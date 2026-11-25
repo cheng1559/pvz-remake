@@ -188,6 +188,7 @@ export class Plant {
         const { position, mowered } = this, inPlay = this.inPlay, own = this.snapshotOwn(inPlay ? tick : undefined)
         const snapshot: PlantSnapshot = {
             entityId: this.id,
+            slot: world.plants.slot(this.id)!,
             typeId: this.typeId,
             state: this.state,
             x: position.x, y: position.y, row: position.row,

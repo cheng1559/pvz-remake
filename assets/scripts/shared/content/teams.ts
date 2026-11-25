@@ -65,3 +65,9 @@ export const plantFacingRect = <T extends { x: number, width: number }>(rect: T,
 
 /** A point within a plant as it faces, like a blast's center. */
 export const plantFacingX = (x: number, team: Team): number => mirrorX(x, PLANT_WIDTH, team === 'zombies')
+
+/**
+ * Where a shooter's reach ahead begins from its corner as it faces, its body's width in (Plant::GetPlantAttackRect's
+ * mX + 60): its `range` runs on from there.
+ */
+export const shooterFront = (body: { width: number }, team: Team): number => plantFacingX(body.width, team)

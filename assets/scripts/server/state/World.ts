@@ -182,6 +182,11 @@ export class EntityList<T extends Entity> implements Iterable<T> {
     holds(id: EntityId): boolean {
         return this.slotOf.has(id)
     }
+
+    /** The slot `id` holds (the original's DataArray index), even on its way out; none when it holds none. */
+    slot(id: EntityId): number | undefined {
+        return this.slotOf.get(id)
+    }
 }
 
 export class ResourceStore {

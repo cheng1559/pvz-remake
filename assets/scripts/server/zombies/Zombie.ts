@@ -269,10 +269,11 @@ export class Zombie {
      * What the client is shown of it, with what only its kind shows (snapshotOwn). Made for every zombie every tick, so
      * it is built field by field, without spreads.
      */
-    snapshot(): ZombieSnapshot {
+    snapshot(world: World): ZombieSnapshot {
         const { position } = this, own = this.snapshotOwn()
         const snapshot: ZombieSnapshot = {
             entityId: this.id,
+            slot: world.zombies.slot(this.id)!,
             typeId: this.typeId,
             state: this.state,
             x: position.x, y: position.y, row: position.row,

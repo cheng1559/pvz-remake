@@ -39,7 +39,7 @@ export const snapshot = {
         // What any plant shows, and what only its kind has (a producer's next sun, a chomper's prey, ...).
         const plants = [...world.plants].map(plant => plant.snapshot(world, gameplayTick))
         // What any zombie shows, and what only its kind has (a pole vaulter's pole, a dancer's phase, a newspaper zombie's rage).
-        const zombies = [...world.zombies].map(zombie => zombie.snapshot())
+        const zombies = [...world.zombies].map(zombie => zombie.snapshot(world))
         // What any projectile shows, and what only its kind has; a mower set off runs among them.
         const projectiles = [...world.projectiles].map(projectile => projectile.snapshot(world))
         const mowers = [...world.mowers].map(mower => mower.snapshot())

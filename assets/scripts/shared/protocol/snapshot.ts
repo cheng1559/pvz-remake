@@ -206,6 +206,8 @@ export interface SeedPacketSnapshot {
 
 export interface PlantSnapshot {
     entityId: EntityId
+    /** Its slot of the plants' list (the original's DataArray index), which the list goes over in order. */
+    slot: number
     typeId: string
     /** What it is in, whatever its kind (PLANT_STATES): in play, or crushed by a mower (`mowered`). */
     state: PlantState
@@ -261,6 +263,8 @@ export const TEAMS: readonly Team[] = ['plants', 'zombies']
 
 export interface ZombieSnapshot {
     entityId: EntityId
+    /** Its slot of the zombies' list (the original's DataArray index), which the list goes over in order. */
+    slot: number
     typeId: string
     state: ZombieState
     x: number
@@ -479,6 +483,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const name = `snapshot.plants[${index}]`
         const plant = record(entry, name)
         nonNegativeInteger(plant.entityId, `${name}.entityId`)
+        nonNegativeInteger(plant.slot, `${name}.slot`)
         nonEmptyString(plant.typeId, `${name}.typeId`)
         // Mowed down exactly when it shows how far it is squashed.
         if ((oneOf(plant.state, PLANT_STATES, `${name}.state`) === 'mowered') !== (plant.mowered !== undefined)) throw new TypeError(`${name}.mowered goes with its state`)
@@ -505,6 +510,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     array(snapshot.zombies, 'snapshot.zombies').forEach((entry, index) => {
         const name = `snapshot.zombies[${index}]`
         const zombie = validateLivingEntity(entry, name)
+        nonNegativeInteger(zombie.slot, `${name}.slot`)
         if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
         validateLayers(zombie.animations, `${name}.animations`)
         nonNegativeInteger(zombie.alpha, `${name}.alpha`)

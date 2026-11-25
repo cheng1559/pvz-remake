@@ -14,6 +14,10 @@ type DebugSettings = {
     fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
+    /** `/hp`: the plants' and zombies' health as bars over them (LevelHealthBars). */
+    hpVisible: boolean
+    /** `/id`: the plants' and zombies' slots of their lists over them (LevelHealthBars). */
+    idVisible: boolean
     /** `/tilted`: a seed packet's picture half as large again (a zombie's twice) and leaning out of its packet. */
     tiltedSeedPackets: boolean
     mobileEnabled: boolean
@@ -49,6 +53,8 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
+    hpVisible: false,
+    idVisible: false,
     tiltedSeedPackets: false,
     mobileEnabled: sys.isMobile,
     autoPauseEnabled: true,
@@ -73,7 +79,7 @@ const isBoolean = (value: unknown): value is boolean => typeof value === 'boolea
  */
 const KEPT: { readonly [Key in keyof DebugSettings]?: (value: unknown) => value is DebugSettings[Key] } = {
     rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, cheatSeedsEnabled: isBoolean,
-    fpsVisible: isBoolean, hitboxesVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
+    fpsVisible: isBoolean, hitboxesVisible: isBoolean, hpVisible: isBoolean, idVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
     autoPauseEnabled: isBoolean, hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
     windowResizable: isBoolean,
     collectMode: (value): value is DebugCollectMode => value === 'auto' || value === 'click' || value === 'move',

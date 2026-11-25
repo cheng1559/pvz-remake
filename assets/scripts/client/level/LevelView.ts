@@ -2,6 +2,7 @@ import { modResources } from '@/client/content/ModResources'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { animateCurve } from '@/shared/content/animation'
 import { LevelHitboxes } from './LevelHitboxes'
+import { LevelHealthBars } from './LevelHealthBars'
 import { LevelCoinBank } from './LevelCoinBank'
 import { LevelProgressMeter } from './LevelProgressMeter'
 import { Color, Component, instantiate, Mask, Node, Sprite, Tween } from 'cc'
@@ -99,6 +100,7 @@ export class LevelView {
     /** The seed-slot purchase dialog holds the coin bank on screen. */
     private questionOpen = false
     private hitboxes!: LevelHitboxes
+    private healthBars!: LevelHealthBars
     get introComplete(): boolean {
         return this.intro.complete
     }
@@ -392,7 +394,8 @@ export class LevelView {
             raiseBank(!intro.complete && tick < 600)
         }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
-        view.hitboxes = new LevelHitboxes(board, content.definitions)
+        view.hitboxes = new LevelHitboxes(entityRenderer, content.definitions)
+        view.healthBars = new LevelHealthBars(entityRenderer, content.definitions, ui, pico129)
         view.player = player
         view.applySeedBankSlots = count => {
             const extra = seedBankExtraWidth(count)
@@ -597,6 +600,7 @@ export class LevelView {
         this.plantingLine?.sync(snapshot)
         for (const event of events) this.audio.play(event)
         this.hitboxes.sync(snapshot)
+        this.healthBars.sync(snapshot)
         if (snapshot.result === 'lost') {
             this.end.cancelWarnings()
             this.gameOver.sync(snapshot, events)

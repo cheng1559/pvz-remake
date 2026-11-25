@@ -101,6 +101,8 @@ async function executeCommand(
         }
         case 'fps': return debugSwitched(name, (GameDebugSettings.set('fpsVisible', !GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
         case 'hitboxes': return debugSwitched(name, (GameDebugSettings.set('hitboxesVisible', !GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
+        case 'hp': return debugSwitched(name, GameDebugSettings.set('hpVisible', !GameDebugSettings.hpVisible))
+        case 'id': return debugSwitched(name, GameDebugSettings.set('idVisible', !GameDebugSettings.idVisible))
         case 'sharpness': {
             const sharpness = Number(args[0])
             if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Sharpness must be between 0 and 1')
