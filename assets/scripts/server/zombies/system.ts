@@ -12,7 +12,7 @@ import type { Plant } from '../plants/Plant'
 import type { Zombie } from './Zombie'
 import { damagePlant } from '../plants/damage'
 import { zombieFacingRect, isHostile, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
-import { plantRect } from '../combat/targets'
+import { plantRect, zombieRect } from '../combat/targets'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl } from './mindControl'
 import { meltIce } from '../combat/ice'
@@ -243,8 +243,8 @@ export class ZombieSystem implements GameSystem {
 
 /**
  * Zombie::FindZombieTarget: the first enemy zombie on the row, standing, whose body the attack rect overlaps by 20, or
- * at all while it eats. `x` is where the zombie stood as its tick began and each other is where it stands, in whole
- * pixels (Zombie::mX).
+ * at all while it eats. `x` is where the zombie stood as its tick began, in whole pixels (Zombie::mX); each other's
+ * body is where it stands (zombieRect: Zombie::GetZombieRect).
  */
 function findZombieTarget(
     world: World,
@@ -260,8 +260,8 @@ function findZombieTarget(
         if (entity === self) continue
         const otherTeam = zombieTeam(other)
         if (at.row !== position.row || !isHostile(team, otherTeam) || other.health <= 0 || !world.hasEntity(entity) || isDeadOrDying(other)) continue
-        const body = zombieFacingRect(definitions.zombies[other.typeId].body, otherTeam), otherX = Math.trunc(at.x)
-        const overlap = Math.min(right, otherX + body.x + body.width) - Math.max(left, otherX + body.x)
+        const body = zombieRect(world, definitions, other)
+        const overlap = Math.min(right, body.x + body.width) - Math.max(left, body.x)
         if (overlap >= 20 || overlap >= 0 && other.state === 'eating') return entity
     }
     return undefined

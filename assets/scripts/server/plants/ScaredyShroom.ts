@@ -5,6 +5,7 @@ import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { SCAREDY_SHROOM_PHASES, type ScaredyShroomPhase } from '@/shared/content/plantKinds'
+import { playsFiringClip } from '@/shared/content/plantAnimation'
 import { circleRectOverlap } from '../combat/collision'
 import { zombieRect } from '../combat/targets'
 import { RandomResource } from '../state/resources'
@@ -51,8 +52,7 @@ export class ScaredyShroom extends Shooter {
     act({ world, tick }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), fright = this.fright, shooter = this.definition.shooter!
-        const firing = Object.entries(this.definition.animation?.fire ?? {}).some(([layer, clip]) => this.animations?.[layer]?.clip === clip)
-        if (this.burst || firing) return
+        if (this.burst || playsFiringClip(this.definition.animation, this)) return
         const near = zombieNear(world, this.definitions, this, fright)
         const next = (phase: ScaredyShroomPhase, ticks: number) => {
             this.phase = phase

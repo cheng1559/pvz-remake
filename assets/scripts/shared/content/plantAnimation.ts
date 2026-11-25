@@ -58,8 +58,17 @@ export function startOffBoardPlant(animation: PlantAnimationDefinition, random: 
  * its kind says (`misses`), or, with `blink.phases`, in a `phase` outside them (a potato mine not armed).
  */
 function blinkMissed(animation: PlantAnimationDefinition, plant: AnimatedPlant, phase: string | undefined, misses: boolean): boolean {
-    const phases = animation.blink!.phases, fire = animation.fire
+    const phases = animation.blink!.phases
     if (misses || phases && (phase === undefined || !phases.includes(phase))) return true
+    return playsFiringClip(animation, plant)
+}
+
+/**
+ * Plant::mShootingCounter through a shot's clip: whether a layer plays a clip the plant fires with (`fire`), which
+ * Plant::UpdateShooting holds the counter for until it is done.
+ */
+export function playsFiringClip(animation: PlantAnimationDefinition | undefined, plant: AnimatedPlant): boolean {
+    const fire = animation?.fire
     if (fire) for (const layer in fire) if (plant.animations?.[layer]?.clip === fire[layer]) return true
     return false
 }
