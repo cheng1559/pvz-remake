@@ -252,7 +252,7 @@ In the seed chooser:
   4. The same pages follow on the zombies' side. A group longer than a page goes on to more pages.
 - Cards on the side that is not their seed's own are drawn mirrored, and both sides of one seed can be chosen.
 - Two yellow `(Prev Page)` and `(Next Page)` buttons turn the pages. They are drawn as the original's cheat-key `(Debug Play)` button (FONT_BRIANNETOD12 in 255,240,0, lit 200,200,255), where the DLC puts its arrows beside Let's Rock. The mouse wheel over the chooser turns them too, a notch a page, wrapping round at either end. Mods may restyle the two buttons (`LevelSeedChooser.pageTurners`).
-- The slots need not all be filled: Let's Rock starts with any number of cards chosen, at least one, and leaves the remaining slots empty.
+- The slots need not be filled; the battle can start with no cards chosen.
 - Turned off in the chooser or a repick, the slots stay as they are, even with fewer cards owned: Let's Rock also starts once every card offered is chosen.
 - These cards count towards whether the chooser opens, so the early levels of a first Adventure open the chooser too.
 

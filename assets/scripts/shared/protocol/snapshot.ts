@@ -114,7 +114,7 @@ export interface WorldSnapshot {
      * `warnings` are shown one after another on confirm; each can be dismissed to repick. `repick`: chosen again in play
      * (`/repick`), the level standing still, for the bank's own size.
      */
-    /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any cards chosen. */
+    /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any number of cards chosen, none included. */
     seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true, cheatSeeds?: true }
     /** `team`: the side it puts down on, when not its seed's own (`/seed`). */
     conveyorPackets: Array<{ id: number; seedId: string; x: number; team?: Team; selected: boolean; availability: SeedAvailability }>

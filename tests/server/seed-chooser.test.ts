@@ -275,12 +275,17 @@ test("a Mod's cards count like owned seeds towards the slots and opening the cho
     }
 })
 
-test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty, and /seed fills or replaces any slot", () => {
+test("/cheatseed's Let's Rock takes fewer cards, none at all included, and leaves the other slots empty, and /seed fills or replaces any slot", () => {
     {
+        const empty = new LocalIntegratedGame(definitions, levels, undefined, true)
+        empty.start({ ...options, cheatSeeds: true })
+        command(empty, { type: 'confirmSeeds' })
+        assert.equal(empty.render().seedChooser?.choosing, false, 'an empty bank starts too')
+        assert.deepEqual(slotSeeds(empty), Array(10).fill(null))
+        command(empty, { type: 'completeIntro' })
+        assert.equal(empty.render().phase, 'gameplay')
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
         game.start({ ...options, cheatSeeds: true })
-        command(game, { type: 'confirmSeeds' })
-        assert.equal(game.render().seedChooser?.choosing, true, 'not with an empty bank')
         for (const seedId of seeds.slice(0, 4)) command(game, { type: 'chooseSeed', seedId })
         command(game, { type: 'confirmSeeds' })
         // The switch gives the bank every slot, ten.

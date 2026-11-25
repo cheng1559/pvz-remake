@@ -9,7 +9,7 @@ type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
     plantInvincible: boolean
-    /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any cards chosen. */
+    /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any number of cards chosen, none included. */
     cheatSeedsEnabled: boolean
     fpsVisible: boolean
     collectMode: DebugCollectMode
