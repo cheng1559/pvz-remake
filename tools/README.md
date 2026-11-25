@@ -20,7 +20,7 @@ tools/
 ├── pvz/                        # Original PAK import and conversion, anim-defs.json and ui-strings.json
 ├── resources/                  # App icons, font and image super-resolution
 │   └── licenses/               # Third-party licenses of the resource processing tools
-├── local/                      # Git-ignored local resource pack generators and their packing interface package_resources.py
+├── local/                      # Git-ignored local resource pack generators
 ├── main.pak                    # Git-ignored: the original's resource package, the default input of build:content
 └── PlantsVsZombies.exe         # Git-ignored: the original program; build:content extracts its mouse cursors and build:icons its icon
 ```
@@ -75,7 +75,7 @@ The original's resource conversion rules are in `tools/pvz/anim-defs.json`:
 
 Node tools are all TypeScript, run through the project's existing `tsx`; Python decodes and converts the original's resources.
 
-`mod/content.ts` reads the author's configuration for Mod packing and engine-free tests; `mod/test.ts` implements the `mod:test` validation. Once a local resource generator has registered its resources, it calls the common Mod packer through `package_resources.py`, also in `local/`.
+`mod/content.ts` reads the author's configuration for Mod packing and engine-free tests; `mod/test.ts` implements the `mod:test` validation.
 
 The PAK is only unpacked into a temporary directory, and the conversion results are written straight into `mods/pvz-base/assets/`. After everyday edits to existing resources, you only need:
 

@@ -20,7 +20,7 @@ tools/
 ├── pvz/                        # 原版 PAK 的导入与转换，anim-defs.json 和 ui-strings.json
 ├── resources/                  # 应用图标，字体与图像超分辨率
 │   └── licenses/               # 资源处理工具的第三方许可证
-├── local/                      # 被 Git 忽略的本地资源包生成脚本，及其打包接口 package_resources.py
+├── local/                      # 被 Git 忽略的本地资源包生成脚本
 ├── main.pak                    # 被 Git 忽略：原版资源包，build:content 的默认输入
 └── PlantsVsZombies.exe         # 被 Git 忽略：原版程序；build:content 从中提取鼠标指针，build:icons 从中提取图标
 ```
@@ -75,7 +75,7 @@ pvz/
 
 Node 工具全部用 TypeScript 编写，通过项目自带的 `tsx` 运行；Python 负责解码和转换原版资源。
 
-`mod/content.ts` 为模组打包和不依赖引擎的测试读取作者的配置；`mod/test.ts` 实现 `mod:test` 的校验。本地资源包生成脚本登记好资源后，通过同在 `local/` 中的 `package_resources.py` 调用通用的模组打包器。
+`mod/content.ts` 为模组打包和不依赖引擎的测试读取作者的配置；`mod/test.ts` 实现 `mod:test` 的校验。
 
 PAK 只会解包到临时目录，转换结果直接写入 `mods/pvz-base/assets/`。日常修改已有资源后，只需执行：
 
