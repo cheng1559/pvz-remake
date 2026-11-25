@@ -438,8 +438,9 @@ export interface PlantAnimationDefinition extends AnimationDefinition {
     /**
      * Plant::DoBlink: every `ticks` (400 to 799 by default) the `blink` layer, over the others, plays one of these
      * clips, drawn by their weights (written `clip` for one, `{clip: weight}` for several: a nut's three); not while
-     * the plant is about to shoot or asleep. With `phases`, only while it is in one of them, the first blink
-     * `first` ticks after it comes to one (an armed potato mine's, 400 to 4399).
+     * the plant winds up to shoot or plays a clip it fires with (`fire`), nor, counting down, while it is asleep. With
+     * `phases`, only while it is in one of them, the first blink `first` ticks after it comes to one (an armed potato
+     * mine's, 400 to 4399). A shot ends its blink (Plant::EndBlink).
      */
     blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; phases?: PlantPhase[]; first?: { min: number; max: number } }
 }

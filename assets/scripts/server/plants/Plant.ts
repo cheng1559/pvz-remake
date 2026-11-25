@@ -145,10 +145,12 @@ export class Plant {
         return undefined
     }
 
-    /** Plant::DoBlink: it misses a blink now, in a phase it does not blink in (a potato mine not armed). */
+    /**
+     * Plant::DoBlink: its kind misses a blink now, besides what its animation has it miss (a clip it fires with, a phase
+     * it does not blink in: stepPlantAnimation): none of every plant's.
+     */
     blinkMisses(): boolean {
-        const phases = this.definition.animation?.blink?.phases, phase = this.animationPhase()
-        return !!phases && (phase === undefined || !phases.includes(phase))
+        return false
     }
 
     /** Plant::PlantInitialize, once its layers have started (startPlantAnimations), `asleep` or not. */

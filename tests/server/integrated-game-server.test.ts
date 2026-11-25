@@ -250,6 +250,28 @@ test('a plant blinks on the server, and a save keeps its animation', () => {
     }
 })
 
+test('a pea shooter misses its blinks until its shooting clip is through, as Plant::UpdateShooting holds Plant::mShootingCounter', () => {
+    const server = new IntegratedGameServer(definitions, levels)
+    startGameplay(server)
+    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
+    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
+    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
+    const shooter = [...world.plants][0] as Shooter
+    const fire = Math.max(1, shooter.readyAtTick) + definitions.plants['pvz:peashooter'].shooter!.windupTicks - 1
+    while (gameplayTick(server) < fire) server.tick()
+    // Its pea is off and its burst over, while its head still plays the shooting clip: a blink that comes round is missed.
+    assert.deepEqual([shooter.burst, shooter.animations!.head.clip], [undefined, 'shootHead'])
+    shooter.blinkTicks = 1
+    assert.equal(server.tick().plants[0].animations!.blink, undefined)
+    assert.ok(shooter.blinkTicks >= 400, 'the next one counted down to anew')
+    // Once the clip is through, one comes round as ever.
+    while (shooter.animations!.head.clip === 'shootHead') server.tick()
+    shooter.blinkTicks = 1
+    assert.equal(server.tick().plants[0].animations!.blink?.clip, 'blink')
+})
+
+
 test('1-1 tutorial collects two suns and starts its first wave 99 ticks after the second plant', () => {
     const server = new IntegratedGameServer(definitions, levels)
     startGameplay(server)

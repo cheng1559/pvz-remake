@@ -1,7 +1,7 @@
 import type { GameSystem } from '@/server/state/World'
-import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
-import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import { blinkPhaseStarted, endBlink, startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Plant } from './Plant'
 import { plantsInPlay } from '../level/lawn'
@@ -31,7 +31,7 @@ export function startPlantAnimations(plant: Plant, definition: PlantDefinition, 
 export function firePlantAnimation(plant: Plant, definition: PlantDefinition, random: AnimationRandom): void {
     const animation = definition.animation
     if (!animation || !plant.animations) return
-    delete plant.animations[PLANT_BLINK_LAYER]
+    endBlink(plant)
     playLayers(animation, plant, animation.fire, random)
 }
 
@@ -40,8 +40,7 @@ export function plantPhaseAnimation(plant: Plant, definition: PlantDefinition, p
     const animation = definition.animation
     if (!animation || !plant.animations) return
     playLayers(animation, plant, animation.phases?.[phase], random)
-    const blink = animation.blink
-    if (blink?.first && blink.phases?.includes(phase)) plant.blinkTicks = random.integer(blink.first.min, blink.first.max)
+    blinkPhaseStarted(animation, plant, phase, random)
 }
 
 /**
@@ -72,10 +71,10 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
                     // A chilled plant animates at half its rate, and counts down to its blink every other tick.
                     slowed: () => plantPace(plant),
                     chewed: plant.recentlyEatenCounter > 0,
-                    // Plant::UpdateBlink: an asleep plant's blink waits. Plant::DoBlink: one about to shoot, or in a state
-                    // it does not blink in (a potato mine not armed), misses its blink (its kind says, Plant.blinkMisses).
+                    // Plant::UpdateBlink: an asleep plant's blink waits.
                     blinkWaits: plantSkipsTick(plant) || isPlantAsleep(definition, level.board),
-                    blinkMisses: () => plant.blinkMisses(),
+                    phase: plant.animationPhase(),
+                    blinkMisses: plant.blinkMisses(),
                 })
             }
         },

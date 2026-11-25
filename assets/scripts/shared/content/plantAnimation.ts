@@ -6,7 +6,7 @@ import type { PlantPhase } from './plantKinds'
 
 /** A plant, as far as its animation goes. */
 export interface AnimatedPlant extends Animated {
-    /** Ticks to its next blink. */
+    /** Ticks to its next blink (Plant::mBlinkCountdown). */
     blinkTicks?: number
 }
 
@@ -53,24 +53,49 @@ export function startOffBoardPlant(animation: PlantAnimationDefinition, random: 
 }
 
 /**
+ * Plant::DoBlink: whether a blink that comes round now is missed, as the tick starts: while a layer plays a clip it
+ * fires with (`fire`; Plant::mShootingCounter, which Plant::UpdateShooting holds until the shot's clip is done), while
+ * its kind says (`misses`), or, with `blink.phases`, in a `phase` outside them (a potato mine not armed).
+ */
+function blinkMissed(animation: PlantAnimationDefinition, plant: AnimatedPlant, phase: string | undefined, misses: boolean): boolean {
+    const phases = animation.blink!.phases, fire = animation.fire
+    if (misses || phases && (phase === undefined || !phases.includes(phase))) return true
+    if (fire) for (const layer in fire) if (plant.animations?.[layer]?.clip === fire[layer]) return true
+    return false
+}
+
+/** Plant::EndBlink: the blink it plays is over (Plant::FindTargetAndFire, as it starts a shot). */
+export function endBlink(plant: AnimatedPlant): void {
+    if (plant.animations) delete plant.animations[PLANT_BLINK_LAYER]
+}
+
+/** It came to a phase of its kind: one it blinks in (`blink.phases`) counts down to its first blink in it (`blink.first`: an armed potato mine). */
+export function blinkPhaseStarted(animation: PlantAnimationDefinition, plant: AnimatedPlant, phase: string, random: AnimationRandom): void {
+    const blink = animation.blink
+    if (blink?.first && blink.phases?.includes(phase)) plant.blinkTicks = random.integer(blink.first.min, blink.first.max)
+}
+
+/**
  * A tick of a plant's animation: its layers move on (stepLayers, at the part of their rate `slowed` says) and the blink
- * comes round. `chewed`: zombies are eating the plant. Plant::UpdateBlink: with `blinkWaits` (an asleep plant) the
- * blink is not counted down to. Plant::DoBlink: with `blinkMisses` (a plant about to shoot, or in a state it does not
- * blink in) the blink that came round is not played.
+ * comes round (Plant::UpdateBlink, then Plant::DoBlink unless it is missed: blinkMissed). `chewed`: zombies are eating
+ * the plant. With `blinkWaits` (asleep, or a chilled plant's tick it sits out) its blink's countdown waits. `phase`: the
+ * phase of its kind it is in, for `blink.phases`. `blinkMisses`: its kind misses a blink now (Plant.blinkMisses: a
+ * shooter winding up).
  */
 export function stepPlantAnimation(animation: PlantAnimationDefinition, plant: AnimatedPlant, random: AnimationRandom,
-    on: { slowed?: (layer: string) => number, chewed?: boolean, blinkWaits?: boolean, blinkMisses?: () => boolean } = {}): void {
+    on: { slowed?: (layer: string) => number, chewed?: boolean, blinkWaits?: boolean, phase?: string, blinkMisses?: boolean } = {}): void {
     const layers = plant.animations
     if (!layers) return
-    stepLayers(animation, plant, random, { slowed: on.slowed, before: (state, clip) => {
-        if (!clip.chewed) return
-        if (on.chewed) state.rate = CHEWED_FPS
-        else if (state.rate === CHEWED_FPS) state.rate = pace(clip, random)
-    } })
     const blink = animation.blink
-    if (!blink || plant.blinkTicks === undefined || on.blinkWaits) return
-    if (--plant.blinkTicks > 0) return
-    plant.blinkTicks = random.integer(blink.ticks.min, blink.ticks.max)
-    if (on.blinkMisses?.()) return
-    layers[PLANT_BLINK_LAYER] = startLayer(animation, plant, drawn(blink.clips, random), random)
+    const counting = !!blink && plant.blinkTicks !== undefined && !on.blinkWaits
+    // Whether it fires as the tick starts, as Plant::UpdateShooting has it before the layers move on.
+    const missed = counting && plant.blinkTicks! <= 1 && blinkMissed(animation, plant, on.phase, !!on.blinkMisses)
+    stepLayers(animation, plant, random, { slowed: on.slowed, before: (layerState, clip) => {
+        if (!clip.chewed) return
+        if (on.chewed) layerState.rate = CHEWED_FPS
+        else if (layerState.rate === CHEWED_FPS) layerState.rate = pace(clip, random)
+    } })
+    if (!counting || --plant.blinkTicks! > 0) return
+    plant.blinkTicks = random.integer(blink!.ticks.min, blink!.ticks.max)
+    if (!missed) layers[PLANT_BLINK_LAYER] = startLayer(animation, plant, drawn(blink!.clips, random), random)
 }

@@ -63,7 +63,7 @@ export class Shooter extends Plant {
         if (this.burst) this.burst.fireAtTick++
     }
 
-    /** Plant::DoBlink: one about to shoot misses its blink. */
+    /** Plant::DoBlink: one winding up to shoot misses its blink (Plant::mShootingCounter), as its firing clip has it do after. */
     blinkMisses(): boolean {
         return !!this.burst || super.blinkMisses()
     }

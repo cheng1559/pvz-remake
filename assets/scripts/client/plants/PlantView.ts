@@ -245,7 +245,9 @@ export class PlantView implements EntityView<PlantSnapshot> {
     advance(ticks: number): void {
         const { stage, plant } = this.context
         if (stage) throw new Error(`A plant on the board is animated by the server: ${plant.typeId}`)
-        for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(this.animation, plant, offBoardRandom)
+        // Its blink goes by the phase of its kind it is shown in (`blink.phases`: an armed potato mine's).
+        const own = plant.own?.phase, phase = typeof own === 'string' ? own : undefined
+        for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(this.animation, plant, offBoardRandom, { phase })
         this.pose(plant)
     }
 
