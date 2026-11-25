@@ -48,6 +48,8 @@ export interface LevelController {
     isWon(): boolean
     countZombiesOnScreenForMusic(): number
     debugCommand(command: string): DebugCliResult
+    /** `/step`: the level runs `ticks` fixed ticks at once, and the board shows where they leave it. */
+    fastForward(ticks: number): void
     /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
     /** `keepMusic`: the board waits but its music plays on (a page opened from the seed chooser). */
     pause(quiet?: boolean, keepMusic?: boolean): void
@@ -300,6 +302,11 @@ export function createLevelController(
             const result = current.game.debugCommand(command)
             current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
             return result
+        },
+        fastForward(ticks) {
+            if (!current?.root.isValid) return
+            current.game.fastForward(ticks)
+            current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
         },
         isPaused() {
             return current?.root.isValid === true && current.scene.isPaused()

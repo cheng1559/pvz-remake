@@ -1,10 +1,14 @@
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
+
 /** `plants`: the plant seeds, which /plant takes; `seeds`: every seed, zombie seeds too, which /seed takes. */
 export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[] }
 interface DebugCliOutcome {
-    action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level'
+    action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level' | 'step'
     levelId?: string
     /** For `goto`. */
     page?: DebugGotoPage
+    /** For `step`: the fixed ticks the level runs at once. */
+    ticks?: number
     catalog?: DebugCliCatalog
     /** A switch's state after the command turned it over (`/cooldown` and the like). */
     enabled?: boolean
@@ -43,6 +47,7 @@ const builtins: CommandSpec[] = [
     { name: 'damage', parameters: ['{damage}'], minimum: 1 },
     { name: 'level', parameters: ['{level}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
+    { name: 'step', parameters: [`{1-${MAX_TICKS_PER_UPDATE}}`], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
     ...DEBUG_SWITCHES.map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'sharpness', parameters: ['{0-1}'], minimum: 1 },

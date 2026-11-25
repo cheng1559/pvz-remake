@@ -8,6 +8,7 @@ import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
 import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSwitchAdvice, debugSwitched, debugSyntax, normalizeDebugName, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
@@ -54,6 +55,12 @@ async function executeCommand(
             if (!Number.isFinite(speed) || speed < 0 || speed > 10) return debugSyntax('Game speed must be between 0 and 10')
             gameClock.setSpeed(speed)
             return debugSuccess(`Game speed: ${speed}`)
+        }
+        case 'step': {
+            const ticks = debugInteger(args[0])
+            if (ticks === null || ticks < 1 || ticks > MAX_TICKS_PER_UPDATE) return debugSyntax(`Ticks must be an integer from 1 to ${MAX_TICKS_PER_UPDATE}`)
+            if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
+            return { ...debugSuccess(`Running ${ticks} ticks`), action: 'step', ticks }
         }
         case 'music': case 'sfx': {
             const percent = debugInteger(args[0])

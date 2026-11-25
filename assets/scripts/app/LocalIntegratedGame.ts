@@ -72,6 +72,22 @@ export class LocalIntegratedGame {
         this.client.update()
     }
 
+    /**
+     * `/step`: `ticks` fixed ticks at once (IntegratedGameHost.fastForward), after what waits to be sent. A paused game
+     * runs them too and stays paused.
+     */
+    fastForward(ticks: number): void {
+        this.update(0)
+        const paused = this.currentSnapshot?.paused === true
+        if (paused) {
+            this.command({ type: 'resume' })
+            this.update(0)
+        }
+        this.host.fastForward(ticks)
+        if (paused) this.command({ type: 'pause' })
+        this.update(0)
+    }
+
     render() {
         return this.client.render(this.host.interpolationAlpha)
     }

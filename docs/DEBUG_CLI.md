@@ -98,6 +98,7 @@ The test levels are outside the Adventure (they have no `adventureIndex`): each 
 | Command | Effect |
 | --- | --- |
 | `/gamespeed {0-10}` | Sets the speed of the game clock, which drives gameplay and presentation alike. Any number from 0 to 10 is accepted, decimals included; `0` freezes the game. The speed lasts until the game restarts. |
+| `/step {1-1000}` | Runs the level that many ticks at once, within one frame: the board shows where they leave it, and the game goes on at its speed. 1000 is as many as one frame may run. A paused level runs them too and stays paused. |
 | `/win` | Wins the level at once |
 | `/lose` | Loses the level at once |
 | `/nextwave` | Spawns the next wave at once |

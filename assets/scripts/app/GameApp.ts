@@ -563,7 +563,9 @@ export class GameApp extends Component {
         } finally {
             releaseClock()
             this.debugCliOpen = false
-            if (!result?.action && this.node?.isValid && running && !wasPaused && this.currentPage === page) controller.resume()
+            // `/step` runs the level on from where the CLI found it.
+            const resumes = !result?.action || result.action === 'step'
+            if (resumes && this.node?.isValid && running && !wasPaused && this.currentPage === page) controller.resume()
         }
         if (!this.canShowGameUI || !result) return
         if (!result.ok) { this.showAdvice('key' in result ? ui.format(result.key, result.args) : result.message); return }
@@ -583,6 +585,7 @@ export class GameApp extends Component {
                     if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
                 }
                 break
+            case 'step': if (controller.isRunning()) controller.fastForward(result.ticks!); break
             case 'restart': await this.navigate('restart'); break
             case 'level': await this.navigate('restart', result.levelId); break
             case 'goto': await this.navigate(result.page!); break

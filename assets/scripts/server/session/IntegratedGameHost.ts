@@ -1,6 +1,6 @@
 import { modErrorOwner } from '@/shared/mod/ModHost'
 import { LocalGameChannel } from '@/shared/channel/index'
-import { TICK_SECONDS } from '@/shared/protocol'
+import { MAX_TICKS_PER_UPDATE, TICK_SECONDS } from '@/shared/protocol'
 import type {
     ClientPacket,
     JsonValue,
@@ -9,8 +9,6 @@ import type {
     WorldSnapshot,
 } from '@/shared/protocol/index'
 import { IntegratedGameServer } from './IntegratedGameServer'
-
-const MAX_TICKS_PER_UPDATE = 1000
 
 export class IntegratedGameHost {
     private acknowledgedSequence = -1
@@ -48,10 +46,27 @@ export class IntegratedGameHost {
             if (this.server.isPaused()) return
             this.advance(dtSeconds)
         } catch (error) {
-            // The client only receives the message; keep the stack in the console.
-            console.error('[IntegratedGameHost]', error)
-            this.fatal('server-error', (error instanceof Error ? error.message : String(error)) || 'Server error', modErrorOwner(error))
+            this.failed(error)
         }
+    }
+
+    /**
+     * `/step`: `ticks` fixed ticks now, as a frame that long catches them up (advance), MAX_TICKS_PER_UPDATE at most; the
+     * part of a tick already shown stays (interpolationAlpha). None while the game is paused.
+     */
+    fastForward(ticks: number): void {
+        if (!this.started || this.stopped || this.server.isPaused()) return
+        try {
+            this.run(ticks)
+        } catch (error) {
+            this.failed(error)
+        }
+    }
+
+    private failed(error: unknown): void {
+        // The client only receives the message; keep the stack in the console.
+        console.error('[IntegratedGameHost]', error)
+        this.fatal('server-error', (error instanceof Error ? error.message : String(error)) || 'Server error', modErrorOwner(error))
     }
 
     private processPackets(): void {
@@ -129,12 +144,16 @@ export class IntegratedGameHost {
     private advance(dtSeconds: number): void {
         this.accumulatorSeconds += dtSeconds
         const ticks = Math.floor((this.accumulatorSeconds + 1e-12) / TICK_SECONDS)
+        this.accumulatorSeconds = Math.max(0, this.accumulatorSeconds - ticks * TICK_SECONDS)
+        this.run(ticks)
+    }
+
+    /** `ticks` fixed ticks, until the game pauses; more than MAX_TICKS_PER_UPDATE stop the game instead. */
+    private run(ticks: number): void {
         if (ticks > MAX_TICKS_PER_UPDATE) {
             this.fatal('tick-limit-exceeded', `update requires ${ticks} fixed ticks`)
             return
         }
-
-        this.accumulatorSeconds = Math.max(0, this.accumulatorSeconds - ticks * TICK_SECONDS)
         const events: ServerEvent[] = []
         for (let tick = 0; tick < ticks; tick++) {
             this.server.step()

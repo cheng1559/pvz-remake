@@ -80,6 +80,12 @@ export function parseGridItem(value: unknown, name: string): GridItemFields {
 export const TICK_SECONDS = 0.01
 
 /**
+ * The most fixed ticks the host runs at once: a frame further behind stops the game (`tick-limit-exceeded`), and `/step`
+ * takes no more.
+ */
+export const MAX_TICKS_PER_UPDATE = 1000
+
+/**
  * The level stands still: paused, or choosing its seeds again (`/repick`). Nothing on the lawn moves or takes the
  * pointer meanwhile, whichever it is. The two differ only in what else stops: a pause stops a seed chooser too and ends
  * with the player's resume, while a repick's chooser goes on and ends with its Let's Rock.
