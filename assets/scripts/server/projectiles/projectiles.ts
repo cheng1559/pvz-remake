@@ -4,7 +4,8 @@ import type { GameSystem, SystemContext } from '@/server/state/World'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource } from '../state/resources'
 import { plantInPlay, plantsInPlay } from '../level/lawn'
-import { plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { projectileTeam, teamDirection } from '@/shared/content/teams'
+import { plantRect, zombieRect } from '../combat/targets'
 import { type MotionAim, ProjectileMotionsResource } from './motions'
 import { MowingProjectile } from './MowingProjectile'
 import { bodyOf, type Projectile, type ProjectileBody, type ProjectileHit, type ProjectileTarget } from './Projectile'
@@ -27,16 +28,16 @@ export class ProjectileSystem implements GameSystem {
         const level = world.resources.get(LevelStateResource)
         if (level.result === 'lost' || level.paused) return
         this.rows = []
-        const add = (target: ProjectileBody, body: { x: number, width: number }) => {
-            const { position } = bodyOf(target), left = position.x + body.x
-            ;(this.rows[position.row] ??= []).push({ ...target, left, right: left + body.width })
+        const add = (target: ProjectileBody, left: number, width: number) => {
+            ;(this.rows[bodyOf(target).position.row] ??= []).push({ ...target, left, right: left + width })
         }
         for (const zombie of world.zombies) {
-            add({ zombie }, zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie)))
+            const rect = zombieRect(world, definitions, zombie)
+            add({ zombie }, rect.x, rect.width)
         }
         for (const plant of plantsInPlay(world)) {
-            const definition = definitions.plants[plant.typeId]
-            add({ plant, low: definition.low === true }, plantFacingRect(definition.body, plantTeam(plant)))
+            const definition = definitions.plants[plant.typeId], body = plantRect(definitions, plant)
+            add({ plant, low: definition.low === true }, body.x, body.width)
         }
         // Board::UpdateGameObjects: the projectiles, then the lawn mowers, which run as mowing projectiles once set off.
         const mowers: Projectile[] = []
@@ -57,7 +58,11 @@ export class ProjectileSystem implements GameSystem {
         // it meets is its kind's (Projectile.canHit, strike).
         const motions = world.resources.get(ProjectileMotionsResource)
         const motion = motions.of(projectile)
-        const step: ProjectileHit = { world, definitions, commands, projectile, motion, rows: this.rows, speedScale: projectile.speedScale() }
+        // What it hits goes by where it stood as the tick began, in whole pixels: a projectile moves before it looks, by
+        // the mX it sets after (Projectile::UpdateMotion); a mower looks before it moves (LawnMower::Update).
+        const step: ProjectileHit = {
+            world, definitions, commands, projectile, motion, rows: this.rows, speedScale: projectile.speedScale(), collisionX: Math.trunc(position.x),
+        }
         const moved = motion.move(step, projectile.motionState), landed = moved === 'landed'
         const bounds = getBoardBounds(world)
         // Projectile::CheckForCollision: a spore reaching its age vanishes before it can hit.
@@ -90,17 +95,18 @@ export class ProjectileSystem implements GameSystem {
     }
 
     /**
-     * What the projectile hits where it is, the nearest first (the leftmost for one flying right; of those as near,
-     * the first met, as Projectile::FindCollisionTarget takes: the row's zombies before its plants, each in slot order):
-     * on its row, the zombies or the plants of it, or only the one its motion aims at. Not what a piercing one has hit
-     * already.
+     * What the projectile hits where it stood as the tick began (MotionStep.collisionX), the nearest first (the leftmost
+     * for one flying right; of those as near, the first met, as Projectile::FindCollisionTarget takes: the row's zombies
+     * before its plants, each in slot order): on its row, the zombies or the plants of it, or only the one its motion
+     * aims at. Not what a piercing one has hit already.
      */
     private targets(hit: ProjectileHit, aim: Exclude<MotionAim, 'none'>): ProjectileTarget[] {
         const { world, projectile } = hit, { position, definition } = projectile
-        const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
+        const left = hit.collisionX + definition.hitbox.x, right = left + definition.hitbox.width
         const candidates = typeof aim === 'number' ? this.rows.flat().filter(target => bodyOf(target).id === aim) : this.rows[position.row] ?? NONE
         const direction = teamDirection(projectileTeam(projectile))
-        const nearer = (a: ProjectileTarget, b: ProjectileTarget) => direction * (bodyOf(a).position.x - bodyOf(b).position.x)
+        // Projectile::FindCollisionTarget goes by where each stands in whole pixels (Zombie::mX).
+        const nearer = (a: ProjectileTarget, b: ProjectileTarget) => direction * (Math.trunc(bodyOf(a).position.x) - Math.trunc(bodyOf(b).position.x))
         let nearest: ProjectileTarget | undefined, all: ProjectileTarget[] | undefined
         // Runs for every projectile on every tick: the span overlap test comes before entity lookups, and a miss makes nothing.
         for (let i = 0; i < candidates.length; i++) {
@@ -113,6 +119,18 @@ export class ProjectileSystem implements GameSystem {
             if (!world.hasEntity(body.id) || 'plant' in target && plantInPlay(world, body.id) !== target.plant) continue
             if (definition.pierce) (all ??= []).push(target)
             else if (!nearest || nearer(target, nearest) < 0) nearest = target
+        }
+        // Projectile::FindCollisionTargetPlant: of plants stacked on the cell of the one it meets, it hits the top one
+        // (Board::GetTopPlantAt), the one in the highest slot (Board::GetPlantsOnLawn) of those it can hit; a low one it
+        // flies over lies under the rest, as a lily pad does.
+        const plants = this.definitions.plants
+        if (nearest && 'plant' in nearest && plants[nearest.plant.typeId].occupiesCell !== false) {
+            const { column } = nearest.plant
+            for (const other of candidates) {
+                if (!('plant' in other) || other.plant.column !== column || plants[other.plant.typeId].occupiesCell === false) continue
+                const overlap = Math.min(right, other.right) - Math.max(left, other.left)
+                if (projectile.canHit(hit, other, overlap) && plantInPlay(world, other.plant.id) === other.plant) nearest = other
+            }
         }
         return all ? all.sort(nearer) : nearest ? [nearest] : NONE
     }

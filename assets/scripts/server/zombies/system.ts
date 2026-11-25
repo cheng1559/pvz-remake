@@ -10,7 +10,8 @@ import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Plant } from '../plants/Plant'
 import type { Zombie } from './Zombie'
 import { damagePlant } from '../plants/damage'
-import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { zombieFacingRect, isHostile, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { plantRect } from '../combat/targets'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import { mindControl } from './mindControl'
 import { meltIce } from '../combat/ice'
@@ -47,9 +48,8 @@ export class ZombieSystem implements GameSystem {
         for (const plant of plantsInPlay(world)) if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
         this.plantRows = []
         for (const plant of plantsInPlay(world)) {
-            const { position } = plant, type = definitions.plants[plant.typeId]
-            const body = plantFacingRect(type.body, plantTeam(plant)), left = position.x + body.x
-            ;(this.plantRows[position.row] ??= []).push({ plant, left, right: left + body.width, rolling: type.occupiesCell === false })
+            const { position } = plant, type = definitions.plants[plant.typeId], body = plantRect(definitions, plant)
+            ;(this.plantRows[position.row] ??= []).push({ plant, left: body.x, right: body.x + body.width, rolling: type.occupiesCell === false })
         }
 
         const sides = new Set([...world.zombies].map(zombie => zombieTeam(zombie)))
@@ -245,7 +245,8 @@ function findZombieTarget(
 /**
  * Zombie::FindPlantTarget: the first of the row's plants, in slot order (EntityList), that `attack` overlaps by 20
  * from `x`, where the zombie stood as its tick began in whole pixels (Zombie::mX); a rolling nut by `rollingAttack`, and
- * none without it.
+ * none without it. Of plants stacked on one cell it takes the top one (Zombie::CanTargetPlant, Board::GetTopPlantAt),
+ * the one in the highest slot (Board::GetPlantsOnLawn), while that one is reached too.
  */
 function findPlantTarget(
     world: World,
@@ -255,15 +256,21 @@ function findPlantTarget(
     attack: { x: number, width: number },
     rollingAttack?: { x: number, width: number },
 ): PlantTarget | undefined {
+    const reached = (candidate: PlantTarget) => {
+        const reach = candidate.rolling ? rollingAttack : attack
+        if (!reach) return false
+        const left = x + reach.x
+        if (Math.min(left + reach.width, candidate.right) - Math.max(left, candidate.left) < 20) return false
+        // An earlier zombie may have finished this plant during the same run.
+        return candidate.plant.health > 0 && world.hasEntity(candidate.plant.id)
+    }
     // A zombie looks often, so the span overlap test comes before entity lookups.
     for (let i = 0; i < plants.length; i++) {
-        const candidate = plants[i], { plant } = candidate
-        const reach = candidate.rolling ? rollingAttack : attack
-        if (!reach) continue
-        const left = x + reach.x
-        if (Math.min(left + reach.width, candidate.right) - Math.max(left, candidate.left) < 20) continue
-        // An earlier zombie may have finished this plant during the same run.
-        if (plant.health > 0 && world.hasEntity(plant.id)) return candidate
+        const candidate = plants[i]
+        if (!reached(candidate)) continue
+        const { column } = candidate.plant
+        if (!candidate.rolling && plants.some((other, j) => j > i && !other.rolling && other.plant.column === column && reached(other))) continue
+        return candidate
     }
     return undefined
 }

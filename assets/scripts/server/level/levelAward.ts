@@ -5,6 +5,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { spawnItem } from '../items/itemSpawn'
 import { levelRule } from '../rules/registry'
 import { isDeadOrDying, isZombieOnScreen } from '@/shared/content/zombieStates'
+import { zombieRect } from '../combat/targets'
 
 /** Board::HasLevelAwardDropped: the level's award is on the lawn (falling, waiting or being collected). */
 export function levelAwardDropped(world: World): boolean {
@@ -32,13 +33,13 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     // Board::AreEnemyZombiesOnScreen: zombies on the plants' side do not hold the award back.
     if (zombies.some(zombie => zombie.id !== defeated && isZombieOnScreen(zombie))) return
     const source = defeated ?? [...zombies].sort((left, right) => right.position.x - left.position.x)[0]?.id
-    const zombie = source === undefined ? undefined : world.zombies.get(source), position = zombie?.position
-    const body = zombie ? definitions.zombies[zombie.typeId].body : undefined
+    const zombie = source === undefined ? undefined : world.zombies.get(source)
+    // From the middle of Zombie::GetZombieRect, in whole pixels.
+    const rect = zombie && zombieRect(world, definitions, zombie)
     // With no zombie to drop it (the original then drops none), it comes down as Challenge::SpawnLevelAward puts one in
     // the middle of the lawn: 40 into cell (4, 2), as the slot machine does.
     const middle = cellPosition(level.board, 2, 4)
-    spawnLevelAward(world, position && body ? position.x + body.x + body.width / 2 : middle.x + 40,
-        position && body ? position.y + body.y + body.height / 2 : middle.y + 40)
+    spawnLevelAward(world, rect ? rect.x + Math.trunc(rect.width / 2) : middle.x + 40, rect ? rect.y + Math.trunc(rect.height / 2) : middle.y + 40)
     // Board::RemoveAllZombies: every zombie that is not dead or dying vanishes, the one that dropped the award included.
     for (const zombie of zombies) {
         if (!isDeadOrDying(zombie)) remover.destroyEntity(zombie.id)

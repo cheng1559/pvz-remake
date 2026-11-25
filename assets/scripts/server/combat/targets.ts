@@ -1,8 +1,27 @@
 import type { World } from '@/server/state/World'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, Rect } from '@/shared/content/gameplay'
 import type { Plant } from '../plants/Plant'
-import { isHostile, plantFacingRect, plantTeam, type Team } from '@/shared/content/teams'
+import type { Zombie } from '../zombies/Zombie'
+import { isHostile, plantTeam, type Team, zombieTeam } from '@/shared/content/teams'
+import { plantRectAt, zombieRectAt, zombieRise } from '@/shared/content/hitRects'
 import { plantsInPlay } from '../level/lawn'
+import { LevelStateResource } from '../state/resources'
+
+/**
+ * Zombie::GetZombieRect: a zombie's body (or `rect`, its attack: GetZombieAttackRect) as it faces, where it stands in
+ * whole pixels (Zombie::mX and mY, which Zombie::Update leaves as it ends), down and cut short while it rises
+ * (zombieRectAt): as plants find it, which act before the zombies, and projectiles meet it, after.
+ */
+export function zombieRect(world: World, definitions: GameplayDefinitions, zombie: Zombie, rect = definitions.zombies[zombie.typeId].body): Rect {
+    const { position, riseTicks } = zombie, definition = definitions.zombies[zombie.typeId]
+    const rising = riseTicks ? { rise: zombieRise(definition, world.resources.get(LevelStateResource).board, zombie.calledUp()), ticks: riseTicks } : undefined
+    return zombieRectAt(rect, zombieTeam(zombie), Math.trunc(position.x), Math.trunc(position.y), rising)
+}
+
+/** Plant::GetPlantRect: a plant's body (or `rect`, its attack) as it faces, where it stands in whole pixels (Plant::mX, mY). */
+export function plantRect(definitions: GameplayDefinitions, plant: Plant, rect = definitions.plants[plant.typeId].body): Rect {
+    return plantRectAt(rect, plantTeam(plant), Math.trunc(plant.position.x), Math.trunc(plant.position.y))
+}
 
 /** A plant an attack can hit, with its body on the board as it faces (Plant::GetPlantRect). */
 export interface PlantTarget {
@@ -20,8 +39,7 @@ export function hostilePlants(world: World, definitions: GameplayDefinitions, te
         const { position } = plant
         if (row !== undefined && position.row !== row || !isHostile(plantTeam(plant), team)) continue
         if (plant.health <= 0) continue
-        const body = plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant))
-        targets.push({ plant, rect: { ...body, x: position.x + body.x, y: position.y + body.y } })
+        targets.push({ plant, rect: plantRect(definitions, plant) })
     }
     return targets
 }

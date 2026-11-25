@@ -2,7 +2,8 @@ import { exact, finite } from '@/shared/validate'
 import { defineResource, type World } from '@/server/state/World'
 import { PLANT_ATTACKS, rowGroundY, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { BASE_MOD_ID, isModId, isQualifiedId, Registry } from '@/shared/mod'
-import { isHostile, plantFacingRect, plantTeam, projectileTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantTeam, projectileTeam, type Team, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { plantRect, zombieRect } from '../combat/targets'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Projectile } from './Projectile'
 import { isTargetableZombie } from '../zombies/damage'
@@ -27,6 +28,8 @@ export interface MotionStep {
     projectile: Projectile
     /** A factor on its own speed this tick (Projectile.speedScale): a mower slows as it chews. */
     speedScale: number
+    /** Projectile::mX: where it stood as the tick began, in whole pixels, which what it hits goes by (GetProjectileRect). */
+    collisionX: number
 }
 
 /**
@@ -125,17 +128,15 @@ function targetBody(world: World, definitions: GameplayDefinitions, entity: numb
     const position = (zombie ?? plant)?.position
     if (!position) return undefined
     if (zombie) {
-        const team = zombieTeam(zombie), body = zombieFacingRect(definitions.zombies[zombie.typeId].body, team)
+        const team = zombieTeam(zombie), body = zombieRect(world, definitions, zombie)
         // Zombie::ZombieTargetLeadX: an eating or frozen zombie stands still (ZombieNotWalking), a chilled one walks at half speed.
         const still = zombie.state === 'eating' || zombie.frozenTicks !== undefined
         const walk = still ? 0 : teamDirection(team) * zombie.speedPerTick * (zombie.chilledTicks > 0 ? 0.5 : 1)
-        const left = Math.trunc(position.x) + body.x
-        return { x: left + body.width / 2, left, width: body.width, top: Math.trunc(position.y) + body.y, height: body.height, team, walk }
+        return { x: body.x + body.width / 2, left: body.x, width: body.width, top: body.y, height: body.height, team, walk }
     }
     if (!plant) return undefined
-    const team = plantTeam(plant), body = plantFacingRect(definitions.plants[plant.typeId].body, team)
-    const left = position.x + body.x
-    return { x: left + body.width / 2, left, width: body.width, top: position.y + body.y, height: body.height, team, walk: 0 }
+    const team = plantTeam(plant), body = plantRect(definitions, plant)
+    return { x: body.x + body.width / 2, left: body.x, width: body.width, top: body.y, height: body.height, team, walk: 0 }
 }
 
 /** Projectile::UpdateNormalMotion: every projectile flying along its row goes this far a tick, as a mower runs. */
@@ -289,12 +290,13 @@ const homing: ProjectileMotionDefinition<HomingState> = {
             if (distance < nearest) { nearest = distance; state.target = entity }
         }
     },
-    aim({ world, definitions, projectile }, state) {
+    aim({ world, definitions, projectile, collisionX }, state) {
         const { position } = projectile, body = prey(world, definitions, state.target, projectileTeam(projectile))
         if (!body) return 'none'
-        // Projectile::CheckForCollision: over the target's body, in height as well.
-        const hitbox = projectile.definition.hitbox, left = position.x + hitbox.x, top = position.y + hitbox.y
-        return Math.min(top + hitbox.height, body.top + body.height) > Math.max(top, body.top) &&
+        // Projectile::CheckForCollision: its rect overlaps the target's body, and where it is (mPosY) lies between the
+        // body's top and bottom.
+        const hitbox = projectile.definition.hitbox, left = collisionX + hitbox.x
+        return position.y > body.top && position.y < body.top + body.height &&
             Math.min(left + hitbox.width, body.left + body.width) >= Math.max(left, body.left) ? state.target : 'none'
     },
     height: state => state.height,

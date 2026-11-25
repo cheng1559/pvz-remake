@@ -417,9 +417,7 @@
     },
     "dance": {
       "rise": {
-        "depth": 200,
-        "riseTicks": 150,
-        "clip": {"x": -200, "y": -78, "width": 520, "bottom": 113, "settleTicks": 0},
+        "clip": {"x": -200, "y": -78, "width": 520, "bottom": 113},
         "particle": "pvz:dancerrise",
         "sounds": [{"audio": "pvz:gravestone_rumble", "foley": true, "pitchRange": 10}]
       }

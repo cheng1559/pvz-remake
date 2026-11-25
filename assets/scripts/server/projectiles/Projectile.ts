@@ -159,8 +159,8 @@ export class Projectile {
             emitServerEvent(world.resources.get(EventQueueResource), 'projectileImpact', { ...impact, targetTypeId: target.plant.typeId, target: 'plant' })
         }
         if (!definition.splash) return
-        // Projectile::DoSplashDamage: what else it would hit there, on its row and the rows next to it.
-        const left = position.x + definition.hitbox.x, right = left + definition.hitbox.width
+        // Projectile::DoSplashDamage: what else it would hit there (MotionStep.collisionX), on its row and the rows next to it.
+        const left = hit.collisionX + definition.hitbox.x, right = left + definition.hitbox.width
         const splashed = [position.row - 1, position.row, position.row + 1].flatMap(row => hit.rows[row] ?? []).filter(other =>
             bodyOf(other) !== bodyOf(target) && this.canHit(hit, other, Math.min(right, other.right) - Math.max(left, other.left)) &&
             world.hasEntity(bodyOf(other).id) && !('plant' in other && plantInPlay(world, other.plant.id) !== other.plant))

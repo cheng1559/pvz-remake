@@ -1,11 +1,11 @@
 import type { SystemContext, World } from '@/server/state/World'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
-import { PLANT_WIDTH, plantFacingX, plantTeam, shooterFront, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantFacingX, plantTeam, shooterFront, teamDirection } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'
 import { getBoardBounds } from '../combat/collision'
 import { ProjectileMotionsResource } from '../projectiles/motions'
 import { launchProjectile } from '../projectiles/Projectile'
-import { hostilePlants } from '../combat/targets'
+import { hostilePlants, zombieRect } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -163,8 +163,7 @@ function targets(
     for (const zombie of world.zombies) {
         const { id: entity, position } = zombie
         if (!isTargetableZombie(zombie, team) || !anywhere && position.row !== plantPosition.row) continue
-        const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
+        const rect = zombieRect(world, definitions, zombie)
         if (!anywhere && !ahead(rect.x, rect.width)) continue
         zombies.push(entity)
         near(entity, rect)

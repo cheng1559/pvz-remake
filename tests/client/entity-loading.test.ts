@@ -1293,15 +1293,16 @@ test('a zombie with steps kicks up their effect under its feet as its walk comes
     })
     const walk = (time: number, zombie: object = {}) =>
         view.step({ x: 300.7, y: 50.2, row: 2, state: 'walking', animations: { body: { clip: 'walk', time, rate: 20 } }, ...zombie })
-    // Zombie::UpdateZombieWalking: 0.03 and 0.61 of the 30-frame walk, (81, 106) and (87, 110) from (mX, mY), at mRenderOrder - 1.
+    // Zombie::UpdateZombieWalking: 0.03 and 0.61 of the 30-frame walk, (81, 106) and (87, 110) from where the frame draws
+    // it, not in whole pixels, at mRenderOrder - 1.
     walk(0); walk(1); walk(18); walk(19)
     walk(31, { team: 'plants' })
     walk(40, { state: 'eating' })
     walk(0, { animations: { body: { clip: 'eat', time: 0, rate: 36 } } }); walk(20, { animations: { body: { clip: 'eat', time: 20, rate: 36 } } })
     assert.deepEqual(particles, [
-        ['pvz:dust_foot', 381, 156, 101, undefined, false],
-        ['pvz:dust_foot', 387, 160, 101, undefined, false],
-        ['pvz:dust_foot', 300 + 120 - 81, 156, 101, undefined, true],
+        ['pvz:dust_foot', 300.7 + 81, 50.2 + 106, 101, undefined, false],
+        ['pvz:dust_foot', 300.7 + 87, 50.2 + 110, 101, undefined, false],
+        ['pvz:dust_foot', 300.7 + (120 - 81), 50.2 + 106, 101, undefined, true],
     ], 'none while it eats, nor on another clip')
 })
 
@@ -1339,8 +1340,8 @@ test("a shot leaves the muzzle effect of the plant that fired it just over the r
     const order = renderOrderModule.renderOrder('lawnMower', 2, 1)
     assert.deepEqual(JSON.parse(JSON.stringify(particles)), [
         ['pvz:puffshroommuzzle', 118, 133, order, null, false],
-        // The spore's hitbox runs from -15 to 40: 27 in from one side is 2 out from the other.
-        ['pvz:puffshroommuzzle', 98, 133, order, null, true],
+        // The spore's hitbox runs from 0 to 40: 27 in from one side is 13 in from the other.
+        ['pvz:puffshroommuzzle', 113, 133, order, null, true],
         ['pvz:snowpeapuff', 108, 133, order, null, false],
     ], 'the peashooter has none')
 })

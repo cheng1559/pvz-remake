@@ -144,6 +144,8 @@ export interface BoardDefinition {
     columns: number
     origin: Point
     cell: { width: number; height: number }
+    /** How a zombie comes up out of a grave on it (Zombie::UpdateZombieRiseFromGrave). */
+    riseFromGrave: ZombieRise
 }
 
 interface SeedCommon {
@@ -533,6 +535,8 @@ export interface ZombieDefinition {
          * original's on Wall-nut Bowling (Zombie::ZombieInitialize, UpdateZombiePolevaulter), whose plants all roll.
          */
         bowlingAttack?: Rect
+        /** Its attack rect in the air (Zombie::GetZombieAttackRect in PHASE_POLEVAULTER_IN_VAULT). */
+        airborneAttack: Rect
         landedAttack: Rect
         landingOffset: number
         /**
@@ -559,6 +563,21 @@ export interface ZombieDefinition {
  */
 export interface ZombieDance {
     lead?: DanceLead
+    /** How it comes up out of the ground, called up into a troupe (PHASE_DANCER_RISING); out of a grave otherwise. */
+    rise?: ZombieRise
+}
+
+/**
+ * How a zombie comes up out of the ground while it rises (`riseTicks`), out of a grave (BoardDefinition.riseFromGrave,
+ * PHASE_RISING_FROM_GRAVE) or called up into a troupe (ZombieDance.rise, PHASE_DANCER_RISING): Zombie::GetDrawPos. Its
+ * body sits `depth` below and comes up over the last `riseTicks` of its rise (mAltitude, mBodyY); the ground hides as
+ * much of it as it sits below, and the ticks it has still to rise, at most `settleTicks`, more (mClipHeight). Its body
+ * and attack rects come down with it and are as much shorter (GetZombieRect, GetZombieAttackRect).
+ */
+export interface ZombieRise {
+    depth: number
+    riseTicks: number
+    settleTicks: number
 }
 
 /** Zombie::UpdateZombieDancer: how a dancer leads its troupe. */

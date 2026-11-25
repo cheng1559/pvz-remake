@@ -253,16 +253,42 @@ test('a bowled nut takes 400 off a shield alone, but breaks a screen door throug
     }
 })
 
-test("a nut rolls on its roll clip's ground as a zombie walks on its walk's (Reanimation::GetTrackVelocity)", () => {
+test('a bowled nut strikes the leftmost zombie it reaches, one that has lost its head too (Plant::FindTargetZombie)', () => {
+    const clip = definitions.plants['pvz:bowling-wallnut'].animation!.clips.body
+    // Which of the normal zombies whose bodies begin `ahead` into its attack rect it strikes: the rect runs 60 from where
+    // it rolls to this tick (Plant::GetPlantAttackRect on Wall-nut Bowling), a body from 36 past where the zombie stands.
+    const struck = (zombies: Array<{ ahead: number, headless?: true }>) => {
+        const { server, world, plant } = rollNut()
+        const nut = world.plants.get(plant.entityId)!, left = nut.position.x + Math.trunc(groundStep(clip, nut.animations!.body))
+        const ids = zombies.map(({ ahead, headless }) => {
+            const id = spawnZombie(world, definitions, 'pvz:normal', 2, left + ahead - 36, plant.y - 30)
+            if (headless) world.zombies.get(id)!.hasHead = false
+            return id
+        })
+        server.drainEvents()
+        server.tick()
+        const impact = server.drainEvents().find(event => event.type === 'bowlingImpact')
+        return impact && ids.indexOf(impact.data.entityId as number)
+    }
+    assert.equal(struck([{ ahead: 40 }, { ahead: 10 }]), 1, 'the nearer, though the other came first')
+    assert.equal(struck([{ ahead: 10, headless: true }]), 0, 'one walking on without its head')
+})
+
+test("a nut rolls on its roll clip's ground as a zombie walks on its walk's (Reanimation::GetTrackVelocity), in whole pixels (Plant::mX)", () => {
     const { server, world, plant } = rollNut()
     const nut = world.plants.get(plant.entityId)!, position = world.plants.get(plant.entityId)!.position
     const clip = definitions.plants['pvz:bowling-wallnut'].animation!.clips.body
     assert.ok(nut.animations!.body.rate >= 12 && nut.animations!.body.rate <= 18, 'Plant::PlantInitialize: RandRangeFloat(12, 18)')
+    const steps = new Set<number>()
     for (let tick = 0; tick < 100; tick++) {
         const roll = { ...nut.animations!.body }, x = position.x
         server.tick()
-        assert.ok(Math.abs(position.x - x - groundStep(clip, roll)) < 1e-9, `tick ${tick}`)
+        // Plant::UpdateBowling's mX -= aSpeed drops what is left of a pixel.
+        assert.equal(position.x - x, Math.trunc(groundStep(clip, roll)), `tick ${tick}`)
+        assert.ok(Number.isInteger(position.x), `tick ${tick}`)
+        steps.add(position.x - x)
     }
+    assert.ok([...steps].every(step => step === 2 || step === 3), `two or three a tick (${[...steps]})`)
 })
 
 test("a bowled nut takes Plant::UpdateBowling's numbers unless it writes its own, checked as the content loads", () => {

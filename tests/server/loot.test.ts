@@ -15,15 +15,21 @@ const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const money = (game: LocalIntegratedGame) => game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
 
+/** A replay of 1-1 (whose pool has only the plain zombie), its loot rolls coming up `roll`. */
+function replay11(roll: number, ownedUpgrades = 0): World {
+    const world = withZombieTypes(new World(), definitions)
+    world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
+    world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
+    world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades })
+    world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
+    world.resources.set(EventQueueResource, createEventQueue())
+    return world
+}
+
 test('Zombie::DropLoot: a zombie the level does not pick still drops at its own value (mZombieValue)', () => {
-    /** What a replay of 1-1 (whose pool has only the plain zombie) drops for `typeId` on a roll of `roll`. */
+    /** What a replay of 1-1 drops for `typeId` on a roll of `roll`. */
     const drop = (typeId: string, roll: number, ownedUpgrades = 0) => {
-        const world = withZombieTypes(new World(), definitions)
-        world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
-        world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
-        world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades })
-        world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
-        world.resources.set(EventQueueResource, createEventQueue())
+        const world = replay11(roll, ownedUpgrades)
         dropZombieLoot(world, definitions, spawnZombie(world, definitions, typeId, 2, 500, 0), world)
         return [...world.items].map(item => item.typeId)
     }
@@ -34,6 +40,14 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
     // A diamond below 14 times it, gold while the player owns no seed-slot upgrade (mPurchases, as the drop comes).
     assert.deepEqual(drop('pvz:normal', 13), ['pvz:coin_gold'])
     assert.deepEqual(drop('pvz:normal', 13, 1), ['pvz:diamond'])
+})
+
+test('Zombie::DropLoot drops from the middle of the zombie, a quarter of the way down, in whole pixels (GetZombieRect)', () => {
+    const world = replay11(13)
+    dropZombieLoot(world, definitions, spawnZombie(world, definitions, 'pvz:normal', 2, 500.7, 0.7), world)
+    // Its body runs 42 across from 36 past Zombie::mX 500 and 115 down from mY 0; the gold coin comes down 40 to the left
+    // of where it drops (Board::DropLootPiece), its corner 10 and 8 up and left of that.
+    assert.deepEqual([...world.items].map(({ position }) => [position.x, position.y]), [[500 + 36 + 21 - 40 - 10, 28 - 8]])
 })
 
 function play21(initialMoney: number, firstAdventure = true) {

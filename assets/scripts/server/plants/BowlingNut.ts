@@ -1,17 +1,16 @@
 import type { EntityId, EntityRemover, SystemContext, World } from '@/server/state/World'
-import { cellPosition, type GameplayDefinitions, pastAdventureLevel, type PlantDefinition } from '@/shared/content/gameplay'
+import { cellPosition, type GameplayDefinitions, pastAdventureLevel, type PlantDefinition, type PlantTargeting } from '@/shared/content/gameplay'
 import { groundStep } from '@/shared/content/animation'
-import { plantFacingRect, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { plantTeam, teamDirection } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger } from '@/shared/validate'
-import { rectOverlap } from '../combat/collision'
-import { hostilePlants } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { LevelStateResource, RandomResource, TutorialResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { damageZombie, isTargetableZombie } from '../zombies/damage'
+import { damageZombie } from '../zombies/damage'
 import { damagePlant, detonatePlant } from './damage'
 import { Plant, type PlantConfig } from './Plant'
+import { findAbilityTarget } from './targeting'
 import { plantInPlay } from '../level/lawn'
 
 /**
@@ -19,6 +18,9 @@ import { plantInPlay } from '../level/lawn'
  * rolls on, as a zombie walks on its walk's (groundStep).
  */
 const ROLL_LAYER = 'body'
+
+/** Plant::FindTargetZombie for a bowled nut: it reaches no further for a zombie eating. */
+const BOWLING_TARGETING: PlantTargeting = { eatingExtraRange: 0 }
 
 export interface BowlingNut {
     /** The way it slants, a row a time: -1 up, 1 down, 0 straight along its row. */
@@ -73,10 +75,10 @@ export class BowlingNut extends Plant {
         if (!roll) return
         // Plant::UpdateBowling: a clip with a `_ground` track rolls the nut as far as its ground goes at the clip's rate
         // (Reanimation::GetTrackVelocity), between the frames it is at before the animation system moves it on after the
-        // plants have acted. A chilled nut is slowed by the ticks it sits out (chill.ts), not here. A nut on the zombies'
-        // side rolls left.
+        // plants have acted. It goes in whole pixels (Plant::mX), what is left of one dropped each tick. A chilled nut is
+        // slowed by the ticks it sits out (chill.ts), not here. A nut on the zombies' side rolls left.
         const clip = definition.animation!.clips[roll.clip], team = plantTeam(this), facing = teamDirection(team)
-        if (clip?.ground) position.x += facing * groundStep(clip, roll)
+        if (clip?.ground) position.x += facing * Math.trunc(groundStep(clip, roll))
         if (facing > 0 ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
             commands.destroyEntity(this.id)
             return
@@ -86,15 +88,12 @@ export class BowlingNut extends Plant {
         let direction = this.direction
         if (direction < 0 && position.row === 0) direction = 1
         else if (direction > 0 && position.row === board.rows - 1) direction = -1
-        const nutAttack = plantFacingRect(rules.attack, team)
-        const nut = { x: position.x + nutAttack.x, width: nutAttack.width }
-        const target = [...world.zombies].find(zombie => {
-            const point = zombie.position, body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-            return point.row === position.row && isTargetableZombie(zombie, team) && rectOverlap(nut, { x: point.x + body.x, width: body.width }) > 0
-        })?.id
+        // Plant::FindTargetZombie with its attack rect: the nearest hostile zombie it reaches, one that has lost its head
+        // too, or a hostile plant.
+        const hit = findAbilityTarget(world, definitions, this, { attack: rules.attack, targeting: BOWLING_TARGETING, headless: true })
+        const target = hit !== undefined && world.zombies.get(hit) ? hit : undefined
         // A hostile plant takes the body blow; it is no zombie impact, so `hits` does not count it.
-        const plantTarget = target === undefined
-            ? hostilePlants(world, definitions, team, position.row).find(candidate => rectOverlap(nut, candidate.rect) > 0)?.plant.id : undefined
+        const plantTarget = target === undefined ? hit : undefined
         if (target === undefined && plantTarget === undefined) {
             if (direction) { position.row += direction; this.direction = direction }
             return

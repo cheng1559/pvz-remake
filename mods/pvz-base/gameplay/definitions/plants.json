@@ -204,7 +204,7 @@
     "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
-    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": {"id": "pvz:spore", "lifetimeTicks": 75}, "offset": {"x": 52.5, "y": 60}, "range": 230},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": {"id": "pvz:spore", "lifetimeTicks": 75}, "offset": {"x": 60, "y": 60}, "range": 230},
     "nocturnal": true,
     "animation": {
       "clips": {
@@ -294,7 +294,7 @@
   "pvz:scaredyshroom": {
     "kind": "scaredyshroom",
     "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
-    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 25, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 41.5, "y": 41}},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 25, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 49, "y": 41}},
     "fright": {"center": {"x": 0, "y": 20}, "radius": 120, "rowRange": 1, "lowerTicks": 130, "raiseTicks": {"min": 84, "max": 143}},
     "nocturnal": true,
     "animation": {
@@ -334,6 +334,7 @@
     }
   },
   "pvz:lilypad": {
+    "low": true,
     "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "animation": {
       "clips": {"body": {"frames": 1, "fps": [10, 15]}, "blink": {"frames": 3, "fps": 15, "once": true}},

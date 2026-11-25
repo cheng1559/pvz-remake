@@ -7,6 +7,7 @@ import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from '../items/itemSpawn'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule, zombieValue } from '../rules/registry'
+import { zombieRect } from '../combat/targets'
 
 const SILVER = 'pvz:coin_silver', GOLD = 'pvz:coin_gold', DIAMOND = 'pvz:diamond'
 
@@ -30,10 +31,11 @@ export function dropZombieLoot(world: World, definitions: GameplayDefinitions, e
     if (levelAwardDropped(world) || !canDropLoot(world)) return
     const level = world.resources.get(LevelStateResource).definition
     zombie.droppedLoot = true
-    const body = definitions.zombies[zombie.typeId].body
     // GetZombieDefinition().mZombieValue, the same points the wave picker spends on it.
     const value = zombieValue(level, definitions, zombie.typeId)
-    dropLootPiece(world, definitions, position.x + body.x + body.width / 2, position.y + body.y + body.height / 4, value)
+    // From the middle of Zombie::GetZombieRect, a quarter of the way down, in whole pixels.
+    const rect = zombieRect(world, definitions, zombie)
+    dropLootPiece(world, definitions, rect.x + Math.trunc(rect.width / 2), rect.y + Math.trunc(rect.height / 4), value)
 }
 
 /**

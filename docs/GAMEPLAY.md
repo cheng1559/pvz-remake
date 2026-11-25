@@ -154,7 +154,7 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 
 - 200 ticks after the final wave, every fully risen grave on the lawn (not only the level's own) raises one zombie, picked by the level's `graveZombies` weights, over 150 ticks. None rises once the award has dropped. A grave raises its zombies on its own side.
 - `graveZombies` names the zombies at their wave weights; with none given, the pool's zombies that can rise from graves (`graveRise`: Zombie, Conehead, Buckethead) are used.
-- `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie`: how deep it starts and its clip, the original's `Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos` and `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change these values.
+- A zombie comes up as its board's `riseFromGrave` has it (`Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos`): its body and attack rects come up with it, less what the ground hides. `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie.clip`, the original's `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change it.
 
 #### 2-1
 
@@ -397,6 +397,7 @@ Costs and recharges are the seed definitions' `sunCost` and `cooldownTicks`; the
 
 - **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `isPlantAsleep`, the server's one test of a plant asleep): it does nothing, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
 - **Shots leave a puff at the mouth** (`Plant::Fire`): the Scaredy-shroom's `PARTICLE_PUFFSHROOM_MUZZLE` at 27 and 13 from the shot's corner, the Puff-shroom's at 18 and 13, the Snow Pea's `PARTICLE_SNOWPEA_PUFF` at 8 and 13, drawn just over the row's lawn mowers. This is the plant presentation's `muzzle`, placed where `projectileFired` says the shot set off.
+- **Shots hit from where they stood as the tick began** (`Projectile::mX`, `GetProjectileRect`): a shot moves, then hits what its rect overlaps at that place, in whole pixels; a lawn mower set off looks there too, before it moves. A homing shot hits its target only once its own y lies between the target's top and bottom.
 - **Producers on the zombies' side** (the Sunflower, the Sun-shroom) make no sun. Each time they would, they take what that sun is worth (25, or a small Sun-shroom's 15) from the player's bank, down to 0 (the `sunDrained` event), glowing as they would and flashing the sun counter red with the buzzer. **Differs from the original**, where plants have no side (see [Teams and the Hypno-shroom](TEAMS.md)).
 - **Saves.** Ability states such as the Sun-shroom's growth and the Grave Buster's progress are saved.
 - **Almanac and level share their look.** Installed plants use their level animations in the almanac, with the same body coordinates, scale and shadow.
@@ -487,9 +488,10 @@ Wall-nut Bowling's rules are in [1-5](#1-5-wall-nut-bowling).
 - `pvz:bowling-wallnut` and `pvz:bowling-explodenut` are plants and seeds of their own, configured in the gameplay and presentation JSON. Only the Wall-nut's art is reused; the plain Wall-nut takes no part in bowling.
 - Their kind is `bowlingnut` (`BowlingNut` on the server, `BowlingNutView` on the client), whose fields `direction` and `hits` are the way it rolls and the strikes so far.
 - Their `bowling` must give the attack rect `attack` (`Plant::GetPlantAttackRect`). `bounceSpeed` (2), `damage` (1800), `helmDamage` (900) and `shieldDamage` (400) take `Plant::UpdateBowling`'s values unless a plant gives its own. `bouncedBreaks` lists the shields a full strike breaks through after a bounce (the plain nut's `["door"]`) and is empty unless given.
+- A nut strikes the leftmost hostile zombie or plant its attack rect reaches, a zombie that has lost its head too (`Plant::FindTargetZombie`).
 - The explosive nut goes off at the first touch and deals no strike of its own.
 - The settings are checked by exact keys as the content loads, not when a nut is planted.
-- A nut rolls by the `ground` of its body layer's rolling clip (`wallnut_roll`'s `_ground`), with the same `groundStep` zombies walk by (`Reanimation::GetTrackVelocity`).
+- A nut rolls by the `ground` of its body layer's rolling clip (`wallnut_roll`'s `_ground`), with the same `groundStep` zombies walk by (`Reanimation::GetTrackVelocity`). It goes in whole pixels (`Plant::mX`), what is left of one dropped each tick: two or three a tick.
 - Rolling down a row, a nut is drawn with the row above (`BowlingNutView.drawnRow`, `Plant::UpdateBowling`). Its rolling sound when put down (`SOUND_BOWLING` in `Board::MouseDownWithPlant`) is the nut's own `plantedSounds`.
 - Flags: `occupiesCell: false` makes a moving plant hold no cell and be nothing to bite; `low: true` makes a low plant that hostile projectiles fly over (see [Teams and the Hypno-shroom](TEAMS.md)); the presentation's `layer: "projectile"` draws a rolling nut on its row's projectile layer (`Plant::CalcRenderOrder` on bowling levels).
 
@@ -515,7 +517,7 @@ From `mods/pvz-base/gameplay/definitions/zombies.json`. Health is the body's; ar
 A zombie looks for something to eat on every 4th tick of its age, every 8th while chilled (`bite.cadenceTicks`, `Zombie::CheckIfPreyCaught`):
 
 - It looks only with its head on. A zombie without one goes on eating or walking as it was.
-- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant in slot order that it overlaps by 20.
+- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant in slot order that it overlaps by 20. Of plants stacked on one cell it takes the one in the highest slot (`Board::GetTopPlantAt`).
 - Finding one, it starts eating in that tick and bites it at once, for 4 (`bite.damage`). An awake Hypno-shroom is bitten without harm.
 - Finding nothing while it eats, it stops and walks on from the next tick. Between the ticks it looks on, it goes on as it was.
 - At each chew of its eat clip it looks again for the plant it chews, which flashes (`Zombie::AnimateChewSound`).

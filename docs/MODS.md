@@ -378,6 +378,11 @@ A zombie's `dance` makes it dance to the board's shared beat (`DANCE_BEAT`): on 
 - A leader first moonwalks for `moonwalkTicks` on the `moonwalk` clip (which has an `fps` and a `ground` recorded by direction of travel) at that clip's own pace. A chill does not affect it; one frozen during the moonwalk stands where it is once thawed until the moonwalk ends.
 - It then plays `point` (which has an `fps` and a `hold`) to snap its fingers, summoning `backup` (which must be a zombie with a `dance` and no `lead`) to each place `{ row, x }` in `troupe`. Row and x are relative to the leader, mirrored left to right on the plants' side. The backup dancers rise from the ground within `riseTicks`.
 - After that it holds still for `holdTicks`. When backup dancers are missing it waits `summonTicks`, then summons again on the arm-raising beat once its x is within `summonBeforeX`.
+- `dance.rise` is how a backup dancer comes up when it is summoned (see [Rising out of the ground](#rising-out-of-the-ground)); without it, it comes up as from a grave.
+
+#### Rising out of the ground
+
+A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises.
 
 #### Projectile range
 
@@ -399,7 +404,7 @@ The bowling nut is of the plant kind `bowlingnut`. The values of its `bowling` c
 - The presentation of a zombie with a `dance` can have `dance: { music?, spotlight?, rise? }`:
   - `music` is played when a leader first snaps its fingers (with no more than 15 zombies on the board), and stopped when no leading dancer is left on the board.
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` is the leader's spotlight after its first snap: `floor` is drawn under it and `beam` over it, its color cycling through `colors` by age.
-  - `rise` is how backup dancers rise from the ground, with the same fields as a grave zombie's rise (`depth`, `riseTicks`, `clip`), plus a `particle` and `sounds` for when the rise starts.
+  - `rise` is how backup dancers are drawn rising from the ground: a `clip` as a grave zombie's, plus a `particle` and `sounds` for when the rise starts.
 - `steps: { effect, marks: [{ at, x, y }] }`: each time the walk animation reaches `at` (a fraction of the clip's length), it plays `effect` once at the zombie's position plus (`x`, `y`), one layer below the zombie, mirrored when it walks right (the Football Zombie's dust).
 
 #### Plant presentation
@@ -736,7 +741,7 @@ Zombies are divided by the gameplay definition's `kind` (`zombie` by default; th
 - Register it with `registry.zombies.register(assets.id, kind, Class)`, then write `kind` in the zombie definition.
 - To show the client something of its own, override `snapshotOwn()` to return a JSON object. It appears in the snapshot's `own`, and the client's matching view class reads it with `this.own(zombie, field, validate)`.
 - Each zombie is an instance of its class, in the world's `zombies` list. The instance's fields are saved as they are, so they can only be plain data (refer to another zombie by its entity id). A subclass gives its own fields initial values in its constructor and overrides `restoreOwn(fields, name)` to read them back from the save, taking and validating its own and passing the rest to `super.restoreOwn`.
-- A class's own definition fields (`vault`, `dance`, `enrage`) may only be written with the class that takes them, and the class's static `config` lists which ones it takes. The pole vaulter's `vault.evades` lists the targeting keys that leave it out while it holds its pole.
+- A class's own definition fields (`vault`, `dance`, `enrage`) may only be written with the class that takes them, and the class's static `config` lists which ones it takes. The pole vaulter's `vault.evades` lists the targeting keys that leave it out while it holds its pole. Its attack rect is `vault.attack` while it holds its pole, `vault.airborneAttack` in the air and `vault.landedAttack` once it is down.
 
 #### Projectile kinds
 
@@ -779,6 +784,7 @@ Both base views give subclasses the same members:
 | `root` | The node the layers are in; moving it moves the whole picture. |
 | `clip(name)`, `ownFrames(reanimId)`, `particle(...)`, `flash` | Helpers for clips, frames, particles and the hit flash. |
 | `own(entity, field, validate)` | Reads the kind's own snapshot data (`snapshotOwn`). |
+| `hitRects(entity)` | Its body and attack rects, the ones the server goes by, where the frame draws the entity rather than in the server's whole pixels. `/hitboxes`, `/hp` and `/id` draw by them. A kind whose server class goes by other rects overrides it. |
 
 Derive cosmetic effects from the authoritative tick and the snapshot rather than a clock of the view's own, so pausing does not keep emitting particles.
 

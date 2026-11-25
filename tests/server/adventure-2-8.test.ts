@@ -113,7 +113,8 @@ test('2-8 follows 2-7 with 10 waves over seven graves, brings the dancer in on w
 test('the dancers: 500 and 270 health, drawn at 1 (the original\'s 0.8 is in their art), a backup dancer never picked for a wave', () => {
     const dancer = definitions.zombies['pvz:dancer'], backup = definitions.zombies['pvz:backup_dancer']
     assert.deepEqual([dancer.maxHealth, dancer.scale, dancer.wave], [500, undefined, { points: 5, weight: 1000, firstWave: 5 }])
-    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, undefined, 0, {}])
+    // Called up, it comes up over the 150 ticks of its rise from 200 below (ZOMBIE_BACKUP_DANCER_RISE_HEIGHT).
+    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, undefined, 0, { rise: { depth: 200, riseTicks: 150, settleTicks: 0 } }])
     assert.deepEqual({ ...lead, moonwalkTicks: { ...lead.moonwalkTicks } }, {
         moonwalkTicks: { min: 300, max: 311 }, backup: 'pvz:backup_dancer',
         troupe: [{ row: -1, x: 0 }, { row: 1, x: 0 }, { row: 0, x: -100 }, { row: 0, x: 100 }],

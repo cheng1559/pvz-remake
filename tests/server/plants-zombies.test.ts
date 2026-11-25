@@ -19,6 +19,7 @@ import { createZombieSystem } from '@/server/zombies/system'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { explode } from '@/server/combat/explosions'
+import { findAbilityTarget } from '@/server/plants/targeting'
 import type { JsonValue } from '@/shared/protocol/index'
 import { withZombieTypes } from '../zombieTypes'
 import { newPlant, withPlantTypes } from '../plantTypes'
@@ -147,6 +148,19 @@ test('a chomper swallows a zombie in reach, digests for 40 seconds and misses po
     assert.equal(ability().phase, 'missed')
     run(35)
     assert.equal(ability().phase, 'ready')
+})
+
+test('a chomper takes the zombie in reach furthest left in whole pixels and, of two on one pixel, the first in slot order', () => {
+    const { world, plant, zombie } = game()
+    const chomper = world.plants.get(plant('pvz:chomper', 2, 2))!, config = definitions.plants['pvz:chomper'].chomper!
+    // Zombie::mX: 250.2 and 250.7 stand on one pixel. The last one takes the slot the first one freed, before the second's.
+    const freed = zombie('pvz:normal', 2, 250.7), second = zombie('pvz:normal', 2, 250.2)
+    world.destroyEntity(freed)
+    world.freeSlots()
+    const last = zombie('pvz:normal', 2, 250.7)
+    assert.equal(findAbilityTarget(world, definitions, chomper, config), last, 'not the nearer by a part of a pixel, nor the lower id')
+    world.zombies.get(second)!.position.x = 249.9
+    assert.equal(findAbilityTarget(world, definitions, chomper, config), second, 'a pixel further left')
 })
 
 test('helms absorb damage first and drop once, and snow peas chill through them, halving walking and biting', () => {

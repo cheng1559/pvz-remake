@@ -4,7 +4,8 @@ import { Color, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { zombieDefinition } from './definitions'
 import { renderOrder } from '@/shared/content/renderOrder'
-import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
+import { mirrorX, ZOMBIE_WIDTH, zombieTeam } from '@/shared/content/teams'
+import { risen, zombieRectAt, zombieRise } from '@/shared/content/hitRects'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { clipNamed, prepareClips, showClip } from '@/client/reanim/clips'
 import { entityTint } from '@/client/view/tints'
@@ -14,8 +15,8 @@ import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot
 import { type LevelEntitySnapshot, parseSavedPlayback } from '@/client/level/LevelPresentationSnapshot'
 import { exact } from '@/shared/validate'
 import { attachmentTrack, type GraveZombiePresentation, type ZombiePresentationDefinition } from '@/shared/content/presentation'
-import { type AnimationDefinition, damageIndex, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
-import { animateCurve, ASSET_FPS, passedMark } from '@/shared/content/animation'
+import { type AnimationDefinition, damageIndex, type Rect, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type ZombieDefinition, type ZombieRise } from '@/shared/content/gameplay'
+import { ASSET_FPS, passedMark } from '@/shared/content/animation'
 import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, layerPlayback, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
@@ -223,7 +224,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const mirrored = zombie.team === 'plants'
         for (const mark of steps.marks) {
             if (!passedMark(clip, last.time, body.time, mark.at)) continue
-            stage.particle(steps.effect, Math.trunc(zombie.x) + mirrorX(mark.x, ZOMBIE_WIDTH, mirrored), Math.trunc(zombie.y) + mark.y,
+            stage.particle(steps.effect, zombie.x + mirrorX(mark.x, ZOMBIE_WIDTH, mirrored), zombie.y + mark.y,
                 stage.zombieOrder(zombie.row, zombie.typeId) - 1, undefined, mirrored)
         }
     }
@@ -317,9 +318,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             this.place(player.node, at.x, at.y)
             return
         }
-        const rise = this.rise(zombie), sunk = this.sunk(rise, zombie.riseTicks), { clip } = rise
+        const { clip } = this.rise(zombie), { sunk, hidden } = risen(this.riseOf(zombie), zombie.riseTicks)
         this.place(player.node, at.x, at.y - sunk)
-        const top = sunk + clip.y, bottom = clip.bottom - Math.min(clip.settleTicks, zombie.riseTicks), { x, y } = player.node.position
+        const top = sunk + clip.y, bottom = sunk + clip.bottom - hidden, { x, y } = player.node.position
         // DrawReanim clips in board pixels. The mask is local to the scaled, possibly mirrored body.
         player.setClip({
             x: (this.turned ? x - clip.x - clip.width : clip.x - x) / this.scale,
@@ -329,14 +330,39 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         })
     }
 
-    /** How it comes up while it rises (`riseTicks`): out of a grave, unless its view has it come up otherwise. */
+    /** How it is drawn coming up while it rises (`riseTicks`): out of a grave, unless its view has it come up otherwise. */
     protected rise(_zombie: ShownZombie): GraveZombiePresentation {
         return this.context.content.presentation.graves.zombie
     }
 
-    /** How far below the body still is: Zombie::UpdateZombieRiseFromGrave's altitude, from -depth up to none. */
-    private sunk({ depth, riseTicks: ticks }: GraveZombiePresentation, riseTicks: number): number {
-        return -animateCurve(ticks, 0, riseTicks, -depth, 0)
+    /** While it rises, whether it was called up into a troupe rather than out of a grave (Zombie.calledUp). */
+    protected calledUp(_zombie: ShownZombie): boolean {
+        return false
+    }
+
+    /** How it comes up while it rises (zombieRise), on the board it is on. */
+    private riseOf(zombie: ShownZombie): ZombieRise {
+        const { content, stage } = this.context
+        return zombieRise(content.definitions.zombies[zombie.typeId], content.definitions.boards[stage!.level.board], this.calledUp(zombie))
+    }
+
+    /**
+     * Its body and attack rects, the ones the server goes by (zombieRectAt: Zombie::GetZombieRect, GetZombieAttackRect),
+     * on the board where `zombie` has it stand as the frame draws it, not in the server's whole pixels: what `/hitboxes`
+     * outlines.
+     */
+    hitRects(zombie: ZombieSnapshot): { body: Rect, attack: Rect } {
+        const definition = this.context.content.definitions.zombies[zombie.typeId], team = zombieTeam(zombie)
+        const rising = zombie.riseTicks ? { rise: this.riseOf(zombie), ticks: zombie.riseTicks } : undefined
+        return {
+            body: zombieRectAt(definition.body, team, zombie.x, zombie.y, rising),
+            attack: zombieRectAt(this.attackRect(zombie), team, zombie.x, zombie.y, rising),
+        }
+    }
+
+    /** Zombie::GetZombieAttackRect's rect (Zombie.attackRect): its `attack`, unless its view has its kind's. */
+    protected attackRect(zombie: ZombieSnapshot): Rect {
+        return this.context.content.definitions.zombies[zombie.typeId].attack
     }
 
     /**

@@ -5,9 +5,9 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions } from '@/shared/content/gameplay'
 import type { EntityRemover, Position, World } from '@/server/state/World'
 import { damageZombie, destroyZombie, isTargetableZombie } from '../zombies/damage'
-import { isHostile, plantFacingX, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantFacingX, type Team, teamDirection, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
-import { hostilePlants } from './targets'
+import { hostilePlants, zombieRect } from './targets'
 import { damagePlant } from '../plants/damage'
 
 const BURNED_TICKS = 300
@@ -43,8 +43,8 @@ export function explode(
         const { id: entity, position } = zombie
         if (Math.abs(position.row - origin.row) > explosion.rowRange || zombie.state === 'burned' || !isHostile(zombieTeam(zombie), team)) continue
         if (!explosion.burn && !isTargetableZombie(zombie, team)) continue
-        const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
+        // Zombie::GetZombieRect, in whole pixels.
+        const rect = zombieRect(world, definitions, zombie)
         if (rect.x > getBoardBounds(world).right || !circleRectOverlap(x, y, explosion.radius, rect)) continue
         // Zombie::ApplyBurn chars a zombie whose body has less health than the blast; a tougher one only takes the damage.
         const burned = explosion.burn && zombie.health < explosion.damage

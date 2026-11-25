@@ -238,6 +238,24 @@ test('peas fly over low plants and hit the plant behind', () => {
     for (const low of plants(server).filter(plant => plant.typeId !== 'pvz:sunflower' && plant.team === 'zombies')) assert.equal(low.health, low.maxHealth)
 })
 
+test('of plants stacked on one cell, peas hit and zombies bite the one in the highest slot first (Board::GetTopPlantAt)', () => {
+    // Projectile::FindCollisionTargetPlant: past the lily pad, which it flies over, put down last.
+    const shot = begin()
+    debug(shot, '/plant peashooter 3 1')
+    for (const plant of ['sunflower', 'wallnut', 'lilypad']) debug(shot, `/plant ${plant} 3 6 zombies`)
+    shot.drainEvents()
+    const hits = run(shot, 600).filter(event => event.type === 'projectileImpact' && event.data.target === 'plant')
+    assert.ok(hits.length > 0 && hits.every(event => event.data.targetTypeId === 'pvz:wallnut'), 'the wall-nut, put down after the sunflower')
+    // Zombie::CanTargetPlant: a zombie bites the top one while it can.
+    const bitten = begin()
+    debug(bitten, '/plant wallnut 3 3')
+    debug(bitten, '/plant sunflower 3 3')
+    debug(bitten, '/zombie normal 3 5')
+    const plant = (typeId: string) => plants(bitten).find(plant => plant.typeId === typeId)!
+    while (plant('pvz:sunflower').health === plant('pvz:sunflower').maxHealth && bitten.snapshot().gameplayTick < 2000) bitten.tick()
+    assert.deepEqual([plant('pvz:sunflower').health < plant('pvz:sunflower').maxHealth, plant('pvz:wallnut').health], [true, plant('pvz:wallnut').maxHealth])
+})
+
 test('a shooter with only low plants ahead holds its fire', () => {
     const server = begin()
     debug(server, '/plant peashooter 3 1')

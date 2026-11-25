@@ -380,6 +380,11 @@ my-mod/
 - 领舞者先用 `moonwalk` 片段（带有 `fps`，以及按行进方向记录的 `ground`）以该片段自身的节奏太空步 `moonwalkTicks`。减速对此无效；太空步期间被冰冻的，解冻后原地站立直到太空步结束。
 - 随后播放 `point`（带有 `fps` 和 `hold`）打响指，把 `backup`（必须是带 `dance` 且没有 `lead` 的僵尸）召唤到 `troupe` 中的每个位置 `{ row, x }`。行和 x 相对于领舞者，在植物方会左右镜像。伴舞在 `riseTicks` 内从地下升起。
 - 之后静止 `holdTicks`。伴舞不全时先等待 `summonTicks`，再在其 x 进入 `summonBeforeX` 以内后的举手拍上再次召唤。
+- `dance.rise` 是伴舞被召唤时升起的方式（见[从地下升起](#从地下升起)）；没有时按从墓碑爬出的方式升起。
+
+#### 从地下升起
+
+从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。
 
 #### 子弹射程
 
@@ -401,7 +406,7 @@ my-mod/
 - 带 `dance` 的僵尸，其表现可以有 `dance: { music?, spotlight?, rise? }`：
   - `music` 在领舞者第一次打响指时播放（场上僵尸不超过 15 个时），场上没有领舞者时停止。
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` 是领舞者第一次打响指后的聚光灯：`floor` 画在它下方，`beam` 画在它上方，颜色随时间在 `colors` 中循环。
-  - `rise` 是伴舞从地下升起的方式，字段与墓碑僵尸的升起相同（`depth`、`riseTicks`、`clip`），另有升起开始时的 `particle` 和 `sounds`。
+  - `rise` 是伴舞从地下升起时的绘制方式：与墓碑僵尸相同的 `clip`，另有升起开始时的 `particle` 和 `sounds`。
 - `steps: { effect, marks: [{ at, x, y }] }`：行走动画每次到达 `at`（片段长度的比例）时，在僵尸位置加 (`x`, `y`) 处播放一次 `effect`，位于僵尸下面一层，向右走时镜像（橄榄球僵尸的扬尘）。
 
 #### 植物表现
@@ -738,7 +743,7 @@ const regenerating = (Base) => class extends Base {
 - 用 `registry.zombies.register(assets.id, kind, Class)` 注册，然后在僵尸定义中写上 `kind`。
 - 要向客户端展示自己的内容，覆写 `snapshotOwn()` 返回一个 JSON 对象。它出现在快照的 `own` 中，客户端对应的视图类用 `this.own(zombie, field, validate)` 读取。
 - 每个僵尸都是其类的实例，位于世界的 `zombies` 列表中。实例的字段原样保存，因此只能是普通数据（引用其他僵尸时使用其实体 id）。子类在构造函数中为自己的字段赋初值，并覆写 `restoreOwn(fields, name)` 从存档中读回：取出并校验自己的字段，把其余字段交给 `super.restoreOwn`。
-- 类自己的定义字段（`vault`、`dance`、`enrage`）只能与接受它们的类一起编写，类的静态 `config` 列出了它接受哪些字段。撑杆僵尸的 `vault.evades` 列出它持杆期间不会被哪些瞄准键选中。
+- 类自己的定义字段（`vault`、`dance`、`enrage`）只能与接受它们的类一起编写，类的静态 `config` 列出了它接受哪些字段。撑杆僵尸的 `vault.evades` 列出它持杆期间不会被哪些瞄准键选中。它的攻击框持杆时为 `vault.attack`，在空中为 `vault.airborneAttack`，落地后为 `vault.landedAttack`。
 
 #### 子弹类型
 
@@ -781,6 +786,7 @@ host.get('client/views').plants.registerView('example:beacon', BeaconView)
 | `root` | 各图层所在的节点；移动它即移动整个画面。 |
 | `clip(name)`、`ownFrames(reanimId)`、`particle(...)`、`flash` | 片段、帧、粒子和受击闪光的辅助成员。 |
 | `own(entity, field, validate)` | 读取类型自己的快照数据（`snapshotOwn`）。 |
+| `hitRects(entity)` | 它的身体框和攻击框，与服务端判定所用的一致，位置取画面中绘制它的位置，而不是服务端的整数像素。`/hitboxes`、`/hp` 和 `/id` 按此绘制。服务端类按其他框判定的类型应覆盖它。 |
 
 装饰效果应根据权威的逻辑步和快照计算，而不是依赖视图自己的时钟，这样暂停时就不会继续发射粒子。
 

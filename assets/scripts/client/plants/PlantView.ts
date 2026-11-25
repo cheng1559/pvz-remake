@@ -11,13 +11,14 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
-import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
+import { PLANT_BLINK_LAYER, type PlantAnimationDefinition, type Rect } from '@/shared/content/gameplay'
+import { plantAttack, plantRectAt } from '@/shared/content/hitRects'
 import { type ReanimKeyframe, sampleReanimTrack } from '@/shared/content/reanim'
 export type { LayerShown } from '@/client/view/layerPlayback'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
-import { PLANT_WIDTH } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
@@ -123,6 +124,16 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** The players of the layers it shows, for whoever shows a picture of the plant (a packet stills and colors them). */
     get players(): ReanimPlayer[] { return this.layers.shown }
+
+    /**
+     * Its body and attack rects, the ones the server goes by (plantRectAt: Plant::GetPlantRect, GetPlantAttackRect;
+     * plantAttack), on the board where `plant` has it stand as the frame draws it, not in the server's whole pixels: what
+     * `/hitboxes` outlines. No attack rect for one without.
+     */
+    hitRects(plant: PlantSnapshot): { body: Rect, attack?: Rect } {
+        const definition = this.context.content.definitions.plants[plant.typeId], team = plantTeam(plant), attack = plantAttack(definition)
+        return { body: plantRectAt(definition.body, team, plant.x, plant.y), ...attack ? { attack: plantRectAt(attack, team, plant.x, plant.y) } : {} }
+    }
 
     private get clips(): Record<string, ClientAnimationClip | undefined> {
         const { content, plant } = this.context

@@ -5,7 +5,7 @@ import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 import { plantKindPhases } from './plantKinds'
 import { ZOMBIE_STATES } from './zombieStates'
-import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type ModField, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition } from '@/shared/content/gameplayTypes'
+import { CHOOSER_PLACES, PLANT_ATTACKS, STORE_PAGE_PLACES, TOOL_KINDS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AlmanacZombieEntry, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type FreezeDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type ModField, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type StoreItemDefinition, type StorePageDefinition, type StorePurchase, type ToolDefinition, type UnlockedEntry, type ZenGardenPlant, type ZombieDefinition, type ZombieRise } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
 
@@ -125,7 +125,7 @@ export function parseGameplayLevels(
 const UNLOCKED_ENTRIES: readonly string[] = ['almanac', 'store', 'garden'] satisfies UnlockedEntry[]
 
 function parseBoard(value: unknown, name: string): BoardDefinition {
-    const source = exact(value, ['rows', 'columns', 'origin', 'cell', 'bounds'], name, ['night'])
+    const source = exact(value, ['rows', 'columns', 'origin', 'cell', 'bounds', 'riseFromGrave'], name, ['night'])
     if (source.night !== undefined && typeof source.night !== 'boolean') throw new Error(`${name}.night must be boolean`)
     const bounds = exact(source.bounds, ['left', 'right'], `${name}.bounds`)
     const left = finite(bounds.left, `${name}.bounds.left`), right = finite(bounds.right, `${name}.bounds.right`)
@@ -141,6 +141,16 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
             width: positiveFinite(cell.width, `${name}.cell.width`),
             height: positiveFinite(cell.height, `${name}.cell.height`),
         },
+        riseFromGrave: zombieRise(source.riseFromGrave, `${name}.riseFromGrave`),
+    }
+}
+
+function zombieRise(value: unknown, name: string): ZombieRise {
+    const source = exact(value, ['depth', 'riseTicks', 'settleTicks'], name)
+    return {
+        depth: finite(source.depth, `${name}.depth`),
+        riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`),
+        settleTicks: nonNegativeInteger(source.settleTicks, `${name}.settleTicks`),
     }
 }
 
@@ -460,12 +470,13 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     }
     if (source.vault !== undefined) {
         const vault = exact(source.vault,
-            ['runSpeedPerTick', 'attack', 'landedAttack', 'landingOffset'], `${name}.vault`,
+            ['runSpeedPerTick', 'attack', 'airborneAttack', 'landedAttack', 'landingOffset'], `${name}.vault`,
             ['bowlingAttack', 'evades'])
         result.vault = {
             runSpeedPerTick: speedRange(vault.runSpeedPerTick, `${name}.vault.runSpeedPerTick`),
             attack: rect(vault.attack, `${name}.vault.attack`),
             ...vault.bowlingAttack === undefined ? {} : { bowlingAttack: rect(vault.bowlingAttack, `${name}.vault.bowlingAttack`) },
+            airborneAttack: rect(vault.airborneAttack, `${name}.vault.airborneAttack`),
             landedAttack: rect(vault.landedAttack, `${name}.vault.landedAttack`),
             landingOffset: finite(vault.landingOffset, `${name}.vault.landingOffset`),
             ...vault.evades === undefined ? {} : { evades: qualifiedIdArray(vault.evades, `${name}.vault.evades`) },
@@ -473,9 +484,9 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     }
     if (source.scale !== undefined) result.scale = positiveFinite(source.scale, `${name}.scale`)
     if (source.dance !== undefined) {
-        const dance = exact(source.dance, [], `${name}.dance`, ['lead'])
+        const dance = exact(source.dance, [], `${name}.dance`, ['lead', 'rise'])
         if (result.vault || result.enrage) throw new Error(`${name}.dance cannot go with vault or enrage`)
-        result.dance = {}
+        result.dance = dance.rise === undefined ? {} : { rise: zombieRise(dance.rise, `${name}.dance.rise`) }
         if (dance.lead !== undefined) {
             const lead = exact(dance.lead, ['moonwalkTicks', 'backup', 'troupe', 'holdTicks', 'summonTicks', 'summonBeforeX', 'riseTicks'], `${name}.dance.lead`)
             const troupe = array(lead.troupe, `${name}.dance.lead.troupe`).map((place, index) => {

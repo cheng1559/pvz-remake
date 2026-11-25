@@ -117,6 +117,29 @@ test('a homing projectile whose target dies flies on as it was going, where it w
     assert.ok(Math.abs(Math.hypot(after.x - x, after.y - y) - 50 * 2) < 1e-6, 'fifty ticks straight on at its speed of 2')
 })
 
+test('a projectile hits by where it stood as the tick began, in whole pixels (Projectile::mX)', () => {
+    const { definitions, world, schedule, health } = flying(false)
+    // The body runs from 336 to 378 (Zombie::mX 300); the pea's rect, from mX - 15 to mX + 40, overlaps it from mX 297.
+    const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 300.5, 250)
+    launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
+    // At 3.33 a tick it begins tick 60 at 296.47 and tick 61 at 299.8.
+    for (let tick = 1; tick <= 60; tick++) schedule.run(world, tick)
+    assert.equal(health(zombie), 270)
+    schedule.run(world, 61)
+    assert.equal(health(zombie), 250)
+})
+
+test("a homing projectile hits only once its own y lies between its target's top and bottom, not as soon as its rect reaches the body", () => {
+    for (const [y, hit] of [[240, false], [260, true]] as const) {
+        const { definitions, world, schedule, health } = flying(false)
+        // The body runs from 336 to 378 across and from 250 to 365 down; the pea's rect overlaps it across.
+        const target = spawnZombie(world, definitions, 'pvz:normal', 2, 300, 250)
+        launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 330, y, row: 2 }, motion: HOMING, target })
+        schedule.run(world, 1)
+        assert.equal(health(target), hit ? 250 : 270, `from ${y}`)
+    }
+})
+
 test('a lobbed projectile comes down past a shield onto the body, where a straight one hits the shield', () => {
     const { definitions } = firing('shooter')
     const hit = (motion: string) => {

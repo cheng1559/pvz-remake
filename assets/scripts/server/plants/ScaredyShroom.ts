@@ -1,11 +1,12 @@
 import type { SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
-import { isHostile, plantFacingX, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantFacingX, plantTeam, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { SCAREDY_SHROOM_PHASES, type ScaredyShroomPhase } from '@/shared/content/plantKinds'
 import { circleRectOverlap } from '../combat/collision'
+import { zombieRect } from '../combat/targets'
 import { RandomResource } from '../state/resources'
 import type { Plant, PlantConfig } from './Plant'
 import { Shooter } from './Shooter'
@@ -89,8 +90,8 @@ function zombieNear(world: World, definitions: GameplayDefinitions, plant: Plant
     for (const zombie of world.zombies) {
         const at = zombie.position
         if (Math.abs(at.row - position.row) > fright.rowRange || isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), team)) continue
-        const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        if (circleRectOverlap(x, y, fright.radius, { x: at.x + body.x, y: at.y + body.y, width: body.width, height: body.height })) return true
+        // Zombie::GetZombieRect, in whole pixels.
+        if (circleRectOverlap(x, y, fright.radius, zombieRect(world, definitions, zombie))) return true
     }
     return false
 }

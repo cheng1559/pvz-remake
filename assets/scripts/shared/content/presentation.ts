@@ -499,15 +499,13 @@ export interface LevelRulePresentation {
     readonly [key: string]: unknown
 }
 /**
- * Zombie::UpdateZombieRiseFromGrave: a rising zombie's body comes up from `depth` below over the last `riseTicks` of
- * its rise. Zombie::GetDrawPos and DrawReanim draw it inside a clip `x` across from the zombie and `width` wide, from
- * `y` from the top of its body (which comes up with it) down to `bottom` under the zombie less the ticks it has still
- * to rise, at most `settleTicks`, so the clip's bottom comes down over its last ticks. Down is positive.
+ * A rising zombie's body, coming up as its rise has it (ZombieRise: BoardDefinition.riseFromGrave, ZombieDance.rise):
+ * Zombie::GetDrawPos and DrawReanim draw it inside a clip `x` across from the zombie and `width` wide, from `y` from the
+ * top of its body (which comes up with it) down to `bottom` under the zombie less the ticks it has still to rise, at
+ * most its rise's `settleTicks`, so the clip's bottom comes down over its last ticks. Down is positive.
  */
 export interface GraveZombiePresentation {
-    readonly depth: number
-    readonly riseTicks: number
-    readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number; readonly settleTicks: number }
+    readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number }
 }
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets and clips are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
@@ -841,9 +839,8 @@ function graveRise(value: unknown, name: string): PresentationDefinitions['grave
 
 function graveZombie(value: unknown, name: string): GraveZombiePresentation {
     return allFields<GraveZombiePresentation>(value, name, {
-        depth: nonNegativeFinite, riseTicks: positiveInteger,
         clip: (value, name) => allFields<GraveZombiePresentation['clip']>(value, name, {
-            x: finite, y: finite, width: positiveFinite, bottom: finite, settleTicks: nonNegativeInteger,
+            x: finite, y: finite, width: positiveFinite, bottom: finite,
         }),
     })
 }

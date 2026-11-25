@@ -3,7 +3,7 @@ import type { GameSystem, World } from '@/server/state/World'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
-import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { zombieRect } from '../combat/targets'
 import { mowsZombie } from '../projectiles/MowingProjectile'
 import { readyMowers } from '../level/lawn'
 import { Mower } from './Mower'
@@ -37,9 +37,9 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
                 if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
                 const waiting = world.mowers.get(mower)!, hitbox = definitions.projectiles[waiting.typeId].hitbox
-                const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-                const left = waiting.position.x + hitbox.x
-                if (Math.min(left + hitbox.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
+                // LawnMower::GetLawnMowerAttackRect against Zombie::GetZombieRect, both in whole pixels.
+                const left = Math.trunc(waiting.position.x) + hitbox.x, body = zombieRect(world, definitions, zombie)
+                if (Math.min(left + hitbox.width, body.x + body.width) > Math.max(left, body.x)) {
                     ready.delete(position.row)
                     waiting.setOff(world, definitions, zombie)
                 }

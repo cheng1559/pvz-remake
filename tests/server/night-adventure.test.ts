@@ -362,6 +362,22 @@ test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, 
     assert.equal(state(), 'calm')
 })
 
+test("a spore's rect is the plain 40 square (Projectile::GetProjectileRect), fired from Plant::Fire's corner", () => {
+    assert.deepEqual(definitions.projectiles['pvz:spore'].hitbox, { x: 0, y: 0, width: 40, height: 40 })
+    for (const [typeId, x, y] of [['pvz:puffshroom', 40, 40], ['pvz:scaredyshroom', 29, 21]] as const) {
+        const world = worldFor(true), schedule = new Schedule(), queue = world.resources.get(EventQueueResource)
+        schedule.add('plant', createPlantAttackSystem(definitions))
+        plantAt(world, typeId, 40)
+        spawnZombie(world, definitions, 'pvz:normal', 0, 200, 50)
+        let fired: Record<string, unknown> | undefined
+        for (let tick = 1; tick < 400 && !fired; tick++) {
+            schedule.run(world, tick)
+            fired = drainServerEvents(queue).find(event => event.type === 'projectileFired')?.data
+        }
+        assert.deepEqual([fired?.x, fired?.y], [40 + x, 80 + y], typeId)
+    }
+})
+
 test('sun-shrooms drop small sun until they grow, produce nothing while growing, and neither grow nor produce asleep', () => {
     const growth = definitions.plants['pvz:sunshroom'].producer!.growth!
     for (const night of [false, true]) {

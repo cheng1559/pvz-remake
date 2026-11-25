@@ -154,7 +154,7 @@
 
 - 最后一波出现 200 逻辑步后，草坪上每一座已完全升起的墓碑（不限于本关开局的墓碑）都会召唤一只僵尸，按关卡 `graveZombies` 的权重抽取，用 150 逻辑步爬出地面。奖励掉落后不再有僵尸爬出。墓碑召唤的僵尸属于墓碑所在的阵营。
 - `graveZombies` 列出的僵尸使用各自的出怪权重；未指定时，使用出怪池中可以从墓碑爬出的僵尸（`graveRise`：普通、路障、铁桶僵尸）。
-- `GraveView` 绘制原版的墓碑与土堆图集，`ZombieView` 按表现定义中的 `graves.zombie` 裁剪正在爬出的身体：起始深度和裁剪范围，取自原版 `Zombie::UpdateZombieRiseFromGrave`、`GetDrawPos` 和 `DrawReanim` 中的数值。裁剪以棋盘像素计，与僵尸的缩放无关。资源包可以修改这些数值。
+- 僵尸按所在场地的 `riseFromGrave` 爬出（`Zombie::UpdateZombieRiseFromGrave`、`GetDrawPos`）：身体框和攻击框随身体上升，不含被地面遮住的部分。`GraveView` 绘制原版的墓碑与土堆图集，`ZombieView` 按表现定义中的 `graves.zombie.clip` 裁剪正在爬出的身体，取自原版 `DrawReanim` 中的数值。裁剪以棋盘像素计，与僵尸的缩放无关。资源包可以修改裁剪范围。
 
 #### 2-1
 
@@ -397,6 +397,7 @@
 
 - **睡眠。**夜间植物（`nocturnal`，即蘑菇类）种在非夜间的草坪上会睡着（`Plant::mIsAsleep`、`isPlantAsleep`，这是服务端判断植物是否睡着的唯一依据）：它什么也不做，眨眼动作暂停，僵尸会像吃普通植物一样吃掉它，即使清醒时僵尸本该放过它。
 - **发射时在口部留下烟雾**（`Plant::Fire`）：胆小菇的 `PARTICLE_PUFFSHROOM_MUZZLE` 位于子弹角点 (27, 13) 处，小喷菇的位于 (18, 13)，寒冰射手的 `PARTICLE_SNOWPEA_PUFF` 位于 (8, 13)，绘制在该行小推车之上。这就是植物表现定义中的 `muzzle`，放置在 `projectileFired` 事件所报告的发射位置。
+- **子弹按本逻辑步开始时所在的位置命中**（`Projectile::mX`、`GetProjectileRect`）：子弹先移动，再用这个整数像素位置上的碰撞框找命中目标；开动的小推车也用这个位置，先找再移动。追踪子弹只有在自身的 y 位于目标上下边之间时才命中目标。
 - **僵尸方的产阳光植物**（向日葵、阳光菇）不产出阳光。每次本该产出时，它们会从玩家的阳光中扣除这份阳光的价值（25，小阳光菇为 15），最低扣到 0（`sunDrained` 事件），照常发光，让阳光计数闪红，并播放蜂鸣音效。**与原版不同**：原版的植物没有阵营之分（见[阵营与迷糊菇](TEAMS.zh-CN.md)）。
 - **存档。**阳光菇的生长、咬咬碑的进度等能力状态都会随存档保存。
 - **图鉴与关卡外观一致。**已实现的植物在图鉴中使用其关卡动画，身体坐标、缩放和影子也相同。
@@ -487,9 +488,10 @@
 - `pvz:bowling-wallnut` 和 `pvz:bowling-explodenut` 是独立的植物和种子，在玩法和表现 JSON 中配置。它们只复用坚果的美术资源；普通坚果不参与保龄球。
 - 其类型为 `bowlingnut`（服务端 `BowlingNut`，客户端 `BowlingNutView`），字段 `direction` 和 `hits` 分别表示滚动方向和已撞击次数。
 - 其 `bowling` 必须给出攻击矩形 `attack`（`Plant::GetPlantAttackRect`）。`bounceSpeed`（2）、`damage`（1800）、`helmDamage`（900）和 `shieldDamage`（400）在植物未自行指定时取 `Plant::UpdateBowling` 中的数值。`bouncedBreaks` 列出反弹后的完整撞击可以击穿的盾牌（普通保龄球坚果为 `["door"]`），未指定时为空。
+- 坚果撞击攻击矩形碰到的最靠左的敌方僵尸或植物，掉了头的僵尸也算（`Plant::FindTargetZombie`）。
 - 爆炸坚果在第一次接触时爆炸，自身不造成撞击伤害。
 - 这些设置在内容加载时按精确的键名校验，而不是在种下时。
-- 坚果按其身体图层滚动动画的 `ground`（`wallnut_roll` 的 `_ground`）滚动，使用与僵尸行走相同的 `groundStep`（`Reanimation::GetTrackVelocity`）。
+- 坚果按其身体图层滚动动画的 `ground`（`wallnut_roll` 的 `_ground`）滚动，使用与僵尸行走相同的 `groundStep`（`Reanimation::GetTrackVelocity`）。它按整数像素移动（`Plant::mX`），每个逻辑步舍去不足一像素的部分：每步 2 或 3 像素。
 - 向下一行滚动时，坚果与上一行一起绘制（`BowlingNutView.drawnRow`，`Plant::UpdateBowling`）。放下时的滚动音效（`Board::MouseDownWithPlant` 中的 `SOUND_BOWLING`）是坚果自己的 `plantedSounds`。
 - 标记：`occupiesCell: false` 让移动中的植物不占格子，也不会被啃咬；`low: true` 表示低矮植物，敌对子弹会从其上方飞过（见[阵营与迷糊菇](TEAMS.zh-CN.md)）；表现定义中的 `layer: "projectile"` 让滚动的坚果绘制在其所在行的子弹图层上（保龄球关卡中的 `Plant::CalcRenderOrder`）。
 
@@ -515,7 +517,7 @@
 僵尸在年龄每满 4 逻辑步时寻找啃食目标，被减速时每满 8 逻辑步（`bite.cadenceTicks`，`Zombie::CheckIfPreyCaught`）：
 
 - 只有头还在时才寻找。没有头的僵尸保持原来的状态，继续啃食或行走。
-- 先找敌方僵尸，再找植物。攻击框从本逻辑步开始时所在的整数像素位置算起（`Zombie::mX`），取重叠至少 20 的植物中槽位最靠前的一株。
+- 先找敌方僵尸，再找植物。攻击框从本逻辑步开始时所在的整数像素位置算起（`Zombie::mX`），取重叠至少 20 的植物中槽位最靠前的一株。同一格里叠着几株时，取其中槽位最靠后的那株（`Board::GetTopPlantAt`）。
 - 找到目标时，当步开始啃食并立刻咬一口，造成 4 点伤害（`bite.damage`）。醒着的魅惑菇被咬不受伤害。
 - 正在啃食却找不到目标时停止啃食，从下一逻辑步起继续行走。两次寻找之间保持原来的状态。
 - 啃食动画每次咀嚼时重新寻找正在啃的植物，使其闪白（`Zombie::AnimateChewSound`）。

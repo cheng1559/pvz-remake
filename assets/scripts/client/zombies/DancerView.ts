@@ -108,7 +108,12 @@ export class DancerView extends ZombieView {
 
     /** One called up into a troupe comes up out of the ground (DancePresentation.rise, PHASE_DANCER_RISING). */
     protected rise(zombie: ShownZombie): GraveZombiePresentation {
-        return this.dancePhase(zombie) === 'rise' && this.presentation.dance?.rise || super.rise(zombie)
+        return this.calledUp(zombie) && this.presentation.dance?.rise || super.rise(zombie)
+    }
+
+    /** Coming up out of the ground as its leader calls it up (its `rise` phase: Dancer.calledUp). */
+    protected calledUp(zombie: ShownZombie): boolean {
+        return this.dancePhase(zombie) === 'rise'
     }
 
     /**

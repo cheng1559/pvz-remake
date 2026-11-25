@@ -220,6 +220,11 @@ export class Zombie {
         return this.definition.attack
     }
 
+    /** While it rises, whether it was called up into a troupe (PHASE_DANCER_RISING) rather than out of a grave (zombieRise). */
+    calledUp(): boolean {
+        return false
+    }
+
     /** Zombie::EatPlant: a plant in its way it does not bite, true if so (a leader's moonwalk ends there). */
     passesPlant(): boolean {
         return false

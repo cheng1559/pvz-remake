@@ -177,36 +177,37 @@ import * as m173 from '@/shared/content/from'
 import * as m174 from '@/shared/content/gameplay'
 import * as m175 from '@/shared/content/gameplayTypes'
 import * as m176 from '@/shared/content/graves'
-import * as m177 from '@/shared/content/levelHelpers'
-import * as m178 from '@/shared/content/music'
-import * as m179 from '@/shared/content/parseGameplay'
-import * as m180 from '@/shared/content/particle'
-import * as m181 from '@/shared/content/plantAnimation'
-import * as m182 from '@/shared/content/plantKinds'
-import * as m183 from '@/shared/content/planting'
-import * as m184 from '@/shared/content/presentation'
-import * as m185 from '@/shared/content/reanim'
-import * as m186 from '@/shared/content/renderOrder'
-import * as m187 from '@/shared/content/seedGroups'
-import * as m188 from '@/shared/content/strings'
-import * as m189 from '@/shared/content/teams'
-import * as m190 from '@/shared/content/zombieAnimation'
-import * as m191 from '@/shared/content/zombieStates'
-import * as m192 from '@/shared/debug/DebugCli'
-import * as m193 from '@/shared/kernel'
-import * as m194 from '@/shared/kernel/binary'
-import * as m195 from '@/shared/kernel/particles'
-import * as m196 from '@/shared/menu'
-import * as m197 from '@/shared/mod'
-import * as m198 from '@/shared/mod/ModAssets'
-import * as m199 from '@/shared/mod/ModHost'
-import * as m200 from '@/shared/mod/content'
-import * as m201 from '@/shared/protocol'
-import * as m202 from '@/shared/protocol/json'
-import * as m203 from '@/shared/protocol/packets'
-import * as m204 from '@/shared/protocol/snapshot'
-import * as m205 from '@/shared/random'
-import * as m206 from '@/shared/validate'
+import * as m177 from '@/shared/content/hitRects'
+import * as m178 from '@/shared/content/levelHelpers'
+import * as m179 from '@/shared/content/music'
+import * as m180 from '@/shared/content/parseGameplay'
+import * as m181 from '@/shared/content/particle'
+import * as m182 from '@/shared/content/plantAnimation'
+import * as m183 from '@/shared/content/plantKinds'
+import * as m184 from '@/shared/content/planting'
+import * as m185 from '@/shared/content/presentation'
+import * as m186 from '@/shared/content/reanim'
+import * as m187 from '@/shared/content/renderOrder'
+import * as m188 from '@/shared/content/seedGroups'
+import * as m189 from '@/shared/content/strings'
+import * as m190 from '@/shared/content/teams'
+import * as m191 from '@/shared/content/zombieAnimation'
+import * as m192 from '@/shared/content/zombieStates'
+import * as m193 from '@/shared/debug/DebugCli'
+import * as m194 from '@/shared/kernel'
+import * as m195 from '@/shared/kernel/binary'
+import * as m196 from '@/shared/kernel/particles'
+import * as m197 from '@/shared/menu'
+import * as m198 from '@/shared/mod'
+import * as m199 from '@/shared/mod/ModAssets'
+import * as m200 from '@/shared/mod/ModHost'
+import * as m201 from '@/shared/mod/content'
+import * as m202 from '@/shared/protocol'
+import * as m203 from '@/shared/protocol/json'
+import * as m204 from '@/shared/protocol/packets'
+import * as m205 from '@/shared/protocol/snapshot'
+import * as m206 from '@/shared/random'
+import * as m207 from '@/shared/validate'
 
 /** Every module a client Mod may get from its host, by its path under assets/scripts. */
 export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
@@ -387,34 +388,35 @@ export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'shared/content/gameplay': m174,
     'shared/content/gameplayTypes': m175,
     'shared/content/graves': m176,
-    'shared/content/levelHelpers': m177,
-    'shared/content/music': m178,
-    'shared/content/parseGameplay': m179,
-    'shared/content/particle': m180,
-    'shared/content/plantAnimation': m181,
-    'shared/content/plantKinds': m182,
-    'shared/content/planting': m183,
-    'shared/content/presentation': m184,
-    'shared/content/reanim': m185,
-    'shared/content/renderOrder': m186,
-    'shared/content/seedGroups': m187,
-    'shared/content/strings': m188,
-    'shared/content/teams': m189,
-    'shared/content/zombieAnimation': m190,
-    'shared/content/zombieStates': m191,
-    'shared/debug/DebugCli': m192,
-    'shared/kernel': m193,
-    'shared/kernel/binary': m194,
-    'shared/kernel/particles': m195,
-    'shared/menu': m196,
-    'shared/mod': m197,
-    'shared/mod/ModAssets': m198,
-    'shared/mod/ModHost': m199,
-    'shared/mod/content': m200,
-    'shared/protocol': m201,
-    'shared/protocol/json': m202,
-    'shared/protocol/packets': m203,
-    'shared/protocol/snapshot': m204,
-    'shared/random': m205,
-    'shared/validate': m206,
+    'shared/content/hitRects': m177,
+    'shared/content/levelHelpers': m178,
+    'shared/content/music': m179,
+    'shared/content/parseGameplay': m180,
+    'shared/content/particle': m181,
+    'shared/content/plantAnimation': m182,
+    'shared/content/plantKinds': m183,
+    'shared/content/planting': m184,
+    'shared/content/presentation': m185,
+    'shared/content/reanim': m186,
+    'shared/content/renderOrder': m187,
+    'shared/content/seedGroups': m188,
+    'shared/content/strings': m189,
+    'shared/content/teams': m190,
+    'shared/content/zombieAnimation': m191,
+    'shared/content/zombieStates': m192,
+    'shared/debug/DebugCli': m193,
+    'shared/kernel': m194,
+    'shared/kernel/binary': m195,
+    'shared/kernel/particles': m196,
+    'shared/menu': m197,
+    'shared/mod': m198,
+    'shared/mod/ModAssets': m199,
+    'shared/mod/ModHost': m200,
+    'shared/mod/content': m201,
+    'shared/protocol': m202,
+    'shared/protocol/json': m203,
+    'shared/protocol/packets': m204,
+    'shared/protocol/snapshot': m205,
+    'shared/random': m206,
+    'shared/validate': m207,
 }
