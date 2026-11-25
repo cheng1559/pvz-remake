@@ -87,7 +87,7 @@ export interface LevelEntitySnapshot {
 export type LevelParticleOwnerSnapshot =
     | {
         kind: 'screen'
-        slot: 'board' | 'entity-layer' | 'coin-layer' | 'hud' | 'seed-packet' | `seed-packet-${number}` | 'award-layer' | 'overlay-layer'
+        slot: 'board' | 'entity-layer' | 'coin-layer' | 'hud' | 'seed-packet' | `seed-packet-${number}` | 'award-layer' | 'rule-effects' | 'overlay-layer'
         x: number
         y: number
         z: number
@@ -318,7 +318,7 @@ function parseParticleOwner(value: unknown, particleName: string): LevelParticle
     if (tagged.kind === 'screen') {
         const source = exact(value, ['kind', 'slot', 'x', 'y', 'z'], name)
         const slots = new Set([
-            'board', 'entity-layer', 'coin-layer', 'hud', 'seed-packet', 'award-layer', 'overlay-layer',
+            'board', 'entity-layer', 'coin-layer', 'hud', 'seed-packet', 'award-layer', 'rule-effects', 'overlay-layer',
         ])
         if (typeof source.slot !== 'string' || !slots.has(source.slot) && !/^seed-packet-[1-9]\d*$/.test(source.slot)) throw new TypeError(`${name}.slot is invalid`)
         return {

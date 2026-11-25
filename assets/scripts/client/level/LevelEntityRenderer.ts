@@ -48,6 +48,8 @@ export class LevelEntityRenderer implements LevelStage {
     private readonly entities = new Map<number, Entity>()
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
+    uiOnLawn = (x: number, y: number): { x: number, y: number } => ({ x, y })
+    lawnScale = (): number => 1
     levelEndTicks = (): number => -1
     shake: LevelStage['shake'] = () => {}
     private readonly creationTasks = new Map<number, Promise<void>>()

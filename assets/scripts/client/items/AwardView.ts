@@ -74,13 +74,14 @@ export class AwardView implements EntityView<ItemSnapshot> {
         const { node, stage } = this.context, award = stage.level.award, size = levelAwardSize(award)
         const ticks = stage.levelEndTicks(), collected = item.state === 'collecting' && ticks >= 0
         let { x, y, scale } = item
-        // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size; a
-        // note fades out where it is instead.
+        // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size on
+        // the screen, wherever the lawn is moved or scaled; a note fades out where it is instead.
         this.collectProgress = collected && award.kind !== 'note' ? animateCurveFloat(0, AWARD_MOVE_TICKS, ticks, 0, 1, 'ease-out') : 0
         if (collected && award.kind !== 'note') {
-            x += (400 - size.width / 2 - x) * this.collectProgress
-            y += (200 - size.height / 2 - y) * this.collectProgress
-            scale = animateCurveFloat(0, AWARD_GROW_TICKS, ticks, 1.01, 2, 'ease-in-out')
+            const middle = stage.uiOnLawn(400, 200)
+            x += (middle.x - size.width / 2 - x) * this.collectProgress
+            y += (middle.y - size.height / 2 - y) * this.collectProgress
+            scale = animateCurveFloat(0, AWARD_GROW_TICKS, ticks, 1.01, 2 / stage.lawnScale(), 'ease-in-out')
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: collected && award.kind === 'note' ? Math.round(item.alpha * Math.max(0, 1 - ticks / 15)) : item.alpha })

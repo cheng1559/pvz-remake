@@ -1000,8 +1000,11 @@ test('a collected item says how far it is on its way to its counter, which the s
     })
     const node = { position: { x: 0, y: 0 }, setPosition(x: number, y: number) { this.position = { x, y } }, setScale() {} }
     const content = { definitions: { items: { 'test:sun': { kind: 'sun' }, 'test:coin': { kind: 'money' } } }, presentation: { items: { 'test:sun': {}, 'test:coin': {} } } }
-    const shown = (typeId: string) => {
-        const view = new ItemView({ node, content, item: { typeId }, stage: { sunBankOffset: () => 100 } })
+    // The lawn shown at half size, its top left 20 right of and 10 below the screen's: a point of the screen UI is on
+    // the lawn twice as far from there.
+    const uiOnLawn = (x: number, y: number) => ({ x: (x - 20) * 2, y: (y - 10) * 2 })
+    const shown = (typeId: string, stage: object = { sunBankOffset: () => 100, uiOnLawn: (x: number, y: number) => ({ x, y }) }) => {
+        const view = new ItemView({ node, content, item: { typeId }, stage })
         view.animation = {}
         return view
     }
@@ -1018,6 +1021,16 @@ test('a collected item says how far it is on its way to its counter, which the s
     coin.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
     assert.ok(Math.abs(coin.collectProgress - 2 / 3) < 1e-9, 'money, to the coin bank')
     assert.equal(node.position.x, 39 + 100 + 30, 'which is not pinned')
+    // With the lawn moved and scaled, both head for where their counters are on it, across and down.
+    const far = shown('test:sun', { sunBankOffset: () => 100, uiOnLawn })
+    far.sync(at(315, 400))
+    far.sync(at(165, 200))
+    assert.deepEqual([node.position.x, node.position.y], [165 + 30 + ((115 - 20) * 2 - 15) * 0.5, -(200 + 30 + (0 - 10) * 2 * 0.5)])
+    const coins = shown('test:coin', { sunBankOffset: () => 100, uiOnLawn })
+    coins.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
+    coins.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
+    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 + ((39 - 20) * 2 - 39) * 2 / 3)) < 1e-9, 'money too, not pinned')
+    assert.ok(Math.abs(node.position.y + (558 + 30 + ((558 - 10) * 2 - 558) * 2 / 3)) < 1e-9)
 })
 
 test("a projectile's impact sounds and splats without a view of the projectile, the board's own over its row", () => {

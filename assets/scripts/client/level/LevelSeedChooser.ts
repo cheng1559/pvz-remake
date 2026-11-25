@@ -87,6 +87,13 @@ export class LevelSeedChooser {
     private warningOpen = false
     private readonly panel: Node
     private readonly edge: Node
+    /**
+     * The panel and what stands on it: the cards, those chosen into the bank too, their flights, Let's Rock and the page
+     * turners. The almanac and store buttons stand by the screen's bottom instead, in `pageButtonLayer` beside it, which
+     * slides with the panel; a Mod can resize the panel's layer alone (the widescreen Mod's high view).
+     */
+    private readonly panelLayer: Node
+    private readonly pageButtonLayer: Node
     private readonly cards: Node
     private readonly flying: Node
     /**
@@ -130,14 +137,16 @@ export class LevelSeedChooser {
         })
         // The chooser hugs the left screen edge together with the seed bank, keeping their relative position.
         this.edge = uiAreaEdge(parent, 'left')
-        this.panel = uiNode({ name: 'SeedChooser', parent: this.edge, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
+        this.panelLayer = uiNode({ name: 'ChooserPanelLayer', parent: this.edge }).node
+        this.panel = uiNode({ name: 'SeedChooser', parent: this.panelLayer, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         ui.image(this.panel, background, { y: 87 })
         ui.label(this.panel, { text: ui.text('CHOOSE_YOUR_PLANTS'), font: 'yellow', color: Color.WHITE, x: 229, y: 110, baseline: true, align: 'center' })
         const shadows = uiNode({ name: 'ChooserShadows', parent: this.panel }).node
-        this.cards = uiNode({ name: 'ChooserCards', parent: this.edge, active: false }).node
-        this.cardIcons = uiNode({ name: 'ChooserCardIcons', parent: this.edge }).node
-        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.edge, active: false }).node
-        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
+        this.cards = uiNode({ name: 'ChooserCards', parent: this.panelLayer, active: false }).node
+        this.cardIcons = uiNode({ name: 'ChooserCardIcons', parent: this.panelLayer }).node
+        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.panelLayer, active: false }).node
+        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.panelLayer, active: false }).node
+        this.pageButtonLayer = uiNode({ name: 'ChooserPageButtons', parent: this.edge, active: false }).node
         this.gridShadows = uiNode({ name: 'GridSilhouettes', parent: shadows }).node
         this.addEmptySlots()
         // A card's two views, its grid shadow and the card itself, with its tooltip and button.
@@ -182,7 +191,7 @@ export class LevelSeedChooser {
         for (const [shown, key, x, open] of [[pages.almanac, 'ALMANAC_BUTTON', 560, () => this.onAlmanac()],
             [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
             if (!shown) continue
-            const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
+            const button = ui.button(this.pageButtonLayer, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
             this.pageButtons.push(button)
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen && !this.inFlight
         }
@@ -449,9 +458,11 @@ export class LevelSeedChooser {
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active
         this.buttons.active = this.panel.active
+        this.pageButtonLayer.active = this.panel.active
         const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
+        this.pageButtonLayer.setPosition(0, y)
         for (const choice of this.choices) {
             // A card waiting in the grid shows only while the grid lists it.
             choice.view.node.active = this.panel.active && (choice.slot < 0 ? !!choice.home || !!choice.motion : this.choosing)

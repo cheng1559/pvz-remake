@@ -85,6 +85,13 @@ export interface LevelStage {
     readonly graveRise: { readonly particle: string, readonly sounds: readonly PresentationSound[] }
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset(): number
+    /**
+     * Where a point of the screen UI, in the HUD's 800x600 layout (y down), is on the lawn, wherever a Mod moves or
+     * scales the lawn (LevelView.setWorldView): what sun, money and the award fly to.
+     */
+    uiOnLawn(x: number, y: number): { x: number, y: number }
+    /** The size the lawn is shown at (LevelView.setWorldView); the screen UI keeps its own. */
+    lawnScale(): number
     /** Ticks since the level was won (Board::UpdateLevelEndSequence), -1 before. */
     levelEndTicks(): number
     /** Board::ShakeBoard by (x, y), felt as `haptic`: of a frame's shakes, the strongest is felt once. */

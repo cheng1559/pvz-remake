@@ -67,10 +67,12 @@ export class ItemView implements EntityView<ItemSnapshot> {
         const { node, content } = this.context, definition = this.presentation
         uiNode({ node, opacity: item.alpha })
         this.collectProgress = this.progress(item)
-        // The server flies sun to the layout's counter; it is eased toward the counter's actual position (possibly
-        // pinned to the screen's edge) along the way.
-        const sun = content.definitions.items[item.typeId]?.kind !== 'money'
-        node.setPosition(item.x + HALF + (sun ? this.context.stage.sunBankOffset() * this.collectProgress : 0), -(item.y + HALF))
+        // The server flies sun and money to the layout's counters; each is eased toward where its counter actually is on
+        // the lawn along the way: the sun counter pinned to the screen's edge, both wherever the lawn is moved or scaled.
+        const itemDefinition = content.definitions.items[item.typeId], target = collectTarget(itemDefinition)
+        const stage = this.context.stage
+        const counter = stage.uiOnLawn(target.x + (itemDefinition?.kind !== 'money' ? stage.sunBankOffset() : 0), target.y)
+        node.setPosition(item.x + HALF + (counter.x - target.x) * this.collectProgress, -(item.y + HALF + (counter.y - target.y) * this.collectProgress))
         node.setScale(item.scale, item.scale, 1)
         // Moving silver and gold coins use the flat dollar image and hide the spinning animation.
         const flying = !!this.flight && (!item.landed || item.state === 'collecting')

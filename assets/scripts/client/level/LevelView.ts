@@ -5,7 +5,7 @@ import { LevelHitboxes } from './LevelHitboxes'
 import { LevelHealthBars } from './LevelHealthBars'
 import { LevelCoinBank } from './LevelCoinBank'
 import { LevelProgressMeter } from './LevelProgressMeter'
-import { Color, Component, instantiate, Mask, Node, Sprite, Tween } from 'cc'
+import { Color, Component, instantiate, Mask, Node, Sprite, Tween, Vec3 } from 'cc'
 import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -74,7 +74,11 @@ export class LevelView {
     private pinScreen = () => {}
     /** How far the lawn sits right of its original gameplay position (wide viewports); the screen UI stays put. */
     private lawnShift = 0
-    get worldShift(): number { return this.lawnShift }
+    /** The size the lawn is shown at (a high view's 600/720); the screen UI keeps its own. */
+    private lawnScale = 1
+    /** The board: the lawn, with the screen UI pinned in it (pinScreen); the HUD, the screen UI's 800x600 layout. */
+    private boardNode?: Node
+    private hudNode?: Node
     private presentationPaused = false
     private gameplayTick = 0
     private money?: number
@@ -296,7 +300,7 @@ export class LevelView {
             layout,
             new Map<Extract<LevelParticleOwnerSnapshot, { kind: 'screen' }>['slot'], Node>([
                 ['board', board], ['entity-layer', entityLayer], ['coin-layer', coinLayer],
-                ['hud', hud], ['award-layer', awardLayer],
+                ['hud', hud], ['award-layer', awardLayer], ['rule-effects', ruleEffects],
                 ...hudPresenter.seedBank.packets.map((packet, index) => [index === 0 ? 'seed-packet' : `seed-packet-${index}` as const, packet.view.node] as const),
                 ['overlay-layer', overlayLayer],
             ]),
@@ -306,6 +310,8 @@ export class LevelView {
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
         entityRenderer.sunBankOffset = () => bankLeft.position.x
+        entityRenderer.uiOnLawn = (x, y) => view.uiOnLawn(x, y)
+        entityRenderer.lawnScale = () => view.lawnScale
         entityRenderer.shake = (x, y, haptic) => view.shakeBoard(x, y, haptic)
         view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
@@ -317,16 +323,29 @@ export class LevelView {
             view.rule = await createLevelRuleView({ kind: level.rules.kind, config: rulePresentation ?? {}, content, ui, initial, audio,
                 cursorLayer, effectLayer: ruleEffects, ground: slots.sodClip, bank, bankHeight })
         }
-        // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift, and the seed
-        // chooser holds them through its whole camera pan; restoring a completed intro clears that hold. The HUD's lawn
-        // layers (items, awards, cursors) undo the pin, so anything else added to the HUD stays on screen.
+        // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift and scale, and the
+        // seed chooser holds them through its whole camera pan; restoring a completed intro clears that hold. The HUD's
+        // lawn layers (items, awards, cursors) undo the pin, taking the lawn's top left and size back, so anything else
+        // added to the HUD stays on screen at its own size.
+        view.boardNode = board
+        view.hudNode = hud
         view.pinScreen = () => {
             const pin = seedChooser && !intro.complete ? board.position.x : view.lawnShift
-            hud.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
+            const scale = view.lawnScale, unscale = 1 / scale
+            const pinned = (node: Node) => {
+                node.setPosition((-WIDTH / 2 - pin) * unscale, HEIGHT / 2 * unscale)
+                node.setScale(unscale, unscale, 1)
+            }
+            pinned(hud)
             // A repick lifts the bank's layer into the HUD, over it (raiseBankToChooser).
-            if (bankLayer.parent === hud) bankLayer.setPosition(0, 0)
-            else bankLayer.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
-            for (const layer of [coinLayer, awardLayer, ruleEffects, cursorLayer]) layer.setPosition(pin, 0)
+            if (bankLayer.parent === hud) {
+                bankLayer.setPosition(0, 0)
+                bankLayer.setScale(1, 1, 1)
+            } else pinned(bankLayer)
+            for (const layer of [coinLayer, awardLayer, ruleEffects, cursorLayer]) {
+                layer.setPosition(pin + WIDTH / 2 * (1 - scale), -HEIGHT / 2 * (1 - scale))
+                layer.setScale(scale, scale, 1)
+            }
         }
         // A repick lifts the bank over everything but the chooser: the lawn's entities and the HUD's coins and sun, which
         // would otherwise come between the bank and the chooser's cards resting in it. It goes back under the entities
@@ -419,10 +438,37 @@ export class LevelView {
         return view
     }
 
-    /** Mods that move the lawn sideways report the shift; the screen UI cancels it and input maps onto the moved lawn. */
-    setWorldShift(shift: number): void {
-        this.lawnShift = shift
+    /**
+     * Mods that move or scale the lawn report it: `shift`, how far right of its original gameplay place they moved the
+     * board (wide viewports); `scale`, the size to show the lawn at (a high view's 600/720), which the view gives the
+     * board. What is left out stays. The screen UI cancels both and keeps its size; input, and what flies between the
+     * lawn and the UI, map through the board (lawnPointAt, uiOnLawn).
+     */
+    setWorldView(view: { shift?: number, scale?: number }): void {
+        if (view.shift !== undefined) this.lawnShift = view.shift
+        if (view.scale !== undefined) {
+            this.lawnScale = view.scale
+            this.boardNode?.setScale(view.scale, view.scale, 1)
+        }
         this.pinScreen()
+    }
+
+    /** The lawn pixel under a point of the screen (a pointer's UI location), wherever the board is moved or scaled. */
+    lawnPointAt(x: number, y: number): { x: number, y: number } {
+        if (!this.boardNode) return { x, y }
+        const local = uiNode({ node: this.boardNode }).transform.convertToNodeSpaceAR(new Vec3(x, y))
+        return { x: local.x + WIDTH / 2, y: HEIGHT / 2 - local.y }
+    }
+
+    /**
+     * Where a point of the screen UI, in the HUD's 800x600 layout (y down), is on the lawn: the counter that sun and
+     * money fly to, the screen's middle the award goes to.
+     */
+    uiOnLawn(x: number, y: number): { x: number, y: number } {
+        if (!this.boardNode || !this.hudNode) return { x, y }
+        const world = uiNode({ node: this.hudNode }).transform.convertToWorldSpaceAR(new Vec3(x, -y))
+        const local = uiNode({ node: this.boardNode }).transform.convertToNodeSpaceAR(world)
+        return { x: local.x + WIDTH / 2, y: HEIGHT / 2 - local.y }
     }
 
     updateIntro(dt: number): boolean {
