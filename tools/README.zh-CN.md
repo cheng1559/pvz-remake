@@ -8,7 +8,7 @@
 tools/
 ├── build/
 │   └── clean-native-assets.ts  # 原生构建前清除输出目录中旧的 data/assets 和 Xcode 已构建的应用（由 Windows、macOS 和 iOS 构建命令调用）
-├── installer/                  # 安装包：package-windows.ts 用 Inno Setup 编译 windows.iss，package-macos.ts 生成各架构的 macOS 磁盘映像
+├── installer/                  # 安装包：package-windows.ts 生成 Windows 安装程序（windows.iss，Inno Setup）和压缩包，package-macos.ts 生成各架构的 macOS 磁盘映像
 ├── kernel/build.ts             # 把 C++ 内核编译为 Wasm
 ├── mod/                        # 模组的初始化、打包、校验、宿主模块列表生成与配置读取
 │   ├── cli.ts
@@ -33,7 +33,7 @@ tools/
 | 初始化、打包和校验模组 | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
 | 重新生成模组宿主模块列表 | `npm run mod:hosts` |
 | 检查 Cocos 预览的模块映射 | `npm run check:preview` |
-| 打包 Windows 安装程序和 macOS 磁盘映像 | `npm run package:windows`、`npm run package:macos` |
+| 打包 Windows 安装程序和压缩包，以及 macOS 磁盘映像 | `npm run package:windows`、`npm run package:macos` |
 | 为 Cloudflare Pages 准备 Web 构建，并检查一次部署 | `npm run package:pages`、`npm run verify:pages -- <部署地址>` |
 | 把共享的 C++ 内核编译为 Wasm | `npm run build:kernel` |
 | 用原版程序的图标生成网页与原生应用图标 | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |

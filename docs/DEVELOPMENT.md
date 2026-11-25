@@ -174,7 +174,7 @@ npm run build:web:debug
 | Platform | Command | Output |
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build in `build/web-mobile/` |
-| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
+| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe` and the zip `dist/pvz-remake-v{version}-windows-x64.zip`; packaging needs Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package in `build/android-arm64-release/`; `compile:android:armv7:release` builds for 32-bit devices into `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | The unsigned IPA `build/ios/pvz-remake-mobile-unsigned.ipa` to sign yourself; macOS only |
@@ -199,7 +199,7 @@ A `v*` tag deploys the staged build from CI (`.github/workflows/build.yml`), aft
 ### Windows
 
 1. `npm run compile:windows:release` clears the build's old assets (see [Native build output](#native-build-output)), builds, and compiles `build/windows/proj/Release/pvz-remake.exe`.
-2. `npm run package:windows` compiles `tools/installer/windows.iss` with Inno Setup 6, passing the version from `package.json`, and writes `dist/pvz-remake-v{version}-windows-x64-setup.exe`. It fails if the Release executable is missing.
+2. `npm run package:windows` picks the game executable, its DLLs and `Resources/` from the Release build, with the C++ runtime of the Visual Studio that built it (`Microsoft.VC143.CRT`) in place of the older one Cocos copies, so players need not install the Visual C++ runtime. It compiles `tools/installer/windows.iss` with Inno Setup 6 over them, passing the version from `package.json`, and writes `dist/pvz-remake-v{version}-windows-x64-setup.exe`. From the same files it writes `dist/pvz-remake-v{version}-windows-x64.zip`, which unpacks into a `Plants vs. Zombies` folder the game runs from. It fails if the Release executable is missing.
 
 The packaging script finds `ISCC.exe` through the `ISCC` environment variable, then in `Inno Setup 6` under `%LOCALAPPDATA%\Programs`, `%ProgramFiles(x86)%` and `%ProgramFiles%`, and finally on `PATH`.
 

@@ -463,12 +463,12 @@ npm run preview:debug     # start the preview, http://localhost:9527 by default
 | Platform | Command | Output |
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build |
-| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
+| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe` and the zip `dist/pvz-remake-v{version}-windows-x64.zip`; packaging needs Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package; use `android:armv7` for 32-bit devices |
 | iOS | `npm run compile:ios:release` | An unsigned IPA to sign yourself; macOS only |
 
-Replace `release` with `debug` in a command for a debug build. The Windows installer packs only a Release build.
+Replace `release` with `debug` in a command for a debug build. The Windows installer and zip pack only a Release build.
 
 See [Development](docs/DEVELOPMENT.md) for the full guide.
 

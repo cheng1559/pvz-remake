@@ -1,15 +1,16 @@
 ; Windows installer for the Release build (Inno Setup 6).
-; Build it with `npm run package:windows`, which passes the version from package.json.
-; Packs build/windows/proj/Release: the game executable, its DLLs and Resources/, without link
-; outputs (.lib/.exp) and the debug C runtime that Cocos copies next to every build.
+; Build it with `npm run package:windows`, which passes the version from package.json and, as Files, the folder of
+; the files it picks from build/windows/proj/Release for players, the zip's too.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
+#ifndef Files
+  #error Files is the folder of the files to install, which npm run package:windows passes
+#endif
 #define AppName "Plants vs. Zombies"
 #define AppExe "pvz-remake.exe"
 #define Root AddBackslash(SourcePath) + "..\.."
-#define Release Root + "\build\windows\proj\Release"
 #define Icon Root + "\native\engine\win64\res\game.ico"
 
 [Setup]
@@ -40,9 +41,7 @@ SetupIconFile={#Icon}
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#Release}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#Release}\*.dll"; DestDir: "{app}"; Excludes: "msvcp140d.dll,ucrtbased.dll,vcruntime140d.dll,vcruntime140_1d.dll"; Flags: ignoreversion
-Source: "{#Release}\Resources\*"; DestDir: "{app}\Resources"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Files}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

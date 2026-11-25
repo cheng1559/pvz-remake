@@ -8,7 +8,7 @@ Directories are split by purpose. The root holds only this guide, the Node modul
 tools/
 ├── build/
 │   └── clean-native-assets.ts  # Clears old data/assets, and the built Xcode apps, from the output directory before a native build (called by the Windows, macOS and iOS build commands)
-├── installer/                  # Installers: package-windows.ts compiles windows.iss with Inno Setup, package-macos.ts makes a macOS disk image per architecture
+├── installer/                  # Installers: package-windows.ts makes the Windows installer (windows.iss, Inno Setup) and zip, package-macos.ts makes a macOS disk image per architecture
 ├── kernel/build.ts             # Compiles the C++ kernel to Wasm
 ├── mod/                        # Mod initialization, packing, validation, host module list generation and configuration reading
 │   ├── cli.ts
@@ -33,7 +33,7 @@ Common entry points:
 | Initialize, pack and validate a Mod | `npm run mod:init`, `npm run mod:pack`, `npm run mod:test` |
 | Regenerate the Mod host module list | `npm run mod:hosts` |
 | Check the Cocos preview's module mapping | `npm run check:preview` |
-| Package the Windows installer and the macOS disk image | `npm run package:windows`, `npm run package:macos` |
+| Package the Windows installer and zip, and the macOS disk image | `npm run package:windows`, `npm run package:macos` |
 | Stage the web build for Cloudflare Pages and check a deployment | `npm run package:pages`, `npm run verify:pages -- <deployment URL>` |
 | Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
 | Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |

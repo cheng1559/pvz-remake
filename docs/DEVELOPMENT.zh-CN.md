@@ -174,7 +174,7 @@ npm run build:web:debug
 | 平台 | 命令 | 输出 |
 | --- | --- | --- |
 | 网页 | `npm run build:web:release` | `build/web-mobile/` 中的 Web 构建 |
-| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{version}-windows-x64-setup.exe`；打包需要 Inno Setup 6 |
+| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{version}-windows-x64-setup.exe` 和压缩包 `dist/pvz-remake-v{version}-windows-x64.zip`；打包需要 Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` 和 `compile:macos:x64:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{version}-macos-arm64.dmg`（Apple 芯片）和 `-macos-x64.dmg`（Intel）；仅能在 macOS 上构建 |
 | Android | `npm run compile:android:arm64:release` | `build/android-arm64-release/` 中的 arm64 安装包；32 位设备使用 `compile:android:armv7:release`，输出到 `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | 未签名的 IPA `build/ios/pvz-remake-mobile-unsigned.ipa`，需要自行签名；仅能在 macOS 上构建 |
@@ -199,7 +199,7 @@ npm run build:web:debug
 ### Windows
 
 1. `npm run compile:windows:release` 先清除构建目录中的旧资源（见[原生构建输出](#原生构建输出)），再构建并编译出 `build/windows/proj/Release/pvz-remake.exe`。
-2. `npm run package:windows` 用 Inno Setup 6 编译 `tools/installer/windows.iss`，并传入 `package.json` 中的版本号，生成 `dist/pvz-remake-v{version}-windows-x64-setup.exe`。缺少 Release 可执行文件时报错。
+2. `npm run package:windows` 从 Release 构建中取出游戏可执行文件、其 DLL 和 `Resources/`，并用编译它的 Visual Studio 的 C++ 运行库（`Microsoft.VC143.CRT`）替换 Cocos 复制来的旧版，玩家无需另装 Visual C++ 运行库。随后用 Inno Setup 6 编译 `tools/installer/windows.iss`，并传入 `package.json` 中的版本号，生成 `dist/pvz-remake-v{version}-windows-x64-setup.exe`；再用同样的文件生成 `dist/pvz-remake-v{version}-windows-x64.zip`，解压后是一个 `Plants vs. Zombies` 文件夹，可直接从中运行游戏。缺少 Release 可执行文件时报错。
 
 打包脚本按以下顺序查找 `ISCC.exe`：环境变量 `ISCC`，`%LOCALAPPDATA%\Programs`、`%ProgramFiles(x86)%` 和 `%ProgramFiles%` 下的 `Inno Setup 6` 目录，最后是 `PATH`。
 

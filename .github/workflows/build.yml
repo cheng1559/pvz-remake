@@ -134,7 +134,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
           retention-days: 1
 
   macos:
