@@ -389,7 +389,7 @@ The `UIButton` component also has `touchSlide` (follow the finger and activate o
 A button's `tooltip` is a string or `{ text, title?, warning?, font?, maxWidth?, gap?, offset?, surface?, fixed? }`. The popup uses the original's colors: a pale yellow box with a black border, the text in Pico129 (`packetCost`), an optional title in Pix118Bold and an optional warning line in red.
 
 - It follows the actual hover, appears below the anchor (`gap`, 4 px by default), flips above it when there is no room, and stays within the enclosing viewport, mask or Canvas, 2 px from its edges.
-- Long text wraps by the original's rules, at the first break at or after the target width; CJK text can break between characters, except before closing and after opening punctuation.
+- Long text wraps by the original's rules (`ToolTipWidget::GetLines`): at the first space at or past the target width, and at each newline. Text without spaces, such as Chinese, breaks only at the newlines written into it.
 - `offset: [x, y]` moves it right and down before edge clamping. The gardens' tooltip uses it (see [Gardens, Help and the award page](#gardens-help-and-the-award-page)).
 - `fixed` puts the popup's top-left corner at the anchor's (a `ToolTipWidget` at a fixed position, as the main menu's trophy uses); `surface` draws it on another node when the control is inside a clipped area.
 - `ui.tooltip(anchor, options)` creates one for manual `show()` and `hide()`, with settable `text`, `title` and `warning`. Disabling the anchor hides the popup; destroying it removes it.
