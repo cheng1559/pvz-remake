@@ -15,7 +15,7 @@ import { PLANT_BLINK_LAYER, type PlantAnimationDefinition, type Rect } from '@/s
 import { plantAttack, plantRectAt } from '@/shared/content/hitRects'
 import { type ReanimKeyframe, sampleReanimTrack } from '@/shared/content/reanim'
 export type { LayerShown } from '@/client/view/layerPlayback'
-import { renderOrder } from '@/shared/content/renderOrder'
+import { isAboveRows, renderOrder } from '@/shared/content/renderOrder'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
 import { PLANT_WIDTH, plantTeam } from '@/shared/content/teams'
@@ -396,15 +396,20 @@ export class PlantView implements EntityView<PlantSnapshot> {
         void SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
     }
 
-    /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
+    /**
+     * Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone
+     * by then. One over every row (RENDER_LAYER_TOP) still has its row as an offset, so a lower row's covers a higher
+     * row's; not the original, where such explosions tie and draw by their particle systems' slots.
+     */
     static readonly exploded: StageEvent = (stage, event) => {
         stage.shake(3, -4, 'explosion')
         const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
         void SoundSystem.playSounds(presentation?.explosionSounds)
         const { x, y, row } = event.data, explosion = presentation?.explosion
         if (!explosion || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
+        const order = renderOrder(explosion.layer, row, isAboveRows(explosion.layer) ? row : 0)
         // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
-        stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
+        stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, order)
     }
 
     /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */

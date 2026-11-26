@@ -117,6 +117,26 @@ test("a plant off the board keeps its animation on by the server's rules, from w
     assert.throws(() => board.advance(1), /animated by the server/)
 })
 
+test("an explosion over every row still draws a lower row's over a higher row's; one of a row's own layer keeps the row's order", () => {
+    const { PlantView } = load('plants/PlantView', { '@/client/sound/SoundSystem': { SoundSystem: { playSounds() {} } } })
+    const orders: number[] = []
+    const stage = {
+        shake() {},
+        particle(_effect: string, _x: number, _y: number, order: number) { orders.push(order) },
+        content: { presentation: { plants: {
+            'test:cherry': { explosion: { effect: 'test:powie', x: 0, layer: 'top' } },
+            'test:mine': { explosion: { effect: 'test:mine', x: 20, layer: 'particle' } },
+        } } },
+    }
+    const explode = (typeId: string, row: number) => PlantView.exploded(stage, { eventId: 1, type: 'plantExploded', data: { typeId, x: 100, y: 100, row } }, {})
+    explode('test:cherry', 3)
+    explode('test:cherry', 1)
+    explode('test:mine', 3)
+    const { renderOrder } = renderOrderModule
+    assert.deepEqual(orders, [renderOrder('top') + 3, renderOrder('top') + 1, renderOrder('particle', 3)])
+    assert.ok(orders[0] < renderOrder('fog') && orders[1] > renderOrder('particle', 5), 'over every row, under the fog')
+})
+
 test("a sun-shroom's shadow is the size of the state it is in: small, growing with its grow clip, grown, and grown off the board", async () => {
     const random = { nextFloat: () => 0, integer: (min: number) => min }
     const plantView = load('plants/PlantView', {
