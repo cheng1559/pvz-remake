@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { Color, EventMouse, Node, UITransform, type EventTouch, SpriteFrame } from 'cc'
+import { Color, EventMouse, Node, UITransform, Vec3, type EventTouch, SpriteFrame } from 'cc'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { packetSubject } from '@/client/plants/definitions'
 import { UIButton } from '@/client/ui/UIButton'
@@ -7,7 +7,7 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
-import { animateCurve } from '@/shared/content/animation'
+import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
@@ -352,6 +352,15 @@ export class LevelSeedChooser {
         this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
     }
 
+    /**
+     * The bank's shift and rise (setBankShift) read off where `bank` stands, by the nodes: its choosing place is the
+     * panel's layer's origin, wherever the layers holding the two are put or scaled.
+     */
+    followBank(bank: Node): void {
+        const at = this.panelLayer.inverseTransformPoint(new Vec3(), bank.worldPosition)
+        this.setBankShift(at.x, at.y)
+    }
+
     /** Whether the node is the chooser's: its panel, cards and buttons, and the preview zombies' tooltips. */
     holds(node: Node): boolean {
         return node.isChildOf(this.edge) || node.isChildOf(this.previewTooltipSurface)
@@ -460,7 +469,8 @@ export class LevelSeedChooser {
         this.flying.active = this.panel.active
         this.buttons.active = this.panel.active
         this.pageButtonLayer.active = this.panel.active
-        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
+        // Unrounded, for a smooth slide.
+        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurveFloat(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurveFloat(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
         // The almanac and store buttons keep their margins from the UI area's right edge, as Menu does: twice its inset

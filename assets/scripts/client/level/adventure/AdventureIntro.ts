@@ -16,6 +16,7 @@ import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import { SEED_CHOOSER_SLIDE } from '../LevelSeedChooser'
+import { SEED_BANK_X } from '../LevelGeometry'
 import { createOffBoardZombie } from '@/client/view/offBoard'
 import type { ZombieView } from '@/client/zombies/ZombieView'
 import { UIButton } from '@/client/ui/UIButton'
@@ -363,16 +364,21 @@ export class AdventureIntro implements LevelIntro {
         this.houseName.active = !this.hasOpeningDialog && this.layout.pan !== false && houseNameTicks > 0
         uiNode({ node: this.houseName, opacity: Math.min(255, houseNameTicks * 15) })
 
-        // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop.
+        // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop. Its slides
+        // are unrounded, for smooth ones.
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
         // The bank drops with the chooser (CutScene's TimeSeedBankOnStart). Without the entrance it is where it ends.
         const bankStart = this.seedChooser ? SEED_CHOOSER_SLIDE.onStart : SEED_BANK_START + this.sodTicks
         const inPlace = this.layout.entrance === false
         this.bank.active = !this.layout.hiddenSeedBank && (inPlace || tick > bankStart)
         this.bank.setPosition(
-            inPlace ? 10 : animateCurve(SEED_BANK_RIGHT_START, PAN_LEFT_END, tick, 0, 10, 'ease-in-out'),
-            inPlace ? 0 : animateCurve(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
+            SEED_BANK_X * this.bankSettled(),
+            inPlace ? 0 : animateCurveFloat(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
         )
+    }
+
+    bankSettled(): number {
+        return this.layout.entrance === false ? 1 : animateCurveFloat(SEED_BANK_RIGHT_START, PAN_LEFT_END, this.ticks, 0, 1, 'ease-in-out')
     }
 
     private startSodRoll(): void {

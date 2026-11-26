@@ -1,6 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { animateCurve } from '@/shared/content/animation'
+import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import { LevelHitboxes } from './LevelHitboxes'
 import { LevelHealthBars } from './LevelHealthBars'
 import { LevelCoinBank } from './LevelCoinBank'
@@ -13,7 +13,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { LevelSlots } from './LevelSlots'
 import { UI } from '@/client/ui/UI'
 import { formatMoney } from '@/client/ui/formatMoney'
-import { seedBankExtraWidth } from './LevelGeometry'
+import { SEED_BANK_X, seedBankExtraWidth } from './LevelGeometry'
 import type { UIButton } from '@/client/ui/UIButton'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
@@ -39,7 +39,7 @@ import { LevelSeedChooser, SEED_CHOOSER_SLIDE } from './LevelSeedChooser'
 import { LevelBoardHud } from './LevelBoardHud'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { PlantingLineView } from './PlantingLineView'
-import { uiAreaEdge } from '@/client/view/ClientViewport'
+import { uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -182,8 +182,9 @@ export class LevelView {
             size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
         bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
-        // The top bar keeps its original margins from the UI area's edges.
-        const bankLeft = uiAreaEdge(bankLayer, 'left')
+        // The seed bank, with the tools beside it and the conveyor, has its place set as it slides (placeBank); the
+        // level's controls keep their original margin from the UI area's right edge.
+        const bankLeft = uiNode({ name: 'SeedBankPlace', parent: bankLayer }).node
         const controls = uiAreaEdge(bankLayer, 'right')
         controls.name = 'LevelControls'
         // Edge-anchored controls can sit outside the HUD's 800 width, so their tooltips clamp to the visible screen.
@@ -194,7 +195,7 @@ export class LevelView {
         }).node
         mobileGridGuide.setSiblingIndex(bankLayer.getSiblingIndex())
         const bank = uiNode({
-            node: slots.bank, parent: bankLeft, position: { x: 10, y: 0 }, anchor: { x: 0, y: 1 },
+            node: slots.bank, parent: bankLeft, position: { x: SEED_BANK_X, y: 0 }, anchor: { x: 0, y: 1 },
             sprite: { frame: seedbank, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
         // SeedBank::Draw: past six slots the bank repeats its own right end, read from (width - extra - 12), at width - 12.
@@ -386,6 +387,12 @@ export class LevelView {
             }
             view.pinScreen()
         }
+        // The seed bank, with the tools beside it and the conveyor, stands at the UI area's left edge, where the chooser
+        // does, while it is in its choosing place (x 0), and at the 800 layout's left in its own (SEED_BANK_X), where the
+        // original has it in play; between the two as it slides from one to the other (the intro's SeedBankRight, a
+        // repick's slide). A level without a chooser keeps it where it is in play.
+        // `settled` is how far the bank has slid; its slides are unrounded, for smooth ones.
+        const placeBank = (settled: number) => bankLeft.setPosition(-uiAreaInset() * (1 - settled), 0)
         // How far above its place the bank was when a repick's chooser started to drop, until it is back there.
         let hiddenBankY: number | undefined
         view.syncSeedChooserIntro = () => {
@@ -409,15 +416,19 @@ export class LevelView {
                 // drops, as the intro's does, for the cards to be chosen into it, and goes back up as the chooser lifts: the
                 // level stood still meanwhile, so it is no nearer its time.
                 if (repick <= SEED_CHOOSER_SLIDE.onEnd) hiddenBankY ??= bank.position.y
-                bank.setPosition(repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, 10, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, 10, 'ease-in-out'),
+                const settled = repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurveFloat(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, 1, 0, 'ease-in-out')
+                    : animateCurveFloat(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, 1, 'ease-in-out')
+                bank.setPosition(SEED_BANK_X * settled,
                     hiddenBankY === undefined ? bank.position.y
-                        : repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, hiddenBankY, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, hiddenBankY, 'ease-in-out'))
+                        : repick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurveFloat(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, repick, hiddenBankY, 0, 'ease-in-out') : animateCurveFloat(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, repick, 0, hiddenBankY, 'ease-in-out'))
                 if (repick >= SEED_CHOOSER_SLIDE.offEnd) hiddenBankY = undefined
-                chooser.setBankShift(bank.position.x, bank.position.y)
+                placeBank(settled)
                 raiseBankToChooser(repick < SEED_CHOOSER_SLIDE.offEnd)
+                chooser.followBank(bank)
                 return
             }
             chooser.syncIntro(tick)
+            placeBank(intro.bankSettled?.() ?? 1)
             if (!seedChooser) return
             view.pinScreen()
             raiseBank(!intro.complete && tick < 600)

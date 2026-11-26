@@ -193,3 +193,21 @@ test('the level stands still for a pause and for a repick alike, which is all th
     assert.equal(protocol.levelStandsStill({ paused: false, seedChooser: { ...playing.seedChooser, repick: true } }), true,
         "until the chooser has lifted out after its Let's Rock")
 })
+
+test("a repick's cards in the bank ride with it where it stands, wherever the layers holding the two are put or scaled", () => {
+    class Vec3 { constructor(public x = 0, public y = 0, public z = 0) {} }
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, Vec3, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
+        '@/shared/content/chooserPages': chooserPages,
+    })
+    const shifts: number[][] = []
+    // The panel's layer at the UI area's left edge (-300, 300), shown at half size (a Mod's high view).
+    const panelLayer = { inverseTransformPoint: (out: Vec3, point: Vec3) => Object.assign(out, { x: (point.x + 300) / 0.5, y: (point.y - 300) / 0.5 }) }
+    const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+        panelLayer, setBankShift(shift: number, rise: number) { shifts.push([shift, rise]) },
+    })
+    chooser.followBank({ worldPosition: new Vec3(-300, 300) })
+    chooser.followBank({ worldPosition: new Vec3(-295, 310) })
+    assert.deepEqual(shifts, [[0, 0], [10, 20]], 'in its choosing place, then 10 right of it and 20 above, in the panel\'s own units')
+})

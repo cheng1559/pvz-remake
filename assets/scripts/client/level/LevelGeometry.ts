@@ -2,6 +2,12 @@ import { type BoardDefinition, levelAwardSize } from '@/shared/content/gameplay'
 
 export { levelAwardSize }
 
+/**
+ * The seed bank's x in play (SeedBank::mX), its choosing place being 0: how far right it slides once the seeds are
+ * chosen (CutScene's SEED_BANK_OFFSET_X).
+ */
+export const SEED_BANK_X = 10
+
 /** Board::GetSeedBankExtraWidth, shared by the adjacent board tools. */
 export function seedBankExtraWidth(slots: number): number {
     return slots <= 6 ? 0 : slots === 7 ? 60 : slots === 8 ? 76 : slots === 9 ? 112 : 153

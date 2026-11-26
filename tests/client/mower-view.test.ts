@@ -185,6 +185,20 @@ test("the intro brings each row's mower on as CutScene::UpdateIntro does: the hi
     assert.equal(later.mowerArrival(0), 1, 'a complete intro has every one in place')
 })
 
+test('the intro slides the seed bank right as the camera pans back, unrounded, for its place to move smoothly', () => {
+    const { AdventureIntro } = load('level/adventure/AdventureIntro')
+    const intro = (layout: object) => new AdventureIntro({}, {}, [], { rolls: [], width: 0, ...layout }, null, [], new Map(), {}, {}, {}, {})
+    const plain = intro({})
+    // CutScene's TimeSeedBankRightStart 4750 to the pan's end 6000, eased in and out.
+    for (const [ticks, settled] of [[400, 0], [475, 0], [537.5, 0.5], [600, 1], [700, 1]]) {
+        plain.ticks = ticks
+        assert.equal(plain.bankSettled(), settled, `at ${ticks}`)
+    }
+    plain.ticks = 480
+    assert.ok(plain.bankSettled() > 0 && plain.bankSettled() * 10 % 1 !== 0, 'between whole pixels of its 10')
+    assert.equal(intro({ entrance: false }).bankSettled(), 1, 'without the entrance it is in its own place')
+})
+
 test("the street before an adventure level leaves out the zombie that leads the flag waves (CutScene::PlaceStreetZombies)", () => {
     const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }, level = { previewCapacity: 4 } as LevelDefinition
     assert.deepEqual(streetZombies(level, counts, 'pvz:flag'), ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
