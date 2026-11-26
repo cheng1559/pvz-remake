@@ -615,7 +615,7 @@ The level's entities draw in the original's order, `Board::MakeRenderOrder`: `ro
 - Shadows lie on `ground` at 3, under every row's plants and zombies.
 - Dropped heads, arms and helms draw one above their zombie; other particles at the original's layer, or at their entity's order plus its offset.
 - An explosion on a layer from `top` up still takes its row as an offset, so a lower row's covers a higher row's; the original's tie and draw by their particle systems' slots.
-- Equal orders keep a list's entities in slot order and the kinds in a fixed order, with the remains and particles at an entity's order after the entities.
+- Equal orders keep a list's entities in slot order and the kinds in a fixed order, with the remains and particles at an entity's order after the entities. Particles of one order draw in the order they came, a recycled one going last as a new one would.
 - Presentation data names layers (a plant's `layer`, an explosion's `layer`; rolling bowling nuts use `projectile`) instead of numbers.
 
 #### Saves and layout

@@ -111,7 +111,8 @@ export interface ParticleSpawnArgs {
     mirrored?: boolean
     /**
      * Once finished, keep the node for the next spawn of the same effect under the same parent instead of destroying
-     * it. For frequent board effects: creating and destroying nodes costs more than simulating them.
+     * it, which takes it last among the parent's as a new node would be. For frequent board effects: creating and
+     * destroying nodes costs more than simulating them.
      */
     recycle?: boolean
     /** No save keeps it: whatever spawned it brings it back, as a projectile does its trail. */
@@ -239,6 +240,8 @@ export class ParticlePlayer extends Component {
         const player = assets ? idlePlayers.get(args.parent)?.get(idleKey(args.id, args.spriteOverride))?.pop() : undefined
         if (!assets || !player) return null
         player.idlePool = null
+        // It goes last among its parent's, as a new one would: a parent draws its particles in the order they came.
+        player.node.setSiblingIndex(args.parent.children.length - 1)
         player.count()
         player.node.setPosition(args.x, args.y, args.z ?? 0)
         player.configure(args)

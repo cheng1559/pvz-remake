@@ -183,6 +183,7 @@ async function particlePlayer(emitters: Record<string, number> = {}) {
     const makeNode = (name: string, parent: FakeNode | null): FakeNode => {
         const node: FakeNode = { name, parent, children: [], isValid: true, worldPosition: { x: 0, y: 0 }, scaleX: 1,
             setPosition() {}, setScale(x: number) { node.scaleX = x }, addComponent(type: new () => any) { const component = new type(); component.node = node; return component },
+            setSiblingIndex(index: number) { const siblings = node.parent!.children; siblings.splice(siblings.indexOf(node), 1); siblings.splice(index, 0, node) },
             once(_event: string, listener: () => void) { node.destroyed = listener },
             destroy() { if (!node.isValid) return; node.isValid = false; node.destroyed?.() } }
         parent?.children.push(node)
@@ -218,11 +219,12 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     assert.equal(first.node.isValid, true, 'a finished recyclable particle keeps its node')
     assert.equal(first.live, false)
     assert.throws(() => first.snapshot(), /not ready/)
+    const later = ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0 })
     const second = spawn()
     assert.equal(second, first)
     assert.equal(second.live, true)
     assert.equal(second.node.scaleX, 1, 'a recycled particle drops its old facing')
-    assert.equal(parent.children.length, 1)
+    assert.deepEqual(parent.children, [later.node, first.node], 'it goes last, over what came before it, as a new one would')
     assert.equal(spawn() === first, false, 'a playing particle is not reused')
     const saved = spawn(true).snapshot()
     assert.equal(saved.mirrored, true)
