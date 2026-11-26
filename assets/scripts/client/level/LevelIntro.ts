@@ -13,9 +13,9 @@ export interface LevelIntro {
      */
     mowerArrival(row: number): number
     /**
-     * CutScene's TimeSeedBankRightStart: how far the seed bank has slid from its choosing place to its own, from 0 to 1,
-     * unrounded: the bank's x is SEED_BANK_X of it, and the view moves the bank's place with it. An intro without it
-     * keeps the bank in its own place (1).
+     * How far the seed bank's place has come from the UI area's left edge, where it is chosen into, to the 800 layout's,
+     * from 0 to 1, unrounded: the view moves the bank's place by it. The bank's own slide in that place (SEED_BANK_X,
+     * CutScene's TimeSeedBankRightStart) is the intro's. An intro without it keeps the bank in its own place (1).
      */
     bankSettled?(): number
     update(dt: number, stopAtTick?: number): boolean

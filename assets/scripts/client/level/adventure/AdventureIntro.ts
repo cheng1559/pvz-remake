@@ -33,7 +33,7 @@ const PAN_RIGHT_START = 150
 const PAN_RIGHT_END = 350
 const PAN_LEFT_START = 450
 const PAN_LEFT_END = 600
-/** CutScene's TimeSeedBankRightStart: the bank slides from its choosing place back right as the camera pans left. */
+/** CutScene's TimeSeedBankRightStart: the bank slides its own 10 right (SEED_BANK_X) as the camera pans left. */
 const SEED_BANK_RIGHT_START = 475
 const ROLL_SOD_START = 600
 const ROLL_SOD_END = 800
@@ -372,15 +372,24 @@ export class AdventureIntro implements LevelIntro {
         const inPlace = this.layout.entrance === false
         this.bank.active = !this.layout.hiddenSeedBank && (inPlace || tick > bankStart)
         this.bank.setPosition(
-            SEED_BANK_X * this.bankSettled(),
+            SEED_BANK_X * this.bankSlid(SEED_BANK_RIGHT_START),
             inPlace ? 0 : animateCurveFloat(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
         )
     }
 
     bankSettled(): number {
-        return this.layout.entrance === false ? 1 : animateCurveFloat(SEED_BANK_RIGHT_START, PAN_LEFT_END, this.ticks, 0, 1, 'ease-in-out')
+        return this.bankSlid(PAN_LEFT_START)
     }
 
+    /** How far the bank has slid right from `start` to the pan's end, unrounded; without the entrance it is there. */
+    private bankSlid(start: number): number {
+        return this.layout.entrance === false ? 1 : animateCurveFloat(start, PAN_LEFT_END, this.ticks, 0, 1, 'ease-in-out')
+    }
+
+    /**
+     * The bank's place comes back from the UI area's left edge as the camera pans back (TimePanLeftStart), the two
+     * starting and stopping together, whether or not this intro pans.
+     */
     private startSodRoll(): void {
         for (const roll of this.layout.rolls) ParticlePlayer.spawn({
             parent: this.board,

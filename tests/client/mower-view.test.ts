@@ -189,13 +189,15 @@ test('the intro slides the seed bank right as the camera pans back, unrounded, f
     const { AdventureIntro } = load('level/adventure/AdventureIntro')
     const intro = (layout: object) => new AdventureIntro({}, {}, [], { rolls: [], width: 0, ...layout }, null, [], new Map(), {}, {}, {}, {})
     const plain = intro({})
-    // CutScene's TimeSeedBankRightStart 4750 to the pan's end 6000, eased in and out.
-    for (const [ticks, settled] of [[400, 0], [475, 0], [537.5, 0.5], [600, 1], [700, 1]]) {
+    // Its place comes from the UI area's edge with the pan back, TimePanLeftStart 4500 to 6000; its own 10 from
+    // CutScene's TimeSeedBankRightStart 4750 to the pan's end. Both eased in and out.
+    for (const [ticks, place, own] of [[400, 0, 0], [450, 0, 0], [475, 0.0156, 0], [525, 0.5, 0.2845], [537.5, 0.682, 0.5], [600, 1, 1], [700, 1, 1]]) {
         plain.ticks = ticks
-        assert.equal(plain.bankSettled(), settled, `at ${ticks}`)
+        assert.equal(Number(plain.bankSettled().toFixed(4)), place, `place at ${ticks}`)
+        assert.equal(Number(plain.bankSlid(475).toFixed(4)), own, `own slide at ${ticks}`)
     }
     plain.ticks = 480
-    assert.ok(plain.bankSettled() > 0 && plain.bankSettled() * 10 % 1 !== 0, 'between whole pixels of its 10')
+    assert.ok(plain.bankSlid(475) > 0 && plain.bankSlid(475) * 10 % 1 !== 0, 'between whole pixels of its 10')
     assert.equal(intro({ entrance: false }).bankSettled(), 1, 'without the entrance it is in its own place')
 })
 

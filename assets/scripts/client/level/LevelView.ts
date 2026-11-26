@@ -389,7 +389,7 @@ export class LevelView {
         }
         // The seed bank, with the tools beside it and the conveyor, stands at the UI area's left edge, where the chooser
         // does, while it is in its choosing place (x 0), and at the 800 layout's left in its own (SEED_BANK_X), where the
-        // original has it in play; between the two as it slides from one to the other (the intro's SeedBankRight, a
+        // original has it in play; between the two as it slides from one to the other (with the intro's pan back, a
         // repick's slide). A level without a chooser keeps it where it is in play.
         // `settled` is how far the bank has slid; its slides are unrounded, for smooth ones.
         const placeBank = (settled: number) => bankLeft.setPosition(-uiAreaInset() * (1 - settled), 0)
