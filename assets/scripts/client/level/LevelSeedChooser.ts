@@ -89,8 +89,9 @@ export class LevelSeedChooser {
     private readonly edge: Node
     /**
      * The panel and what stands on it: the cards, those chosen into the bank too, their flights, Let's Rock and the page
-     * turners. The almanac and store buttons stand by the screen's bottom instead, in `pageButtonLayer` beside it, which
-     * slides with the panel; a Mod can resize the panel's layer alone (the widescreen Mod's high view).
+     * turners. The almanac and store buttons stand at the screen's bottom right instead, in `pageButtonLayer` beside it,
+     * which keeps to the UI area's right edge and slides with the panel; a Mod can resize the panel's layer alone (the
+     * widescreen Mod's high view).
      */
     private readonly panelLayer: Node
     private readonly pageButtonLayer: Node
@@ -462,7 +463,9 @@ export class LevelSeedChooser {
         const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
-        this.pageButtonLayer.setPosition(0, y)
+        // The almanac and store buttons keep their margins from the UI area's right edge, as Menu does: twice its inset
+        // right of this left edge.
+        this.pageButtonLayer.setPosition(2 * uiAreaInset(), y)
         for (const choice of this.choices) {
             // A card waiting in the grid shows only while the grid lists it.
             choice.view.node.active = this.panel.active && (choice.slot < 0 ? !!choice.home || !!choice.motion : this.choosing)

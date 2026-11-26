@@ -253,7 +253,7 @@ The debug console's history (64 commands) is kept under `pvz-remake:debug:cli-hi
   - Click or tap a card to put it in the seed bank, and a chosen card to send it back. Cards fly between the grid and the bank over 25 ticks (15 when moving between slots), and a new click lands every flying card first.
   - Tooltips describe each card. A card the level does not recommend is greyed (to 115 while it waits in the grid), and its tooltip carries a red warning.
   - Let's Rock (`seed`, yellow font) looks enabled exactly while the bank is full; with `/cheatseed`, once any card is chosen. If the level has warnings, each then asks in turn, and Re-pick goes back to choosing.
-  - ALMANAC and SHOP (`seedSmall`) appear once the almanac and the store are unlocked, when `LawnApp::CanShowAlmanac` and `CanShowStore` allow, and open over the paused level, its music playing on; a repick has neither. Clicking a zombie on the street opens its almanac entry.
+  - ALMANAC and SHOP (`seedSmall`) appear once the almanac and the store are unlocked, when `LawnApp::CanShowAlmanac` and `CanShowStore` allow, and open over the paused level, its music playing on; a repick has neither. They keep their margins from the UI area's right edge, while the rest of the chooser keeps to its left edge. Clicking a zombie on the street opens its almanac entry.
   - With `/cheatseed`, `(Prev Page)` and `(Next Page)` use the `text` skin.
 - **Touch planting** uses the gestures described in [Touch](#touch); `LevelInputPresenter` handles them. Swipe collection samples every 24 px, selection highlights reuse `SeedPacketView`'s mobile mode, and planting uses the existing backend commands.
 
