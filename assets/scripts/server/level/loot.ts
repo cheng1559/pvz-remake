@@ -1,5 +1,6 @@
 import type { CommandBuffer, EntityRemover, World } from '@/server/state/World'
 import { type GameplayDefinitions, pastAdventureLevel } from '@/shared/content/gameplay'
+import { zombieTeam } from '@/shared/content/teams'
 import { EconomyStateResource, LevelStateResource, RandomResource, TutorialResource, WaveResource } from '../state/resources'
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
@@ -22,11 +23,16 @@ export function canDropLoot(world: World): boolean {
         pastAdventureLevel(world.resources.get(LevelStateResource).definition, FIRST_LOOT_LEVEL - 1)
 }
 
-/** Zombie::DropLoot: the award check comes first, then one roll per zombie. */
+/**
+ * Zombie::DropLoot: the award check comes first, then one roll per zombie. A zombie put down on the plants' side, which
+ * the original does not have, drops no money; a mind-controlled one, an enemy turned, does, as the original's DropLoot
+ * does not check mMindControlled.
+ */
 export function dropZombieLoot(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
     const zombie = world.zombies.get(entity), position = zombie?.position
     if (!zombie || !position) return
     tryDropLevelAward(world, definitions, remover, entity)
+    if (zombieTeam(zombie) === 'plants' && !zombie.mindControlled) return
     if (zombie.droppedLoot) return
     if (levelAwardDropped(world) || !canDropLoot(world)) return
     const level = world.resources.get(LevelStateResource).definition

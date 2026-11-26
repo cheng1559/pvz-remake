@@ -72,6 +72,10 @@ All of this lives in `shared/content/teams.ts`, shared by the client and the ser
 
 Only zombies of the `zombies` team are counted.
 
+### Money
+
+A zombie put down on the `plants` team drops no money, coins or diamonds, when it dies (`dropZombieLoot` in `server/level/loot.ts`). A mind-controlled zombie, an enemy turned, still drops money as in the original, whose `Zombie::DropLoot` does not check `mMindControlled`.
+
 ### Sun producers
 
 An extension: a producer of the `zombies` team (`server/plants/Producer.ts`; the Sunflower, and the Sun-shroom, whose kind extends it) spawns nothing. Each time it would produce, it takes its item's sun value from the player's bank, down to 0, and emits `sunDrained` (`entityId`, `sun`); a producer of money gives nothing. The client plays the buzzer, flashes the sun counter red for 70 ticks and lights the producer as when it produces.
@@ -252,3 +256,5 @@ See [Debug Console](DEBUG_CLI.md).
 - a pole vaulter facing right vaulting right, and a charred `plants`-team zombie crumbling facing right;
 - an enemy Sunflower draining sun;
 - mind control: the team change, tint and speed, saving, `plants`-team zombies that were put down not counting as mind-controlled, no effect in the day, the award dropping when the last zombie is mind-controlled, and a Chomper turned by an awake Hypno-shroom or eating a sleeping one.
+
+`tests/server/loot.test.ts` covers a `plants`-team zombie that was put down dropping no money, and a mind-controlled one dropping it.

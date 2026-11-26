@@ -42,6 +42,19 @@ test('Zombie::DropLoot: a zombie the level does not pick still drops at its own 
     assert.deepEqual(drop('pvz:normal', 13, 1), ['pvz:diamond'])
 })
 
+test('a zombie put down on the plants\' side drops no money; a mind-controlled one does, as the original\'s', () => {
+    /** What a replay of 1-1 drops, on a gold roll, for a plain zombie on `side`. */
+    const drop = (side: { team?: 'plants', mindControlled?: true }) => {
+        const world = replay11(13), entity = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 0)
+        Object.assign(world.zombies.get(entity)!, side)
+        dropZombieLoot(world, definitions, entity, world)
+        return [...world.items].map(item => item.typeId)
+    }
+    assert.deepEqual(drop({ team: 'plants' }), [])
+    assert.deepEqual(drop({ team: 'plants', mindControlled: true }), ['pvz:coin_gold'], 'Zombie::DropLoot does not check mMindControlled')
+    assert.deepEqual(drop({}), ['pvz:coin_gold'])
+})
+
 test('Zombie::DropLoot drops from the middle of the zombie, a quarter of the way down, in whole pixels (GetZombieRect)', () => {
     const world = replay11(13)
     dropZombieLoot(world, definitions, spawnZombie(world, definitions, 'pvz:normal', 2, 500.7, 0.7), world)
