@@ -270,7 +270,7 @@
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
     "plantedSounds": [{"audio": "pvz:reverse_explosion", "foley": true}],
-    "explosionSounds": [{"audio": "pvz:doomshroom", "foley": false}],
+    "explosionSounds": [{"audio": "pvz:doomshroom", "foley": true}],
     "explosion": {"effect": "pvz:doom", "x": 0, "layer": "top"},
     "shake": {"clip": "explode", "tracks": {"DoomShroom_head1": 1, "DoomShroom_head2": 2, "DoomShroom_head3": 2}}
   }

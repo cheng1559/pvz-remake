@@ -469,6 +469,7 @@ Awarded by 2-5; its ability works from 2-6. See [Teams and the Hypno-shroom](TEA
 - It idles as any plant (10–15 fps, also off the board). Awake, it goes down with its fuse lit: its animation's `fuse` state plays `explode` at 23 fps as it is planted (`Plant::UpdateDoomShroom`).
 - The fuse burns 100 ticks, the three parts of its head shaking by up to 1, 2 and 2 px each tick (`Reanimation::SetShakeOverride`; the plant presentation's `shake`, drawn by `ReanimPlayer.setTrackOffset`).
 - It then deals 1800 within 250 px, three rows each way, and leaves a [crater](#craters) in its cell for 18000 ticks (`fuse.crater`).
+- Its blast's sound plays as foley: blasts within 100 ms of each other are heard once. **Differs from the original**, which plays it every time.
 
 ### Craters
 

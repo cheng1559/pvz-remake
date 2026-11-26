@@ -469,6 +469,7 @@
 - 待机动画与普通植物相同（10–15 fps，棋盘外也是如此）。清醒时种下即点燃引信：其动画的 `fuse` 状态以 23 fps 播放 `explode`（`Plant::UpdateDoomShroom`）。
 - 引信燃烧 100 逻辑步，期间其头部的三个部分每逻辑步分别抖动最多 1、2、2 像素（`Reanimation::SetShakeOverride`；植物表现定义中的 `shake`，由 `ReanimPlayer.setTrackOffset` 绘制）。
 - 随后对半径 250 像素、上下各三行内造成 1800 伤害，并在所在格子留下持续 18000 逻辑步的[弹坑](#弹坑)（`fuse.crater`）。
+- 爆炸声按 Foley 播放，100 ms 内的几次爆炸只响一次。**与原版不同**：原版每次都播放。
 
 ### 弹坑
 
