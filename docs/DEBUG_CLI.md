@@ -47,7 +47,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 - Most board commands need a level in play: past the intro and the seed chooser, and neither won nor lost. Elsewhere they report "/… requires an active level".
 - `/plant` works in any state of a level: during the intro, in the seed chooser and after the result.
 - `/money` and `/achievement` also work during the intro. `/money` outside a level and `/achievement` anywhere need a player profile.
-- The rule switches (`/cooldown`, `/suncost`, `/plantinvincible`, `/cheatseed`) and `/collect` work in any state of a level. Outside a level they only set the preference for the levels to come.
+- The rule switches (`/cooldown`, `/suncost`, `/plantinvincible`, `/plantanywhere`, `/cheatseed`) and `/collect` work in any state of a level. Outside a level they only set the preference for the levels to come.
 - Commands work while the level is paused and at speed 0.
 
 ## Examples
@@ -63,7 +63,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | `/zombie normal 3 9` | Puts a Zombie down in row 3, column 9 |
 | `/zombie normal 3 1 plants` | Puts a plants' side Zombie down in row 3, column 1 |
 | `/item award` | Drops the level's award |
-| `/plantinvincible`, `/cheatseed`, `/tilted`, `/highresolution`, `/haptics`, `/cursor`, `/fps` | Turn these switches over |
+| `/plantinvincible`, `/plantanywhere`, `/cheatseed`, `/tilted`, `/highresolution`, `/haptics`, `/cursor`, `/fps` | Turn these switches over |
 | `/sharpness 0.5` | Sets the sharpness back to its default |
 | `/mod` | Opens the Mod manager |
 | `/win` | Wins the level |
@@ -221,6 +221,7 @@ The test levels are outside the Adventure (they have no `adventureIndex`): each 
 | `/cooldown` | Turns seed recharge on or off; turning it off makes every packet ready at once |
 | `/suncost` | Turns sun cost on or off |
 | `/plantinvincible` | Turns plant invincibility on or off |
+| `/plantanywhere` | Turns planting anywhere on or off: any seed in any cell of the board |
 | `/cheatseed` | Turns cheat seeds on or off: more seeds in the seed chooser, every slot and the shovel, and the whole almanac |
 | `/collect {auto\|click\|move}` | Sets how sun and coins are collected |
 
@@ -239,6 +240,16 @@ In a level these commands change the level's rules and also keep the new state a
 - A Hypno-shroom still turns the zombie that chews it, or the hostile plant that bites it, and is gone; a hostile Chomper still swallows a plant whole.
 - It applies to current and newly planted plants.
 - A plant's own self-destruction, shoveling and `/removeplant` still work.
+- It is off by default and persists locally across levels and restarts.
+
+#### `/plantanywhere`
+
+- While it is on, a seed put down from the seed bank or the conveyor goes into any cell of the board, whatever the level or what stands there. Sun cost and recharge still apply (`/suncost`, `/cooldown`).
+- A plant seed goes into a dirt row, onto a grave or a crater, and over another plant. The bowling red line, cells a level rule closes, and what the Grave Buster and aquatic plants need under them no longer hold either.
+- A zombie seed goes into a dirt row too.
+- A grave seed's grave replaces a grave already in the cell, and a crater seed's crater replaces a crater there, its time starting over. A grave and a crater can share a cell. Either still destroys the plants in its cell.
+- Of plants stacked on a cell, the one in the highest slot of the plant list, usually the last planted, is on top: zombies eat it first, projectiles hit it first, it is drawn over the rest and the shovel digs it up first.
+- The planting preview follows the switch too.
 - It is off by default and persists locally across levels and restarts.
 
 #### `/cheatseed`
@@ -379,6 +390,7 @@ The switches take no argument: each run turns its switch over and shows where it
 | Recharge | `/cooldown` | On | On this device |
 | Sun cost | `/suncost` | On | On this device |
 | Invincible plants | `/plantinvincible` | Off | On this device |
+| Plant anywhere | `/plantanywhere` | Off | On this device |
 | Cheat seeds | `/cheatseed` | Off | On this device |
 | Collection | `/collect` | `click` | On this device |
 | Frame rate | `/fps` | Off | On this device |

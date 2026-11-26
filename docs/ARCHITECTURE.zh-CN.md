@@ -349,7 +349,7 @@ flowchart LR
 
 关卡的 `plantingLine: {column}` 是它的红线（坚果保龄球）：玩家不能在该列右侧种植，第一次尝试时提示 `ADVICE_NOT_PASSED_LINE`。这是下文共享种植判定中的一项检查。关卡表现定义中的 `plantingLine`（`{sprite, offset, dialogs}`）负责在战斗中以及列出的戴夫台词期间绘制它。任何关卡都可以设置红线，无论是否使用关卡规则。
 
-种子能种在哪里，对两端来说是同一个判定：`shared/content/planting.ts` 中的 `plantingRefusal`（`Board::CanPlantAt`）。它读取一个 `PlantingLawn`，两端各自根据自己的状态构建：服务端基于其 World，客户端基于快照（`snapshotLawn`）。
+种子能种在哪里，对两端来说是同一个判定：`shared/content/planting.ts` 中的 `plantingRefusal`（`Board::CanPlantAt`）。它读取一个 `PlantingLawn`，两端各自根据自己的状态构建：服务端基于其 World，客户端基于快照（`snapshotLawn`）。`PlantingLawn` 还带有来自调试规则的 `/plantanywhere`（`anywhere`），开启后两端同样只保留棋盘范围这一条限制。
 
 - 服务端对每种拒绝原因给出相应的拒绝码和提示。
 - 种植预览只显示是否会被拒绝。

@@ -57,7 +57,7 @@ test("the base game's own state has fields of its own, and `extensions` holds on
     debug(bowling, '/collect move')
     debug(bowling, '/cooldown')
     assert.deepEqual(received(bowling.snapshot()).debug,
-        { cooldown: false, sunCost: true, plantInvincible: false, collect: 'move', cheatSeeds: false })
+        { cooldown: false, sunCost: true, plantInvincible: false, collect: 'move', cheatSeeds: false, plantAnywhere: false })
 
     // 2-5: no shovel and no belt; its rule shows the mallet under its kind.
     snapshot = received(start({ levelId: 'pvz:adventure-2-5', firstAdventure: false }).snapshot())

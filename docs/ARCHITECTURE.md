@@ -347,7 +347,7 @@ A level's gameplay `conveyor` gives the belt: its `capacity`, `spacing`, movemen
 
 A level's `plantingLine: {column}` is its red line (Wall-nut Bowling's): the player plants nothing right of that column, and gets `ADVICE_NOT_PASSED_LINE` the first time. It is a check of the shared planting decision below. The level presentation's `plantingLine` (`{sprite, offset, dialogs}`) draws it in play and during the listed Dave lines. Any level can have one, with or without a rule.
 
-Where a seed may go is one decision for both sides: `plantingRefusal` in `shared/content/planting.ts` (`Board::CanPlantAt`). It reads a `PlantingLawn` that each side builds from its own state: the server from its World, the client from its snapshot (`snapshotLawn`).
+Where a seed may go is one decision for both sides: `plantingRefusal` in `shared/content/planting.ts` (`Board::CanPlantAt`). It reads a `PlantingLawn` that each side builds from its own state: the server from its World, the client from its snapshot (`snapshotLawn`). The lawn also carries `/plantanywhere` (`anywhere`, from the debug rules), which lifts every rule but the board's bounds on both sides alike.
 
 - The server answers each refusal with its rejection and advice.
 - The planting preview only shows whether there is one.

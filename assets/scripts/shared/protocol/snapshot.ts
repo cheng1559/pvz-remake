@@ -177,6 +177,11 @@ export interface DebugRules {
      * chosen. It counts towards the chooser's slots and whether it opens, so a chooser takes it up when it opens.
      */
     cheatSeeds: boolean
+    /**
+     * `/plantanywhere`: any seed goes into any cell of the board, whatever the level, the cell or what stands there
+     * (plantingRefusal): a dirt row, a plant's cell, a grave or a crater.
+     */
+    plantAnywhere: boolean
 }
 
 export type CursorSnapshot =
@@ -425,7 +430,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     }
     if (snapshot.debug !== undefined) {
         const debug = record(snapshot.debug, 'snapshot.debug')
-        for (const key of ['cooldown', 'sunCost', 'plantInvincible', 'cheatSeeds']) boolean(debug[key], `snapshot.debug.${key}`)
+        for (const key of ['cooldown', 'sunCost', 'plantInvincible', 'cheatSeeds', 'plantAnywhere']) boolean(debug[key], `snapshot.debug.${key}`)
         oneOf(debug.collect, DEBUG_COLLECT_MODES, 'snapshot.debug.collect')
     }
     record(snapshot.extensions, 'snapshot.extensions')

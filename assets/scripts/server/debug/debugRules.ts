@@ -2,7 +2,7 @@ import { defineResource, type World } from '@/server/state/World'
 import type { DebugRules } from '@/shared/protocol/index'
 
 export const DEFAULT_DEBUG_RULES: Readonly<DebugRules> = {
-    cooldown: true, sunCost: true, plantInvincible: false, collect: 'click', cheatSeeds: false,
+    cooldown: true, sunCost: true, plantInvincible: false, collect: 'click', cheatSeeds: false, plantAnywhere: false,
 }
 /** Set once a debug command changes a rule; the snapshot shows it (`debug`) from then on. */
 export const DebugRulesResource = defineResource<DebugRules>('pvz:debug-rules')

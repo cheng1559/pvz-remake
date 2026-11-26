@@ -9,6 +9,8 @@ type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
     plantInvincible: boolean
+    /** `/plantanywhere`: any seed goes into any cell of the board (DebugRules.plantAnywhere). */
+    plantAnywhere: boolean
     /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any number of cards chosen, none included. */
     cheatSeedsEnabled: boolean
     fpsVisible: boolean
@@ -49,6 +51,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     rechargingEnabled: true,
     sunCostEnabled: true,
     plantInvincible: false,
+    plantAnywhere: false,
     cheatSeedsEnabled: false,
     fpsVisible: false,
     collectMode: 'click',
@@ -78,7 +81,7 @@ const isBoolean = (value: unknown): value is boolean => typeof value === 'boolea
  * to the default. The others (`/mobile`, the `/perf` toggles) last for the session.
  */
 const KEPT: { readonly [Key in keyof DebugSettings]?: (value: unknown) => value is DebugSettings[Key] } = {
-    rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, cheatSeedsEnabled: isBoolean,
+    rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, plantAnywhere: isBoolean, cheatSeedsEnabled: isBoolean,
     fpsVisible: isBoolean, hitboxesVisible: isBoolean, hpVisible: isBoolean, idVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
     autoPauseEnabled: isBoolean, hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
     windowResizable: isBoolean,

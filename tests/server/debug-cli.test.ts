@@ -7,6 +7,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { debugCliCatalog, getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { TICK_SECONDS, type GraveSnapshot } from '@/shared/protocol'
+import { plantingRefusal, snapshotLawn } from '@/shared/content/planting'
 import { startFromSave } from './start-from-save'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
@@ -234,6 +235,65 @@ test('plant invincibility blocks bites until disabled and does not prevent remov
     assert.equal(game.debugCommand('/plantinvincible').enabled, true)
     assert.equal(game.debugCommand('/removeplant 3 2').ok, true)
     assert.equal(game.render().plants.some(plant => plant.row === 2), false)
+})
+
+test('/plantanywhere puts any seed into any cell of the board: a dirt row, over a plant, on a grave or a crater', () => {
+    // 1-2 plays rows 1-3 (from 0), and its bank holds two packets.
+    const game = setup(true, 'pvz:adventure-1-2')
+    for (const command of ['/cooldown', '/sun set 9990', '/seed 1 peashooter', '/seed 2 normal', '/griditem grave 3 5', '/griditem crater 3 6']) {
+        assert.equal(game.debugCommand(command).ok, true, command)
+    }
+    game.command({ type: 'resume' })
+    game.update(0)
+    /** The rejection of putting `seedId` down from `slot` in the cell, if it is refused. */
+    const place = (seedId: string, slot: number, row: number, column: number) => {
+        const before = game.lastRejection
+        game.command({ type: 'selectSeed', seedId, slot })
+        game.command({ type: 'placePlant', row, column })
+        game.update(0)
+        return game.lastRejection === before ? undefined : game.lastRejection!.code
+    }
+    const plantsAt = (row: number, column: number) => game.render().plants.filter(plant => plant.row === row && plant.column === column)
+    const itemsAt = (typeId: string, row: number, column: number) =>
+        (game.render().gridItems as GraveSnapshot[]).filter(item => item.typeId === typeId && item.row === row && item.column === column)
+    assert.equal(place('pvz:peashooter', 0, 0, 0), 'row-not-active')
+
+    const on = game.debugCommand('/plantanywhere')
+    assert.deepEqual([on.ok, on.enabled, on.advice], [true, true, { key: 'DEBUG_SWITCH_ON', args: ['DEBUG_SWITCH_PLANTANYWHERE'] }])
+    // The client's planting preview decides by the same rules, the switch read off the snapshot.
+    const lawn = snapshotLawn(definitions, levels.levels['pvz:adventure-1-2'], game.render())
+    assert.equal(plantingRefusal(lawn, definitions.seeds['pvz:peashooter'], 'plants', 0, 0), undefined)
+    assert.equal(place('pvz:peashooter', 0, 0, 0), undefined, 'a dirt row')
+    assert.equal(place('pvz:peashooter', 0, 0, 0), undefined, 'over a plant')
+    const [bottom, top] = plantsAt(0, 0)
+    assert.ok(bottom && top)
+    assert.equal(place('pvz:peashooter', 0, 2, 4), undefined, 'on a grave')
+    assert.equal(place('pvz:peashooter', 0, 2, 5), undefined, 'on a crater')
+    assert.deepEqual([plantsAt(2, 4).length, itemsAt('pvz:grave', 2, 4).length, plantsAt(2, 5).length, itemsAt('pvz:crater', 2, 5).length], [1, 1, 1, 1])
+    assert.equal(place('pvz:normal', 1, 4, 8), undefined, 'a zombie seed in a dirt row')
+    assert.deepEqual(game.render().zombies.map(zombie => zombie.row), [4])
+
+    // The shovel digs up the top plant, the one zombies eat first.
+    game.command({ type: 'selectTool', toolId: 'pvz:shovel' })
+    game.command({ type: 'useToolAt', row: 0, column: 0 })
+    game.update(0)
+    assert.deepEqual(plantsAt(0, 0).map(plant => plant.entityId), [bottom.entityId])
+
+    // A grave seed's grave replaces the grave there and a crater seed's crater the crater there, their plants gone as
+    // ever; a grave and a crater share a cell.
+    const [grave] = itemsAt('pvz:grave', 2, 4), [crater] = itemsAt('pvz:crater', 2, 5)
+    assert.equal(game.debugCommand('/seed 1 grave').ok, true)
+    assert.equal(game.debugCommand('/seed 2 crater').ok, true)
+    assert.equal(place('pvz:grave', 0, 2, 4), undefined)
+    assert.equal(place('pvz:crater', 1, 2, 5), undefined)
+    assert.equal(place('pvz:grave', 0, 2, 5), undefined)
+    assert.deepEqual([plantsAt(2, 4).length, plantsAt(2, 5).length], [0, 0])
+    const graves = itemsAt('pvz:grave', 2, 4), craters = itemsAt('pvz:crater', 2, 5)
+    assert.deepEqual([graves.length, craters.length, itemsAt('pvz:grave', 2, 5).length], [1, 1, 1])
+    assert.ok(graves[0].entityId !== grave.entityId && craters[0].entityId !== crater.entityId, 'each a new one')
+
+    assert.equal(game.debugCommand('/plantanywhere').enabled, false)
+    assert.equal(place('pvz:grave', 0, 0, 3), 'row-not-active', 'off, the rules hold again')
 })
 
 test('CLI replaces a seed slot while paused, preserves slot order and saves the new packet', () => {

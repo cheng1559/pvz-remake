@@ -18,6 +18,7 @@ const RULE_PREFERENCES: Record<string, () => boolean> = {
     cooldown: () => GameDebugSettings.set('rechargingEnabled', !GameDebugSettings.rechargingEnabled),
     suncost: () => GameDebugSettings.set('sunCostEnabled', !GameDebugSettings.sunCostEnabled),
     plantinvincible: () => GameDebugSettings.set('plantInvincible', !GameDebugSettings.plantInvincible),
+    plantanywhere: () => GameDebugSettings.set('plantAnywhere', !GameDebugSettings.plantAnywhere),
 }
 
 export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
@@ -169,6 +170,7 @@ async function executeCommand(
             if (name === 'cooldown') GameDebugSettings.set('rechargingEnabled', enabled)
             if (name === 'suncost') GameDebugSettings.set('sunCostEnabled', enabled)
             if (name === 'plantinvincible') GameDebugSettings.set('plantInvincible', enabled)
+            if (name === 'plantanywhere') GameDebugSettings.set('plantAnywhere', enabled)
             return { ...result, advice: debugSwitchAdvice(name, enabled) }
         }
     }

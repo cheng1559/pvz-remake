@@ -49,7 +49,7 @@
 - 大多数草坪指令需要关卡处于游戏进行中：已过开场和选卡界面，且尚未分出胜负。否则会提示"/… requires an active level"。
 - `/plant` 在关卡的任何状态下都可使用：开场期间、选卡界面中，以及分出胜负之后。
 - `/money` 和 `/achievement` 在开场期间也可使用。关卡外的 `/money` 和任何地方的 `/achievement` 都需要玩家档案。
-- 规则开关（`/cooldown`、`/suncost`、`/plantinvincible`、`/cheatseed`）和 `/collect` 在关卡的任何状态下都可使用；在关卡外只设定之后关卡的偏好。
+- 规则开关（`/cooldown`、`/suncost`、`/plantinvincible`、`/plantanywhere`、`/cheatseed`）和 `/collect` 在关卡的任何状态下都可使用；在关卡外只设定之后关卡的偏好。
 - 关卡暂停时和速度为 0 时，指令照常生效。
 
 ## 示例
@@ -65,7 +65,7 @@
 | `/zombie normal 3 9` | 在第 3 行第 9 列放下普通僵尸 |
 | `/zombie normal 3 1 plants` | 在第 3 行第 1 列放下植物方的普通僵尸 |
 | `/item award` | 掉落本关奖励 |
-| `/plantinvincible`、`/cheatseed`、`/tilted`、`/highresolution`、`/haptics`、`/cursor`、`/fps` | 切换这些开关 |
+| `/plantinvincible`、`/plantanywhere`、`/cheatseed`、`/tilted`、`/highresolution`、`/haptics`、`/cursor`、`/fps` | 切换这些开关 |
 | `/sharpness 0.5` | 把锐度恢复为默认值 |
 | `/mod` | 打开模组管理器 |
 | `/win` | 立即赢得本关 |
@@ -223,6 +223,7 @@
 | `/cooldown` | 开关种子冷却；关闭时所有种子包立即可用 |
 | `/suncost` | 开关阳光消耗 |
 | `/plantinvincible` | 开关植物无敌 |
+| `/plantanywhere` | 开关随意种植：任何种子都能放在棋盘上的任意格子 |
 | `/cheatseed` | 开关全卡模式：选卡界面提供更多种子，卡槽全开并给出铁铲，并开放完整图鉴 |
 | `/collect {auto\|click\|move}` | 设定阳光和金币的收集方式 |
 
@@ -241,6 +242,16 @@
 - 迷糊菇仍会让啃咬它的僵尸或敌对植物倒戈，然后消失；敌对大嘴花仍可整株吞下植物。
 - 对现有植物和之后种下的植物都生效。
 - 植物自身的自毁、铁铲铲除和 `/removeplant` 照常生效。
+- 默认关闭，保存在本机，跨关卡和重启保留。
+
+#### `/plantanywhere`
+
+- 开启后，从种子栏或传送带放下的种子可以放在棋盘上的任意格子，不受关卡和格子里已有东西的限制。阳光和冷却照常计算（`/suncost`、`/cooldown`）。
+- 植物种子可以种在土地行、墓碑和弹坑上，也可以叠种在其他植物上。保龄球红线、关卡规则封闭的格子，以及墓碑吞噬者和水生植物对格子的要求也一并取消。
+- 僵尸种子也可以放在土地行。
+- 墓碑种子放下的墓碑替换格子里已有的墓碑，弹坑种子放下的弹坑替换已有的弹坑并重新计时；墓碑和弹坑可以在同一格。两者照常消灭所在格子的植物。
+- 同一格叠种的植物中，在植物列表里槽位最靠后的那株（通常是最后种下的）在最上层：僵尸先啃它，子弹先打它，它画在最上面，铁铲也先铲它。
+- 种植预览同样遵循这个开关。
 - 默认关闭，保存在本机，跨关卡和重启保留。
 
 #### `/cheatseed`
@@ -381,6 +392,7 @@
 | 冷却 | `/cooldown` | 开 | 保存在本机 |
 | 阳光消耗 | `/suncost` | 开 | 保存在本机 |
 | 植物无敌 | `/plantinvincible` | 关 | 保存在本机 |
+| 随意种植 | `/plantanywhere` | 关 | 保存在本机 |
 | 全卡模式 | `/cheatseed` | 关 | 保存在本机 |
 | 收集方式 | `/collect` | `click` | 保存在本机 |
 | 帧率 | `/fps` | 关 | 保存在本机 |

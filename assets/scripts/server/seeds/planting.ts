@@ -215,7 +215,7 @@ function sessionLawn(session: Session): PlantingLawn {
     const { world } = session
     const { definition, board } = world.resources.get(LevelStateResource)
     return {
-        level: definition, board, rule: levelRule(world),
+        level: definition, board, rule: levelRule(world), anywhere: getDebugRules(world).plantAnywhere,
         plantAt: (row, column) => {
             const entity = planting.findPlantAt(session, row, column)
             return entity === undefined ? undefined : plantInPlay(world, entity)

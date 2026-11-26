@@ -62,6 +62,11 @@ test('plant invincibility is saved only after a successful server command', asyn
     assert.equal(settings().plantInvincible, true)
     assert.equal((await executeDebugCliCommand('/plantinvincible', true, () => cli.debugSwitched('plantinvincible', false))).ok, true)
     assert.equal(settings().plantInvincible, false)
+    // /plantanywhere is kept the same way; outside a level it turns the preference alone, for the levels to come.
+    assert.equal((await executeDebugCliCommand('/plantanywhere', false, () => { throw new Error('no level') })).enabled, true)
+    assert.equal(settings().plantAnywhere, true)
+    assert.equal((await executeDebugCliCommand('/plantanywhere', true, () => cli.debugSwitched('plantanywhere', false))).ok, true)
+    assert.equal(settings().plantAnywhere, false)
 })
 
 test('FPS and cursor commands persist their settings and work without an active level', async () => {

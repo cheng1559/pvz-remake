@@ -167,11 +167,12 @@ export function createLevelController(
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, startOptions, lifecycle)
             if (save) await restoring(save, () => scene!.restorePresentation(save.client))
-            // A level's switches start as DEFAULT_DEBUG_RULES (recharge and sun cost on, invincibility off), saved or not;
-            // the preferences turn over those that differ.
+            // A level's switches start as DEFAULT_DEBUG_RULES (recharge and sun cost on, invincibility and planting
+            // anywhere off), saved or not; the preferences turn over those that differ.
             if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown')
             if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost')
             if (GameDebugSettings.plantInvincible) game.debugCommand('/plantinvincible')
+            if (GameDebugSettings.plantAnywhere) game.debugCommand('/plantanywhere')
             if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
