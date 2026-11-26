@@ -245,7 +245,7 @@ The debug console's history (64 commands) is kept under `pvz-remake:debug:cli-hi
 
 ### The level's UI
 
-- **Menu button**: the original 117×46 stone button at the top right, at (681, -10), created by `LevelHudPresenter` and shown after the level intro (not after a loss). It ignores the right button. While a seed packet or tool is held, a click on it only drops it; otherwise it opens the in-game [Options](#options) dialog. Pausing is described in [Pausing, focus and saving](#pausing-focus-and-saving).
+- **Menu button**: the original 117×46 stone button at the top right, at (681, -10), created by `LevelHudPresenter` and shown after the level intro (not after a loss). It ignores the right button. While a seed packet or tool is held, a click on it only drops it; otherwise it opens the in-game [Options](#options) dialog. Pausing is described in [Pausing, focus and saving](#pausing-focus-and-saving). It stands in the level's controls (`LevelView.controls`, `LevelControls`), which keep their margin from the UI area's right edge and take the buttons Mods add beside it (`LevelHudOptions.controlsParent`); they are drawn in the seed bank's layer unless a Mod moves them.
 - **Seed bank and tools**: bank and conveyor packets share `LevelSeedBank`'s views, buttons and tooltips; `LevelBoardHud` lays out the tools. The key labels shown while hotkeys are on are described in [Hotkeys](#hotkeys).
 - **Seed chooser** (`LevelSeedChooser`, the original `SeedChooserScreen`): the server decides which seeds are offered and chosen; the client moves the panel and the cards.
   - The panel drops in during the level intro, 516 px over intro ticks 400–425, and lifts out over 450–475 (`CutScene`'s `TimeSeedChoserSlideOnStart` and the rest); a repick follows the same timeline.

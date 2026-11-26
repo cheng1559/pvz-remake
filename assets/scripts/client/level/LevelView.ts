@@ -61,6 +61,12 @@ export class LevelView {
     rule?: LevelRuleView
     /** The level's red line, when it has one with a look. */
     plantingLine?: PlantingLineView
+    /**
+     * The level's controls at the top right, kept at the UI area's right edge: Menu, and what Mods put beside it
+     * (LevelHudOptions.controlsParent). It stands in the seed bank's layer, drawn where the bank is; a Mod may move it
+     * to another layer of the screen UI, the HUD's for one.
+     */
+    controls!: Node
     private boardHud?: LevelBoardHud
     private seedChooser?: LevelSeedChooser
     private seedChooserSend: (command: GameCommand) => void = () => {}
@@ -177,7 +183,9 @@ export class LevelView {
         }).node
         bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
         // The top bar keeps its original margins from the UI area's edges.
-        const bankLeft = uiAreaEdge(bankLayer, 'left'), bankRight = uiAreaEdge(bankLayer, 'right')
+        const bankLeft = uiAreaEdge(bankLayer, 'left')
+        const controls = uiAreaEdge(bankLayer, 'right')
+        controls.name = 'LevelControls'
         // Edge-anchored controls can sit outside the HUD's 800 width, so their tooltips clamp to the visible screen.
         const tooltipSurface = uiNode({ name: 'TooltipSurface', parent: hud, position: { x: WIDTH / 2, y: -HEIGHT / 2 }, viewport: true }).node
         const mobileGridGuide = uiNode({
@@ -291,7 +299,7 @@ export class LevelView {
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, levelRule: () => view.rule, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             packetCostFont: pico129,
-            adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
+            adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: controls, adviceFont: houseOfTerror28,
             tutorialArrowLayer: tutorialArrows, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
             sunText, progressMeter: meterNodes.meter, progressFillClip: meterNodes.fillClip, progressFill: meterNodes.fill, progressHead: meterNodes.head, levelText: meterNodes.levelText, coinBank,
@@ -309,6 +317,7 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        view.controls = controls
         entityRenderer.sunBankOffset = () => bankLeft.position.x
         entityRenderer.coinBankOffset = () => coinBank.edge.position.x
         entityRenderer.uiOnLawn = (x, y) => view.uiOnLawn(x, y)
