@@ -8,7 +8,7 @@ import { sunflowerTutorial } from './sunflowerTutorial'
 import { moreSunTutorial } from './moreSunTutorial'
 import { shovelTutorial } from './shovelTutorial'
 import { introDialog } from './introDialog'
-import { packetUpgradeOffer, packetUpgradeOffers } from './packetUpgradeOffer'
+import { packetUpgradeOffer, packetUpgradeOffers, packetUpgradeTeaser } from './packetUpgradeOffer'
 import { coinAdvice } from './coinAdvice'
 import { whackTutorial } from './whackTutorial'
 
@@ -112,7 +112,8 @@ export function installBuiltinTutorials(registry: TutorialRegistry): void {
         // and keeps the seed-slot upgrade out of reach until 2-2's lines about it.
         'pvz:adventure-2-1': { ...introDialog(201, 207), loot: { firstCoinAfterWave: 5, savingsCap: 75 }, moneyCollected: coinAdvice,
             chooserWarnings: { seed: { id: 'pvz:puffshroom', warning: 'SEED_CHOOSER_PUFFSHROOM_WARNING' }, sunWarning: 'SEED_CHOOSER_NIGHT_SUN_WARNING' } },
-        'pvz:adventure-2-2': introDialog(1401, 1402),
+        // 2-2's lines about it, or the offer itself to one who can already afford it (packetUpgradeTeaser).
+        'pvz:adventure-2-2': packetUpgradeTeaser(1401, 1402),
         // CutScene::StartLevelIntro offers the first seed-slot upgrade on levels 13-24 except 15, 20 and 21, and the
         // second on levels 16-24 except 20 and 21.
         'pvz:adventure-2-3': packetUpgradeOffer,

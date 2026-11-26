@@ -169,6 +169,7 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 
 - Twenty waves (flags on 10 and 20) of Zombies, Coneheads, Bucketheads, Newspaper and Flag Zombies, on 2-1's graves, which raise Zombies or Coneheads 4000:4000 after the final wave.
 - On a first adventure Dave says lines 1401–1402, with `{MONEY}` and `{UPGRADE_COST}` replaced by the current coins and the price of the next seed-slot upgrade.
+- Not in the original, where 2-1's savings cap keeps a first adventure below the price (`packetUpgradeTeaser`): Dave says 1401–1402 only while the next upgrade is out of reach. A player who can already afford it here (from `/money`, a Mod or the profile) is offered it instead, the first slot as from 2-3 on or the second as from 2-6 on, and one who owns both, or whom Dave no longer pitches to (declined twice), hears nothing.
 - Award: the Fume-shroom, which leads to 2-3.
 
 #### 2-3

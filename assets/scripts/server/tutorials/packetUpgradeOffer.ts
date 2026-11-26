@@ -1,6 +1,8 @@
 import { EconomyStateResource, PacketUpgradeOfferResource, TutorialResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { TutorialScript } from './index'
+import type { World } from '../state/World'
+import { daveLines, introDialog } from './introDialog'
 
 /**
  * CutScene::StartLevelIntro's seed-slot pitches, by the upgrade each sells: the first slot's, 1501-1503, then 1510-1511
@@ -74,3 +76,28 @@ export function packetUpgradeOffers(upgrades: number): TutorialScript {
 
 /** Levels 13-15: the first seed-slot upgrade only. */
 export const packetUpgradeOffer = packetUpgradeOffers(1)
+
+/**
+ * Dave's lines `first` to `last` about the next seed-slot upgrade (2-2's 1401-1402: what has been saved, and that he
+ * will sell something once it is {UPGRADE_COST}), said while it is out of reach; on a first adventure 2-1's savings cap
+ * keeps the first one so there. Not the original, which never gets past that: one who can afford the next upgrade
+ * already (from /money, a Mod or the profile) is offered it instead, the first or the second as from levels 13 and 16
+ * on, and hears nothing once both are owned; one Dave no longer pitches to (no offer, declined twice) hears nothing.
+ */
+export function packetUpgradeTeaser(first: number, last: number): TutorialScript {
+    const teaser = introDialog(first, last), lines = daveLines(first, last), offers = packetUpgradeOffers(OFFERS.length)
+    const teasing = (world: World) => lines.includes(world.resources.get(TutorialResource).dialogIndex ?? -1)
+    return {
+        blocksIntro: true,
+        dave: true,
+        initialize(world, firstAdventure) {
+            offers.initialize!(world, firstAdventure)
+            if (world.resources.get(TutorialResource).dialogIndex !== undefined || !world.resources.has(PacketUpgradeOfferResource)) return
+            const offer = world.resources.get(PacketUpgradeOfferResource)
+            if (world.resources.get(EconomyStateResource).money < offer.cost) teaser.initialize!(world, firstAdventure)
+        },
+        advanceDialog(world) { (teasing(world) ? teaser : offers).advanceDialog!(world) },
+        dialogQuestion: offers.dialogQuestion,
+        answerDialog: offers.answerDialog,
+    }
+}
