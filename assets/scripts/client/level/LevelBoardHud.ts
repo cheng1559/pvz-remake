@@ -43,8 +43,10 @@ export class LevelBoardHud {
                 text: look.hotkey, font: 'hotkey', fontSize: 16, color: new Color(213, 159, 43),
                 x: bankFrame.originalSize.width - 4, y: -4, align: 'right',
             })
-            // The held tool follows the pointer over the lawn, under the plant cursor.
-            const cursor = ui.image(cursorLayer, frame).node
+            // The held tool follows the pointer over the lawn, under the plant cursor. Its node stands at the pointer and
+            // the tool at its offset from there, so a Mod may scale it about the pointer.
+            const cursor = uiNode({ name: 'ToolCursor', parent: cursorLayer }).node
+            ui.image(cursor, frame, { x: look.cursorOffset[0], y: -look.cursorOffset[1] })
             cursor.setSiblingIndex(0)
             cursor.active = false
             const tooltip = ui.tooltip(bank, { text: ui.text(look.tooltipKey), gap: 0, surface: tooltipSurface })
@@ -130,7 +132,7 @@ export class LevelBoardHud {
             const held = snapshot.cursor.mode === 'tool' && snapshot.cursor.toolId === tool.toolId
             tool.image.active = !held
             tool.cursor.active = held && !!this.pointer
-            if (this.pointer) tool.cursor.setPosition(this.pointer.x + look.cursorOffset[0], -this.pointer.y + look.cursorOffset[1])
+            if (this.pointer) tool.cursor.setPosition(this.pointer.x, -this.pointer.y)
         }
         if (this.tools.length) syncTutorialArrow(this.root, arrow)
         const layout = this.content.presentation.conveyor

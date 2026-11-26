@@ -1262,9 +1262,10 @@ test("the level's award is collected by its own view: its sounds, the starburst,
         active = true
         children: FakeNode[] = []
         components: any[] = []
+        scale = { x: 1, y: 1 }
         constructor(readonly name = '', public parent?: FakeNode) { parent?.children.push(this) }
         setPosition() {}
-        setScale() {}
+        setScale(x: number, y: number) { this.scale = { x, y } }
         getComponent(type: any) { return this.components.find(component => component instanceof type) ?? null }
         getComponentsInChildren(type: any): any[] { return this.children.flatMap(child => [...child.components.filter(component => component instanceof type), ...child.getComponentsInChildren(type)]) }
         destroy() { this.isValid = false; this.parent!.children.splice(this.parent!.children.indexOf(this), 1) }
@@ -1305,6 +1306,13 @@ test("the level's award is collected by its own view: its sounds, the starburst,
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'the glow goes as it is collected')
     view.sync({ ...item, state: 'collecting' })
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'and nothing else takes what is behind it away')
+    // Grown, it is twice its size on the screen: on a lawn shown at 0.8, its node scaled by a Mod to 1.25 (its own size
+    // on the screen), the 2x packet is drawn at its own size.
+    Object.assign(stage, { levelEndTicks: () => 400, lawnScale: () => 0.8, uiOnLawn: () => ({ x: 400, y: 200 }) })
+    node.setScale(1.25, 1.25)
+    view.sync({ ...item, state: 'collecting' })
+    const large = node.children.find(child => child.name === 'FinalSeedPacketLarge')!
+    assert.ok(large.active && Math.abs(0.8 * node.scale.x * large.scale.x * 2 - 2) < 1e-9, 'twice its size on the screen')
     AwardView.collected(stage, { eventId: 2, type: 'levelAwardCollected', data: { entityId: 6, x: 0, y: 0 } }, {})
     assert.deepEqual(played, ['seedlift', 'tap2', 'seedlift', 'tap2'], 'heard even before its view is made')
 })
