@@ -352,7 +352,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 - Installed Mods persist locally, independently of the original ZIP, and can be updated with a package of the same ID.
 - Higher-priority Mods, loaded later, override matching resource IDs. Missing IDs use the original resources; declared resources that fail to load do not fall back.
 - ZIP is the only installation format. The game has no built-in HD assets; they ship separately as a resource pack. Pico129 and Pix118Bold are excluded from the HD pack.
-- The manager shows `Loading...` until the installed Mod list is ready.
+- The manager shows the `LOADING` text (`LOADING...`) until the installed Mod list is ready.
 
 See [Mods](MODS.md) for the package format and installation.
 

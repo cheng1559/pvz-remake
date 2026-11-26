@@ -25,7 +25,7 @@ ZIP is the only way to install a Mod.
 3. Tick the Mods to enable and use the arrows to order them (see [Priority and load order](#priority-and-load-order)).
 4. Click **Apply** and confirm the restart.
 
-The manager window shows `Loading...` first, and the list once the installed Mods have been read.
+The manager window shows the `LOADING` text (`LOADING...`) first, and the list once the installed Mods have been read.
 
 ### What Import does
 
