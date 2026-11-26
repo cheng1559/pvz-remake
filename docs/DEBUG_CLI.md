@@ -319,7 +319,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 - `/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. The counter measures drawn frames against real time, independently of the game's pause or speed. It is off by default and saved locally.
 - `/hitboxes` outlines on the lawn, a pixel wide, the plants' bodies (green) and attack areas (red: a Chomper's, a Potato Mine's, a bowled nut's, a Puff-shroom's or Fume-shroom's reach), the bodies (green) and bite areas (red) of zombies not dead or dying, and the hitboxes of projectiles and lawn mowers (red; a waiting lawn mower's is the area where a zombie sets it off). It is off by default and saved locally.
 - `/hp` shows health bars over the plants' and zombies' hitboxes: green for a plant; for a zombie, its body (red), then its helm (yellow) and its shield (blue), out of all three at their full. It is off by default and saved locally.
-- `/id` shows the plants' and zombies' slot numbers in their lists in the bottom left of their hitboxes (see [Entity data](MODS.md#entity-data)). It is off by default and saved locally.
+- `/id` shows the plants' and zombies' slot numbers in their lists in the bottom right of their hitboxes (see [Entity data](MODS.md#entity-data)). It is off by default and saved locally.
 
 #### Focus, haptics, controls, full screen and volume
 

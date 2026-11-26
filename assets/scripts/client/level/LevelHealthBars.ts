@@ -29,7 +29,7 @@ type Part = { health: number, color: Color }
  * Over each plant and zombie on the lawn, over the lawn's particles (DEBUG_OVERLAY_ORDER): with `/hp` a bar of its
  * health, as wide for any in a black frame, centred over its body the way it faces (the hitbox `/hitboxes` outlines; of
  * a rising zombie, what is up out of the ground), and with `/id` its slot of its list (EntityList) in its body's bottom
- * left. A zombie's bar is its body's health, then its helm's, then its shield's, out of all three at their full: the
+ * right. A zombie's bar is its body's health, then its helm's, then its shield's, out of all three at their full: the
  * armor, which goes first, empties it from the right.
  */
 export class LevelHealthBars {
@@ -81,9 +81,10 @@ export class LevelHealthBars {
             const label = this.slots.get(entity.entityId) ?? this.label(node, entity.entityId), slot = String(entity.slot)
             // Set again, a label is laid out again.
             if (label.text !== slot) label.text = slot
-            // In the body's bottom left, a pixel clear of the `/hitboxes` outline (Graphics::DrawRect: its left column the
-            // body's first, its bottom row under the body's last). A label's y runs down to its baseline.
-            label.setPosition(body.x - 400 + BORDER + BAR_GAP, -(top - body.height + BAR_GAP))
+            // In the body's bottom right, its right edge a pixel clear of the `/hitboxes` outline (Graphics::DrawRect: its
+            // right column one past the body's last, its bottom row under the body's last). A label's y runs down to its
+            // baseline.
+            label.setPosition(body.x + body.width - 400 - BAR_GAP, -(top - body.height + BAR_GAP))
         }
         // A plant's or zombie's body as its view has it (PlantView.hitRects, ZombieView.hitRects); none until the view is
         // made.
@@ -114,7 +115,7 @@ export class LevelHealthBars {
     }
 
     private label(parent: Node, entityId: number): UILabel {
-        const label = this.ui.label(parent, { text: '', font: this.font, color: Color.WHITE, baseline: true })
+        const label = this.ui.label(parent, { text: '', font: this.font, color: Color.WHITE, baseline: true, align: 'right' })
         this.slots.set(entityId, label)
         return label
     }

@@ -60,7 +60,7 @@ test('/hitboxes outlines as Board::DrawDebugObjectRects does, each rect with Gra
     ])
 })
 
-test("/hp draws over each plant and zombie a bar as wide for any, a zombie's armor in it after its body, and its slot in its bottom left", () => {
+test("/hp draws over each plant and zombie a bar as wide for any, a zombie's armor in it after its body, and its slot in its bottom right", () => {
     class Color {
         static readonly WHITE = new Color(255, 255, 255)
         constructor(readonly r = 0, readonly g = 0, readonly b = 0, readonly a = 255) {}
@@ -85,12 +85,12 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
         node.setParent(options.parent)
         return { node, ...options.graphics ? { graphics } : {} }
     }
-    const labels: Array<{ node: Node, text: string, at: number[] }> = []
+    const labels: Array<{ node: Node, text: string, align?: string, at: number[] }> = []
     const ui = {
-        label(parent: Node, options: { text: string }) {
+        label(parent: Node, options: { text: string, align?: string }) {
             const node = new Node('Label')
             node.setParent(parent)
-            const label = { node, text: options.text, at: [] as number[], setPosition(x: number, y: number) { this.at = [x, y] } }
+            const label = { node, text: options.text, align: options.align, at: [] as number[], setPosition(x: number, y: number) { this.at = [x, y] } }
             labels.push(label)
             return label
         },
@@ -122,8 +122,10 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     const frame = (x: number, y: number) => [[x - 1, y - 1, 52], [x - 1, y + 3, 52], [x - 1, y, 1], [x + 50, y, 1]]
     assert.deepEqual(rects, [...frame(-295, 97), [-295, 97, 50], [-295, 97, 25],
         ...frame(130, 192), [130, 192, 50], [130, 192, 21.09375], [151.09375, 192, 14.453125]])
-    // Each slot in its body's bottom left, two in and one up: the plant's body bottoms 35 up the layer, the zombie's 90.
-    assert.deepEqual(labels.map(({ text, at }) => [text, ...at]), [['1', -288, -36], ['4', 132, -91]], 'a label\'s y running down')
+    // Each slot in its body's bottom right, its right edge one in and one up: the plant's body ends 250 left of the
+    // layer's middle and bottoms 35 up it, the zombie's ends 180 right of it and bottoms 90 up.
+    assert.deepEqual(labels.map(({ text, align, at }) => [text, align, ...at]), [['1', 'right', -251, -36], ['4', 'right', 179, -91]],
+        'a label\'s y running down')
 
     const shown = () => labels.filter(({ node }) => node.parent!.children.includes(node)).map(({ text }) => text)
     bars.sync({ plants: [], zombies: [{ ...zombie, slot: 0 }] })
@@ -134,14 +136,14 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     Object.assign(settings, { hpVisible: false, idVisible: true })
     bars.sync({ plants: [plant], zombies: [zombie] })
     const at = labels.filter(({ node }) => node.parent!.children.includes(node)).map(({ text, at }) => [text, ...at])
-    assert.deepEqual([rects.length, at], [0, [['1', -288, -36], ['4', 132, -91]]], '/id alone: the slots without the bars, where they were')
+    assert.deepEqual([rects.length, at], [0, [['1', -251, -36], ['4', 179, -91]]], '/id alone: the slots without the bars, where they were')
 
     // A rising zombie's bar over what is up out of the ground (its top 140 up the layer), its slot in that part's bottom
-    // left; none for one all under the ground.
+    // right; none for one all under the ground.
     Object.assign(settings, { hpVisible: true, idVisible: true })
     bars.sync({ plants: [], zombies: [{ ...zombie, entityId: 8, slot: 5 }, { ...zombie, entityId: 9, slot: 6 }] })
     const rising = labels.filter(({ node }) => node.parent!.children.includes(node)).map(({ text, at }) => [text, ...at])
-    assert.deepEqual([rects.slice(0, 4), rects.length, rising], [frame(130, 142), 7, [['5', 132, -91]]])
+    assert.deepEqual([rects.slice(0, 4), rects.length, rising], [frame(130, 142), 7, [['5', 179, -91]]])
     // One whose view is still being made goes without.
     bars.sync({ plants: [{ ...plant, entityId: 4 }], zombies: [] })
     assert.deepEqual([rects.length, shown()], [0, []])
