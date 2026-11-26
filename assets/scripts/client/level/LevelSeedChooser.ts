@@ -34,6 +34,8 @@ interface Choice extends ChooserEntry {
     home?: { x: number, y: number }
     slot: number
     motion?: { fromX: number, fromY: number, x: number, y: number, start: number, end: number }
+    /** Whether the level may not recommend it (a card of its seed's own side with a tooltip that warns; recommend). */
+    warns: boolean
     /** SeedNotRecommendedToPick: grayed while it waits in the chooser. */
     notRecommended: boolean
     grayed?: boolean
@@ -122,7 +124,7 @@ export class LevelSeedChooser {
     }
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
-        notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
+        private readonly notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
         entries: readonly ChooserEntry[] = [], cheatSeeds = false) {
         this.definitions = content.definitions
         this.slots = slots
@@ -157,16 +159,10 @@ export class LevelSeedChooser {
                 x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost }
             const views = [new SeedPacketView({ ...args, name: `ChosenShadow-${cardKey(card)}`, parent: shadows, iconLayer: this.cardIcons }),
                 new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
-            let tooltipOptions: Parameters<UI['tooltip']>[1]
-            let warning: string | undefined
             const subject = packetSubject(content.presentation, seed)
             for (const view of views) view.setSeed(subject.plant, seed.sunCost, subject.zombie, subject.gridItem)
-            if (subject.tooltipKey === undefined) tooltipOptions = { text: ui.text(subject.nameKey), gap: 0 }
-            else {
-                warning = card.team === undefined ? notRecommended(card.seedId) : undefined
-                tooltipOptions = { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0,
-                    ...(warning ? { warning: ui.text(warning) } : {}) }
-            }
+            const tooltipOptions: Parameters<UI['tooltip']>[1] = subject.tooltipKey === undefined ? { text: ui.text(subject.nameKey), gap: 0 }
+                : { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0 }
             const [shadow, view] = views
             // A card of the other side from its seed's own faces the other way, as it does in the bank.
             if (packetTeam(seed, card.team)) for (const packet of views) packet.setMirrored(true)
@@ -179,7 +175,9 @@ export class LevelSeedChooser {
             button.hapticsEnabled = false
             button.clickOnPress = true
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
-            const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1, notRecommended: warning !== undefined }
+            const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1,
+                warns: subject.tooltipKey !== undefined && card.team === undefined, notRecommended: false }
+            this.recommend(choice)
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
             return choice
@@ -253,6 +251,16 @@ export class LevelSeedChooser {
         this.pages = cheatSeeds ? pages : pages.slice(0, 1)
         for (const { button } of this.pageTurners) button.node.active = this.pages.length > 1
         this.showPage(0)
+    }
+
+    /**
+     * Board::SeedNotRecommendedForLevel for a card, asked again as the chooser opens for a repick, since the level's
+     * time of day may have changed meanwhile (`/time`): its tooltip's warning, and whether it is grayed in the grid.
+     */
+    private recommend(choice: Choice): void {
+        const warning = choice.warns ? this.notRecommended(choice.seedId) : undefined
+        choice.notRecommended = warning !== undefined
+        choice.tooltip.warning = warning ? this.ui.text(warning) : ''
     }
 
     /** Turns to the next page (`step` 1) or the one before (-1), round from either end. */
@@ -392,6 +400,7 @@ export class LevelSeedChooser {
         if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= SEED_CHOOSER_SLIDE.offStart)) {
             this.repickTick = SEED_CHOOSER_SLIDE.onStart
             this.repickFinished = false
+            for (const choice of this.choices) this.recommend(choice)
             this.syncIntro(SEED_CHOOSER_SLIDE.onStart)
         }
         for (const button of this.pageButtons) button.node.active = !repick

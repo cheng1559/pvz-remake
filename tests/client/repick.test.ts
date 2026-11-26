@@ -211,3 +211,33 @@ test("a repick's cards in the bank ride with it where it stands, wherever the la
     chooser.followBank({ worldPosition: new Vec3(-295, 310) })
     assert.deepEqual(shifts, [[0, 0], [10, 20]], 'in its choosing place, then 10 right of it and 20 above, in the panel\'s own units')
 })
+
+test("a chooser opened again for a repick asks again which cards the level does not recommend, its time of day changed meanwhile", () => {
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
+        '@/shared/content/chooserPages': chooserPages,
+    })
+    let night = false
+    const card = (seedId: string, warns: boolean, notRecommended: boolean) => ({ seedId, warns, notRecommended, slot: -1, tooltip: { warning: notRecommended ? 'NOCTURNAL_WARNING' : '' } })
+    const puff = card('pvz:puffshroom', true, true), pea = card('pvz:peashooter', true, false), zombie = card('pvz:normal', false, false)
+    const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+        age: 0, choices: [puff, pea, zombie], start: {}, syncPlaceholders() {}, syncIntro() {}, layOut() {}, pageButtons: [], send() {},
+        ui: { text: (key: string) => key },
+        // Board::SeedNotRecommendedForLevel by the time of day it is at now.
+        notRecommended: (seedId: string) => seedId === 'pvz:puffshroom' && !night ? 'NOCTURNAL_WARNING' : undefined,
+    })
+    const snapshot = (repick: boolean) => ({ seedPackets: [], seedChooser: { availableSeeds: [], slots: 6, choosing: true, ...(repick ? { repick: true } : {}) } })
+    chooser.sync(snapshot(false))
+    // `/time night` in play, then a repick.
+    night = true
+    chooser.sync(snapshot(true))
+    assert.deepEqual([puff, pea, zombie].map(each => [each.notRecommended, each.tooltip.warning]), [[false, ''], [false, ''], [false, '']],
+        'the mushroom is recommended at night: no longer grayed, nor warned of')
+    // Its Let's Rock lifted it out; back at day for the next.
+    chooser.repickTick = 475
+    chooser.sync(snapshot(false))
+    night = false
+    chooser.sync(snapshot(true))
+    assert.deepEqual([puff.notRecommended, puff.tooltip.warning], [true, 'NOCTURNAL_WARNING'])
+})
