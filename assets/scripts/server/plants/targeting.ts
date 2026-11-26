@@ -12,7 +12,9 @@ import type { Plant } from './Plant'
  * left mirrors the attack rect, the zombie's inset on its far side.
  * `headless`: it takes a zombie that has lost its head too, as every plant but the potato mine, the chomper and the
  * tangle kelp does.
- * `biting`: a chomper biting reaches a little further (its `eatingExtraRange`).
+ * `biting`: a chomper biting reaches a little further for a zombie (its `eatingExtraRange`), which may walk on or stop
+ * eating between the start of the bite and the bite. A plant does neither, so the bite reaches no further for one: a
+ * plant dug up meanwhile makes it miss, not take the one beyond.
  */
 export function findAbilityTarget(
     world: World,
@@ -48,7 +50,7 @@ export function findAbilityTarget(
         consider(entity, zombieRect(world, definitions, zombie), inset, zombie.state === 'eating' || biting ? targeting.eatingExtraRange : 0)
     }
     for (const { plant: other, rect } of hostilePlants(world, definitions, team, plantPosition.row)) {
-        consider(other.id, rect, 0, biting ? targeting.eatingExtraRange : 0, targeting.plantReach)
+        consider(other.id, rect, 0, 0, targeting.plantReach)
     }
     return target
 }

@@ -131,6 +131,24 @@ test('blasts and chompers take out hostile plants only', () => {
     assert.ok(events.some(event => event.type === 'chomperBit' && event.data.ate === true && typeof event.data.plantId === 'number'))
 })
 
+test('a chomper whose plant is dug up before the bite misses, and does not reach the plant a cell further on', () => {
+    const server = begin()
+    debug(server, '/plant sunflower 3 4')
+    debug(server, '/plant sunflower 3 5')
+    debug(server, '/plant chomper 3 6 zombies')
+    server.drainEvents()
+    const chomper = [...world(server).plants].find(plant => plant.typeId === 'pvz:chomper') as unknown as { phase: string }
+    for (let tick = 0; tick < 100 && chomper.phase !== 'biting'; tick++) server.tick()
+    assert.equal(chomper.phase, 'biting', 'it bites at the sunflower beside it')
+    runCommand(server, { type: 'selectTool', toolId: 'pvz:shovel' })
+    assert.equal(runCommand(server, { type: 'useToolAt', row: 2, column: 4 }), undefined)
+    const bite = run(server, 100).find(event => event.type === 'chomperBit')!
+    assert.equal(bite.data.ate, false, 'with it dug up, the bite misses')
+    // The next sunflower is 50 past its reach: within the 60 a bite reaches further for a zombie, but a plant does not
+    // move or stop eating meanwhile.
+    assert.deepEqual(plants(server).filter(plant => plant.typeId === 'pvz:sunflower').map(plant => plant.column), [3])
+})
+
 test('zombies eat the plants of the other side and pass their own', () => {
     const server = begin()
     debug(server, '/plant wallnut 3 3 zombies')
