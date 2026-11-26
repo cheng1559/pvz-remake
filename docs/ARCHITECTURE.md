@@ -551,7 +551,7 @@ A Mod's kind extends one of these classes and is registered by the name its defi
 - An armor's `dropSounds` play with its `clips.drop` when it breaks, unless the hit bypasses the shield.
 - `seedPackets` holds the packet flash effect (`flash`), the selection color and the default placement of a picture in its packet. A plant's own presentation `packet` may give its picture's `placement` and `phase`.
 - `almanac` holds, by plant or zombie ID, the ground the almanac shows it on and whether its packet is an upgrade's.
-- Presentation `boards` define backgrounds, music and game-over geometry; gameplay `boards.*.bounds` define the horizontal limits.
+- Presentation `boards` define the game-over geometry, and for each time of day (`times`) the background, the whole lawn, the music and the house door; gameplay `boards.*.bounds` define the horizontal limits.
 - A zombie whose animation has a `flag` layer carries a flag, dropped as in `Zombie::DropFlag`.
 - Particle snapshots retain optional remaining lifetimes. Packet flashes use `seedPackets.flash`, with no effect-ID branches on restore.
 
@@ -588,7 +588,12 @@ See [Mod Lab](../mods/example/README.md) and [Mods](MODS.md).
 
 - `LevelPresentation` (`getLevelPresentation`) selects the intro and the tutorial text and guide configuration by the level's ID (the presentation `levels`).
 - The adventure intro (the grass roll, the preview zombies and the timing of the mowers rolling in) lives in `level/adventure/AdventureIntro`. The shared scene contains no intro timings.
-- Board backgrounds, music and game-over geometry live in the presentation `boards` (`boards.json`).
+- Board backgrounds, music and game-over geometry live in the presentation `boards` (`boards.json`), by time of day.
+- `/time` (`server/level/time.ts`) starts a change of time of day, `LevelState.timeChange`, sent in the snapshot as `timeChange`. The server advances it a tick at a time and moves the level to the new time (`LevelState.time`) halfway (`TIME_SWITCH_TICKS`).
+- On the client, `TimeBlends` (`client/level/TimeBlends.ts`) draws the change. Each `TimeBlend` keeps the old look (`begin`), shows the new time's (`show`), mixes the two by the change's progress (`blend`) and drops the old one at the end (`end`). The base game adds the lawn, the shadows (`BoardShadows`), the music (`LevelAudioPresenter.timeBlend`) and the house door (`LevelGameOverPresenter.timeBlend`); a Mod adds its own with `LevelView.addTimeBlend`.
+- A crater reads the change from `LevelStage.timeBlend()`. `SpriteBlend` draws two pictures in one sprite's place: a shadow's at their shares, a covering picture's (a crater, the door) with the new one whole under the old one.
+- The game over draws the door from `LevelGameOverPresenter.doorFrames`, which the widescreen Mod wraps for its TV pictures.
+- The background shows the lawn `shownLawn` (`level/boards/definitions.ts`) picks. `LevelView.showLawn` draws it; the widescreen Mod wraps it for its TV pictures.
 - Later levels add backend content and a presentation entry (or reuse an existing one). New environments implement their board presentation; they do not copy the scene, input, HUD or save controller.
 
 #### Game over

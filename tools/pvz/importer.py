@@ -18,6 +18,7 @@ from .particles import convert_directory as convert_particles
 from .strings import convert_lawnstrings, merge_project_strings
 from .audio import copy_sounds
 from .cursors import extract_cursors
+from .doors import make_alike as make_doors_alike
 from .music.convert import convert_music, split_manifest
 
 from . import ROOT, BASE_MOD as MOD
@@ -60,6 +61,8 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     print('[content] Images and alpha channels', flush=True)
     images = convert_images(raw / 'reanim', assets / 'images')
     images += convert_images(raw / 'images', assets / 'images', raw / 'properties/resources.xml')
+    # The front yard's house door, alike by day and by night for `/time`'s blend (tools/pvz/doors.py).
+    make_doors_alike(assets / 'images')
     particle_images = convert_images(raw / 'particles', assets / 'images/particles')
     # The mouse cursors are only in the executable: pvz:cursor_pointer, pvz:cursor_hand, pvz:cursor_dragging.
     for name, image in cursors.items():

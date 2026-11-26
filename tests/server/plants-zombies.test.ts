@@ -27,7 +27,7 @@ import type { PoleVaulter } from '@/server/zombies/PoleVaulter'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
-const board = definitions.boards['pvz:day']
+const board = definitions.boards['pvz:frontyard']
 
 function game(config = definitions) {
     const world = withPlantTypes(withZombieTypes(new World(), config), config)
@@ -37,6 +37,7 @@ function game(config = definitions) {
         id: 'pvz:test',
         definition: { ...levels.levels['pvz:adventure-1-1'], activeRows: [0, 1, 2, 3, 4] },
         board,
+        time: 'day',
         phase: 'gameplay',
         result: 'playing' as const,
         paused: false,

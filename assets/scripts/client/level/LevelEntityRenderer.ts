@@ -14,7 +14,7 @@ import { boardCell } from './LevelGeometry'
 import { BoardShadows } from './BoardShadows'
 import { EntityFlashes } from './EntityFlashes'
 import { canShovel, cellPlant } from '@/shared/content/planting'
-import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType } from './LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType, worldTime } from './LevelStage'
 
 /** What every frame is heard as, once its own events are: StageEventRegistry's `frame` handlers (the disco music's end). */
 const FRAME_EVENT: ServerEvent = { eventId: 0, type: 'frame', data: {} }
@@ -51,6 +51,7 @@ export class LevelEntityRenderer implements LevelStage {
     coinBankOffset = (): number => 0
     uiOnLawn = (x: number, y: number): { x: number, y: number } => ({ x, y })
     lawnScale = (): number => 1
+    timeBlend: LevelStage['timeBlend'] = () => undefined
     levelEndTicks = (): number => -1
     shake: LevelStage['shake'] = () => {}
     private readonly creationTasks = new Map<number, Promise<void>>()
@@ -79,6 +80,7 @@ export class LevelEntityRenderer implements LevelStage {
     get quiet(): boolean { return this.firstFrame || this.restoring }
     get level(): LevelDefinition { return this.content.levels.levels[this.lastSnapshot!.levelId] }
     get gameplayTick(): number { return this.lastSnapshot?.gameplayTick ?? 0 }
+    get time(): string { return worldTime(this.content, this.lastSnapshot!) }
 
     addScenery(node: Node, order: number, entityId?: number): void { this.scenery.set(node, { order, ...(entityId === undefined ? {} : { entityId }) }) }
 

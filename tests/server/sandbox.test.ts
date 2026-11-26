@@ -13,9 +13,9 @@ const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options = { randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
 
-for (const [levelId, board] of [['pvz:sandbox-day', 'pvz:day'], ['pvz:sandbox-night', 'pvz:night']] as const) {
+for (const [levelId, time] of [['pvz:sandbox-day', 'day'], ['pvz:sandbox-night', 'night']] as const) {
     test(`${levelId} has ten empty slots, no zombies but those put down, and never ends`, () => {
-        assert.equal(levels.levels[levelId].board, board)
+        assert.deepEqual([levels.levels[levelId].board, levels.levels[levelId].time], ['pvz:frontyard', time])
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
         game.start({ ...options, levelId })
         game.command({ type: 'completeIntro' })
@@ -40,8 +40,8 @@ for (const [levelId, board] of [['pvz:sandbox-day', 'pvz:day'], ['pvz:sandbox-ni
             [null, null, 'pvz:peashooter', null, null, null, null, null, null, null])
     })
 
-    test(`${levelId}'s graves raise any of its board's grave zombies, as it names no zombies`, () => {
-        assert.deepEqual(levels.levels[levelId].graveZombies, definitions.boards[board].graveZombies)
+    test(`${levelId}'s graves raise any of its time's grave zombies, as it names no zombies`, () => {
+        assert.deepEqual(levels.levels[levelId].graveZombies, definitions.boards['pvz:frontyard'].times[time].graveZombies)
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
         game.start({ ...options, levelId })
         game.command({ type: 'completeIntro' })

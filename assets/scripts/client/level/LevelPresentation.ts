@@ -5,7 +5,7 @@ import type { LoadedContent } from './LevelView'
 import type { LevelSlots } from './LevelSlots'
 import type { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
-import { getBoardPresentation } from './boards/definitions'
+import { boardTimeLook } from './boards/definitions'
 import { AdventureIntro } from './adventure/AdventureIntro'
 import type { UI } from '@/client/ui/UI'
 
@@ -47,10 +47,14 @@ export interface LevelPresentation {
     lawnGuideSteps: readonly string[]
 }
 
-export function getLevelPresentation(level: LevelDefinition, definitions: PresentationDefinitions, levelId: string) {
+/**
+ * The level's presentation, at its own time of day or `time` (`/time`): its board's look then, with the level's music
+ * if it has its own.
+ */
+export function getLevelPresentation(level: LevelDefinition, definitions: PresentationDefinitions, levelId: string, time = level.time) {
     const presentation = definitions.levels?.[levelId]
     if (!presentation) throw new Error(`Level presentation is not installed: ${levelId}`)
-    const board = getBoardPresentation(definitions, level.board)
+    const board = boardTimeLook(definitions, level.board, time)
     return { ...presentation, board: { ...board, music: presentation.music ?? board.music },
         createIntro: (context: LevelIntroContext) => AdventureIntro.create(context, presentation.intro) }
 }

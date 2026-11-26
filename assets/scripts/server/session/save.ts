@@ -60,8 +60,14 @@ export interface ServerSaveSnapshot extends SavedLists {
     gameplayTick: number
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
-    /** `iceTrap`: LevelState.iceTrap, a side the board keeps frozen. */
-    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, iceTrap?: Partial<Record<Team, number>> }
+    /**
+     * `iceTrap`: LevelState.iceTrap, a side the board keeps frozen; `time`: LevelState.time, when `/time` put it at
+     * another than its own; `timeChange`: LevelState.timeChange, the lawn turning.
+     */
+    level: {
+        phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, iceTrap?: Partial<Record<Team, number>>, time?: string
+        timeChange?: { from: string, to: string, ticks: number }
+    }
     economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
@@ -104,12 +110,14 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     } as DeterministicRngState
     DeterministicRng.restore(random)
 
-    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level', ['iceTrap'])
+    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level', ['iceTrap', 'time', 'timeChange'])
     const level = {
         phase: oneOf(levelSource.phase, ['intro', 'gameplay'] as const, 'server save.level.phase'),
         result: oneOf(levelSource.result, ['playing', 'won', 'lost'] as const, 'server save.level.result'),
         paused: boolean(levelSource.paused, 'server save.level.paused'),
         ...(levelSource.iceTrap === undefined ? {} : { iceTrap: parseIceTrap(levelSource.iceTrap, 'server save.level.iceTrap') }),
+        ...(levelSource.time === undefined ? {} : { time: nonEmptyString(levelSource.time, 'server save.level.time') }),
+        ...(levelSource.timeChange === undefined ? {} : { timeChange: parseTimeChange(levelSource.timeChange, 'server save.level.timeChange') }),
     }
 
     const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks'])
@@ -227,6 +235,13 @@ function parseSeedBank(value: unknown): SeedBankState {
         ...(source.choosing === undefined ? {} : { choosing: boolean(source.choosing, 'server save.seedBank.choosing') }),
         ...(source.owned === undefined ? {} : { owned: array(source.owned, 'server save.seedBank.owned')
             .map((id, index) => nonEmptyString(id, `server save.seedBank.owned[${index}]`)) }) }
+}
+
+/** LevelState.timeChange: the time of day the lawn turns from, the one it turns to, and how many ticks it has turned. */
+function parseTimeChange(value: unknown, name: string): { from: string, to: string, ticks: number } {
+    const source = exact(value, ['from', 'to', 'ticks'], name)
+    return { from: nonEmptyString(source.from, `${name}.from`), to: nonEmptyString(source.to, `${name}.to`),
+        ticks: nonNegativeInteger(source.ticks, `${name}.ticks`) }
 }
 
 /** LevelState.iceTrap: the ticks left of a side frozen, by side. */

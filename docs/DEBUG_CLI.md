@@ -135,6 +135,7 @@ The test levels are outside the Adventure (they have no `adventureIndex`): each 
 | `/griditem {grave\|crater} {row} {col} [team]` | Places a grave or a crater in a cell |
 | `/gravezombies` | Raises a zombie from every grave at once |
 | `/lawnmower {trigger\|reset} [row]` | Sets off or resets the lawn mower of one row, or of every active row |
+| `/time {time_of_day}` | Changes the level to another time of day of its board, such as `/time night` |
 
 #### `/plant`
 
@@ -165,6 +166,14 @@ The test levels are outside the Adventure (they have no `adventureIndex`): each 
 - `trigger` sets off the waiting lawn mower of the row, or of every active row.
 - `reset` puts a new lawn mower down in the row, or in every active row, whose mower has gone, whatever that one is still doing.
 - When no mower changes, the command reports "No lawn mowers could be changed".
+
+#### `/time`
+
+- The name is one of the board's times of day (`day` or `night` on the front yard), in any case. A time the board does not have is refused ("Board has no time of day: …"); 1-1 to 1-4 have no night.
+- The change takes 100 ticks; the level is at the new time after 50.
+- While a change is in progress, `/time` is refused ("Time of day is changing").
+- The time the level is already at changes nothing.
+- Everything on the lawn stays where it is. See [Boards](GAMEPLAY.md#boards) for what changes.
 
 ### Seeds, sun, coins, drops and achievements
 

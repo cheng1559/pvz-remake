@@ -232,7 +232,7 @@ function parseSavedPlant(value: unknown, name: string): SavedPlant {
     const own = jsonRoundTrip(Object.fromEntries(Object.entries(all).filter(([key]) => !fields.includes(key)))) as JsonObject
     const source = exact(Object.fromEntries(Object.entries(all).filter(([key]) => fields.includes(key))),
         ['typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], name,
-        ['mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks'])
+        ['mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks', 'wakeTicks'])
     const mowered = source.mowered === undefined ? undefined : exact(source.mowered, ['squash'], `${name}.mowered`, ['left'])
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -254,6 +254,7 @@ function parseSavedPlant(value: unknown, name: string): SavedPlant {
         ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
         ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
+        ...(source.wakeTicks === undefined ? {} : { wakeTicks: positiveInteger(source.wakeTicks, `${name}.wakeTicks`) }),
     }
 }
 

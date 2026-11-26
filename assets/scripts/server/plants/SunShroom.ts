@@ -1,4 +1,5 @@
 import type { SystemContext } from '@/server/state/World'
+import type { AnimationRandom } from '@/shared/content/animation'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
@@ -44,6 +45,15 @@ export class SunShroom extends Producer {
 
     animationPhase(): string {
         return this.phase
+    }
+
+    /**
+     * Plant::SetSleeping's anim_sleep is the small one's. Grown, it sleeps big (`bigsleep`, anim_bigsleep, which the
+     * original draws off the board only: no board of its turns to day).
+     */
+    setSleeping(asleep: boolean, random: AnimationRandom): void {
+        super.setSleeping(asleep, random)
+        if (asleep && this.phase === 'big' && this.animations?.body) this.animations.body.clip = 'bigsleep'
     }
 
     protected holdsProduction(): boolean {

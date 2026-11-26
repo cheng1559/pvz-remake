@@ -471,7 +471,7 @@ export interface AdventureIntroLayout {
     readonly readySetPlant: boolean
 }
 export interface LevelPresentationDefinition {
-    readonly music?: BoardPresentation['music']
+    readonly music?: BoardTimePresentation['music']
     /**
      * A strings key: the name a level outside the Adventure (no `adventureIndex`) shows at the bottom right, as the
      * original's other modes show theirs (Board::DrawLevel's mChallengeName).
@@ -861,9 +861,9 @@ function graveZombie(value: unknown, name: string): GraveZombiePresentation {
     })
 }
 
-function music(value: unknown, name: string): BoardPresentation['music'] {
+function music(value: unknown, name: string): BoardTimePresentation['music'] {
     const tune = (value: unknown, name: string) => nonEmptyString(value, name) as MusicTuneId
-    return allFields<BoardPresentation['music']>(value, name, { choosing: tune, gameplay: tune })
+    return allFields<BoardTimePresentation['music']>(value, name, { choosing: tune, gameplay: tune })
 }
 
 /** A pace: a value, or [min, max] to pick between. */
@@ -1013,16 +1013,20 @@ function parseDave(value: unknown, name: string): PresentationDefinitions['dave'
 }
 
 function parseBoard(value: unknown, name: string): BoardPresentation {
-    return fields<BoardPresentation>(value, name, ['background', 'backgroundX', 'music', 'gameOver'], {
-        background: nonEmptyString, backgroundX: finite, plantShadow: nonEmptyString, music,
+    const board = allFields<BoardPresentation>(value, name, {
         gameOver: (value, name) => allFields<BoardPresentation['gameOver']>(value, name, {
-            images(value, name) {
-                const images = nonEmptyStrings(value, name)
-                if (images.length !== 3) throw new TypeError(`${name} must contain three images`)
-                return images as [string, string, string]
-            },
-            interior: point, doorway: point, clipX: finite, winnerY: finite, panX: finite,
+            title: nonEmptyString, interior: point, doorway: point, clipX: finite, winnerY: finite, panX: finite,
         }),
+        times: table(parseBoardTime),
+    })
+    if (!Object.keys(board.times).length) throw new TypeError(`${name}.times must not be empty`)
+    return board
+}
+
+function parseBoardTime(value: unknown, name: string): BoardTimePresentation {
+    return fields<BoardTimePresentation>(value, name, ['background', 'backgroundX', 'music', 'door'], {
+        background: nonEmptyString, backgroundX: finite, lawn: nonEmptyString, plantShadow: nonEmptyString, music,
+        door: (value, name) => allFields<BoardTimePresentation['door']>(value, name, { interior: nonEmptyString, doorway: nonEmptyString }),
     })
 }
 
@@ -1278,18 +1282,39 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
     return projectile
 }
 
+/** A board's look (BoardDefinition): its house as the zombies win into it, and its look at each of its times of day. */
 export interface BoardPresentation {
-    readonly background: string
-    readonly backgroundX: number
-    /** The shadow under its plants and zombies (Board::DrawShadow: IMAGE_PLANTSHADOW, IMAGE_PLANTSHADOW2 at night); the day's when left out. */
-    readonly plantShadow?: string
-    readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
+    /**
+     * The zombies winning (CutScene::UpdateZombiesWon): the title that comes up (ZOMBIESWON), where the house's door
+     * lies (Board::DrawHouseDoorBottom draws its `interior` under the winner, Board::DrawHouseDoorTop its `doorway` frame
+     * over it), the board x the winner is cut off at behind the doorway, the y it walks in at, and how far the camera
+     * pans to the house. The same at every time: each time's door pictures (BoardTimePresentation.door) are made to lie
+     * alike (tools/pvz/doors.py), so a change of time blends them as the lawn.
+     */
     readonly gameOver: {
-        readonly images: readonly [string, string, string]
+        readonly title: string
         readonly interior: { readonly x: number; readonly y: number }
         readonly doorway: { readonly x: number; readonly y: number }
         readonly clipX: number
         readonly winnerY: number
         readonly panX: number
     }
+    readonly times: Readonly<Record<string, BoardTimePresentation>>
+}
+
+/** A board's look at a time of day (BoardPresentation.times). */
+export interface BoardTimePresentation {
+    readonly background: string
+    readonly backgroundX: number
+    /**
+     * The whole lawn, sodded (the day's): a level whose sod is it shows it whole once that sod is laid, and so does a
+     * level at this time by `/time`, whose own sod lies at its own time only (shownLawn). `background` when left out
+     * (the night's).
+     */
+    readonly lawn?: string
+    /** The shadow under its plants and zombies (Board::DrawShadow: IMAGE_PLANTSHADOW, IMAGE_PLANTSHADOW2 at night); the day's when left out. */
+    readonly plantShadow?: string
+    readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
+    /** Its house's door, open as the zombies win (BoardPresentation.gameOver): the interior's picture and the doorway's. */
+    readonly door: { readonly interior: string; readonly doorway: string }
 }

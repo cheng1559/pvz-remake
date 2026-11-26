@@ -20,7 +20,6 @@ import { lawnPlants, plantInPlay } from '../level/lawn'
 import { gridItems } from '../gridItems/gridItems'
 import { placeCrater } from '../gridItems/craters'
 import { craterAt } from '@/shared/content/craters'
-import { isPlantAsleep } from '../plants/sleep'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -200,7 +199,7 @@ export const planting = {
         if (team === 'zombies') plant.team = team
         world.insert(world.plants, plant)
         plant.start(random, gameplayTick)
-        startPlantAnimations(plant, definition, isPlantAsleep(definition, level.board), random)
+        startPlantAnimations(plant, definition, plant.asleep(world), random)
         return entity
     },
 

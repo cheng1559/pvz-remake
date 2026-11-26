@@ -238,6 +238,10 @@ export class AdventureIntro implements LevelIntro {
 
     get elapsedTicks(): number { return this.ticks }
 
+    laidSod(): string | undefined {
+        return !this.sodTicks || this.ticks >= ROLL_SOD_END ? this.layout.sod : undefined
+    }
+
     /**
      * CutScene::UpdateIntro: each row's mower shows once its TimeLawnMowerStart has passed (the higher rows' later),
      * after the lawn is rolled and the graves are up, and comes on over TimeLawnMowerDuration.
@@ -377,6 +381,10 @@ export class AdventureIntro implements LevelIntro {
         )
     }
 
+    /**
+     * The bank's place comes back from the UI area's left edge as the camera pans back (TimePanLeftStart), the two
+     * starting and stopping together, whether or not this intro pans.
+     */
     bankSettled(): number {
         return this.bankSlid(PAN_LEFT_START)
     }
@@ -386,10 +394,6 @@ export class AdventureIntro implements LevelIntro {
         return this.layout.entrance === false ? 1 : animateCurveFloat(start, PAN_LEFT_END, this.ticks, 0, 1, 'ease-in-out')
     }
 
-    /**
-     * The bank's place comes back from the UI area's left edge as the camera pans back (TimePanLeftStart), the two
-     * starting and stopping together, whether or not this intro pans.
-     */
     private startSodRoll(): void {
         for (const roll of this.layout.rolls) ParticlePlayer.spawn({
             parent: this.board,

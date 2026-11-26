@@ -14,7 +14,7 @@ import { withZombieTypes } from '../zombieTypes'
 import { newPlant, withPlantTypes } from '../plantTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-const board = definitions.boards['pvz:day']
+const board = definitions.boards['pvz:frontyard']
 
 function game(content = definitions) {
     const world = withPlantTypes(withZombieTypes(new World(), content), content)
@@ -24,7 +24,8 @@ function game(content = definitions) {
         id: 'pvz:test',
         definition: {
             adventureIndex: 1,
-            board: 'pvz:day',
+            board: 'pvz:frontyard',
+            time: 'day',
             activeRows: [2],
             startingSun: 0,
             seedPackets: ['pvz:peashooter'],
@@ -34,6 +35,7 @@ function game(content = definitions) {
             award: { kind: 'seed' as const, id: 'pvz:test' },
         },
         board,
+        time: 'day',
         phase: 'gameplay',
         result: 'playing' as const,
         paused: false,

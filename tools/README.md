@@ -39,6 +39,7 @@ Common entry points:
 | Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
 | Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
+| Process a Mod's front yard door pictures for the time-of-day change | `python3 -m tools.pvz.doors mods/<name> [--namespace widescreen]` |
 | iOS JS performance sampling | `npx tsx tools/profile/ios.ts ...` |
 | Compare built games with the benchmark | `npm run bench -- <A> [<B>]` |
 | Tests of the resource conversion tools | `npm run test:tools` |
@@ -53,6 +54,7 @@ pvz/
 ├── importer.py              # Import flow and resource manifest
 ├── pak.py                   # PAK unpacking, file name normalization, temporary directory
 ├── images.py                # Images and alpha channel merging
+├── doors.py                 # Front yard door pictures, made the same size and place by day and by night
 ├── reanim.py                # Reanim tracks, clips and animation marks
 ├── oversized.py             # The dancers' art, a quarter larger than the others', shrunk with their Reanims to the others' size
 ├── compiled_reanim.py       # Decoding of the original's compiled animations

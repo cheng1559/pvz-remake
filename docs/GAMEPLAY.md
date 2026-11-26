@@ -153,7 +153,7 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 **After the last wave.**
 
 - 200 ticks after the final wave, every fully risen grave on the lawn (not only the level's own) raises one zombie, picked by the level's `graveZombies` weights, over 150 ticks. None rises once the award has dropped. A grave raises its zombies on its own side.
-- `graveZombies` names the zombies at their wave weights. A level that names none takes its board's `graveZombies` that its waves or pool bring (`Board::PickGraveRisingZombieType`, `mZombieAllowed`), and all of them if it names no zombies, as the sandboxes: Zombie, Conehead and Buckethead by day, Zombie and Conehead at night.
+- `graveZombies` names the zombies at their wave weights. A level that names none takes its time of day's `graveZombies` that its waves or pool bring (`Board::PickGraveRisingZombieType`, `mZombieAllowed`), and all of them if it names no zombies, as the sandboxes: Zombie, Conehead and Buckethead by day, Zombie and Conehead at night.
 - A zombie comes up as its board's `riseFromGrave` has it (`Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos`): its body and attack rects come up with it, less what the ground hides. `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie.clip`, the original's `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change it.
 
 #### 2-1
@@ -303,6 +303,28 @@ These presentation settings are `pvz:whack-a-zombie` in `presentation/definition
 - The Grave Buster limit (2-10) is applied before those weights.
 - The belt stops once the level award has dropped.
 
+### Boards
+
+A level is played on a board (`board`) at one of the board's times of day (`time`). A board has the same layout at every time; its `times` give what differs: whether it is night, the zombies its graves raise (`graveZombies`) and the sun that falls from the sky (`skySun`).
+
+- The front yard (`pvz:frontyard`) has a day and a night. Sun falls from the sky by day (`pvz:sun`), not at night.
+- 1-1 to 1-4 are played on the unsodded front yard (`pvz:frontyard-unsodded`), which has only a day. Each level lays its own sod over it: one row in 1-1, three in 1-2 and 1-3, the whole lawn in 1-4.
+- A level can name its own sky sun (`skySun`), or none with `null`. Wall-nut Bowling (1-5) and the conveyor belt level (1-10) have none.
+- The first sky sun falls 425 to 700 ticks into play (`Board::InitLevel`).
+- Once 1-4's sod is laid, the whole lawn is drawn as one picture. **Differs from the original**, which keeps drawing the sod strip over the unsodded lawn.
+
+`/time` (see [Debug Console](DEBUG_CLI.md#time)) changes a level in play to another time of day of its board. The original has no such change.
+
+- The change takes 100 ticks. The lawn, shadows, craters, the house and the music fade from the old time to the new one.
+- After 50 ticks the level is at the new time:
+  - At night, sleeping mushrooms wake over 70 ticks. Meanwhile their Zs stay and they stretch up and down on their base (`Plant::UpdateReanim`); then the Zs go and they play their awake animation.
+  - By day, mushrooms fall asleep at once. A grown Sun-shroom uses its big sleeping animation (`anim_bigsleep`).
+  - A Doom-shroom or Ice-shroom lights its fuse as it wakes, with its planting sound.
+  - Sky sun starts or stops falling as the new time has it.
+- When the change is over, the level's music (unless it has its own) and the house the zombies walk into are the new time's.
+- At a time other than its own, a level shows that time's whole lawn instead of its own sod.
+- Pausing holds the change, and so does losing. A save keeps the time and a change in progress.
+
 ## Seeds and the seed chooser
 
 ### Seed definitions
@@ -396,7 +418,8 @@ Costs and recharges are the seed definitions' `sunCost` and `cooldownTicks`; the
 
 ### Shared rules
 
-- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `isPlantAsleep`, the server's one test of a plant asleep): it does nothing, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
+- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `Plant.asleep`, the server's one test of a plant asleep): it does nothing, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
+- **Lit fuses stay awake.** A Doom-shroom or Ice-shroom whose fuse is lit does not fall asleep, even when the time turns to day.
 - **Shots leave a puff at the mouth** (`Plant::Fire`): the Scaredy-shroom's `PARTICLE_PUFFSHROOM_MUZZLE` at 27 and 13 from the shot's corner, the Puff-shroom's at 18 and 13, the Snow Pea's `PARTICLE_SNOWPEA_PUFF` at 8 and 13, drawn just over the row's lawn mowers. This is the plant presentation's `muzzle`, placed where `projectileFired` says the shot set off.
 - **Shots hit from where they stood as the tick began** (`Projectile::mX`, `GetProjectileRect`): a shot moves, then hits what its rect overlaps at that place, in whole pixels; a lawn mower set off looks there too, before it moves. A homing shot hits its target only once its own y lies between the target's top and bottom.
 - **Producers on the zombies' side** (the Sunflower, the Sun-shroom) make no sun. Each time they would, they take what that sun is worth (25, or a small Sun-shroom's 15) from the player's bank, down to 0 (the `sunDrained` event), glowing as they would and flashing the sun counter red with the buzzer. **Differs from the original**, where plants have no side (see [Teams and the Hypno-shroom](TEAMS.md)).
@@ -681,3 +704,4 @@ Each is described in its section above. The README's [Bug Fixes](../README.md#bu
 - The dance beat follows the level's ticks, not the app's updates, so pausing cannot steer it.
 - A dancer that reaches the house switches to its walk; on the plants' side its spotlight turns round with it.
 - The dancers' almanac windows are drawn at their lawn size.
+- Once 1-4 has rolled its sod, the day's lawn is drawn whole as one picture.

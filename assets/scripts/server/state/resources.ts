@@ -73,7 +73,18 @@ export interface EconomyState {
 export interface LevelState {
     id: string
     definition: LevelDefinition
+    /** The board it is on: its definition's. */
     board: BoardDefinition
+    /**
+     * The time of day it is at now, one of its board's `times`: its definition's, or another `/time` put it at
+     * (level/time.ts), which the save keeps.
+     */
+    time: string
+    /**
+     * The lawn turning from a time of day to another (`/time`; level/time.ts): the two, and how many of its
+     * TIME_CHANGE_TICKS it has turned; the level at the time it turns to from TIME_SWITCH_TICKS on. Kept by the save.
+     */
+    timeChange?: { from: string, to: string, ticks: number }
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean

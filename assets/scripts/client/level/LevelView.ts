@@ -5,7 +5,7 @@ import { LevelHitboxes } from './LevelHitboxes'
 import { LevelHealthBars } from './LevelHealthBars'
 import { LevelCoinBank } from './LevelCoinBank'
 import { LevelProgressMeter } from './LevelProgressMeter'
-import { Color, Component, instantiate, Mask, Node, Sprite, Tween, Vec3 } from 'cc'
+import { Color, Component, instantiate, Mask, Node, Sprite, type SpriteFrame, Tween, Vec3 } from 'cc'
 import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -40,6 +40,9 @@ import { LevelBoardHud } from './LevelBoardHud'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { PlantingLineView } from './PlantingLineView'
 import { uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
+import { boardPlantShadow, worldTime } from './LevelStage'
+import { type TimeBlend, TimeBlends } from './TimeBlends'
+import { boardLook, boardTimeLook, shownLawn } from './boards/definitions'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -136,26 +139,63 @@ export class LevelView {
         readonly definitions: GameplayDefinitions,
         readonly level: LevelDefinition,
         readonly board: BoardDefinition,
+        private levelTime: string,
     ) {}
+
+    /** The time of day the level is at (worldTime): its own, or another of its board's `/time` put it at. */
+    get time(): string { return this.levelTime }
+
+    /** The lawn picture the background shows (showLawn), a sprite ID. */
+    get lawn(): string { return this.lawnImage }
+    private lawnImage = ''
+    private backgroundNode?: Node
+    /** The background shows the lawn its time (`lawnTime`) and its sod call for now (shownLawn), once that picture is loaded. */
+    private syncLawn: () => Promise<void> = async () => {}
+    /** The time of day whose lawn is drawn: the level's, or one a change of time blends into (TimeBlends). */
+    private lawnTime = ''
+    /** `/time`'s change of time of day as it is drawn: the lawn, the shadows, the music, the house and what Mods add (addTimeBlend). */
+    private timeBlends!: TimeBlends
+
+    /**
+     * More of the board that `/time`'s change of time of day blends with the lawn, the shadows, the music and the
+     * house (TimeBlend): a Mod's that draws more of the board (the widescreen Mod's covers).
+     */
+    addTimeBlend(blend: TimeBlend): void {
+        this.timeBlends.add(blend)
+    }
+
+    /**
+     * The background shows the lawn picture `image` (a sprite ID, loaded as `frame`) about `x`: the time's background
+     * under the level's sod while that is being laid, the whole lawn once it is and at another time (shownLawn). A Mod
+     * that draws the lawn its own way wraps it (the widescreen Mod's TV pictures).
+     */
+    showLawn(image: string, frame: SpriteFrame, x: number): void {
+        this.lawnImage = image
+        if (!this.backgroundNode?.isValid) return
+        uiNode({ node: this.backgroundNode, position: { x, y: 0 }, anchor: { x: 0.5, y: 0.5 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+    }
 
     static async create(root: Node, content: LoadedContent, levelId: string, player: LevelPlayer, initial: WorldSnapshot): Promise<LevelView> {
         const playerName = player.name
         const level = content.levels.levels[levelId]
         if (!level) throw new Error(`Level is not installed: ${levelId}`)
-        const boardDefinition = content.definitions.boards[level.board]
-        const presentation = getLevelPresentation(level, content.presentation, levelId)
+        // A restored level may be at a time of day `/time` put it at, or turning from one to another: the view starts at
+        // the time it turns from, and its first frame blends on (TimeBlends), as it does as the change goes on.
+        const time = initial.timeChange?.from ?? worldTime(content, initial), boardDefinition = content.definitions.boards[level.board]
+        const presentation = getLevelPresentation(level, content.presentation, levelId, time)
+        const houseLook = boardLook(content.presentation, level.board).gameOver
         const animations = content.animations
         animations.freeze()
         const [
-            background, seedbank, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
+            seedbank, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverTitle, door, ui,
         ] = await Promise.all([
-            modResources.sprite(presentation.board.background),
             modResources.sprite('pvz:seedbank'),
             modResources.font('pvz:continuumbold14'),
             modResources.font('pvz:pico129'),
             modResources.font('pvz:houseofterror16'),
             modResources.font('pvz:houseofterror28'),
-            LevelGameOverPresenter.loadAssets(presentation.board.gameOver),
+            LevelGameOverPresenter.loadAssets(houseLook),
+            LevelGameOverPresenter.loadDoor(presentation.board.door),
             UI.load(),
             content.views.preload(content, level),
             AdviceWidget.loadAssets(content.presentation.clips),
@@ -166,10 +206,6 @@ export class LevelView {
         if (!slots) throw new Error('Level prefab is missing LevelSlots')
         uiNode({ node: layout, size: { width: WIDTH, height: HEIGHT } })
         const board = uiNode({ node: slots.board, size: { width: WIDTH, height: HEIGHT } }).node
-        uiNode({
-            node: slots.background, position: { x: presentation.board.backgroundX },
-            sprite: { frame: background, sizeMode: Sprite.SizeMode.RAW, trim: false },
-        })
         const entityLayer = uiNode({
             node: slots.entityLayer, size: { width: WIDTH, height: HEIGHT },
         }).node
@@ -265,12 +301,15 @@ export class LevelView {
         const rulePresentation = levelRulePresentation(content.presentation, level)
         const graveRise = rulePresentation?.graveRise ?? content.presentation.graves.rise
         const audio = new LevelAudioPresenter(presentation.board.music)
+        // Made below; the opening chooser comes before it.
+        let view: LevelView | undefined
         const createSeedChooser = async (chooser: NonNullable<WorldSnapshot['seedChooser']>) => {
             const created = await LevelSeedChooser.create(ui, content, hud, chooser.availableSeeds, chooser.slots, root, seedId => {
                 // Board::SeedNotRecommendedForLevel, on the installed land boards.
                 const seed = content.definitions.seeds[seedId]
                 if (seed.kind !== 'plant') return undefined
-                if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
+                // The time it is at: the level's own as it opens, any `/time` made at a repick.
+                if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.times[view?.time ?? time].night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 if (seed.placement === 'water') return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
@@ -279,7 +318,6 @@ export class LevelView {
             return created
         }
         const seedChooser = initial.seedChooser === undefined ? undefined : await createSeedChooser(initial.seedChooser)
-        let view!: LevelView
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
@@ -316,8 +354,76 @@ export class LevelView {
             entityRenderer,
             intro,
         )
-        const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
-        view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, houseLook, gameOverTitle, door)
+        view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition, time)
+        // The level's own sod (what its intro rolls, what it keeps from the last level) lies over its time's background
+        // until it is the whole lawn laid; at another time that time's whole lawn shows (shownLawn).
+        view.backgroundNode = slots.background
+        const ownSod = [slots.sodClip, board.getChildByName('ExistingSod')]
+        const wantedLawn = () => {
+            const shown = view.lawnTime, look = boardTimeLook(content.presentation, level.board, shown)
+            return { x: look.backgroundX, ...shownLawn(look, shown === level.time, intro.laidSod?.()) }
+        }
+        view.syncLawn = async () => {
+            const wanted = wantedLawn()
+            const frame = wanted.image === view.lawnImage ? undefined : await modResources.sprite(wanted.image)
+            // A later change shows its own.
+            const now = wantedLawn()
+            if (now.image !== wanted.image || !slots.background.isValid) return
+            for (const node of ownSod) if (node?.isValid) node.active = now.ownSod
+            if (frame) view.showLawn(now.image, frame, now.x)
+        }
+        view.lawnTime = time
+        // The old lawn, copied over the lawn's own nodes and under what lies on it (the planting line's stripe, the
+        // entities): the lawn is opaque, so the new one shows whole under it, and the copy goes at the rest of the weight.
+        let keptLawn: Node | undefined
+        const lawnBlend: TimeBlend = {
+            begin() {
+                const kept = keptLawn = uiNode({ name: 'LawnBlend', parent: board }).node
+                for (const node of [slots.background, ...ownSod]) if (node?.isValid && node.active) kept.addChild(instantiate(node))
+                kept.setSiblingIndex(slots.sodClip.getSiblingIndex() + 1)
+            },
+            show(to) {
+                view.lawnTime = to
+                return view.syncLawn()
+            },
+            blend(weight) { if (keptLawn?.isValid) uiNode({ node: keptLawn, opacity: Math.round(255 * (1 - weight)) }) },
+            end() {
+                if (keptLawn?.isValid) keptLawn.destroy()
+                keptLawn = undefined
+            },
+        }
+        // The shadows' picture the board's entities are drawn with (`shadow`), the one of the time a change blends into
+        // (`under`), which they turn to once none goes on.
+        let shadow = await boardPlantShadow(content, level.board, time), under = shadow, showing = time, changing = false
+        const settleShadows = () => {
+            if (changing || under === shadow) return
+            entityRenderer.shadows.swap(shadow, under)
+            shadow = under
+        }
+        const shadowBlend: TimeBlend = {
+            begin() { changing = true },
+            async show(to) {
+                showing = to
+                const frame = await boardPlantShadow(content, level.board, to)
+                if (showing !== to) return
+                under = frame
+                settleShadows()
+            },
+            blend(weight) { entityRenderer.shadows.blend(shadow, under, weight) },
+            end() {
+                changing = false
+                entityRenderer.shadows.blend(shadow, undefined, 0)
+                settleShadows()
+            },
+        }
+        view.timeBlends = new TimeBlends(time)
+        view.timeBlends.add(lawnBlend)
+        view.timeBlends.add(shadowBlend)
+        view.timeBlends.add(audio.timeBlend(to => getLevelPresentation(level, content.presentation, levelId, to).board.music))
+        view.timeBlends.add(gameOver.timeBlend(to => getLevelPresentation(level, content.presentation, levelId, to).board.door))
+        // What draws the change in its own place as it syncs (a crater).
+        entityRenderer.timeBlend = () => view.timeBlends.blending
         view.controls = controls
         entityRenderer.sunBankOffset = () => bankLeft.position.x
         entityRenderer.coinBankOffset = () => coinBank.edge.position.x
@@ -453,6 +559,7 @@ export class LevelView {
         }
         if (view.boardHud) view.boardHud.onQuestion = question => view.askDialogQuestion(ui, question)
         intro.sync()
+        await view.syncLawn()
         view.pinScreen()
         // Over everything the HUD got since, as the arrow spawned in play always was.
         tutorialArrows.setSiblingIndex(tutorialArrows.parent!.children.length - 1)
@@ -503,6 +610,7 @@ export class LevelView {
             if (this.boardHud.blocksIntro) return false
         }
         const complete = this.intro.update(dt, this.seedChooser?.choosing ? SEED_CHOOSER_SLIDE.onEnd : undefined)
+        void this.syncLawn()
         this.seedChooser?.update(dt)
         this.syncSeedChooserIntro()
         return complete
@@ -629,6 +737,8 @@ export class LevelView {
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
         this.lastSnapshot = snapshot
         this.gameplayTick = snapshot.gameplayTick
+        this.levelTime = snapshot.time ?? this.level.time
+        this.timeBlends.sync(this.levelTime, snapshot.timeChange)
         for (const event of events) {
             if (event.type === 'achievementEarned' && typeof event.data.id === 'string') this.onAchievementEarned?.(event.data.id, event.data.announce === true)
             if (event.type !== 'packetUpgradePurchased' && event.type !== 'packetUpgradeDeclined') continue
@@ -722,6 +832,7 @@ export class LevelView {
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
+        await this.syncLawn()
         // The board, graves rising with the intro included, is shown as it was, quietly.
         await this.entityRenderer.restore(snapshot)
         this.syncSeedChooserIntro()

@@ -219,8 +219,8 @@ test('the conveyor counts planted and waiting grave busters before dealing anoth
 
 function worldFor(night: boolean) {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
-    const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false })
+    const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards['pvz:frontyard']
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, time: night ? 'night' : 'day', phase: 'gameplay', result: 'playing', paused: false })
     withProjectileMotions(world, definitions).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world

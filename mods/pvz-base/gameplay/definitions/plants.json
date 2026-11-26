@@ -232,6 +232,7 @@
         "grow": {"frames": 12, "fps": 12, "hold": true},
         "body": {"frames": 12, "fps": [12, 15]},
         "sleep": {"frames": 10, "fps": [10, 15]},
+        "bigsleep": {"frames": 12, "fps": [10, 15]},
         "sleeping": {"frames": 17, "fps": [6, 8], "start": [0, 0.9]},
         "blink": {"frames": 3, "fps": 15, "once": true}
       },

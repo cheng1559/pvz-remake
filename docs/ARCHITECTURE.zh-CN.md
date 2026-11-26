@@ -553,7 +553,7 @@ flowchart LR
 - 护具的 `dropSounds` 在护具破碎时与其 `clips.drop` 一起播放，攻击绕过护盾时除外。
 - `seedPackets` 保存种子包的闪光特效（`flash`）、选中颜色，以及图片在种子包中的默认位置。植物自己的表现定义 `packet` 可以指定其图片的 `placement` 和 `phase`。
 - `almanac` 按植物或僵尸 ID 保存图鉴中展示它所用的背景，以及它的种子包是否为升级植物的样式。
-- 表现定义中的 `boards` 定义背景、音乐和失败演出的几何参数；玩法定义中的 `boards.*.bounds` 定义水平边界。
+- 表现定义的 `boards` 定义失败演出的几何参数，以及每个时段（`times`）的背景、整片草坪、音乐和房门；玩法定义的 `boards.*.bounds` 定义水平边界。
 - 动画中带有 `flag` 层的僵尸会举着旗子，旗子按 `Zombie::DropFlag` 的方式掉落。
 - 粒子快照保留可选的剩余寿命。种子包闪光使用 `seedPackets.flash`，读档时不按特效 ID 分支。
 
@@ -590,7 +590,12 @@ flowchart LR
 
 - `LevelPresentation`（`getLevelPresentation`）按关卡 ID（表现定义的 `levels`）选择开场，以及教程文字和引导配置。
 - 冒险模式的开场（草皮铺开、预览僵尸、小推车驶入的时机）位于 `level/adventure/AdventureIntro`。共享场景中不包含任何开场时间参数。
-- 场地背景、音乐和失败演出的几何参数位于表现定义的 `boards`（`boards.json`）。
+- 场景背景、音乐和失败演出的几何参数位于表现定义的 `boards`（`boards.json`），按时段区分。
+- `/time`（`server/level/time.ts`）开始一次时段切换，即 `LevelState.timeChange`，快照中为 `timeChange`。服务端每个逻辑步推进一格，走到一半（`TIME_SWITCH_TICKS`）时把关卡换到新时段（`LevelState.time`）。
+- 客户端由 `TimeBlends`（`client/level/TimeBlends.ts`）绘制切换。每个 `TimeBlend` 开始时保留旧样子（`begin`），显示新时段的样子（`show`），按切换进度混合两者（`blend`），结束时去掉旧的（`end`）。本体提供草坪、阴影（`BoardShadows`）、音乐（`LevelAudioPresenter.timeBlend`）和房门（`LevelGameOverPresenter.timeBlend`）；模组用 `LevelView.addTimeBlend` 加入自己的。
+- 弹坑从 `LevelStage.timeBlend()` 读取切换进度。`SpriteBlend` 在一个精灵的位置画新旧两张图：影子各按比例绘制，遮挡类的图（弹坑、房门）新图在下完整绘制、旧图在上淡出。
+- 失败演出的房门图由 `LevelGameOverPresenter.doorFrames` 给出，宽屏模组包装它换成 TV 版。
+- 背景显示 `shownLawn`（`level/boards/definitions.ts`）选出的草坪，由 `LevelView.showLawn` 绘制，宽屏模组包装它换成 TV 版。
 - 后续关卡只需加入后端内容和一条表现定义条目（或复用已有条目）。新环境实现自己的场地表现，而不复制场景、输入、HUD 或存档控制器。
 
 #### 失败演出

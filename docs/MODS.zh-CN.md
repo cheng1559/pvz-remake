@@ -253,6 +253,13 @@ my-mod/
 
 新关卡必须同时在玩法 `levels`（规则与波次）和表现 `levels`（开场、草坪与提示）中注册。
 
+关卡还要写明所在场景（`board`）和进行的时段（`time`），时段必须是该场景 `times` 中的一个。
+
+- 玩法场景写一次布局（`rows`、`columns`、`origin`、`cell`、`bounds`、`riseFromGrave`），在 `times.<名称>` 下写随时段变化的部分：`night`、`graveZombies`、`skySun`。
+- 表现场景写一次失败演出（`gameOver`：标题图 `title`、门内 `interior` 和门框 `doorway` 的位置、`clipX`、`winnerY`、`panX`），在 `times.<名称>` 下写各时段的 `background`、`backgroundX`、`lawn`、`plantShadow`、`music` 和 `door`（门内、门框两张图）。
+- 同一场景各时段的门图大小必须相同，每个像素要么完整绘制，要么不绘制。模组自带的前院门图可用 `python3 -m tools.pvz.doors` 处理。
+- 要给其他命名空间的场景加时段，写在那个场景的 `times` 下。
+
 ### 修改已有定义
 
 模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `settings`、`mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
@@ -384,7 +391,7 @@ my-mod/
 
 #### 从地下升起
 
-从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。从墓碑爬出哪些僵尸由关卡的 `graveZombies` 决定；关卡未指定时，取所在场地 `graveZombies` 中本关波次或出怪池出现过的僵尸，关卡完全没有写僵尸时取全部。
+从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。从墓碑爬出哪些僵尸由关卡的 `graveZombies` 决定；关卡未指定时，取所在时段 `graveZombies` 中本关波次或出怪池出现过的僵尸，关卡完全没有写僵尸时取全部。
 
 #### 子弹射程
 
@@ -448,7 +455,7 @@ my-mod/
 | `pvz:bowling` | `plants`、`hits` |
 | `pvz:coin-streak` | `items`、`coins` |
 | `pvz:sun-held` | `sun` |
-| `pvz:win-planting` | `boards`、`skipRules`、`only` / `never` |
+| `pvz:win-planting` | `boards` / `times`、`skipRules`、`only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
 模组新增的成就可以直接使用这些类型。需要新的判断方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`registry` 是宿主模块 `gameplay/registry`，即 `server/registry/GameplayRegistry` 的实例）。`observe` 接收事件、设置，以及该成就在本关中的状态（保存在存档中）。要让基础成就把模组的植物也计算在内，在模组自己的 `achievements` 中按它的 ID 修改 `trigger`。

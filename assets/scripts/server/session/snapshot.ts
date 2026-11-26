@@ -64,6 +64,8 @@ export const snapshot = {
         const ruleSnapshot = levelRule(world)?.snapshot?.(world)
         return {
             levelId: level.id,
+            ...(level.time === level.definition.time ? {} : { time: level.time }),
+            ...(level.timeChange ? { timeChange: { ...level.timeChange } } : {}),
             tick,
             gameplayTick,
             phase: level.phase,

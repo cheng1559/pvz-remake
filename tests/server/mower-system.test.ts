@@ -25,11 +25,11 @@ import { newZombie, withZombieTypes } from '../zombieTypes'
 import { newPlant, withPlantTypes } from '../plantTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-const board = definitions.boards['pvz:day']
+const board = definitions.boards['pvz:frontyard']
 /** A level whose row 2 has a mower waiting. */
 function mowerWorld(): World {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
-    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board,
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board, time: 'day',
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     withProjectileMotions(world, definitions).resources.set(RandomResource, new DeterministicRng(1))

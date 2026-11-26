@@ -18,6 +18,11 @@ export interface LevelIntro {
      * CutScene's TimeSeedBankRightStart) is the intro's. An intro without it keeps the bank in its own place (1).
      */
     bankSettled?(): number
+    /**
+     * Board::DrawBackdrop's sod: the picture the level's sod is (AdventureIntroLayout.sod), once it is all laid; none
+     * while it is being laid. An intro without it has no sod of its own.
+     */
+    laidSod?(): string | undefined
     update(dt: number, stopAtTick?: number): boolean
     sync(): void
     snapshot(): LevelIntroSnapshot

@@ -83,6 +83,7 @@ export class StageEventRegistry {
             plantFiring: ShooterView.fired, plantAreaAttack: ShooterView.areaAttack, mineRising: PotatoMineView.rose, plantExploded: PlantView.exploded,
             plantFroze: FusePlantView.froze, iceReleased,
             plantGrew: SunShroomView.grew, sunProduced: ProducerView.produced, plantChilled: PlantView.chilled, plantMowered: PlantView.mowered,
+            plantAwoke: PlantView.awoke,
             bowlingImpact: BowlingNutView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
             projectileFired: ProjectileView.fired, projectileImpact: ProjectileView.impact, mowerActivated: MowerView.activated,
             zombieChewedPlant: ZombieView.chewed, zombieChewedZombie: ZombieView.chewed, plantEaten: ZombieView.ate, zombieAteZombie: ZombieView.ate,

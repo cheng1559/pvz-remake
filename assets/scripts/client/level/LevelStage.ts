@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { getBoardPresentation } from './boards/definitions'
+import { boardTimeLook } from './boards/definitions'
 import type { HapticStyle } from '@/platform/Haptics'
 import type { Color, Node, SpriteFrame } from 'cc'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
@@ -7,6 +7,7 @@ import type { ParticlePlayer, ParticleSpawnArgs } from '@/client/particle/Partic
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationSound } from '@/shared/content/presentation'
 import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { TimeBlending } from './TimeBlends'
 import type { BoardShadows } from './BoardShadows'
 import type { EntityFlashes } from './EntityFlashes'
 import type { LevelIntro } from './LevelIntro'
@@ -22,10 +23,22 @@ export function boardToLayer(x: number, y: number): { x: number, y: number } {
     return { x: x - WIDTH / 2, y: HEIGHT / 2 - y }
 }
 
-/** The board's plant shadow (BoardPresentation.plantShadow, the darker one at night); off the board the day's. */
-export async function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
-    const id = (stage && getBoardPresentation(content.presentation, stage.level.board).plantShadow) ?? 'pvz:plantshadow'
-    return modResources.sprite(id)
+/** The time of day a frame's level is at: its own, unless `/time` put it at another (WorldSnapshot.time). */
+export function worldTime(content: Content, world: Pick<WorldSnapshot, 'time' | 'levelId'>): string {
+    return world.time ?? content.levels.levels[world.levelId].time
+}
+
+/**
+ * The plant shadow of the board `boardId` at its time of day `time` (BoardTimePresentation.plantShadow, the darker one
+ * at night); the day's without one.
+ */
+export function boardPlantShadow(content: Content, boardId: string, time: string): Promise<SpriteFrame> {
+    return modResources.sprite(boardTimeLook(content.presentation, boardId, time).plantShadow ?? 'pvz:plantshadow')
+}
+
+/** The board's plant shadow (boardPlantShadow) at the time it is now; off the board the day's. */
+export function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
+    return stage ? boardPlantShadow(content, stage.level.board, stage.time) : modResources.sprite('pvz:plantshadow')
 }
 
 /**
@@ -64,13 +77,18 @@ export type ViewType<V> = abstract new (...args: never[]) => V
 export interface LevelStage {
     /** The layer the board's entities and effects are in. */
     readonly layer: Node
-    /** The shadows on the board's ground that are drawn a row at a time: its zombies'. */
+    /**
+     * The board's shadows: its zombies', drawn a row at a time on the ground (add), and its plants', projectiles' and
+     * mowers', drawn on their own sprites (attach), which change and blend with the time of day alike.
+     */
     readonly shadows: BoardShadows
     readonly content: Content
     readonly intro: LevelIntro
     /** The level being played, and the gameplay tick of the frame being drawn. */
     readonly level: LevelDefinition
     readonly gameplayTick: number
+    /** The time of day the level is at in the frame being drawn: its own, or another `/time` put it at (worldTime). */
+    readonly time: string
     /**
      * Plants' and zombies' flashes (Plant::mEatenFlashCountdown, Zombie::mJustGotShotCounter), raised by the server's
      * events (EntityFlashes' handlers), kept with the board across a save.
@@ -94,6 +112,12 @@ export interface LevelStage {
     uiOnLawn(x: number, y: number): { x: number, y: number }
     /** The size the lawn is shown at (LevelView.setWorldView); the screen UI keeps its own. */
     lawnScale(): number
+    /**
+     * `/time`'s change of time of day as it is drawn now (TimeBlends.blending): the time it blends from, the one it
+     * blends into and its weight, for what blends in its own place as it syncs (a crater); none while none goes on. It
+     * goes by the lawn's turning, not by the time the level is at, which is the new one from halfway on.
+     */
+    timeBlend(): TimeBlending | undefined
     /** Ticks since the level was won (Board::UpdateLevelEndSequence), -1 before. */
     levelEndTicks(): number
     /** Board::ShakeBoard by (x, y), felt as `haptic`: of a frame's shakes, the strongest is felt once. */

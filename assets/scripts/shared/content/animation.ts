@@ -3,7 +3,7 @@ import { pickWeighted } from '@/shared/random'
 import type { AnimationClip, AnimationDefinition } from './gameplay'
 
 /** PvzpCurves: how a value animated from one end to the other goes (PvzpCurveEvaluate); a bounce goes there and back. */
-export type AnimateCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'bounce' | 'bounce-slow-middle'
+export type AnimateCurve = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'bounce' | 'bounce-slow-middle' | 'ease-sin-wave'
 const curveS = (t: number) => 3 * t * t - 2 * t * t * t
 /** PvzpCurveInvQuad. */
 const invQuad = (t: number) => 2 * t - t * t
@@ -19,10 +19,12 @@ const CURVES: Record<AnimateCurve, (t: number) => number> = {
     linear: t => t, 'ease-in': t => t * t, 'ease-out': invQuad, 'ease-in-out': easeInOutCurve, bounce,
     // CURVE_BOUNCE_SLOW_MIDDLE: the bounce eased out, lingering at its far end.
     'bounce-slow-middle': t => invQuad(bounce(t)),
+    // CURVE_EASE_SIN_WAVE: once round a sine, eased in and out (sinf(2 * PI * PvzpCurveS)); there and back the other way.
+    'ease-sin-wave': t => Math.sin(2 * Math.PI * curveS(t)),
 }
 
 /** The curves that end where they start (PvzpCurveEvaluateClamped). */
-const BOUNCES: readonly AnimateCurve[] = ['bounce', 'bounce-slow-middle']
+const BOUNCES: readonly AnimateCurve[] = ['bounce', 'bounce-slow-middle', 'ease-sin-wave']
 
 /**
  * PvzpAnimateCurveFloat: the value `from` at `start` going to `to` at `end`, as `age` goes between them by `curve`;

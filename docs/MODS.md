@@ -251,6 +251,13 @@ Presentation definitions are as strict as gameplay definitions: each object acce
 
 A new level must be registered in both the gameplay `levels` (rules and waves) and the presentation `levels` (intro, lawn and hints).
 
+A level also names its board (`board`) and the time of day it is played at (`time`), one of the board's `times`.
+
+- A gameplay board gives its layout once (`rows`, `columns`, `origin`, `cell`, `bounds`, `riseFromGrave`) and, under `times.<name>`, what changes with the time: `night`, `graveZombies`, `skySun`.
+- A presentation board gives the game over once (`gameOver`: the `title` image, the places of the door's `interior` and `doorway`, `clipX`, `winnerY`, `panX`) and, under `times.<name>`, each time's `background`, `backgroundX`, `lawn`, `plantShadow`, `music` and `door` (its `interior` and `doorway` images).
+- A board's door images must be the same size at every time, each pixel drawn whole or not at all. `python3 -m tools.pvz.doors` makes a Mod's own front yard door images so.
+- To add a time to another namespace's board, write it under that board's `times`.
+
 ### Changing what is defined
 
 An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `settings`, `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
@@ -382,7 +389,7 @@ A zombie's `dance` makes it dance to the board's shared beat (`DANCE_BEAT`): on 
 
 #### Rising out of the ground
 
-A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises. Which zombies rise from graves is the level's `graveZombies`, or else its board's `graveZombies` that the level's waves or pool bring, all of them on a level that names no zombies.
+A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises. Which zombies rise from graves is the level's `graveZombies`, or else its time of day's `graveZombies` that the level's waves or pool bring, all of them on a level that names no zombies.
 
 #### Projectile range
 
@@ -446,7 +453,7 @@ Achievements are written in the gameplay `achievements` table, from ID to `{ tit
 | `pvz:bowling` | `plants`, `hits` |
 | `pvz:coin-streak` | `items`, `coins` |
 | `pvz:sun-held` | `sun` |
-| `pvz:win-planting` | `boards`, `skipRules`, `only` / `never` |
+| `pvz:win-planting` | `boards` / `times`, `skipRules`, `only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
 A Mod's new achievements can use these types directly. When a new way of judging is needed, register one with `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` (`registry` is the host module `gameplay/registry`, the instance of `server/registry/GameplayRegistry`). `observe` receives the event, the settings and this achievement's state in the level (kept in the save). To make a base achievement count a Mod's plants, change its `trigger` under its ID in the Mod's own `achievements`.

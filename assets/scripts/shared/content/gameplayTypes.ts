@@ -9,6 +9,11 @@ export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
 /** Board pixel where collected money flies to: the coin bank at the bottom left. */
 export const COIN_BANK_TARGET = { x: 39, y: 558 } as const
 
+/** The sun that falls on `level` at the time of day `time`: the level's own, or none when it says null, or the time's. */
+export function levelSkySun(level: Pick<LevelDefinition, 'skySun'>, time: Pick<BoardTime, 'skySun'>): string | undefined {
+    return level.skySun === undefined ? time.skySun : level.skySun ?? undefined
+}
+
 /** Coin::UpdateCollected: where a collected item flies, money to the coin bank and the rest to the sun counter. */
 export function collectTarget(item: Pick<ItemDefinition, 'kind'> | undefined): { readonly x: number, readonly y: number } {
     return item?.kind === 'money' ? COIN_BANK_TARGET : SUN_BANK_TARGET
@@ -136,9 +141,12 @@ export const MOWER_READY_X = -21
 /** Where the intro brings each row's mower on from, rolling it in to MOWER_READY_X (CutScene::UpdateIntro's CalcPosition). */
 export const MOWER_INTRO_X = -80
 
+/**
+ * A board: a lawn laid out once (a yard: the front yard; a pool's, a roof's), at the times of day it is played at
+ * (`times`), as the original's backgrounds are a yard by day or by night (Board::StageIsNight, StageHasPool,
+ * StageHasRoof). A level goes from one of its board's times to another (`/time`) with everything on it where it stands.
+ */
 export interface BoardDefinition {
-    /** Nocturnal plants sleep on boards that are not at night. */
-    night?: boolean
     bounds: { left: number; right: number }
     rows: number
     columns: number
@@ -146,10 +154,28 @@ export interface BoardDefinition {
     cell: { width: number; height: number }
     /** How a zombie comes up out of a grave on it (Zombie::UpdateZombieRiseFromGrave). */
     riseFromGrave: ZombieRise
-    /** Board::PickGraveRisingZombieType: the zombies that rise from graves on it, by weight, for a level that names none
+    /** Its times of day by name (`day`, `night`): what of it changes with the time. */
+    times: Record<string, BoardTime>
+}
+
+/** A board at a time of day (BoardDefinition.times). */
+export interface BoardTime {
+    /** Nocturnal plants sleep at a time that is not night. */
+    night?: boolean
+    /** Board::PickGraveRisingZombieType: the zombies that rise from graves at it, by weight, for a level that names none
      *  of its own (LevelDefinition.graveZombies). */
     graveZombies?: Array<{ id: string; weight: number }>
+    /** The sun that falls from its sky (Board::UpdateSunSpawning), for a level that names none of its own; none at night. */
+    skySun?: string
 }
+
+/**
+ * `/time`'s change of time of day: the ticks the lawn takes to turn to the new time's (LevelState.timeChange). Not the
+ * original, which never changes a level's time.
+ */
+export const TIME_CHANGE_TICKS = 100
+/** The ticks the lawn has turned when the level goes on at the new time (changeTime): halfway. */
+export const TIME_SWITCH_TICKS = TIME_CHANGE_TICKS / 2
 
 interface SeedCommon {
     /**
@@ -264,7 +290,7 @@ export interface PlantDefinition {
     kind?: string
     occupiesCell?: boolean
     plantingOffset?: { min: Point; max: Point }
-    /** Mushrooms: asleep, doing nothing, on a board that is not at night. */
+    /** Mushrooms: asleep, doing nothing, at a time of day that is not night. */
     nocturnal?: boolean
     /**
      * Kept from the cold: no snow pea or ice-shroom chills it, so none freezes it either (the torchwood). Its kind keeps
@@ -753,6 +779,8 @@ export interface LevelDefinition {
     /** False: the level grants no achievements (debug and test levels). */
     achievements?: boolean
     board: string
+    /** The time of day it is played at, one of its board's (BoardDefinition.times); `/time` may change it in play. */
+    time: string
     activeRows: number[]
     startingSun: number
     /**
@@ -767,12 +795,15 @@ export interface LevelDefinition {
     plantingLine?: { column: number }
     /** The mower waiting at each active row's end, set off when a zombie reaches it: a projectile that mows. */
     lawnMower: string
-    /** The sun that falls from the sky; omitted at night (Board::UpdateSunSpawning). */
-    skySun?: string
+    /**
+     * The sun that falls from the sky (Board::UpdateSunSpawning): its time's (BoardTime.skySun) when left out,
+     * this one when named, none when null (Wall-nut Bowling, the conveyor levels).
+     */
+    skySun?: string | null
     /** Board::AddGraveStones: per column, graves on random free rows. */
     graves?: Array<{ column: number; count: number }>
     /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, its
-     *  board's that the level's waves or pool bring (mZombieAllowed), all of them where it names no zombies; a lawn
+     *  time's that the level's waves or pool bring (mZombieAllowed), all of them where it names no zombies; a lawn
      *  with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
     /**

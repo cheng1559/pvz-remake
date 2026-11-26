@@ -70,7 +70,8 @@ async function projectileView(path: string, name: string, mower: object) {
     })
     const View = load(path, { './ProjectileView': ProjectileViewModule, '../projectiles/ProjectileView': ProjectileViewModule })[name]
     const intro = { complete: false, arrival: 0, mowerArrival(row: number) { assert.equal(row, ROW); return this.arrival } }
-    const stage = { layer: new Node(), content, intro }
+    // The board holds its shadow, as any plant shadow, to change and fade it with the board's picture.
+    const stage = { layer: new Node(), content, intro, shadows: { attach: () => ({ remove() {} }) } }
     const node = new Node(), view = new View({ node, content, projectile: mower, stage })
     await view.initialize()
     return { view, node, stage, intro }

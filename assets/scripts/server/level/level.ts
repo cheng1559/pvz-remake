@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/server/state/World'
-import { type GameplayDefinitions, levelHasWaves } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, levelHasWaves, levelSkySun } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SeedBankResource, SkySunResource, TutorialResource, WaveResource } from '../state/resources'
 import { updateSkySun } from './sun'
 import { getActiveTutorial, levelTutorial, skipTutorial } from '../tutorials'
@@ -12,7 +12,7 @@ import { createGraves, pickSpecialGrave } from '../gridItems/graves'
 const FIRST_WAVE_TICKS = 1800
 
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
-    const level = world.resources.get(LevelStateResource).definition
+    const state = world.resources.get(LevelStateResource), level = state.definition
     const script = levelTutorial(world)
     // TutorialScript.skips: a first adventure without what the script teaches starts as a replay does.
     const skipped = firstAdventure && !!script?.skips?.(world)
@@ -24,7 +24,7 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
         displayedAdvice: [],
     })
     // Board::InitLevel: the first sky sun (RandRangeInt(425, 700), the upper end included), unless the tutorial holds it back for its first plant.
-    world.resources.set(SkySunResource, { fallen: 0, ...(blocked || !level.skySun ? {} : { atTick: world.resources.get(RandomResource).integer(425, 700) }) })
+    world.resources.set(SkySunResource, { fallen: 0, ...(blocked || !levelSkySun(level, state.board.times[state.time]) ? {} : { atTick: world.resources.get(RandomResource).integer(425, 700) }) })
     if (level.graves) createGraves(world)
     world.resources.set(WaveResource, {
         index: 0,

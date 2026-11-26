@@ -2,7 +2,7 @@ import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 
 /** `plants`: the plant seeds, which /plant takes; `seeds`: every seed, zombie seeds too, which /seed takes. */
-export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[] }
+export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[], times: string[] }
 
 /** The installed gameplay content by the names the commands take, for completion and the /level check. */
 export function debugCliCatalog(definitions: GameplayDefinitions, levels: GameplayLevels): DebugCliCatalog {
@@ -12,6 +12,7 @@ export function debugCliCatalog(definitions: GameplayDefinitions, levels: Gamepl
         zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
         items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
         levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
+        times: [...new Set(Object.values(definitions.boards).flatMap(board => Object.keys(board.times)))],
     }
 }
 interface DebugCliOutcome {
@@ -57,6 +58,7 @@ const builtins: CommandSpec[] = [
     { name: 'item', parameters: ['{item_name}', '[row]', '[col]'], minimum: 1 },
     { name: 'damage', parameters: ['{damage}'], minimum: 1 },
     { name: 'level', parameters: ['{level}'], minimum: 1 },
+    { name: 'time', parameters: ['{time_of_day}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     { name: 'step', parameters: [`{1-${MAX_TICKS_PER_UPDATE}}`], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
@@ -132,7 +134,7 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     if (!token && !allowEmpty) return []
     const spec = commands.find(spec => spec.name === name)
     const dynamic = name === 'seed' && index === 2 ? catalog?.seeds : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
-        : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
+        : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : name === 'time' ? catalog?.times : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
     return values.filter(option => option.toLowerCase().startsWith(token.toLowerCase()))
         .map(option => value.slice(0, start) + option)

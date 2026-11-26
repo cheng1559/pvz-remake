@@ -137,6 +137,7 @@
 | `/griditem {grave\|crater} {row} {col} [team]` | 在指定格子放置墓碑或弹坑 |
 | `/gravezombies` | 让每座墓碑立即召唤一只僵尸 |
 | `/lawnmower {trigger\|reset} [row]` | 启动或重置指定行（或所有启用行）的小推车 |
+| `/time {time_of_day}` | 把关卡切换到所在场景的另一个时段，如 `/time night` |
 
 #### `/plant`
 
@@ -167,6 +168,14 @@
 - `trigger` 启动该行（或所有启用行）待命的小推车。
 - `reset` 在该行（或所有启用行）中小推车已离开的位置放下一辆新的小推车，无论原来那辆是否仍在行进。
 - 没有任何小推车发生变化时，提示"No lawn mowers could be changed"。
+
+#### `/time`
+
+- 时段名为场景的时段之一（前院为 `day`、`night`），不区分大小写。场景没有的时段会被拒绝（"Board has no time of day: …"），1-1 到 1-4 没有黑夜。
+- 切换用时 100 逻辑步，第 50 步时关卡换到新时段。
+- 切换进行中再输入 `/time` 会被拒绝（"Time of day is changing"）。
+- 指定关卡当前的时段不会有变化。
+- 草坪上的东西都留在原处，具体变化见[场景](GAMEPLAY.zh-CN.md#场景)。
 
 ### 种子、阳光、金币、掉落物与成就
 

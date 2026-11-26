@@ -39,6 +39,7 @@ tools/
 | 把共享的 C++ 内核编译为 Wasm | `npm run build:kernel` |
 | 用原版程序的图标生成网页与原生应用图标 | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | 字体与图像超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
+| 处理模组自带的前院门图，用于时段切换 | `python3 -m tools.pvz.doors mods/<name> [--namespace widescreen]` |
 | iOS 上的 JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
 | 用性能基准对比已构建的游戏 | `npm run bench -- <A> [<B>]` |
 | 资源转换工具的测试 | `npm run test:tools` |
@@ -53,6 +54,7 @@ pvz/
 ├── importer.py              # 导入流程与资源清单
 ├── pak.py                   # PAK 解包、文件名规范化、临时目录
 ├── images.py                # 图像与 Alpha 通道合并
+├── doors.py                 # 前院门图，白天和黑夜处理成同样的大小和位置
 ├── reanim.py                # Reanim 轨道、片段与动画标记
 ├── oversized.py             # 舞者僵尸与伴舞僵尸的美术比其他僵尸大四分之一，连同其 Reanim 缩到与其他僵尸相同的尺寸
 ├── compiled_reanim.py       # 原版编译后动画的解码

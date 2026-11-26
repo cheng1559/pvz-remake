@@ -6,7 +6,7 @@ import { shooterFront } from '@/shared/content/teams'
 import { readGameplaySource } from '../../tools/mod/content'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-const board = definitions.boards['pvz:night'], normal = definitions.zombies['pvz:normal']
+const board = definitions.boards['pvz:frontyard'], normal = definitions.zombies['pvz:normal']
 
 test("a plant's rects as it faces, from where it stands (GetPlantRect, GetPlantAttackRect)", () => {
     const { chomper, potatomine, puffshroom, peashooter } = Object.fromEntries(['chomper', 'potatomine', 'puffshroom', 'peashooter']

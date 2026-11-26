@@ -18,7 +18,7 @@ const money = (game: LocalIntegratedGame) => game.render().items.filter(item => 
 /** A replay of 1-1 (whose pool has only the plain zombie), its loot rolls coming up `roll`. */
 function replay11(roll: number, ownedUpgrades = 0): World {
     const world = withZombieTypes(new World(), definitions)
-    world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false } as never)
+    world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:frontyard'], time: 'day', phase: 'gameplay', result: 'playing', paused: false } as never)
     world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
     world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0, ownedUpgrades })
     world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)

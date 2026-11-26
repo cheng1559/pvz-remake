@@ -25,6 +25,7 @@ import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
 import { spawnLevelAward } from '../level/levelAward'
 import { cellPosition, LEVEL_AWARD, zombieRowY } from '@/shared/content/gameplay'
+import { startTimeChange } from '../level/time'
 
 export const executor = { execute: executeCommand }
 
@@ -181,6 +182,15 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
                 else damageZombie(world, definitions, entity, damage)
             }
             return debugSuccess(`${name}: ${zombies.length} zombie(s)`)
+        }
+        case 'time': {
+            // Another time of day of the level's board, the lawn turning to it (level/time.ts): what stands on it stays
+            // where it is. None while the lawn turns.
+            const time = Object.keys(level.board.times).find(name => name.toLowerCase() === args[0].toLowerCase())
+            if (!time) return debugCondition('DEBUG_TIME_NOT_ON_BOARD', args[0])
+            if (level.timeChange) return debugCondition('DEBUG_TIME_CHANGING')
+            startTimeChange(level, time)
+            return debugSuccess(`Time: ${time}`)
         }
         case 'win':
         case 'lose':

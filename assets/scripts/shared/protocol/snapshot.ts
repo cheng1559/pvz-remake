@@ -96,6 +96,13 @@ export function levelStandsStill(snapshot: Pick<WorldSnapshot, 'paused' | 'seedC
 
 export interface WorldSnapshot {
     levelId: string
+    /** The time of day the level is at, when not its own (`/time`; worldTime): one of its board's. */
+    time?: string
+    /**
+     * The lawn turning from a time of day to another (`/time`): the two, and how many of its TIME_CHANGE_TICKS it has
+     * turned; the level is at the time it turns to from TIME_SWITCH_TICKS on.
+     */
+    timeChange?: { from: string, to: string, ticks: number }
     tick: ServerTick
     gameplayTick: number
     phase: 'intro' | 'gameplay'
@@ -228,8 +235,10 @@ export interface PlantSnapshot {
     column: number
     health: number
     maxHealth: number
-    /** A nocturnal plant on a day board. */
+    /** Asleep: a nocturnal plant by day, or one still waking. */
     asleep?: true
+    /** Waking (Plant::mWakeUpCounter): the ticks left until it wakes, stretching on its base meanwhile. */
+    waking?: number
     /**
      * What only its kind shows, which its view reads as its kind has it: the server's class of it writes it
      * (Plant.snapshotOwn) and the client's class of it reads it: the `phase` its animation goes by (PLANT_KIND_PHASES),
@@ -377,6 +386,7 @@ export interface TutorialSnapshot {
 export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     const snapshot = record(value, 'snapshot')
     nonEmptyString(snapshot.levelId, 'snapshot.levelId')
+    if (snapshot.time !== undefined) nonEmptyString(snapshot.time, 'snapshot.time')
     nonNegativeInteger(snapshot.tick, 'snapshot.tick')
     nonNegativeInteger(snapshot.gameplayTick, 'snapshot.gameplayTick')
     if ((snapshot.gameplayTick as number) > (snapshot.tick as number)) {
@@ -389,6 +399,12 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         throw new TypeError('snapshot.result is unknown')
     }
     boolean(snapshot.paused, 'snapshot.paused')
+    if (snapshot.timeChange !== undefined) {
+        const change = exact(snapshot.timeChange, ['from', 'to', 'ticks'], 'snapshot.timeChange')
+        nonEmptyString(change.from, 'snapshot.timeChange.from')
+        nonEmptyString(change.to, 'snapshot.timeChange.to')
+        nonNegativeInteger(change.ticks, 'snapshot.timeChange.ticks')
+    }
     if (snapshot.iceTrap !== undefined) {
         const iceTrap = record(snapshot.iceTrap, 'snapshot.iceTrap')
         for (const [side, ticks] of Object.entries(iceTrap)) {
@@ -508,6 +524,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
+        if (plant.waking !== undefined) positiveInteger(plant.waking, `${name}.waking`)
         if (plant.frozen !== undefined && plant.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
         // Its view reads its own as its kind has it.
         if (plant.own !== undefined) record(plant.own, `${name}.own`)

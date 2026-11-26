@@ -74,13 +74,13 @@
 | `pvz:coin-streak` | 统计所列物品的 `itemScored`（物品到达计数栏，`Coin::ScoreCoin`）；这些物品的 `itemExpired`（自行消失）让计数归零；计数恰好等于设定值时授予 | `items`、`coins` | 铁公鸡（`pvz:coin_silver`、`pvz:coin_gold`，30） |
 | `pvz:sun-held` | `sunAdded`：`Board::AddSun` 之后持有的阳光 | `sun` | 阳光满屋（8000） |
 | `pvz:mind-controlled` | `mindControlled`（`Zombie::StartMindControlled`）：所列类型的僵尸转入 `plants` 阵营。吞下迷糊菇的植物，或转入 `zombies` 阵营的僵尸都不算 | `zombies` | 舞者精神（`pvz:dancer`；伴舞僵尸是另一种类型） |
-| `pvz:win-planting` | 不带 `debug` 的 `plantPlaced` 事件记录是否种过不符合条件的植物（`progress.broken`）；收到 `levelWon` 时，若条件未被破坏、关卡场地在列表中且关卡规则未被跳过，则授予，不在关卡内提示 | `boards`、`skipRules`，以及 `only` 和/或 `never`，各为 `{ nocturnal, plants }` | 全日无休（`pvz:day`，`only` 夜行植物）、无菇之夜（`pvz:night`，`never` 夜行植物）；两者都跳过 `pvz:bowling` 和 `pvz:whack-a-zombie` |
+| `pvz:win-planting` | 不带 `debug` 的 `plantPlaced` 事件记录是否种过不符合条件的植物（`progress.broken`）；收到 `levelWon` 时，若条件未被破坏、关卡的场景在 `boards` 中、所在时段在 `times` 中（不写即不限）且关卡规则未被跳过，则授予，不在关卡内提示 | `boards` 和/或 `times`、`skipRules`，以及 `only` 和/或 `never`，各为 `{ nocturnal, plants }` | 全日无休（`day`，`only` 夜行植物）、无菇之夜（`night`，`never` 夜行植物）；两者都跳过 `pvz:bowling` 和 `pvz:whack-a-zombie` |
 
 触发条件读取的事件细节：
 
 - `{ nocturnal, plants }` 选择器在 `nocturnal` 为 true 时匹配定义中带 `nocturnal: true` 的植物（原版的 `Plant::IsFungus`：蘑菇类，不含咬咬碑），另外匹配 `plants` 中列出的植物 ID。
-- 全日无休的 `only.plants` 目前为空，因为咖啡豆还不在内容中；加入后应列在此处，使触发条件与原版一致（只种蘑菇和咖啡豆，或什么都不种）。什么都不种时 `broken` 不会被设置，因此在对应场地什么都不种并取胜，会获得全日无休或无菇之夜。
-- 目前只有白天和黑夜两块草坪（`pvz:day`、`pvz:night`），因此全日无休和无菇之夜只列出这两块场地。
+- 全日无休的 `only.plants` 目前为空，因为咖啡豆还不在内容中；加入后应列在此处，使触发条件与原版一致（只种蘑菇和咖啡豆，或什么都不种）。什么都不种时 `broken` 不会被设置，因此在对应时段什么都不种并取胜，会获得全日无休或无菇之夜。
+- 全日无休和无菇之夜按时段判断，不按场景，和原版判断任意白天或黑夜背景一样。
 - `plantPlaced` 由玩家从卡片槽或传送带种植时发出（`server/seeds/planting.ts`）。关卡的 `initialPlants` 和教程的 `introPlants` 创建时不发出该事件，`/plant` 发出时带 `debug: true`，因此都不计入。
 - `levelWon` 在收集关卡奖励时发出（`server/items/items.ts`），`/win` 也会发出。
 - `sunAdded` 只在收集的阳光到达计数栏时发出；`/sun` 直接设定阳光而不发出该事件，因此 `/sun set 8000` 之后要再收集一次阳光才会获得阳光满屋。

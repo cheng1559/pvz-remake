@@ -354,7 +354,7 @@ test('what a Mod writes under another namespace\'s ID is a JSON merge patch, app
     // A table written in the gameplay settings would be lost under the table itself.
     assert.throws(() => build([{ ownerId: 'first', data: { settings: { plants: { 'pvz:peashooter': { maxHealth: -1 } } } } }]), /cannot hold the plants table/)
     // A field or an ID named __proto__ is a field or an ID like any other, never the object's prototype.
-    assert.throws(() => build([{ ownerId: 'first', data: JSON.parse('{"boards":{"pvz:day":{"__proto__":{"night":true}}}}') }]), /__proto__/)
+    assert.throws(() => build([{ ownerId: 'first', data: JSON.parse('{"boards":{"pvz:frontyard":{"__proto__":{"times":{}}}}}') }]), /__proto__/)
     assert.throws(() => build([{ ownerId: 'first', data: JSON.parse('{"plants":{"__proto__":{}}}') }]), /changes unknown plants entry: __proto__/)
 })
 

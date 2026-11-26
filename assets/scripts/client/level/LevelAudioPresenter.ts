@@ -3,7 +3,8 @@ import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { SeedAvailability, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
-import type { BoardPresentation } from '@/shared/content/presentation'
+import type { BoardTimePresentation } from '@/shared/content/presentation'
+import type { TimeBlend } from './TimeBlends'
 import type { LevelAudioSnapshot } from './LevelPresentationSnapshot'
 
 export class LevelAudioPresenter {
@@ -14,7 +15,7 @@ export class LevelAudioPresenter {
      * The level's own sounds and its music. What is heard of something on the board (a plant, a zombie, a projectile, an
      * item) is its view's (ClientViews.events).
      */
-    constructor(private readonly music: BoardPresentation['music']) {}
+    constructor(private music: BoardTimePresentation['music']) {}
 
     snapshot(): LevelAudioSnapshot {
         return {
@@ -31,6 +32,34 @@ export class LevelAudioPresenter {
         else if (snapshot.ownsMusic) {
             await MusicSystem.playTune(snapshot.gameplayStarted ? this.music.gameplay : this.music.choosing, true)
         } else MusicSystem.stop()
+    }
+
+    /**
+     * `/time`'s change of time of day as its music is heard (TimeBlends; `musicOf`, the level's music at a time): in
+     * play, the gameplay tune of the time it blends into plays beside the one playing (MusicSystem.keepTune), coming in
+     * as that one goes; a time of the same tune (the level's own music) plays on as it is. Once over, the level's music
+     * is that time's: in play its tune plays, unless the blend has it playing already (held or paused, it starts so).
+     */
+    timeBlend(musicOf: (time: string) => BoardTimePresentation['music']): TimeBlend {
+        let next: BoardTimePresentation['music'] | undefined
+        return {
+            begin: () => {},
+            show: time => {
+                next = musicOf(time)
+                if (!this.gameplayStarted || !this.ownsMusic || next.gameplay === this.music.gameplay) return
+                MusicSystem.keepTune()
+                return MusicSystem.playTune(next.gameplay)
+            },
+            blend: weight => MusicSystem.blendTunes(weight),
+            end: () => {
+                MusicSystem.dropKeptTune()
+                if (!next) return
+                const before = this.music
+                this.music = next
+                next = undefined
+                if (this.gameplayStarted && this.ownsMusic && this.music.gameplay !== before.gameplay) void MusicSystem.playTune(this.music.gameplay)
+            },
+        }
     }
 
     startChoosing(): void {

@@ -7,6 +7,7 @@ import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
 import { BoardSeedResource, EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/resources'
 import { createConveyorSystem } from '../level/conveyor'
+import { createTimeChangeSystem } from '../level/time'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../items/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
@@ -123,6 +124,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
     const systems = [
         { phase: 'command', system: { id: 'pvz:commands', run: () => processCommandPhase(session) } },
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
+        { phase: 'spawn', system: createTimeChangeSystem() },
         { phase: 'spawn', system: createWaveSystem(definitions) },
         { phase: 'spawn', system: createBoardIceSystem() },
         { phase: 'spawn', system: createCraterSystem() },
@@ -156,6 +158,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         id: packet.levelId,
         definition: level,
         board,
+        time: level.time,
         phase: 'intro',
         result: 'playing',
         paused: false,
