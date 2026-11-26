@@ -9,7 +9,7 @@
 | 环境 | 用途 |
 | --- | --- |
 | Node.js 22.17.0 与 `node-gyp` | Cocos CLI（其安装说明的要求）以及项目的 Node 工具 |
-| Python 3.10 及以上（以 `python3` 调用）与 Pillow | `build:content`、`build:icons` 和 `test:tools`，它们都调用 `python3` |
+| Python 3.10 及以上（以 `python3` 调用）与 Pillow、NumPy | `build:content`、`build:icons` 和 `test:tools`，它们都调用 `python3` |
 | ffmpeg | 编码音乐与音效；从 `PATH` 中查找，或在 `/opt/homebrew/bin`、`/usr/local/bin` 中查找 |
 | libopenmpt | 渲染原版的音乐模块；作为系统库查找，或使用 `LIBOPENMPT_PATH` 指定的路径，或在常见目录中查找（Windows 上为当前目录、`C:\msys64\mingw64\bin`、`C:\msys64\ucrt64\bin` 和 `C:\Program Files\OpenMPT`；macOS 上为 `/opt/homebrew/lib`、`/usr/local/lib` 和 `/usr/lib`） |
 | 对应平台的开发工具 | 原生构建，如构建 macOS 和 iOS 版本需要 Xcode |

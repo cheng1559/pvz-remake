@@ -420,7 +420,7 @@ The project uses two forked repositories, both on the `dev/pvz-remake` branch:
 Requirements:
 
 - Node.js 22.17.0 and `node-gyp`;
-- Python 3.10 or later, with Pillow, ffmpeg and libopenmpt (to convert the game's resources);
+- Python 3.10 or later, with Pillow, NumPy, ffmpeg and libopenmpt (to convert the game's resources);
 - For native builds, the platform's development tools, such as Xcode for macOS and iOS.
 
 Install the command-line tool outside the game repository, with the engine in its `packages/engine` directory:

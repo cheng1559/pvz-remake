@@ -67,7 +67,7 @@ jobs:
       - name: Install the converter's dependencies
         run: |
           brew install ffmpeg libopenmpt
-          python -m pip install pillow
+          python -m pip install pillow numpy
 
       - name: Convert resources and generate icons
         run: |

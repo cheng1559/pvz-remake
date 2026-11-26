@@ -9,7 +9,7 @@ Building the game needs Node.js, Python, the Cocos toolchain and the files of a 
 | Requirement | Used for |
 | --- | --- |
 | Node.js 22.17.0 and `node-gyp` | The Cocos CLI, as its setup guide specifies, and the project's Node tools |
-| Python 3.10 or later, run as `python3`, with Pillow | `build:content`, `build:icons` and `test:tools`, which call `python3` |
+| Python 3.10 or later, run as `python3`, with Pillow and NumPy | `build:content`, `build:icons` and `test:tools`, which call `python3` |
 | ffmpeg | Encoding music and sound effects; found on `PATH`, or in `/opt/homebrew/bin` or `/usr/local/bin` |
 | libopenmpt | Rendering the original's music modules; found as a system library, at the path in `LIBOPENMPT_PATH`, or in the usual folders (on Windows the current directory, `C:\msys64\mingw64\bin`, `C:\msys64\ucrt64\bin` and `C:\Program Files\OpenMPT`; on macOS `/opt/homebrew/lib`, `/usr/local/lib` and `/usr/lib`) |
 | The platform's development tools | Native builds, such as Xcode for macOS and iOS |
