@@ -29,7 +29,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 ### Completion and history
 
 - Tab completes the word at the end of the line; pressing it again cycles through the candidates.
-- Command names and fixed values (pages, `add|set`, teams and so on) complete anywhere. Names of installed plants, seeds, zombies, items and levels complete only in a level, because the running level supplies them.
+- Command names and fixed values (pages, `add|set`, teams and so on) complete anywhere. Names of installed plants, seeds, zombies, items and levels complete as well, in a level or not, from the installed gameplay content.
 - A faded suffix after the text shows the first completion, followed by the placeholders of the remaining arguments as hints. In mobile mode, tap the faded suffix to fill it in and keep typing.
 - Up and Down recall the last 64 commands. The history is kept on this device across restarts; running a command again moves it to the newest place.
 
@@ -76,7 +76,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | Command | Effect |
 | --- | --- |
 | `/goto {page}` | Opens a menu page: `main` (main menu), `minigames`, `puzzle`, `survival`, `almanac` (the almanac index), `plants` and `zombies` (the almanac's pages), `store`, `garden` (Zen Garden), `mushroom` (Mushroom Garden), `aquarium` (Aquarium Garden), `tree` (Tree of Wisdom), `achievements`, `help` |
-| `/level {level}` | Starts a level afresh, skipping the prompt about an existing save. Adventure levels take their number: `1-1`, `adventure-1-1` and `pvz:adventure-1-1` are the same. Other levels take their full ID, namespace included, such as `pvz:stress-test`. In a level, a level that is not installed is refused. |
+| `/level {level}` | Starts a level afresh, skipping the prompt about an existing save. Adventure levels take their number: `1-1`, `adventure-1-1` and `pvz:adventure-1-1` are the same. Other levels take their full ID, namespace included, such as `pvz:stress-test`. A level that is not installed is refused. |
 | `/restart` | Starts the current level afresh, skipping the prompt about an existing save; needs a running level |
 | `/reload` | Saves the running level and starts the game again from the splash screen |
 | `/quit` | Saves the running level and quits the game |
@@ -403,7 +403,7 @@ Settings kept on this device, and the command history, live in the game's local 
 
 ## Installed content
 
-Content names complete only in a level. The base package of this version installs:
+The base package of this version installs:
 
 | Kind | Names |
 | --- | --- |
@@ -419,7 +419,7 @@ Plant, zombie, item and level names come from the installed content on the game 
 
 ## How a command runs
 
-1. `GameApp` opens the dialog (`client/dialogs/DebugCliDialog.ts`), built on `UI.dialog` and `UI.input`. When a level is running, it first asks the server for a `catalog` of the installed plant seeds, seeds, zombies, items and levels, which feeds completion and the `/level` check.
+1. `GameApp` opens the dialog (`client/dialogs/DebugCliDialog.ts`), built on `UI.dialog` and `UI.input`. It first makes a list of the installed plant seeds, seeds, zombies, items and levels, which feeds completion and the `/level` check: `debugCliCatalog` (`shared/debug/DebugCli.ts`) reads it off the loaded gameplay content (`loadGameplayContent`), which levels are built from as well. If that content fails to load, the console opens without the list, so `/mod` can still mend a broken Mod.
 2. `executeDebugCliCommand` (`platform/debug/DebugCliCommands.ts`) parses the line with `parseDebugCliCommand` from `shared/debug/DebugCli.ts`, whose `specs.list()` holds every command's syntax. It runs the client's own commands itself: pages, levels and the app, speed, display and input switches, `/mod`, and `/money` outside a level and `/achievement` through the menu API's profile. Audio and full-screen settings go through the menu API's settings.
 3. Gameplay commands are forwarded as raw text: `LevelController.debugCommand` → `LocalIntegratedGame.debugCommand` → `IntegratedGameClient`, which sends a `debugCommand` packet.
 4. `IntegratedGameHost` queues the packet only when debug commands are enabled, as the local integrated game enables them, and otherwise rejects it with `unsupported-command`.

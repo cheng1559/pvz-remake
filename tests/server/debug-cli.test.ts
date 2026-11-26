@@ -5,7 +5,7 @@ import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
+import { debugCliCatalog, getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { TICK_SECONDS, type GraveSnapshot } from '@/shared/protocol'
 import { startFromSave } from './start-from-save'
 
@@ -37,8 +37,8 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     for (const command of ['/unknown', '/grave 3 2', '/griditem rock 3 2', '/gravezombies 1', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/griditem grave', '/griditem grave 3', '/griditem grave 3 2 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
-    const game = setup()
-    const catalog = game.debugCommand('catalog').catalog!
+    const catalog = debugCliCatalog(definitions, levels)
+    assert.ok(getDebugCliCompletions('/level 1-', catalog).includes('/level 1-1'), 'levels by the names /level takes')
     // Every installed plant seed, hidden ones too, by the name /plant takes: without the base namespace.
     const plantSeeds = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].kind === 'plant')
     assert.deepEqual(catalog.plants, plantSeeds.map(id => id.replace(/^pvz:/, '')))

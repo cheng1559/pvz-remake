@@ -1,5 +1,5 @@
 import type { GameCommand } from '@/shared/protocol/index'
-import { debugSuccess, parseDebugCliCommand } from '@/shared/debug/DebugCli'
+import { parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { EconomyStateResource, LevelStateResource, SeedBankResource, TutorialResource } from '../state/resources'
 import { startConveyor } from '../level/conveyor'
 import { executeDebugGameCommand } from '../debug/debugCommands'
@@ -132,19 +132,8 @@ export function processCommandPhase(session: Session): void {
 function processNextCommand(session: Session): CommandRejectionCode | undefined {
     const queued = session.commands.shift()!
     if (queued.command.type === 'debug') {
-        const { definitions, levels } = session
-        const command = queued.command.command
-        const parsed = parseDebugCliCommand(command)
-        const debug = command === 'catalog' ? {
-            ...debugSuccess('Installed debug content'),
-            catalog: {
-                plants: Object.entries(definitions.seeds).filter(([, seed]) => seed.kind === 'plant').map(([id]) => id.replace(/^pvz:/, '')),
-                seeds: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
-                zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
-                items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
-                levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
-            },
-        } : 'name' in parsed ? executeDebugGameCommand(session, parsed) : parsed
+        const parsed = parseDebugCliCommand(queued.command.command)
+        const debug = 'name' in parsed ? executeDebugGameCommand(session, parsed) : parsed
         session.commandResults.push({ sequence: queued.sequence, debug })
         return
     }

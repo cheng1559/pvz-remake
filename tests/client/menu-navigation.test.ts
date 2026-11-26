@@ -103,6 +103,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             musicFrames.push({ ticks, zombies: context.zombiesOnScreen })
         } } },
         '@/client/dialogs/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
+        // Gameplay content a broken Mod keeps from loading: the CLI opens without its names.
+        '@/client/game/loadIntegratedGameContent': { loadGameplayContent: () => Promise.reject(new Error('A broken Mod')) },
         '@/client/dialogs/PackageDialog': { showPackageDialog: async () => {
             managerPaused.push(paused)
             packageDialogs++
@@ -174,7 +176,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             return true
         },
         getLevelDefinition: () => ({}),
-        debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
+        debugCommand: () => ({ ok: true }),
         hide() { commits.push('hide-game'); running = false },
         deleteSave() {},
         async saveIfRunning() { saves++; return null },

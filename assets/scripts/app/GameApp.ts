@@ -37,7 +37,7 @@ import { showDebugCliDialog } from '@/client/dialogs/DebugCliDialog'
 import { showPackageDialog } from '@/client/dialogs/PackageDialog'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import type { DebugCliResult } from '@/shared/debug/DebugCli'
+import { debugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
@@ -560,7 +560,9 @@ export class GameApp extends Component {
         let result: DebugCliResult | null = null
         let ui: UI
         try {
-            const catalog = running ? controller.debugCommand('catalog').catalog : undefined
+            // The installed content's names, in a level or out of one, from the gameplay content levels are built from.
+            // Content that fails to load (a broken Mod) leaves them out: the CLI opens all the same, for /mod to mend it.
+            const catalog = await loadGameplayContent().then(({ definitions, levels }) => debugCliCatalog(definitions, levels), () => undefined)
             ui = await UI.load()
             if (!this.canShowGameUI) return
             result = await showDebugCliDialog(this.node, ui,

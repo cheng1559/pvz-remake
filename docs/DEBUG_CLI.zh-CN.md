@@ -29,7 +29,7 @@
 ### 补全与历史
 
 - 按 Tab 补全行尾的单词，再按一次在候选项之间轮换。
-- 指令名和固定取值（页面、`add|set`、阵营等）在任何地方都能补全。已安装的植物、种子、僵尸、物品和关卡名称只能在关卡中补全，因为这些名称由正在运行的关卡提供。
+- 指令名和固定取值（页面、`add|set`、阵营等）在任何地方都能补全。已安装的植物、种子、僵尸、物品和关卡名称也能补全，在关卡内外都一样，名称来自已安装的玩法内容。
 - 输入内容之后以淡色显示第一个补全结果，其后是其余参数的占位提示。在移动模式下，点击淡色部分即可填入并继续输入。
 - 按上、下方向键可调出最近 64 条指令。历史记录保存在本机，重启后仍在；再次执行某条指令会把它移到最新的位置。
 
@@ -78,7 +78,7 @@
 | 指令 | 作用 |
 | --- | --- |
 | `/goto {page}` | 打开菜单页面：`main`（主菜单）、`minigames`（迷你游戏）、`puzzle`（益智模式）、`survival`（生存模式）、`almanac`（图鉴索引）、`plants` 与 `zombies`（图鉴的植物页与僵尸页）、`store`（商店）、`garden`（休闲花园）、`mushroom`（蘑菇园）、`aquarium`（水族馆）、`tree`（智慧树）、`achievements`（成就）、`help`（帮助） |
-| `/level {level}` | 重新开始指定关卡，跳过"是否继续存档"的提示。冒险模式关卡直接写编号：`1-1`、`adventure-1-1` 和 `pvz:adventure-1-1` 等价。其他关卡写完整 ID（含命名空间），如 `pvz:stress-test`。在关卡中执行时，未安装的关卡会被拒绝。 |
+| `/level {level}` | 重新开始指定关卡，跳过"是否继续存档"的提示。冒险模式关卡直接写编号：`1-1`、`adventure-1-1` 和 `pvz:adventure-1-1` 等价。其他关卡写完整 ID（含命名空间），如 `pvz:stress-test`。未安装的关卡会被拒绝。 |
 | `/restart` | 重新开始当前关卡，跳过"是否继续存档"的提示；需要正在运行的关卡 |
 | `/reload` | 保存正在进行的关卡，然后从启动画面重新载入游戏 |
 | `/quit` | 保存正在进行的关卡，然后退出游戏 |
@@ -405,7 +405,7 @@
 
 ## 已安装的内容
 
-内容名称只能在关卡中补全。当前版本的基础内容包安装了以下内容：
+当前版本的基础内容包安装了以下内容：
 
 | 类别 | 名称 |
 | --- | --- |
@@ -421,7 +421,7 @@
 
 ## 指令的执行过程
 
-1. `GameApp` 打开对话框（`client/dialogs/DebugCliDialog.ts`），对话框基于 `UI.dialog` 和 `UI.input` 构建。有关卡正在运行时，先向服务端请求 `catalog`，即已安装的植物种子、种子、僵尸、物品和关卡列表，用于补全和 `/level` 的检查。
+1. `GameApp` 打开对话框（`client/dialogs/DebugCliDialog.ts`），对话框基于 `UI.dialog` 和 `UI.input` 构建。它先生成已安装的植物种子、种子、僵尸、物品和关卡列表，用于补全和 `/level` 的检查：`shared/debug/DebugCli.ts` 的 `debugCliCatalog` 从已加载的玩法内容（`loadGameplayContent`）中读出这份列表，关卡也由这份内容构建。内容加载失败时，控制台照常打开，只是没有这份列表，仍可用 `/mod` 修复出错的模组。
 2. `executeDebugCliCommand`（`platform/debug/DebugCliCommands.ts`）用 `shared/debug/DebugCli.ts` 中的 `parseDebugCliCommand` 解析输入，该文件的 `specs.list()` 定义了所有指令的语法。客户端自己的指令直接在这里执行：页面、关卡与应用、速度、显示与输入开关、`/mod`，以及通过菜单接口的玩家档案执行的关卡外 `/money` 和 `/achievement`。音频与全屏设置通过菜单接口的设置保存。
 3. 玩法指令以原始文本转发：`LevelController.debugCommand` → `LocalIntegratedGame.debugCommand` → `IntegratedGameClient`，由后者发送 `debugCommand` 数据包。
 4. `IntegratedGameHost` 只在允许调试指令时（本地一体化游戏会开启）把数据包加入队列，否则以 `unsupported-command` 拒绝。

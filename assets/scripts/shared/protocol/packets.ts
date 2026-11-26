@@ -258,12 +258,6 @@ export function validateServerPacket(value: unknown): ServerPacket {
                     if (typeof value !== 'string') throw new TypeError('debugResult.result.args entries must be strings')
                 })
             } else nonEmptyString(result.message, 'debugResult.result.message')
-            if (result.catalog !== undefined) {
-                const catalog = record(result.catalog, 'debugResult.result.catalog')
-                for (const kind of ['plants', 'zombies', 'items', 'levels']) {
-                    array(catalog[kind], `debug catalog.${kind}`).forEach(value => nonEmptyString(value, `debug catalog.${kind} entry`))
-                }
-            }
             break
         }
         case 'saveReady':

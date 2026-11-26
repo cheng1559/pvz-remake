@@ -1,7 +1,19 @@
 import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
+import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 
 /** `plants`: the plant seeds, which /plant takes; `seeds`: every seed, zombie seeds too, which /seed takes. */
 export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[] }
+
+/** The installed gameplay content by the names the commands take, for completion and the /level check. */
+export function debugCliCatalog(definitions: GameplayDefinitions, levels: GameplayLevels): DebugCliCatalog {
+    return {
+        plants: Object.entries(definitions.seeds).filter(([, seed]) => seed.kind === 'plant').map(([id]) => id.replace(/^pvz:/, '')),
+        seeds: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
+        zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
+        items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
+        levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
+    }
+}
 interface DebugCliOutcome {
     action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level' | 'step'
     levelId?: string
@@ -9,7 +21,6 @@ interface DebugCliOutcome {
     page?: DebugGotoPage
     /** For `step`: the fixed ticks the level runs at once. */
     ticks?: number
-    catalog?: DebugCliCatalog
     /** A switch's state after the command turned it over (`/cooldown` and the like). */
     enabled?: boolean
     /** Advice the client shows after a success: a string table key, its %s filled with `args`, string keys themselves. */
