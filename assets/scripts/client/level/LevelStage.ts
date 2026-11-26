@@ -85,6 +85,8 @@ export interface LevelStage {
     readonly graveRise: { readonly particle: string, readonly sounds: readonly PresentationSound[] }
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset(): number
+    /** How far the coin bank sits from its 800-wide layout position, at the UI area's left edge: what money flies to. */
+    coinBankOffset(): number
     /**
      * Where a point of the screen UI, in the HUD's 800x600 layout (y down), is on the lawn, wherever a Mod moves or
      * scales the lawn (LevelView.setWorldView): what sun, money and the award fly to.

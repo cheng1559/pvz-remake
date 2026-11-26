@@ -310,6 +310,7 @@ export class LevelView {
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
         entityRenderer.sunBankOffset = () => bankLeft.position.x
+        entityRenderer.coinBankOffset = () => coinBank.edge.position.x
         entityRenderer.uiOnLawn = (x, y) => view.uiOnLawn(x, y)
         entityRenderer.lawnScale = () => view.lawnScale
         entityRenderer.shake = (x, y, haptic) => view.shakeBoard(x, y, haptic)

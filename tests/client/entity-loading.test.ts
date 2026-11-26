@@ -1003,7 +1003,7 @@ test('a collected item says how far it is on its way to its counter, which the s
     // The lawn shown at half size, its top left 20 right of and 10 below the screen's: a point of the screen UI is on
     // the lawn twice as far from there.
     const uiOnLawn = (x: number, y: number) => ({ x: (x - 20) * 2, y: (y - 10) * 2 })
-    const shown = (typeId: string, stage: object = { sunBankOffset: () => 100, uiOnLawn: (x: number, y: number) => ({ x, y }) }) => {
+    const shown = (typeId: string, stage: object = { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn: (x: number, y: number) => ({ x, y }) }) => {
         const view = new ItemView({ node, content, item: { typeId }, stage })
         view.animation = {}
         return view
@@ -1020,16 +1020,20 @@ test('a collected item says how far it is on its way to its counter, which the s
     coin.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
     coin.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
     assert.ok(Math.abs(coin.collectProgress - 2 / 3) < 1e-9, 'money, to the coin bank')
-    assert.equal(node.position.x, 39 + 100 + 30, 'which is not pinned')
+    assert.equal(node.position.x, 39 + 100 + 30, 'where the 800 layout has it')
+    const edged = shown('test:coin', { sunBankOffset: () => 100, coinBankOffset: () => -40, uiOnLawn: (x: number, y: number) => ({ x, y }) })
+    edged.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
+    edged.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
+    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 - 40 * 2 / 3)) < 1e-9, "or where the UI area's left edge has it")
     // With the lawn moved and scaled, both head for where their counters are on it, across and down.
-    const far = shown('test:sun', { sunBankOffset: () => 100, uiOnLawn })
+    const far = shown('test:sun', { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn })
     far.sync(at(315, 400))
     far.sync(at(165, 200))
     assert.deepEqual([node.position.x, node.position.y], [165 + 30 + ((115 - 20) * 2 - 15) * 0.5, -(200 + 30 + (0 - 10) * 2 * 0.5)])
-    const coins = shown('test:coin', { sunBankOffset: () => 100, uiOnLawn })
+    const coins = shown('test:coin', { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn })
     coins.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
     coins.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
-    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 + ((39 - 20) * 2 - 39) * 2 / 3)) < 1e-9, 'money too, not pinned')
+    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 + ((39 - 20) * 2 - 39) * 2 / 3)) < 1e-9, 'money too')
     assert.ok(Math.abs(node.position.y + (558 + 30 + ((558 - 10) * 2 - 558) * 2 / 3)) < 1e-9)
 })
 
