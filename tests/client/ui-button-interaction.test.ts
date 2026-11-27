@@ -85,6 +85,8 @@ function setup() {
             Component: class { enabledInHierarchy = true }, _decorator: { ccclass: () => (value: unknown) => value },
             Button: { EventType: { CLICK: 'click' } }, EventMouse: MouseEvent, EventTouch: TouchEvent, Color,
             Node: FakeNode, Vec3: Vec, UITransform: Transform, Input: { EventType: events }, input: new FakeNode(),
+            // No band for UIHoverManager's edge guard (edge-guard.test's): these touches start close to the left.
+            screen: { devicePixelRatio: 0, windowSize: { width: Infinity, height: Infinity } },
         },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
         '@/platform/Haptics': { Haptics: { play: (style = 'light') => haptics.push(style) } },

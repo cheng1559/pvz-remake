@@ -31,13 +31,14 @@ Every control listens only to the events of the current mode, so a touch that th
 - **Shovel**: press the shovel to pick it up, drag to aim, and lift to dig; dragging back onto its button cancels.
 - **Collecting**: a finger dragged across the lawn collects the sun and coins along its path.
 - **One finger**: the lawn follows one finger from touch to release. A pause discards the gesture.
+- **Edges**: a touch that starts within 24 points of the screen's left or right edge is taken for the hand holding the device and does nothing, and it does not keep the lawn from the next finger. One that starts further in can still move to the edge.
 - **Buttons**: sliding from one button onto another moves the press to the button under the finger, and lifting activates that one.
 - **Lists** scroll by dragging and keep moving briefly after release. The thin scroll bar can be dragged, and tapping its track pages.
 - **Sliders**: drag the knob, or tap the slot to move the knob there.
 - **Dialogs** can be dragged by their frame.
 - **Store**: a purchase starts when the finger lifts, so holding an item shows its description first. With a mouse it starts on the press.
 - **Text fields** open the on-screen keyboard; the game draws the text itself. On iOS the fields use the ASCII keyboard with autocorrection off.
-- **Debug console**: double-tap the bottom-right corner of the screen (100 CSS pixels square) within 350 ms. This works in mobile mode and on any mobile device.
+- **Debug console**: double-tap the bottom-right corner of the screen (100 CSS pixels square, without its outer 24 points, see Edges) within 350 ms. This works in mobile mode and on any mobile device.
 
 ### Keyboard
 
