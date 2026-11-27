@@ -207,7 +207,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     const presenter = new LevelInputPresenter(ui.root, {
         definitions, render: () => world, command: (command: unknown) => commands.push(command),
     }, {
-        introComplete: true, bindTools() { return [] }, board: { origin: { x: 12, y: 40 }, cell: { width: 20, height: 30 }, rows: 3, columns: 4 },
+        introComplete: true, bindTools() { return [] }, board: { bounds: { left: 0, right: 800 }, origin: { x: 12, y: 40 }, cell: { width: 20, height: 30 }, rows: 3, columns: 4 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer() {},
         pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => bank.packetAt(snapshot, index),
         bindSeedPackets: (select: (index: number) => void) => bank.bind(select),
@@ -350,7 +350,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             command(command: any) { commands.push(command); pending.push(command) },
         }, {
             introComplete: true, bindTools() { return [] }, level: { award: { kind: 'seed' } },
-            board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+            board: { bounds: { left: 0, right: 800 }, origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
             audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
             pointerOffsetY: () => 0, seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
             bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button,
@@ -422,7 +422,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             if (command.type === 'collectItemAt') world.items.find(item => command.x >= item.x && command.x < item.x + 40 && command.y >= item.y && command.y < item.y + 40).state = 'collecting'
         },
     }, view = {
-        introComplete: true, canOpenMenu: true, bindTools() { return [] }, level: { award: { kind: 'seed' } }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+        introComplete: true, canOpenMenu: true, bindTools() { return [] }, level: { award: { kind: 'seed' } }, board: { bounds: { left: 0, right: 800 }, origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value },
         pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => {
             const packet = snapshot.seedPackets[index]

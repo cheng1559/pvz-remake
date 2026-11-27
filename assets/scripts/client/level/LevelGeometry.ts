@@ -26,10 +26,11 @@ export function boardCell(board: BoardDefinition, x: number, y: number) {
 
 /**
  * Board::PixelToGridX and PixelToGridY, where a seed goes down: no cell left of or above the lawn, the last column or row
- * past its right or bottom edge.
+ * past its right or bottom edge. The original's screen ends at the board's right bound; a wider one shows more of the yard
+ * past it, where no seed goes down.
  */
 export function plantingCell(board: BoardDefinition, x: number, y: number): { row: number, column: number } | undefined {
-    if (x < board.origin.x || y < board.origin.y) return undefined
+    if (x < board.origin.x || y < board.origin.y || x >= board.bounds.right) return undefined
     const { row, column } = boardCell(board, x, y)
     return { row: Math.min(board.rows - 1, row), column: Math.min(board.columns - 1, column) }
 }
