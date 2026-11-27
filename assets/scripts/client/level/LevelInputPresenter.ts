@@ -65,10 +65,13 @@ export class LevelInputPresenter {
             if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
             else this.onMenu()
         })
-        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu)
+        // On mobile, with cheat seeds on, the sun counter's box is R.
+        const sunCounter = this.view.bindSunCounter(() => this.repick())
+        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu, sunCounter)
         for (const button of this.buttons) {
             button.canInteract = () => {
                 if (!this.enabled || button === menu && !this.view.canOpenMenu) return false
+                if (button === sunCounter && !(GameDebugSettings.isMobileMode() && GameDebugSettings.cheatSeedsEnabled)) return false
                 const snapshot = this.game.render()
                 return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
             }
@@ -329,11 +332,7 @@ export class LevelInputPresenter {
             if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
             this.selectSeedPacket(packetIndex, true)
         }
-        // `/repick`, which says itself when the level has no bank to choose again; in a repick, its Let's Rock.
-        else if (event.keyCode === KeyCode.KEY_R) {
-            if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
-            else this.game.debugCommand?.('/repick')
-        }
+        else if (event.keyCode === KeyCode.KEY_R) this.repick()
         // `/suncost` and `/cooldown`, run as the CLI runs them: the preference kept for later levels, the advice shown.
         else if (event.keyCode === KeyCode.KEY_S || event.keyCode === KeyCode.KEY_C) {
             const game = this.game
@@ -342,6 +341,15 @@ export class LevelInputPresenter {
                 .then(result => { if (result.ok && result.advice) this.view.showAdvice(result.advice) })
                 .catch(error => console.error('[LevelInput] Switch failed', error))
         }
+    }
+
+    /**
+     * R, and on mobile the sun counter's box: with cheat seeds on, `/repick`, which says itself when the level has no
+     * bank to choose again; in a repick, its Let's Rock.
+     */
+    private repick(): void {
+        if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
+        else if (GameDebugSettings.cheatSeedsEnabled) this.game.debugCommand?.('/repick')
     }
 
     private cancelPlanting(): void {

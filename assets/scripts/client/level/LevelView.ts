@@ -243,6 +243,8 @@ export class LevelView {
         bankExtension.setSiblingIndex(0)
         const bankExtensionImage = ui.image(bankExtension, seedbank).node
         uiNode({ node: slots.seedPacket, position: { x: 85, y: -8 }, anchor: { x: 0, y: 1 } })
+        // The sun counter's box: the bank's left, up to its first packet.
+        const sunArea = uiNode({ name: 'SunArea', parent: bank, anchor: { x: 0, y: 1 }, size: { width: 85, height: bankHeight } }).node
         const sunText = ui.label(slots.sunText.parent!, {
             node: slots.sunText, text: '', font: sunFont, color: Color.BLACK,
             x: 34, y: 78, align: 'center', baseline: true, pixelAlign: true,
@@ -341,7 +343,7 @@ export class LevelView {
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: controls, adviceFont: houseOfTerror28,
             tutorialArrowLayer: tutorialArrows, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
-            sunText, progressMeter: meterNodes.meter, progressFillClip: meterNodes.fillClip, progressFill: meterNodes.fill, progressHead: meterNodes.head, levelText: meterNodes.levelText, coinBank,
+            sunText, sunArea, progressMeter: meterNodes.meter, progressFillClip: meterNodes.fillClip, progressFill: meterNodes.fill, progressHead: meterNodes.head, levelText: meterNodes.levelText, coinBank,
         })
         const particlePresenter = new LevelParticlePresenter(
             layout,
@@ -719,6 +721,10 @@ export class LevelView {
 
     bindMenu(open: () => void): UIButton {
         return this.hud.bindMenu(open)
+    }
+
+    bindSunCounter(press: () => void): UIButton {
+        return this.hud.bindSunCounter(press)
     }
 
     setPaused(paused: boolean): void {

@@ -332,7 +332,7 @@ Four test levels do not overwrite the Adventure save: `pvz:teams-demo` (the team
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | Turns off drawing or processing of a part, for performance checks |
 | `/mod` | Opens the Mod manager |
 
-With hotkeys on, `1`–`9` and `0` pick the matching seed slot or conveyor packet, `F` picks up or puts back the shovel, `R` runs `/repick` (and, pressed again while choosing, starts the level), and `S` and `C` switch sun cost and recharge.
+With hotkeys on, `1`–`9` and `0` pick the matching seed slot or conveyor packet, `F` picks up or puts back the shovel, `R` runs `/repick` with `/cheatseed` on (and, pressed again while choosing, starts the level; on mobile a tap on the sun counter does the same), and `S` and `C` switch sun cost and recharge.
 
 See [Debug Console](docs/DEBUG_CLI.md) for the full reference.
 

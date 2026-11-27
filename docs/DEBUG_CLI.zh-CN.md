@@ -123,7 +123,7 @@
 - 冷却规则与生存模式的重新选卡相同：种子栏原有的卡片保留原有冷却，无论是留在栏中还是重新选入；其他卡片立即可用。点击"开始战斗！"前不会弹出任何选卡警告，既没有缺少产阳光植物的提示，也没有关卡自身的教程警告。
 - 种子栏由关卡发放的关卡也可以使用，结束后仍恢复为发放的种子栏；传送带关卡和没有种子栏的关卡不可使用（"This level has no seed bank to choose again"），正在选卡时也不可使用（"Finish choosing seeds first"）。
 - 重新选卡不会存档：重新选卡期间保存的存档记录的是之前的种子栏（点击"开始战斗！"之后则是新选的种子栏），读档后直接进入战斗。
-- 开启快捷键（`/hotkeys`）后，战斗中按 `R` 即执行该指令，在重新选卡界面中再按一次相当于点击"开始战斗！"。
+- 开启快捷键和作弊卡片（`/hotkeys`、`/cheatseed`）后，战斗中按 `R` 即执行该指令，在重新选卡界面中再按一次相当于点击"开始战斗！"。在移动端，开启作弊卡片后点击阳光计数也是如此。
 
 ### 植物、僵尸与草坪
 
@@ -386,7 +386,7 @@
 | --- | --- |
 | `1`–`9`、`0` | 选取第 1–10 个卡槽中的种子包，或传送带上从左数起对应位置的卡片。手中持有其他种子包或铁铲时，直接换成该种子包；再按手中种子包对应的键则放回。 |
 | `F` | 拿起铁铲，或把铁铲放回。手中持有植物时，像数字键切换种子包一样直接换成铁铲。 |
-| `R` | 执行 `/repick`；在重新选卡界面中再按一次相当于点击"开始战斗！" |
+| `R` | 开启 `/cheatseed` 时执行 `/repick`；在重新选卡界面中再按一次相当于点击"开始战斗！" |
 | `S` | 切换 `/suncost`，效果与输入该指令相同 |
 | `C` | 切换 `/cooldown`，效果与输入该指令相同 |
 
@@ -459,6 +459,6 @@
 
 - 规则开关作用于会话的 `DebugRulesResource`。冷却、阳光消耗、植物无敌、收集方式和全卡模式还作为调试偏好保存在 `GameDebugSettings` 中，由 `LevelController` 应用到每个新关卡；在关卡外，这些指令只设定偏好。
 - `GameDebugSettings` 把保存在本机的设置存放在本地存储的 `pvz-remake:debug:settings` 键下，把指令历史存放在 `pvz-remake:debug:cli-history` 键下。
-- 快捷键 `S` 和 `C` 与控制台一样，通过 `executeDebugCliCommand` 执行 `/suncost` 和 `/cooldown`；`R` 向关卡发送 `/repick`（`client/level/LevelInputPresenter.ts`）。
+- 快捷键 `S` 和 `C` 与控制台一样，通过 `executeDebugCliCommand` 执行 `/suncost` 和 `/cooldown`；开启作弊卡片时，`R` 和移动端的阳光计数向关卡发送 `/repick`（`client/level/LevelInputPresenter.ts`）。
 
 模组通过 `host.around` 包装 `specs.list` 和各个 `executor` 对象来添加指令，详见[模组文档](MODS.zh-CN.md#扩展调试指令)。

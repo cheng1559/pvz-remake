@@ -25,7 +25,8 @@ function setup() {
         constructor(public r: number, public g: number, public b: number, public a = 255) {}
     }
     const events = Object.fromEntries(['MOUSE_DOWN', 'MOUSE_MOVE', 'MOUSE_UP', 'MOUSE_ENTER', 'MOUSE_LEAVE',
-        'TOUCH_START', 'TOUCH_MOVE', 'TOUCH_END', 'TOUCH_CANCEL', 'NODE_DESTROYED'].map(name => [name, name.toLowerCase().replace('_', '-')]))
+        'TOUCH_START', 'TOUCH_MOVE', 'TOUCH_END', 'TOUCH_CANCEL', 'NODE_DESTROYED', 'KEY_DOWN', 'KEY_PRESSING'].map(name => [name, name.toLowerCase().replace('_', '-')]))
+    const keys = { SPACE: 32, ENTER: 13, DIGIT_0: 48, DIGIT_1: 49, KEY_C: 67, KEY_R: 82, KEY_S: 83 }
     class Transform {
         anchorX = 0; anchorY = 1; width = 100; height = 50
         constructor(private node: FakeNode) {}
@@ -79,16 +80,17 @@ function setup() {
         }
     }
     let mobile = false, cursor = 'default'
+    const settings = { isMobileMode: () => mobile, hotkeysEnabled: false, cheatSeedsEnabled: false }
     const cursorHistory: string[] = [], haptics: string[] = []
     const modules: Record<string, any> = {
         cc: {
             Component: class { enabledInHierarchy = true }, _decorator: { ccclass: () => (value: unknown) => value },
             Button: { EventType: { CLICK: 'click' } }, EventMouse: MouseEvent, EventTouch: TouchEvent, Color,
-            Node: FakeNode, Vec3: Vec, UITransform: Transform, Input: { EventType: events }, input: new FakeNode(),
+            Node: FakeNode, Vec3: Vec, UITransform: Transform, Input: { EventType: events }, input: new FakeNode(), KeyCode: keys,
             // No band for UIHoverManager's edge guard (edge-guard.test's): these touches start close to the left.
             screen: { devicePixelRatio: 0, windowSize: { width: Infinity, height: Infinity } },
         },
-        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/platform/Haptics': { Haptics: { play: (style = 'light') => haptics.push(style) } },
         './CursorManager': { CursorManager: { set: (value: string) => { cursor = value; cursorHistory.push(value) } } },
     }
@@ -150,7 +152,7 @@ function setup() {
             node.emit(type, event)
         }
     }
-    return { root, hover, makeButton, dispatch, events, load, Node: FakeNode, cursorHistory, haptics, get cursor() { return cursor }, setMobile(value = true) { mobile = value },
+    return { root, hover, makeButton, dispatch, events, keys, settings, input: (modules.cc as any).input, load, Node: FakeNode, cursorHistory, haptics, get cursor() { return cursor }, setMobile(value = true) { mobile = value },
         cleanup() { for (const button of buttons) { button.enabledInHierarchy = false; button.onDisable() } hover.stop() } }
 }
 
@@ -169,7 +171,7 @@ test("a mobile tap answers Dave's seed-slot offer before the lawn can advance hi
     yes.button.onClick = () => answers.push(true)
     no.button.onClick = () => answers.push(false)
     const presenter = new LevelInputPresenter(board, { command: (cmd: { type: string }) => commands.push(cmd.type) }, {
-        dialogReady: true, bindSeedPackets: () => [], bindTools: () => [], bindMenu: () => ({}), resetCursor() {},
+        dialogReady: true, bindSeedPackets: () => [], bindTools: () => [], bindMenu: () => ({}), bindSunCounter: () => ({}), resetCursor() {},
     })
     try {
         presenter.start()
@@ -183,6 +185,47 @@ test("a mobile tap answers Dave's seed-slot offer before the lawn can advance hi
         ui.hover.endModalBlock(dialog)
         ui.dispatch(board, ui.events.TOUCH_START, 270)
         assert.deepEqual(commands, ['advanceDialog'])
+    } finally { presenter.destroy(); ui.cleanup() }
+})
+
+test("with cheat seeds on, R and on mobile a tap on the sun counter start a repick, and in one are its Let's Rock", () => {
+    const ui = setup()
+    ui.setMobile()
+    const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
+    const board = new ui.Node()
+    ui.root.addChild(board)
+    const sun = ui.makeButton(300, board)
+    let repicking = false, starts = 0
+    const commands: string[] = []
+    const presenter = new LevelInputPresenter(board, {
+        render: () => ({ result: 'playing', phase: 'gameplay', cursor: { mode: 'none' }, seedPackets: [], items: [], ...repicking ? { seedChooser: { repick: true } } : {} }),
+        command() {}, debugCommand: (command: string) => commands.push(command), definitions: { items: {} },
+    }, {
+        introComplete: true, level: {}, bindSeedPackets: () => [], bindTools: () => [], bindMenu: () => ({}), resetCursor() {}, setPointer() {}, seedPacketAt: () => undefined,
+        bindSunCounter(press: () => void) { sun.button.onClick = press; return sun.button },
+        pressSeedChooserStart: () => { starts++; return true },
+    })
+    presenter.boardPixel = (event: any) => event.getUILocation()
+    const tap = () => { ui.dispatch(sun.node, ui.events.TOUCH_START, sun.node.x + 20); ui.dispatch(sun.node, ui.events.TOUCH_END, sun.node.x + 20) }
+    const r = () => ui.input.emit(ui.events.KEY_DOWN, { keyCode: ui.keys.KEY_R })
+    ui.settings.hotkeysEnabled = true
+    try {
+        presenter.start()
+        tap()
+        r()
+        assert.deepEqual([commands, starts], [[], 0], 'not with cheat seeds off')
+        ui.settings.cheatSeedsEnabled = true
+        tap()
+        r()
+        assert.deepEqual(commands, ['/repick', '/repick'])
+        repicking = true
+        tap()
+        r()
+        assert.deepEqual([commands.length, starts], [2, 2], "in the repick, its Let's Rock")
+        repicking = false
+        ui.setMobile(false)
+        tap()
+        assert.deepEqual(commands, ['/repick', '/repick'], 'the sun counter is a button on mobile alone')
     } finally { presenter.destroy(); ui.cleanup() }
 })
 
@@ -212,6 +255,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => bank.packetAt(snapshot, index),
         bindSeedPackets: (select: (index: number) => void) => bank.bind(select),
         bindMenu: () => ({ isValid: true }),
+        bindSunCounter: () => ({ isValid: true }),
     })
     try {
         presenter.start()
@@ -353,7 +397,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             board: { bounds: { left: 0, right: 800 }, origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
             audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
             pointerOffsetY: () => 0, seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
-            bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button,
+            bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button, bindSunCounter: () => ({}),
         })
         input.boardPixel = (event: any) => event.getUILocation()
         const touch = (type: string, x: number, y = 20, id = 1) => { ui.dispatch(ui.root, type, x, 0, id, y); flush() }
@@ -434,6 +478,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             return [pea.button, sunflower.button]
         },
         bindMenu(open: () => void) { menu.node.on('click', open); return menu.button },
+        bindSunCounter: () => ({}),
     }, () => { menus++ })
     presenter.boardPixel = (event: any) => event.getUILocation()
     const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)

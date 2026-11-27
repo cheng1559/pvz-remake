@@ -121,7 +121,7 @@ The test levels are outside the Adventure (they have no `adventureIndex`): each 
 - Recharges follow Survival's repick: a card the bank held keeps its recharge, whether left in or chosen again, and any other card is ready. No chooser warning asks anything before Let's Rock, neither the one for a missing sun producer nor the level's own tutorial warnings.
 - It works on a level that deals its bank too, which goes back to a dealt bank afterwards, but not on a conveyor-belt level or a level without a bank ("This level has no seed bank to choose again"), and not while seeds are being chosen ("Finish choosing seeds first").
 - A repick is not saved: a save made during one holds the bank from before it (or, after Let's Rock, the bank chosen) and loads straight into play.
-- With hotkeys on (`/hotkeys`), `R` runs it during play, and pressed again in the repick it is Let's Rock.
+- With hotkeys and cheat seeds on (`/hotkeys`, `/cheatseed`), `R` runs it during play, and pressed again in the repick it is Let's Rock. On mobile, with cheat seeds on, a tap on the sun counter does the same.
 
 ### Plants, zombies and the lawn
 
@@ -384,7 +384,7 @@ With hotkeys on (`/hotkeys`, off by default and saved locally), each seed packet
 | --- | --- |
 | `1`–`9`, `0` | Pick the packet in seed slot 1–10, or the conveyor belt's packet in that place from the left. Holding another packet or the shovel, the key swaps straight to it; pressing the held packet's key puts it back. |
 | `F` | Pick up the shovel, or put it back. Holding a plant, it swaps straight to the shovel, as the number keys swap packets. |
-| `R` | Run `/repick`; pressed again in the repick, it is Let's Rock |
+| `R` | With `/cheatseed` on, run `/repick`; pressed again in the repick, it is Let's Rock |
 | `S` | Turn `/suncost` the other way, as typing it would |
 | `C` | Turn `/cooldown` the other way, as typing it would |
 
@@ -457,6 +457,6 @@ Rules and preferences:
 
 - The rule switches act on the session's `DebugRulesResource`. Recharge, sun cost, plant invincibility, collection and cheat seeds are also kept as debug preferences in `GameDebugSettings` and applied to each new level by `LevelController`; outside a level these commands only set the preference.
 - `GameDebugSettings` stores the settings kept on the device under the local storage key `pvz-remake:debug:settings` and the history under `pvz-remake:debug:cli-history`.
-- The hotkeys `S` and `C` run `/suncost` and `/cooldown` through `executeDebugCliCommand`, as the console does; `R` sends `/repick` to the level (`client/level/LevelInputPresenter.ts`).
+- The hotkeys `S` and `C` run `/suncost` and `/cooldown` through `executeDebugCliCommand`, as the console does; `R`, and on mobile the sun counter, send `/repick` to the level with cheat seeds on (`client/level/LevelInputPresenter.ts`).
 
 Mods add commands by wrapping `specs.list` and the `executor` objects with `host.around`; see [Mods](MODS.md#extending-cli-commands).
