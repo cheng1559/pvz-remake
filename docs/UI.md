@@ -140,9 +140,14 @@ Text fields keep the system I-beam. The images are extracted from the original e
 
 Feedback is given when:
 
-- a finger touches or slides onto a button (seed packets, tools, chooser cards, almanac cards and the main menu's trophy excepted);
+- a finger touches or slides onto a button (seed packets, tools, chooser cards, almanac cards, the zombies in the intro's street and the main menu's trophy excepted);
 - a slider's knob passes each twentieth of its range;
-- an almanac entry is chosen;
+- an almanac entry is chosen, or a zombie in the intro's street opens its entry;
+- a seed packet or a tool is picked up, the held packet is put back, or a packet that cannot be picked up is touched while one is held;
+- a card is chosen or sent back in the seed chooser;
+- a plant, zombie seed, grave or crater is put down, or a plant is shovelled;
+- the level award is collected, or the mallet hits a zombie: these are stronger;
+- the main menu's Adventure button flashes as the game starts: each dark flash is felt lightly for 0.15 s;
 - the board shakes, such as for an explosion; the strongest shake of a frame decides the strength.
 
 An explosion's feedback waits 40 ms of game time and takes precedence over lighter feedback; feedback within 40 ms of the last one is merged.

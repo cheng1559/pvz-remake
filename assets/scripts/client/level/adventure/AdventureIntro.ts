@@ -24,6 +24,7 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { streetZombies, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -191,6 +192,8 @@ export class AdventureIntro implements LevelIntro {
                 const typeId = this.previewTypes.get(node)!
                 if (!openAlmanacZombie || !almanacZombies.includes(typeId)) return
                 tooltip.hide()
+                // Felt only as it opens the almanac, as an almanac entry chosen is.
+                Haptics.play()
                 void SoundSystem.play(SoundEffect.Tap)
                 openAlmanacZombie(typeId)
             }

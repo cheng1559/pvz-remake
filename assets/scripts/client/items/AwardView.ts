@@ -7,6 +7,7 @@ import type { EntityView, StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { plantPacket } from '@/client/plants/definitions'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 import { uiNode } from '@/client/view/uiNode'
 import type { ItemSnapshot } from '@/shared/protocol/index'
 import type { ItemViewContext } from './ItemView'
@@ -130,6 +131,7 @@ export class AwardView implements EntityView<ItemSnapshot> {
     static readonly collected: StageEvent = (stage, event) => {
         void SoundSystem.play(SoundEffect.SeedLift)
         void SoundSystem.play(SoundEffect.Drop)
+        Haptics.play('medium')
         const { entityId, x, y } = event.data
         if (typeof entityId === 'number' && typeof x === 'number' && typeof y === 'number') stage.view(entityId, AwardView)?.collect(x, y)
     }

@@ -1256,7 +1256,7 @@ test("the winner's blend into its walk goes on by the game over's ticks, its pla
         'its approach and walk both take the blend on, before its pose is drawn where the walk is')
 })
 
-test("the level's award is collected by its own view: its sounds, the starburst, its glow gone and its own effect behind it", async () => {
+test("the level's award is collected by its own view: its sounds and feel, the starburst, its glow gone and its own effect behind it", async () => {
     class FakeNode {
         isValid = true
         active = true
@@ -1270,7 +1270,7 @@ test("the level's award is collected by its own view: its sounds, the starburst,
         getComponentsInChildren(type: any): any[] { return this.children.flatMap(child => [...child.components.filter(component => component instanceof type), ...child.getComponentsInChildren(type)]) }
         destroy() { this.isValid = false; this.parent!.children.splice(this.parent!.children.indexOf(this), 1) }
     }
-    const spawned: { id: string, parent: FakeNode }[] = [], played: string[] = []
+    const spawned: { id: string, parent: FakeNode }[] = [], played: string[] = [], felt: string[] = []
     class ParticlePlayer {
         constructor(readonly id: string, readonly node: FakeNode) {}
         overrideScale() {}
@@ -1290,6 +1290,7 @@ test("the level's award is collected by its own view: its sounds, the starburst,
         '@/client/hud/SeedPacketRenderer': { SEED_PACKET_WIDTH: 50, SEED_PACKET_HEIGHT: 70, SeedPacketRenderer: { drawSeedPacket: ({ parent, name }: any) => new FakeNode(name, parent) } },
         '@/client/level/LevelGeometry': { levelAwardSize: () => ({ width: 50, height: 70 }) },
         '@/client/plants/definitions': { plantPacket: () => ({ plant: {} }) },
+        '@/platform/Haptics': { Haptics: { play(style = 'light') { felt.push(style) } } },
     })
     const layer = new FakeNode('AwardLayer'), node = new FakeNode('Entity-5', layer)
     const stage: any = { level: { award: { id: 'test:seed', kind: 'seed' } }, levelEndTicks: () => -1 }
@@ -1301,7 +1302,7 @@ test("the level's award is collected by its own view: its sounds, the starburst,
     const back = node.children.find(child => child.name === AwardView.BACK)!
     assert.deepEqual(back.children.map(child => child.name), ['pvz:seedpacket'], 'a landed seed packet glows')
     AwardView.collected(stage, { eventId: 1, type: 'levelAwardCollected', data: { entityId: 5, awardId: 'test:seed', x: 100, y: 200 } }, {})
-    assert.deepEqual(played, ['seedlift', 'tap2'])
+    assert.deepEqual([played, felt], [['seedlift', 'tap2'], ['medium']])
     assert.deepEqual(spawned.slice(1).map(({ id, parent }) => [id, parent.name]), [['pvz:starburst', 'AwardLayer'], ['pvz:award', AwardView.BACK]])
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'the glow goes as it is collected')
     view.sync({ ...item, state: 'collecting' })

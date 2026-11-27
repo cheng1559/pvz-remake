@@ -6,6 +6,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 import { parseClip, presentationSounds, type ClientAnimationClip, type LevelRulePresentation, type PresentationSound } from '@/shared/content/presentation'
 import { allFields, finite, named, nonEmptyString, positiveFinite } from '@/shared/validate'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
@@ -106,6 +107,8 @@ export class WhackAZombieView implements LevelRuleView {
             if (event.type === 'sunDropped') { void SoundSystem.play(SoundEffect.Throw, { foley: true, pitchRange: 10 }); continue }
             // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.
             if (event.type !== 'zombieWhacked' && event.type !== 'plantWhacked') continue
+            // Felt as it lands.
+            Haptics.play('medium')
             const helm = event.data.helm === undefined ? undefined : String(event.data.helm)
             if (helm !== undefined) { void SoundSystem.playSounds(this.config.helmSounds[helm]); continue }
             const { bonk } = this.config

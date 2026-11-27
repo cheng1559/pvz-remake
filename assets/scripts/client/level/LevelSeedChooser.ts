@@ -18,6 +18,7 @@ import type { LoadedContent } from './LevelView'
 import { seedPacketX } from './LevelGeometry'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 
 /** A card in the chooser grid: an offered seed, on its side, at a grid place (8 columns in reading order from 0). */
 export interface ChooserCard extends ChooserEntry {
@@ -511,6 +512,7 @@ export class LevelSeedChooser {
         for (const candidate of this.choices) this.land(candidate)
         if (choice.slot < 0 && this.snapshot!.seedPackets.length >= this.snapshot!.seedChooser!.slots) return
         for (const candidate of this.choices) candidate.tooltip.hide()
+        Haptics.play()
         void SoundSystem.play(SoundEffect.Tap)
         this.send({ type: 'chooseSeed', seedId: choice.seedId, ...(choice.team ? { team: choice.team } : {}) })
     }

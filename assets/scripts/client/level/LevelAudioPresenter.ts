@@ -6,6 +6,7 @@ import type { SeedAvailability, ServerEvent, WorldSnapshot } from '@/shared/prot
 import type { BoardTimePresentation } from '@/shared/content/presentation'
 import type { TimeBlend } from './TimeBlends'
 import type { LevelAudioSnapshot } from './LevelPresentationSnapshot'
+import { Haptics } from '@/platform/Haptics'
 
 export class LevelAudioPresenter {
     private ownsMusic = false
@@ -141,7 +142,8 @@ export class LevelAudioPresenter {
     play(event: ServerEvent): void {
         switch (event.type) {
             case 'toolSelected': void SoundSystem.play(SoundEffect.Shovel, { foley: true }); break
-            case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); break
+            // Felt as it is heard, like a plant put down (StageEventRegistry).
+            case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); Haptics.play(); break
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
             case 'musicBurst': MusicSystem.startBurst(Number(event.data.countdown)); break
             case 'hugeWaveSound': void SoundSystem.play(SoundEffect.HugeWave); break

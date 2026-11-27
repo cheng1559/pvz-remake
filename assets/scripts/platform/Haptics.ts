@@ -2,10 +2,11 @@ import { native, sys } from 'cc'
 import { gameClock } from '@/core/GameClock'
 import { GameDebugSettings } from './debug/GameDebugSettings'
 
-export type HapticStyle = 'light' | 'medium' | 'heavy' | 'explosion'
+/** `pulse`: a light rumble of 0.15 s held at 0.35, a little longer than a flash of the main menu's Adventure button. */
+export type HapticStyle = 'light' | 'medium' | 'heavy' | 'explosion' | 'pulse'
 const EXPLOSION_DELAY_MS = 40
 /** Android browsers vibrate for these durations, the fallback the native Android bridge uses without predefined effects. */
-const WEB_VIBRATION_MS: Record<HapticStyle, number> = { light: 10, medium: 20, heavy: 35, explosion: 120 }
+const WEB_VIBRATION_MS: Record<HapticStyle, number> = { light: 10, medium: 20, heavy: 35, explosion: 120, pulse: 150 }
 // iOS browsers have no vibration API; desktop Chrome has the method but no motor.
 const webVibration = () => !sys.isNative && sys.os === sys.OS.ANDROID && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
 const supported = () => (sys.isNative && (sys.os === sys.OS.IOS || sys.os === sys.OS.ANDROID)) || webVibration()

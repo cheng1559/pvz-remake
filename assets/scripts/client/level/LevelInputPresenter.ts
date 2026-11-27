@@ -3,6 +3,7 @@ import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { boardCell, plantingCell } from './LevelGeometry'
 import { itemAt } from '@/shared/content/gameplay'
@@ -111,6 +112,7 @@ export class LevelInputPresenter {
         if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
+        Haptics.play()
         if (snapshot.cursor.mode !== 'none' && (!replace || packet.selected)) {
             this.cancelPlanting()
             return
@@ -143,6 +145,7 @@ export class LevelInputPresenter {
         // Other buttons (Menu, a Mod's controls) keep their normal capture when no plant is held.
         if (!held && !tool && index < 0 && UIButton.at(location, event.windowId)?.interactable) return
         const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
+        if (packet && held && !pickable) Haptics.play()
         if (packet && (!held || pickable)) {
             // Selection replaces the server's held packet atomically; a queued clear is not visible here yet.
             this.selectSeedPacket(index, true)
@@ -262,6 +265,7 @@ export class LevelInputPresenter {
         if (!this.enabled) return
         const cursor = this.game.render().cursor
         if (cursor.mode !== 'none' && (!replace || cursor.mode === 'tool' && cursor.toolId === toolId)) { this.cancelPlanting(); return }
+        Haptics.play()
         this.game.command({ type: 'selectTool', toolId })
         // A touch move can arrive before the next frame; confirm selection at the input boundary.
         this.game.update(0)
