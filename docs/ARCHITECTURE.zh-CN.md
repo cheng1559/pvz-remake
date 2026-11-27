@@ -789,6 +789,17 @@ Release 版本启动时会预热共享的 ZIP 缓存，并准备好所有 Reanim
 - 已用完固定发射上限的空系统会推迟剩余的模拟步并跳过空渲染，同时保持原有的寿命和存档年龄。
 - 表现层设置的 `particles` 规定原版粒子池（TodParticleHolder）的上限。`ParticlePlayer` 统计存活的特效和发射器，放不下的特效不会启动；内核统计所有系统的粒子，超过上限就不再生成，并且不为它取随机数。
 
+### 音乐
+
+音乐用原版的：`MusicSystem` 自己播放原版游戏的 tracker 模块，和原版用 BASS 播放的方式一样。
+
+- 模块曲目（`ModuleTune`）由 Music::PlayMusic 的几个部分组成：每部分是其模块（`mainmusic.mo3` 或 `mainmusic_hihats.mo3`）的一个实例，从指定 order 开始播放，只听得到它的声道（Music::SetupMusicFileForTune），按模块自身的跳转循环。跳转时停掉正在响的音符，和 `BASS_MUSIC_POSRESET` 相同。
+- 白天和夜晚的曲目按 Music::UpdateMusicBurst 调整各部分的音量。夜晚的鼓在主旋律进入下一个 order 时开始它的段落，由播放器按采样精确执行；原版让鼓略早跳过去，再靠调速度拉回同步（Music::MusicResync）。
+- 播放器是 `native/engine/common/music/` 下的 C++，基于 libopenmpt（`native/engine/common/third_party/libopenmpt`）。原生平台通过 `MusicBindings.cpp` 调用，混音作为引擎的音频流播放（`AudioEngine::playStream`）。
+- Web 端在 AudioWorklet 中运行编译为 WebAssembly 的同一份代码（`client/music/ModuleMusicWorklet.ts`），使用自己的音频上下文。修改 C++ 后需运行 `npm run build:music`（需要 Emscripten），并提交重新生成的 `assets/resources/music/pvz_music.bin`。
+- 读一个模块要花一些时间，`mainmusic.mo3` 约 0.25 秒，所以实例读好后会保留，供之后的曲目复用。原生平台在单独的线程上读模块，预加载曲目时会读好它还缺的实例；选卡时预加载本关的曲目。Worklet 在音频线程上读模块，会卡住正在播放的曲目，所以 Web 端在曲目开始时才读缺的实例。
+- 文件曲目（`FileTune`）是模组提供的录音：一个音频文件，整首循环。
+
 ### 游戏时钟
 
 `core/GameClock.ts` 提供共享的 `gameClock`，用于过渡动画、菜单计时器、Reanim、粒子以及本地战斗的帧入口。

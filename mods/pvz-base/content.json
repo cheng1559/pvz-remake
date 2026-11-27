@@ -50194,16 +50194,6 @@
       "pvz:pix118bold": "assets/fonts/pix118bold.json"
     },
     "audio": {
-      "pvz:choose_seeds": "assets/audio/music/choose_seeds.mp3",
-      "pvz:conveyer": "assets/audio/music/conveyer.mp3",
-      "pvz:day_grasswalk_drums": "assets/audio/music/day_grasswalk_drums.mp3",
-      "pvz:day_grasswalk_hihats": "assets/audio/music/day_grasswalk_hihats.mp3",
-      "pvz:day_grasswalk_main": "assets/audio/music/day_grasswalk_main.mp3",
-      "pvz:final_boss": "assets/audio/music/final_boss.mp3",
-      "pvz:minigame": "assets/audio/music/minigame.mp3",
-      "pvz:puzzle": "assets/audio/music/puzzle.mp3",
-      "pvz:title_theme": "assets/audio/music/title_theme.mp3",
-      "pvz:zen_garden": "assets/audio/music/zen_garden.mp3",
       "pvz:achievement": "assets/audio/sfx/achievement.mp3",
       "pvz:awooga": "assets/audio/sfx/awooga.mp3",
       "pvz:balloon_pop": "assets/audio/sfx/balloon_pop.mp3",
@@ -50372,9 +50362,11 @@
       "pvz:zombie_falling_1": "assets/audio/sfx/zombie_falling_1.mp3",
       "pvz:zombie_falling_2": "assets/audio/sfx/zombie_falling_2.mp3",
       "pvz:zombiesonyourlawn": "assets/audio/sfx/zombiesonyourlawn.mp3",
-      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3",
-      "pvz:night_moongrains_drums": "assets/audio/music/night_moongrains_drums.mp3",
-      "pvz:night_moongrains_main": "assets/audio/music/night_moongrains_main.mp3"
+      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3"
+    },
+    "tracker": {
+      "pvz:mainmusic": "assets/music/modules/mainmusic.mo3",
+      "pvz:mainmusic_hihats": "assets/music/modules/mainmusic_hihats.mo3"
     },
     "json": {
       "pvz:strings": "assets/json/strings.json"

@@ -504,6 +504,7 @@ All resource categories share one set of definitions:
 | `sprites` | An object | See [Images](#images). |
 | `fonts` | A font JSON path | See [Fonts](#fonts). |
 | `audio` | A file path | MP3 or WAV. |
+| `tracker` | A file path | A tracker module: MO3, XM, IT, S3M, MOD or MPTM. |
 | `json` | A file path | Plain JSON, including the `pvz:strings` text table. |
 | `text` | A file path | Plain text. |
 | `reanim` | A file path | Reanim animations (schemaVersion 3), which record their source `fps`. |
@@ -551,7 +552,12 @@ All text lives in a single text table merged by key, `pvz:strings`.
 
 Each background music track is one `music` resource with the ID `pvz:<track name>`. The base game's tracks are `day_grasswalk`, `night_moongrains`, `choose_seeds`, `title_theme`, `zen_garden`, `puzzle`, `minigame`, `conveyer` and `final_boss`.
 
-The format is in `shared/content/music.ts` (schemaVersion 3): duration, loop points, stems as audio resource IDs (`main`, with optional `drums` and `hihats`), and optionally the original's burst sections. A music Mod registers the track it replaces under the same ID, and the other tracks stay the base game's.
+The format is in `shared/content/music.ts`. Every tune is schemaVersion 4, in one of two forms:
+
+- A module tune, as the base game's are: its `parts` (`main`, with optional `drums` and `hihats`), each a tracker resource (`module`) with the `order` it plays from (and an optional `row`) and the ranges of channels heard (`channels`, every one when absent). Optionally the original's `burstScheme`: `day`, or `night` with the two orders the drums start at on an even and an odd order of the melody (`drumsJumpOrders`).
+- A recording: one audio resource (`audio`) and its duration (`durationSec`). It loops whole.
+
+A music Mod registers the track it replaces under the same ID, and the other tracks stay the base game's.
 
 ## Animation clips
 

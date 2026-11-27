@@ -57,10 +57,37 @@ endif()
 
 include(${COCOS_X_PATH}/CMakeLists.txt)
 
+# libopenmpt for the module player: the sources its Makefile builds the library from, with minimp3 and stb_vorbis for
+# samples a module keeps compressed (tools/music/build.ts builds the same for the web).
+set(PVZ_OPENMPT_DIR ${CMAKE_CURRENT_LIST_DIR}/third_party/libopenmpt)
+set(PVZ_OPENMPT_SOURCES)
+foreach(directory src/openmpt/all src/openmpt/base src/openmpt/logging src/openmpt/random common src/openmpt/fileformat_base
+        src/openmpt/soundbase src/openmpt/soundfile_data soundlib soundlib/plugins soundlib/plugins/dmo sounddsp libopenmpt)
+    file(GLOB sources CONFIGURE_DEPENDS ${PVZ_OPENMPT_DIR}/${directory}/*.cpp)
+    list(APPEND PVZ_OPENMPT_SOURCES ${sources})
+endforeach()
+add_library(pvz_openmpt STATIC ${PVZ_OPENMPT_SOURCES}
+    ${PVZ_OPENMPT_DIR}/include/minimp3/minimp3.c
+    ${PVZ_OPENMPT_DIR}/include/stb_vorbis/stb_vorbis.c
+)
+# Its archive goes under the build folder, as the engine's does: the app links it by that path, also when an Xcode build
+# puts its products elsewhere (SYMROOT).
+set_target_properties(pvz_openmpt PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/archives)
+target_compile_definitions(pvz_openmpt PRIVATE LIBOPENMPT_BUILD MPT_WITH_MINIMP3 MPT_WITH_STBVORBIS STB_VORBIS_NO_PULLDATA_API STB_VORBIS_NO_STDIO
+    $<$<PLATFORM_ID:Windows>:UNICODE _UNICODE>)
+target_include_directories(pvz_openmpt PRIVATE ${PVZ_OPENMPT_DIR}/src ${PVZ_OPENMPT_DIR}/common ${PVZ_OPENMPT_DIR}/include PUBLIC ${PVZ_OPENMPT_DIR})
+target_compile_options(pvz_openmpt PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/bigobj /utf-8 /W0 /Zc:preprocessor /Zc:__cplusplus> $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>)
+# The app's target is made after this file, in the platform's CMakeLists.
+link_libraries(pvz_openmpt)
+
 list(APPEND CC_COMMON_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.h
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.cpp
     ${CMAKE_CURRENT_LIST_DIR}/Classes/KernelBindings.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/Classes/MusicBindings.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/music/pvz_music.h
+    ${CMAKE_CURRENT_LIST_DIR}/music/pvz_music.cpp
     ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_kernel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_particles.cpp
     ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_png.cpp

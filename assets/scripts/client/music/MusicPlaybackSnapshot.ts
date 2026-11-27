@@ -1,28 +1,33 @@
 import { boolean, exact, finiteInRange, nonNegativeFinite } from '@/shared/validate'
-import type { MusicTuneId } from '@/shared/content/music'
-export type { MusicTuneId } from '@/shared/content/music'
+import type { MusicStemName, MusicTuneId } from '@/shared/content/music'
 
+export type { MusicTuneId } from '@/shared/content/music'
 export type MusicBurstState = 'off' | 'starting' | 'on' | 'finishing'
 export type MusicDrumsState = 'off' | 'on-queued' | 'on' | 'off-queued' | 'fading'
 
-export interface MusicPlaybackSnapshot {
-    tuneId: MusicTuneId
-    drumsPhaseSec?: number
-    timeSec: number
-    paused: boolean
+/** Music::UpdateMusicBurst's state for a module tune with a burst scheme. */
+export interface MusicBurstSnapshot {
     mainVolume: number
     drumsVolume: number
     hihatsVolume: number
-    fadeOutCounter: number
-    fadeOutDuration: number
-    syncCounter: number
-    burstState: MusicBurstState
-    burstCounter: number
+    state: MusicBurstState
+    counter: number
     drumsState: MusicDrumsState
     drumsCounter: number
-    queuedDrumsBoundarySec: number | null
-    queuedDrumsAtSec: number
-    queuedDrumsBoundaryWrapped: boolean
+    /** The place a queued drums change waits to see the melody leave (Music::mQueuedDrumTrackPackedOrder); null with none queued. */
+    queuedMark: number | null
+}
+
+export interface MusicPlaybackSnapshot {
+    tuneId: MusicTuneId
+    paused: boolean
+    fadeOutCounter: number
+    fadeOutDuration: number
+    /** A file tune: how far into it, in seconds. */
+    timeSec?: number
+    /** A module tune: each part's order and row. */
+    parts?: Partial<Record<MusicStemName, [number, number]>>
+    burst?: MusicBurstSnapshot
 }
 
 const TUNES = new Set<MusicTuneId>([
@@ -31,53 +36,71 @@ const TUNES = new Set<MusicTuneId>([
 ])
 const BURST_STATES = new Set<MusicBurstState>(['off', 'starting', 'on', 'finishing'])
 const DRUMS_STATES = new Set<MusicDrumsState>(['off', 'on-queued', 'on', 'off-queued', 'fading'])
-const KEYS: (keyof MusicPlaybackSnapshot)[] = [
-    'tuneId', 'timeSec', 'paused', 'mainVolume', 'drumsVolume', 'hihatsVolume',
-    'fadeOutCounter', 'fadeOutDuration', 'syncCounter', 'burstState', 'burstCounter',
-    'drumsState', 'drumsCounter', 'queuedDrumsBoundarySec', 'queuedDrumsAtSec',
-    'queuedDrumsBoundaryWrapped',
-]
+const STEMS = ['main', 'drums', 'hihats']
 
 export function parseMusicPlaybackSnapshot(value: unknown): MusicPlaybackSnapshot | null {
     if (value === null) return null
-    const source = exact(value, KEYS, 'music snapshot', ['drumsPhaseSec'])
-    const tuneId = member(source.tuneId, TUNES, 'tuneId')
-    const burstState = member(source.burstState, BURST_STATES, 'burstState')
-    const drumsState = member(source.drumsState, DRUMS_STATES, 'drumsState')
+    const source = exact(value, ['tuneId', 'paused', 'fadeOutCounter', 'fadeOutDuration'], 'music snapshot', ['timeSec', 'parts', 'burst'])
     const fadeOutCounter = nonNegativeFinite(source.fadeOutCounter, 'music snapshot.fadeOutCounter')
     const fadeOutDuration = nonNegativeFinite(source.fadeOutDuration, 'music snapshot.fadeOutDuration')
     if (fadeOutCounter > fadeOutDuration || (fadeOutCounter > 0) !== (fadeOutDuration > 0)) {
         throw new TypeError('music snapshot fade counters are inconsistent')
     }
-    const queuedDrumsBoundarySec = source.queuedDrumsBoundarySec === null
-        ? null
-        : nonNegativeFinite(source.queuedDrumsBoundarySec, 'music snapshot.queuedDrumsBoundarySec')
-    const queued = drumsState === 'on-queued' || drumsState === 'off-queued'
-    if (queued !== (queuedDrumsBoundarySec !== null)) {
-        throw new TypeError('music snapshot queued drums boundary is inconsistent with drumsState')
-    }
+    if ((source.timeSec === undefined) === (source.parts === undefined)) throw new TypeError('music snapshot needs either timeSec or parts')
+    if (source.burst !== undefined && source.parts === undefined) throw new TypeError('music snapshot.burst is only for a module tune')
     return {
-        tuneId,
-        ...(source.drumsPhaseSec === undefined ? {} : { drumsPhaseSec: nonNegativeFinite(source.drumsPhaseSec, 'music snapshot.drumsPhaseSec') }),
-        timeSec: nonNegativeFinite(source.timeSec, 'music snapshot.timeSec'),
+        tuneId: member(source.tuneId, TUNES, 'tuneId'),
         paused: boolean(source.paused, 'music snapshot.paused'),
-        mainVolume: finiteInRange(source.mainVolume, 0, 1, 'music snapshot.mainVolume'),
-        drumsVolume: finiteInRange(source.drumsVolume, 0, 1, 'music snapshot.drumsVolume'),
-        hihatsVolume: finiteInRange(source.hihatsVolume, 0, 1, 'music snapshot.hihatsVolume'),
         fadeOutCounter,
         fadeOutDuration,
-        syncCounter: nonNegativeFinite(source.syncCounter, 'music snapshot.syncCounter'),
-        burstState,
-        burstCounter: nonNegativeFinite(source.burstCounter, 'music snapshot.burstCounter'),
-        drumsState,
-        drumsCounter: nonNegativeFinite(source.drumsCounter, 'music snapshot.drumsCounter'),
-        queuedDrumsBoundarySec,
-        queuedDrumsAtSec: nonNegativeFinite(source.queuedDrumsAtSec, 'music snapshot.queuedDrumsAtSec'),
-        queuedDrumsBoundaryWrapped: boolean(source.queuedDrumsBoundaryWrapped, 'music snapshot.queuedDrumsBoundaryWrapped'),
+        ...(source.timeSec === undefined ? {} : { timeSec: nonNegativeFinite(source.timeSec, 'music snapshot.timeSec') }),
+        ...(source.parts === undefined ? {} : { parts: parts(source.parts) }),
+        ...(source.burst === undefined ? {} : { burst: burst(source.burst) }),
     }
 }
 
+function parts(value: unknown): Partial<Record<MusicStemName, [number, number]>> {
+    const source = exact(value, ['main'], 'music snapshot.parts', ['drums', 'hihats'])
+    const result: Partial<Record<MusicStemName, [number, number]>> = {}
+    for (const stem of STEMS) {
+        const position = source[stem]
+        if (position === undefined) continue
+        if (!Array.isArray(position) || position.length !== 2 || !position.every(index)) {
+            throw new TypeError(`music snapshot.parts.${stem} must be an order and a row`)
+        }
+        result[stem as MusicStemName] = [position[0], position[1]]
+    }
+    return result
+}
+
+function burst(value: unknown): MusicBurstSnapshot {
+    const source = exact(value, ['mainVolume', 'drumsVolume', 'hihatsVolume', 'state', 'counter', 'drumsState', 'drumsCounter', 'queuedMark'], 'music snapshot.burst')
+    const drumsState = member(source.drumsState, DRUMS_STATES, 'burst.drumsState')
+    const queuedMark = source.queuedMark === null ? null : index(source.queuedMark) ? source.queuedMark as number : invalid('burst.queuedMark')
+    if ((drumsState === 'on-queued' || drumsState === 'off-queued') !== (queuedMark !== null)) {
+        throw new TypeError('music snapshot.burst.queuedMark is inconsistent with drumsState')
+    }
+    return {
+        mainVolume: finiteInRange(source.mainVolume, 0, 1, 'music snapshot.burst.mainVolume'),
+        drumsVolume: finiteInRange(source.drumsVolume, 0, 1, 'music snapshot.burst.drumsVolume'),
+        hihatsVolume: finiteInRange(source.hihatsVolume, 0, 1, 'music snapshot.burst.hihatsVolume'),
+        state: member(source.state, BURST_STATES, 'burst.state'),
+        counter: nonNegativeFinite(source.counter, 'music snapshot.burst.counter'),
+        drumsState,
+        drumsCounter: nonNegativeFinite(source.drumsCounter, 'music snapshot.burst.drumsCounter'),
+        queuedMark,
+    }
+}
+
+function index(value: unknown): boolean {
+    return Number.isInteger(value) && (value as number) >= 0
+}
+
+function invalid(name: string): never {
+    throw new TypeError(`music snapshot.${name} is invalid`)
+}
+
 function member<T extends string>(value: unknown, allowed: Set<T>, name: string): T {
-    if (typeof value !== 'string' || !allowed.has(value as T)) throw new TypeError(`music snapshot.${name} is invalid`)
+    if (typeof value !== 'string' || !allowed.has(value as T)) invalid(name)
     return value as T
 }

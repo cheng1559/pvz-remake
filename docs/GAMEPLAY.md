@@ -133,7 +133,7 @@ These levels follow the reference `Challenge.h`, `Board::PickZombieWaves`, `Chal
 
 ### Night: 2-1 to 2-10
 
-The night levels reuse the shared level and chooser flow on the night lawn. No sun falls from the sky. The night music uses the same `MusicSystem`, reproducing scheme 2's next-order drum entry and melody crossfade, and keeps the separate drum phase in presentation saves.
+The night levels reuse the shared level and chooser flow on the night lawn. No sun falls from the sky. The night music uses the same `MusicSystem`, reproducing scheme 2's drum entry at the melody's next order and its melody crossfade; presentation saves keep where each part is.
 
 #### Graves
 

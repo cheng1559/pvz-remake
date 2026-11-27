@@ -66,6 +66,8 @@ export class LevelAudioPresenter {
     startChoosing(): void {
         this.ownsMusic = true
         void MusicSystem.playTune(this.music.choosing, true)
+        // Ready while the seeds are chosen (ModuleTune.preload), for the gameplay tune to start as soon as it is played.
+        void MusicSystem.preloadTune(this.music.gameplay)
     }
 
     startGameplay(): void {

@@ -506,6 +506,7 @@ my-mod/
 | `sprites` | 对象 | 见[图像](#图像)。 |
 | `fonts` | 字体 JSON 路径 | 见[字体](#字体)。 |
 | `audio` | 文件路径 | MP3 或 WAV。 |
+| `tracker` | 文件路径 | tracker 模块：MO3、XM、IT、S3M、MOD 或 MPTM。 |
 | `json` | 文件路径 | 普通 JSON，包括 `pvz:strings` 文本表。 |
 | `text` | 文件路径 | 纯文本。 |
 | `reanim` | 文件路径 | Reanim 动画（schemaVersion 3），记录其源 `fps`。 |
@@ -553,7 +554,12 @@ my-mod/
 
 每首背景音乐是一个 `music` 资源，ID 为 `pvz:<曲名>`。基础游戏的曲目有 `day_grasswalk`、`night_moongrains`、`choose_seeds`、`title_theme`、`zen_garden`、`puzzle`、`minigame`、`conveyer` 和 `final_boss`。
 
-格式定义在 `shared/content/music.ts` 中（schemaVersion 3）：时长、循环点、以音频资源 ID 表示的分轨（`main`，以及可选的 `drums` 和 `hihats`），以及可选的原版爆发段落。音乐模组用相同 ID 注册要替换的曲目，其余曲目仍使用基础游戏的。
+格式定义在 `shared/content/music.ts` 中。曲目都是 schemaVersion 4，分两种：
+
+- 模块曲目，基础游戏的曲目都是这种：各部分 `parts`（`main`，以及可选的 `drums` 和 `hihats`），每部分是一个 tracker 资源（`module`），给出开始播放的 `order`（以及可选的 `row`）和听得到的声道范围（`channels`，不写则全部声道）。可选原版的爆发方案 `burstScheme`：`day`，或 `night` 加上鼓在主旋律偶数和奇数 order 时开始的两个 order（`drumsJumpOrders`）。
+- 录音：一个音频资源（`audio`）和时长（`durationSec`），整首循环。
+
+音乐模组用相同 ID 注册要替换的曲目，其余曲目仍使用基础游戏的。
 
 ## 动画片段
 

@@ -420,7 +420,7 @@ flowchart LR
 所需环境：
 
 - Node.js 22.17.0 与 `node-gyp`；
-- Python 3.10 及以上，以及 Pillow、NumPy、ffmpeg、libopenmpt（用于转换游戏资源）；
+- Python 3.10 及以上，以及 Pillow、NumPy、ffmpeg（用于转换游戏资源）；
 - 构建原生版本时，还需要对应平台的开发工具，如构建 macOS 和 iOS 版本需要 Xcode。
 
 在游戏仓库之外安装命令行工具，并把引擎放到它的 `packages/engine` 目录：

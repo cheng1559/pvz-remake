@@ -785,6 +785,17 @@ Particles:
 - Empty systems that have exhausted a fixed launch cap defer their remaining ticks and skip empty rendering, preserving their original lifetime and save age.
 - The presentation settings' `particles` gives the limits of the original's pools (TodParticleHolder). `ParticlePlayer` counts the effects and emitters alive and starts none that would not fit; the kernel counts the particles of all systems and spawns none past the limit, before drawing any random number for it.
 
+### Music
+
+The music is the original's: `MusicSystem` plays the tracker modules of the original game itself, as the original plays them with BASS.
+
+- A module tune (`ModuleTune`) is Music::PlayMusic's parts: each an instance of its module (`mainmusic.mo3` or `mainmusic_hihats.mo3`) played from an order, with only its channels heard (Music::SetupMusicFileForTune), looping by the module's own jumps. A seek stops the notes that were playing, as `BASS_MUSIC_POSRESET` does.
+- The day and night tunes run Music::UpdateMusicBurst on their parts' volumes. At night the drums start their part as the melody enters its next order, to the sample, in the player; the original jumped them a little early and pulled them back into step by their tempo (Music::MusicResync).
+- The player is C++ under `native/engine/common/music/`, on libopenmpt (`native/engine/common/third_party/libopenmpt`). Native platforms reach it through `MusicBindings.cpp` and play its mix as an engine stream (`AudioEngine::playStream`).
+- The web runs the same source compiled to WebAssembly in an AudioWorklet (`client/music/ModuleMusicWorklet.ts`) on an audio context of its own. After changing the C++, run `npm run build:music` (requires Emscripten) and commit the regenerated `assets/resources/music/pvz_music.bin`.
+- Reading a module takes a while, about a quarter of a second for `mainmusic.mo3`, so its instances are kept and reused from tune to tune. Native platforms read it on a thread of their own, and preloading a tune loads the instances it lacks; seed choosing preloads the level's tune. The worklet reads a module on the audio thread, where it would hold up the tune playing, so on the web a tune loads what it lacks as it starts.
+- A file tune (`FileTune`) is a recording a Mod supplies: one audio file, looping whole.
+
 ### Game clock
 
 `core/GameClock.ts` provides the shared `gameClock` for transitions, menu timers, Reanim, particles and the local combat frame entry.

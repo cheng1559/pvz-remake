@@ -5,64 +5,115 @@ export const MUSIC_TUNE_IDS = ['day_grasswalk', 'night_moongrains', 'choose_seed
     'minigame', 'conveyer', 'final_boss'] as const
 export type MusicTuneId = typeof MUSIC_TUNE_IDS[number]
 export type MusicStemName = 'main' | 'drums' | 'hihats'
+export const MUSIC_STEMS: readonly MusicStemName[] = ['main', 'drums', 'hihats']
+/** Music::UpdateMusicBurst: day layers drums and hi-hats in; night swaps the melody for its drum part. */
+export type MusicBurstScheme = 'day' | 'night'
 
-/** One tune: its loop, its stems (audio resource IDs) and, for the in-level tunes, the original's burst timing. */
-export interface Music {
-    schemaVersion: 3
+/** A tune recorded as an audio file (`audio`, an audio resource ID), looping whole. */
+export interface FileMusic {
+    schemaVersion: 4
     id: string
+    audio: string
     durationSec: number
-    loopStartSec: number
-    loopEndSec: number
-    stems: Partial<Record<MusicStemName, string>> & { main: string }
-    /** Music::UpdateMusicBurst: day layers drums and hi-hats in; night swaps the melody for its drum part. */
-    burstScheme?: 'day' | 'night'
-    /** Order boundaries where a burst may start or end. */
-    burstBoundariesSec?: number[]
-    /** Night: where the separate drum part restarts at each boundary. */
-    burstDrumsOffsetsSec?: number[]
-    /** Night: the drum part's own loop length. */
-    drumsLoopEndSec?: number
-    /** Converter notes (MO3 order, channels, original length); not used for playback. */
-    source?: Record<string, unknown>
 }
+
+/** One of a module tune's parts: Music::PlayFromOffset of a module from an order, with only `channels` heard. */
+export interface ModuleMusicPart {
+    /** A tracker module resource ID. */
+    module: string
+    order: number
+    row: number
+    /** The channels heard, as inclusive ranges; all of them when absent (Music::SetupMusicFileForTune). */
+    channels?: [number, number][]
+}
+
+/**
+ * A tune played from tracker modules, as the original plays mainmusic.mo3: each part an instance of its module, all in
+ * step, looping by the module's own jumps.
+ */
+export interface ModuleMusic {
+    schemaVersion: 4
+    id: string
+    parts: Partial<Record<MusicStemName, ModuleMusicPart>> & { main: ModuleMusicPart }
+    burstScheme?: MusicBurstScheme
+    /** Night: the drum part's order when a burst brings it in on an even order of the melody, and on an odd one. */
+    drumsJumpOrders?: [number, number]
+}
+
+export type Music = FileMusic | ModuleMusic
 
 export function musicResourceId(tune: MusicTuneId): string {
     return `pvz:${tune}`
 }
 
+/** A module tune has `parts`, a recording `audio`; one or the other. */
 export function parseMusic(value: unknown): Music {
-    const source = exactObject(value, ['schemaVersion', 'id', 'durationSec', 'loopStartSec', 'loopEndSec', 'stems'],
-        ['burstScheme', 'burstBoundariesSec', 'burstDrumsOffsetsSec', 'drumsLoopEndSec', 'source'], 'music')
-    if (source.schemaVersion !== 3) throw new Error('music.schemaVersion must be 3')
-    if (!isQualifiedId(source.id)) throw new Error('music.id must be a qualified ID')
+    const record = exactObject(value, ['schemaVersion', 'id'], null, 'music')
+    if (record.schemaVersion !== 4) throw new Error('music.schemaVersion must be 4')
+    if (!isQualifiedId(record.id)) throw new Error('music.id must be a qualified ID')
+    if ((record.parts === undefined) === (record.audio === undefined)) throw new Error('music needs either parts or audio')
+    return record.parts === undefined ? parseFileMusic(value) : parseModuleMusic(value)
+}
+
+function parseFileMusic(value: unknown): FileMusic {
+    const source = exactObject(value, ['schemaVersion', 'id', 'audio', 'durationSec'], [], 'music')
     const durationSec = finiteNumber(source.durationSec, 'music.durationSec')
-    const loopStartSec = finiteNumber(source.loopStartSec, 'music.loopStartSec')
-    const loopEndSec = finiteNumber(source.loopEndSec, 'music.loopEndSec')
     if (durationSec <= 0 || durationSec > 3600) throw new Error('music.durationSec must be positive and at most 3600')
-    if (loopStartSec < 0 || loopStartSec >= loopEndSec || loopEndSec > durationSec) {
-        throw new Error('music loop must satisfy 0 <= loopStartSec < loopEndSec <= durationSec')
-    }
-    const stemSource = exactObject(source.stems, ['main'], ['drums', 'hihats'], 'music.stems')
-    const stems: Music['stems'] = { main: audioId(stemSource.main, 'music.stems.main') }
-    for (const stem of ['drums', 'hihats'] as const) if (stemSource[stem] !== undefined) stems[stem] = audioId(stemSource[stem], `music.stems.${stem}`)
-    const music: Music = { schemaVersion: 3, id: source.id, durationSec, loopStartSec, loopEndSec, stems }
+    return { schemaVersion: 4, id: source.id as string, audio: qualifiedId(source.audio, 'music.audio', 'an audio resource ID'), durationSec }
+}
+
+function parseModuleMusic(value: unknown): ModuleMusic {
+    const source = exactObject(value, ['schemaVersion', 'id', 'parts'], ['burstScheme', 'drumsJumpOrders'], 'music')
+    const partSource = exactObject(source.parts, ['main'], ['drums', 'hihats'], 'music.parts')
+    const parts = { main: modulePart(partSource.main, 'music.parts.main') } as ModuleMusic['parts']
+    for (const stem of ['drums', 'hihats'] as const) if (partSource[stem] !== undefined) parts[stem] = modulePart(partSource[stem], `music.parts.${stem}`)
+    const music: ModuleMusic = { schemaVersion: 4, id: source.id as string, parts }
     if (source.burstScheme !== undefined) {
-        if (source.burstScheme !== 'day' && source.burstScheme !== 'night') throw new Error('music.burstScheme must be day or night')
-        music.burstScheme = source.burstScheme
-        music.burstBoundariesSec = numbers(source.burstBoundariesSec, 'music.burstBoundariesSec')
-        if (source.burstScheme === 'night') {
-            if (!stems.drums) throw new Error('a night burst needs music.stems.drums')
-            music.drumsLoopEndSec = finiteNumber(source.drumsLoopEndSec, 'music.drumsLoopEndSec')
-            if (source.burstDrumsOffsetsSec !== undefined) music.burstDrumsOffsetsSec = numbers(source.burstDrumsOffsetsSec, 'music.burstDrumsOffsetsSec')
+        music.burstScheme = burstScheme(source.burstScheme)
+        if (music.burstScheme === 'night') {
+            if (!parts.drums) throw new Error('a night burst needs music.parts.drums')
+            const orders = numbers(source.drumsJumpOrders, 'music.drumsJumpOrders')
+            if (orders.length !== 2 || !orders.every(order => Number.isInteger(order) && order >= 0)) {
+                throw new Error('music.drumsJumpOrders must be two orders')
+            }
+            music.drumsJumpOrders = [orders[0], orders[1]]
         }
     }
-    if (source.source !== undefined) music.source = exactObject(source.source, [], null, 'music.source')
+    if (music.burstScheme !== 'night' && source.drumsJumpOrders !== undefined) throw new Error('music.drumsJumpOrders is only for a night burst')
     return music
 }
 
-function audioId(value: unknown, name: string): string {
-    if (!isQualifiedId(value)) throw new Error(`${name} must be an audio resource ID`)
+function modulePart(value: unknown, name: string): ModuleMusicPart {
+    const source = exactObject(value, ['module', 'order'], ['row', 'channels'], name)
+    const part: ModuleMusicPart = {
+        module: qualifiedId(source.module, `${name}.module`, 'a tracker resource ID'),
+        order: index(source.order, `${name}.order`),
+        row: source.row === undefined ? 0 : index(source.row, `${name}.row`),
+    }
+    if (source.channels !== undefined) {
+        if (!Array.isArray(source.channels)) throw new Error(`${name}.channels must be an array`)
+        part.channels = source.channels.map((range, at) => {
+            const pair = Array.isArray(range) && range.length === 2 ? range.map(channel => index(channel, `${name}.channels[${at}]`)) : null
+            if (!pair || pair[0] > pair[1]) throw new Error(`${name}.channels[${at}] must be a range [first, last]`)
+            return [pair[0], pair[1]] as [number, number]
+        })
+    }
+    return part
+}
+
+function burstScheme(value: unknown): MusicBurstScheme {
+    if (value !== 'day' && value !== 'night') throw new Error('music.burstScheme must be day or night')
     return value
+}
+
+function qualifiedId(value: unknown, name: string, what: string): string {
+    if (!isQualifiedId(value)) throw new Error(`${name} must be ${what}`)
+    return value
+}
+
+function index(value: unknown, name: string): number {
+    if (!Number.isInteger(value) || (value as number) < 0) throw new Error(`${name} must be a whole number of at least 0`)
+    return value as number
 }
 
 function numbers(value: unknown, name: string): number[] {

@@ -11,6 +11,7 @@ tools/
 │   └── clean-native-assets.ts  # Clears old data/assets, and the built Xcode apps, from the output directory before a native build (called by the Windows, macOS and iOS build commands)
 ├── installer/                  # Installers: package-windows.ts makes the Windows installer (windows.iss, Inno Setup) and zip, package-macos.ts makes a macOS disk image per architecture
 ├── kernel/build.ts             # Compiles the C++ kernel to Wasm
+├── music/build.ts              # Compiles the music player and libopenmpt to Wasm
 ├── mod/                        # Mod initialization, packing, validation, host module list generation and configuration reading
 │   ├── cli.ts
 │   ├── content.ts
@@ -37,6 +38,7 @@ Common entry points:
 | Package the Windows installer and zip, and the macOS disk image | `npm run package:windows`, `npm run package:macos` |
 | Stage the web build for Cloudflare Pages and check a deployment | `npm run package:pages`, `npm run verify:pages -- <deployment URL>` |
 | Compile the shared C++ kernel to Wasm | `npm run build:kernel` |
+| Compile the music player to Wasm | `npm run build:music` |
 | Generate the web and native app icons from the original program's icon | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | Font and image super-resolution | `python3 -m tools.resources.upscale_fonts`, `python3 -m tools.resources.upscale_ui` |
 | Process a Mod's front yard door pictures for the time-of-day change | `python3 -m tools.pvz.doors mods/<name> [--namespace widescreen]` |
@@ -65,7 +67,7 @@ pvz/
 ├── cursors.py               # Extraction of the mouse cursors from the original program
 ├── strings.py               # The original's text
 ├── audio.py                 # Sound effect conversion
-├── music/                   # Music conversion and libopenmpt bindings
+├── music/tunes.py           # The original's tunes as module music resources
 └── cache/                   # Plant still-frame atlases rendered from the animations, for resource packs to ship (such as jiangnan's held and planting previews)
 ```
 

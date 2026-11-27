@@ -9,6 +9,7 @@
     "scripts": {
         "build:content": "python3 -m tools.pvz",
         "build:kernel": "tsx tools/kernel/build.ts",
+        "build:music": "tsx tools/music/build.ts",
         "build:icons": "python3 -m tools.resources.icons",
         "mod:init": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts init",
         "mod:test": "tsx --tsconfig tsconfig.server.json tools/mod/cli.ts test",

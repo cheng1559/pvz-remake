@@ -10,12 +10,11 @@ Building the game needs Node.js, Python, the Cocos toolchain and the files of a 
 | --- | --- |
 | Node.js 22.17.0 and `node-gyp` | The Cocos CLI, as its setup guide specifies, and the project's Node tools |
 | Python 3.10 or later, run as `python3`, with Pillow and NumPy | `build:content`, `build:icons` and `test:tools`, which call `python3` |
-| ffmpeg | Encoding music and sound effects; found on `PATH`, or in `/opt/homebrew/bin` or `/usr/local/bin` |
-| libopenmpt | Rendering the original's music modules; found as a system library, at the path in `LIBOPENMPT_PATH`, or in the usual folders (on Windows the current directory, `C:\msys64\mingw64\bin`, `C:\msys64\ucrt64\bin` and `C:\Program Files\OpenMPT`; on macOS `/opt/homebrew/lib`, `/usr/local/lib` and `/usr/lib`) |
+| ffmpeg | Encoding sound effects; found on `PATH`, or in `/opt/homebrew/bin` or `/usr/local/bin` |
 | The platform's development tools | Native builds, such as Xcode for macOS and iOS |
 | Inno Setup 6 | The Windows installer |
 | Xcode command line tools (`codesign`, `SetFile`) | The macOS disk image |
-| Emscripten (`em++` on `PATH`) | Only for rebuilding the shared C++ kernel (`npm run build:kernel`) |
+| Emscripten (`em++` on `PATH`) | Only for rebuilding the shared C++ kernel and the music player (`npm run build:kernel`, `npm run build:music`) |
 | The original game files | Importing resources; see [Original game files](#original-game-files) |
 
 ## Toolchain
@@ -99,10 +98,9 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 ### Music and sound effects
 
-- Music and sound effects are converted to MP3 by the existing `tools/pvz/music/convert.py` and `tools/pvz/audio.py` pipeline.
-- Music uses LAME VBR quality 2 and sound effects quality 4, both at 44.1 kHz.
-- Dynamic music stems retain their leading silence, gain and loop and beat metadata. Each tune is its own music resource (`pvz:<tune>`), so a Mod replaces one tune by registering the same ID.
-- This reduces download and package size; decoded PCM memory does not shrink by the same ratio.
+- Sound effects are converted to MP3 by `tools/pvz/audio.py`, at LAME VBR quality 4 and 44.1 kHz.
+- The music is the original's tracker modules, copied as they are (`tools/pvz/music/tunes.py`): `mainmusic.mo3` and `mainmusic_hihats.mo3` become the tracker resources `pvz:mainmusic` and `pvz:mainmusic_hihats`. Each tune is its own music resource (`pvz:<tune>`) listing the parts Music::PlayMusic plays, so a Mod replaces one tune by registering the same ID.
+- The game plays the modules itself; see [Music](ARCHITECTURE.md#music).
 
 ### Mouse cursors
 
@@ -142,6 +140,7 @@ The layout of `tools/` and its entry points are in [Development Scripts](../tool
 | `npm run mod:hosts` | Regenerates the lists of host modules that Mods can get |
 | `npm run build:icons` (or `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe`) | Generates the app icons from the program's icon |
 | `npm run build:kernel` | Compiles the shared C++ kernel (`native/engine/common/kernel`) to WebAssembly |
+| `npm run build:music` | Compiles the music player (`native/engine/common/music`, with libopenmpt) to WebAssembly |
 | **Preview and builds** | |
 | `npm run preview:debug`, `npm run preview:release` | Starts the preview server, with or without debug mode |
 | `npm run build:web:debug` | Debug web build |
@@ -149,7 +148,7 @@ The layout of `tools/` and its entry points are in [Development Scripts](../tool
 | `npm run bench -- <A> [<B>]` | Compares the benchmark on built games; see [Benchmarks](#benchmarks) |
 | `npm run compile:{platform}:release` | Release native build; see [Release builds](#release-builds) |
 
-`build:kernel` writes the generated module to `assets/scripts/shared/kernel/binary.ts`, which is committed, so other builds do not need Emscripten. Native builds compile the same kernel source directly.
+`build:kernel` writes the generated module to `assets/scripts/shared/kernel/binary.ts`, which is committed, so other builds do not need Emscripten. Native builds compile the same kernel source directly. `build:music` likewise writes `assets/resources/music/pvz_music.bin`.
 
 ## Testing
 

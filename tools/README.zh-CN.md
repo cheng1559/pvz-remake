@@ -11,6 +11,7 @@ tools/
 │   └── clean-native-assets.ts  # 原生构建前清除输出目录中旧的 data/assets 和 Xcode 已构建的应用（由 Windows、macOS 和 iOS 构建命令调用）
 ├── installer/                  # 安装包：package-windows.ts 生成 Windows 安装程序（windows.iss，Inno Setup）和压缩包，package-macos.ts 生成各架构的 macOS 磁盘映像
 ├── kernel/build.ts             # 把 C++ 内核编译为 Wasm
+├── music/build.ts              # 把音乐播放器和 libopenmpt 编译为 Wasm
 ├── mod/                        # 模组的初始化、打包、校验、宿主模块列表生成与配置读取
 │   ├── cli.ts
 │   ├── content.ts
@@ -37,6 +38,7 @@ tools/
 | 打包 Windows 安装程序和压缩包，以及 macOS 磁盘映像 | `npm run package:windows`、`npm run package:macos` |
 | 为 Cloudflare Pages 准备 Web 构建，并检查一次部署 | `npm run package:pages`、`npm run verify:pages -- <部署地址>` |
 | 把共享的 C++ 内核编译为 Wasm | `npm run build:kernel` |
+| 把音乐播放器编译为 Wasm | `npm run build:music` |
 | 用原版程序的图标生成网页与原生应用图标 | `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe` |
 | 字体与图像超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
 | 处理模组自带的前院门图，用于时段切换 | `python3 -m tools.pvz.doors mods/<name> [--namespace widescreen]` |
@@ -65,7 +67,7 @@ pvz/
 ├── cursors.py               # 从原版程序中提取鼠标指针
 ├── strings.py               # 原版文本
 ├── audio.py                 # 音效转换
-├── music/                   # 音乐转换与 libopenmpt 绑定
+├── music/tunes.py           # 把原版曲目写成模块音乐资源
 └── cache/                   # 由动画渲染的植物静帧图集，供资源包随包附带（例如 jiangnan 的手持与种植预览）
 ```
 

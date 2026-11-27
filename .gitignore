@@ -18,7 +18,9 @@ native/engine/common/Classes/*
 !native/engine/common/Classes/Game.h
 !native/engine/common/Classes/Game.cpp
 !native/engine/common/Classes/KernelBindings.cpp
+!native/engine/common/Classes/MusicBindings.cpp
 !native/engine/common/kernel/
+!native/engine/common/music/
 !native/engine/common/third_party/
 # libopenmpt's version header, under a folder the build/ rule above would leave out.
 !native/engine/common/third_party/libopenmpt/build/

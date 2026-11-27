@@ -295,6 +295,16 @@ export class ModResources {
         return pack && this.fileAsset(pack, pack.manifest.audio[baseQualified(id)], AudioClip)
     }
 
+    /** A tracker module's file, or nothing when no running pack has it. */
+    async tracker(id: string): Promise<Uint8Array | undefined> {
+        await this.ready()
+        const pack = this.find('tracker', id)
+        if (!pack) return undefined
+        try {
+            return await archiveFile(pack.files, pack.manifest.tracker[baseQualified(id)])
+        } catch (error) { throw this.resourceError(pack, error) }
+    }
+
     /** A JSON resource of `kind` as its document, or nothing when no running pack has it. */
     json(kind: JsonResourceKind, id: string): Promise<unknown>
     json<T>(kind: JsonResourceKind, id: string, parse: (json: unknown) => T): Promise<T | undefined>

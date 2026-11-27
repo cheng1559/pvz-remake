@@ -10,12 +10,11 @@
 | --- | --- |
 | Node.js 22.17.0 与 `node-gyp` | Cocos CLI（其安装说明的要求）以及项目的 Node 工具 |
 | Python 3.10 及以上（以 `python3` 调用）与 Pillow、NumPy | `build:content`、`build:icons` 和 `test:tools`，它们都调用 `python3` |
-| ffmpeg | 编码音乐与音效；从 `PATH` 中查找，或在 `/opt/homebrew/bin`、`/usr/local/bin` 中查找 |
-| libopenmpt | 渲染原版的音乐模块；作为系统库查找，或使用 `LIBOPENMPT_PATH` 指定的路径，或在常见目录中查找（Windows 上为当前目录、`C:\msys64\mingw64\bin`、`C:\msys64\ucrt64\bin` 和 `C:\Program Files\OpenMPT`；macOS 上为 `/opt/homebrew/lib`、`/usr/local/lib` 和 `/usr/lib`） |
+| ffmpeg | 编码音效；从 `PATH` 中查找，或在 `/opt/homebrew/bin`、`/usr/local/bin` 中查找 |
 | 对应平台的开发工具 | 原生构建，如构建 macOS 和 iOS 版本需要 Xcode |
 | Inno Setup 6 | Windows 安装包 |
 | Xcode 命令行工具（`codesign`、`SetFile`） | macOS 磁盘映像 |
-| Emscripten（`em++` 位于 `PATH` 中） | 仅在重新编译共享 C++ 内核（`npm run build:kernel`）时需要 |
+| Emscripten（`em++` 位于 `PATH` 中） | 仅在重新编译共享 C++ 内核和音乐播放器（`npm run build:kernel`、`npm run build:music`）时需要 |
 | 原版游戏文件 | 导入资源，见[原版游戏文件](#原版游戏文件) |
 
 ## 工具链
@@ -99,10 +98,9 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 ### 音乐与音效
 
-- 音乐和音效由现有的 `tools/pvz/music/convert.py` 与 `tools/pvz/audio.py` 流程转换为 MP3。
-- 音乐使用 LAME VBR 质量 2，音效使用质量 4，采样率均为 44.1 kHz。
-- 动态音乐的各个音轨保留开头的静音、增益以及循环与节拍元数据。每首曲目都是独立的音乐资源（`pvz:<tune>`），因此模组注册相同的 ID 即可替换单首曲目。
-- 这样可以减小下载与安装包体积，但解码后的 PCM 内存不会按相同比例缩小。
+- 音效由 `tools/pvz/audio.py` 转换为 MP3，使用 LAME VBR 质量 4，采样率 44.1 kHz。
+- 音乐直接复制原版的 tracker 模块（`tools/pvz/music/tunes.py`）：`mainmusic.mo3` 和 `mainmusic_hihats.mo3` 成为 tracker 资源 `pvz:mainmusic` 和 `pvz:mainmusic_hihats`。每首曲目都是独立的音乐资源（`pvz:<tune>`），列出 Music::PlayMusic 播放的各部分，因此模组注册相同的 ID 即可替换单首曲目。
+- 游戏自己播放这些模块，见[音乐](ARCHITECTURE.zh-CN.md#音乐)。
 
 ### 鼠标指针
 
@@ -142,6 +140,7 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 | `npm run mod:hosts` | 重新生成模组可获取的宿主模块列表 |
 | `npm run build:icons`（或 `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe`） | 从程序的图标生成应用图标 |
 | `npm run build:kernel` | 把共享 C++ 内核（`native/engine/common/kernel`）编译为 WebAssembly |
+| `npm run build:music` | 把音乐播放器（`native/engine/common/music`，含 libopenmpt）编译为 WebAssembly |
 | **预览与构建** | |
 | `npm run preview:debug`、`npm run preview:release` | 以调试或非调试模式启动预览服务器 |
 | `npm run build:web:debug` | 调试版网页构建 |
@@ -149,7 +148,7 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 | `npm run bench -- <A> [<B>]` | 在已构建的游戏上对比性能基准，见[性能基准](#性能基准) |
 | `npm run compile:{platform}:release` | 原生平台的发布构建，见[构建发布版本](#构建发布版本) |
 
-`build:kernel` 把生成的模块写入 `assets/scripts/shared/kernel/binary.ts`，该文件已提交到仓库，因此其他构建不需要 Emscripten。原生构建直接编译同一份内核源码。
+`build:kernel` 把生成的模块写入 `assets/scripts/shared/kernel/binary.ts`，该文件已提交到仓库，因此其他构建不需要 Emscripten。原生构建直接编译同一份内核源码。`build:music` 同样写入 `assets/resources/music/pvz_music.bin`。
 
 ## 测试
 

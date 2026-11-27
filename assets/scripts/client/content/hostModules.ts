@@ -87,130 +87,135 @@ import * as m83 from '@/client/level/rules/WhackAZombieView'
 import * as m84 from '@/client/level/tutorialArrow'
 import * as m85 from '@/client/mowers/MowerView'
 import * as m86 from '@/client/mowers/MowerViewRegistry'
-import * as m87 from '@/client/music/MusicPlaybackSnapshot'
-import * as m88 from '@/client/music/MusicSystem'
-import * as m89 from '@/client/particle/ParticleAssets'
-import * as m90 from '@/client/particle/ParticlePlayer'
-import * as m91 from '@/client/particle/ParticlePlayerSnapshot'
-import * as m92 from '@/client/plants/BowlingNutView'
-import * as m93 from '@/client/plants/ChomperView'
-import * as m94 from '@/client/plants/FusePlantView'
-import * as m95 from '@/client/plants/GraveBusterView'
-import * as m96 from '@/client/plants/HypnoShroomView'
-import * as m97 from '@/client/plants/PlantView'
-import * as m98 from '@/client/plants/PlantViewRegistry'
-import * as m99 from '@/client/plants/PotatoMineView'
-import * as m100 from '@/client/plants/ProducerView'
-import * as m101 from '@/client/plants/ScaredyShroomView'
-import * as m102 from '@/client/plants/ShooterView'
-import * as m103 from '@/client/plants/SunShroomView'
-import * as m104 from '@/client/plants/WallNutView'
-import * as m105 from '@/client/plants/definitions'
-import * as m106 from '@/client/projectiles/MowingProjectileView'
-import * as m107 from '@/client/projectiles/ProjectileView'
-import * as m108 from '@/client/projectiles/ProjectileViewRegistry'
-import * as m109 from '@/client/reanim/ReanimAssets'
-import * as m110 from '@/client/reanim/ReanimPlaybackSnapshot'
-import * as m111 from '@/client/reanim/ReanimPlayer'
-import * as m112 from '@/client/reanim/clips'
-import * as m113 from '@/client/render/AnimationAtlas'
-import * as m114 from '@/client/render/KernelBatch'
-import * as m115 from '@/client/render/atlasFrame'
-import * as m116 from '@/client/screens/AchievementScreen'
-import * as m117 from '@/client/screens/AlmanacEntityView'
-import * as m118 from '@/client/screens/AlmanacScreen'
-import * as m119 from '@/client/screens/AlmanacText'
-import * as m120 from '@/client/screens/AlmanacZombiePortrait'
-import * as m121 from '@/client/screens/AwardAchievements'
-import * as m122 from '@/client/screens/AwardScreen'
-import * as m123 from '@/client/screens/ChallengeScreen'
-import * as m124 from '@/client/screens/MainMenuScreen'
-import * as m125 from '@/client/screens/MenuPageControls'
-import * as m126 from '@/client/screens/MenuPages'
-import * as m127 from '@/client/screens/MenuScreen'
-import * as m128 from '@/client/screens/PageFade'
-import * as m129 from '@/client/screens/ScreenAnimations'
-import * as m130 from '@/client/screens/ScreenTransition'
-import * as m131 from '@/client/screens/StartupScreen'
-import * as m132 from '@/client/screens/StoreScreen'
-import * as m133 from '@/client/sound/SoundSystem'
-import * as m134 from '@/client/ui/UI'
-import * as m135 from '@/client/ui/UIAssets'
-import * as m136 from '@/client/ui/UIButton'
-import * as m137 from '@/client/ui/UIDialog'
-import * as m138 from '@/client/ui/UIInput'
-import * as m139 from '@/client/ui/UILabel'
-import * as m140 from '@/client/ui/UIScroll'
-import * as m141 from '@/client/ui/UISlider'
-import * as m142 from '@/client/ui/UITooltip'
-import * as m143 from '@/client/ui/WheelPageTurner'
-import * as m144 from '@/client/ui/formatMoney'
-import * as m145 from '@/client/view/ClientViewport'
-import * as m146 from '@/client/view/EntityAttachments'
-import * as m147 from '@/client/view/FpsDisplay'
-import * as m148 from '@/client/view/IceTrapView'
-import * as m149 from '@/client/view/OriginalResolution'
-import * as m150 from '@/client/view/SpriteBlend'
-import * as m151 from '@/client/view/bakeSprite'
-import * as m152 from '@/client/view/layerPlayback'
-import * as m153 from '@/client/view/offBoard'
-import * as m154 from '@/client/view/tints'
-import * as m155 from '@/client/view/uiNode'
-import * as m156 from '@/client/zombies/DancerView'
-import * as m157 from '@/client/zombies/FlagZombieView'
-import * as m158 from '@/client/zombies/NewspaperView'
-import * as m159 from '@/client/zombies/PoleVaulterView'
-import * as m160 from '@/client/zombies/ZombieView'
-import * as m161 from '@/client/zombies/ZombieViewRegistry'
-import * as m162 from '@/client/zombies/definitions'
-import * as m163 from '@/client/zombies/zombieParts'
-import * as m164 from '@/core/GameClock'
-import * as m165 from '@/core/GameTween'
-import * as m166 from '@/platform/Haptics'
-import * as m167 from '@/platform/OptionsSettings'
-import * as m168 from '@/platform/debug/DebugCliCommands'
-import * as m169 from '@/platform/debug/GameDebugSettings'
-import * as m170 from '@/shared/channel'
-import * as m171 from '@/shared/content/DefinitionRegistry'
-import * as m172 from '@/shared/content/animation'
-import * as m173 from '@/shared/content/chooserPages'
-import * as m174 from '@/shared/content/craters'
-import * as m175 from '@/shared/content/font'
-import * as m176 from '@/shared/content/from'
-import * as m177 from '@/shared/content/gameplay'
-import * as m178 from '@/shared/content/gameplayTypes'
-import * as m179 from '@/shared/content/graves'
-import * as m180 from '@/shared/content/hitRects'
-import * as m181 from '@/shared/content/levelHelpers'
-import * as m182 from '@/shared/content/music'
-import * as m183 from '@/shared/content/parseGameplay'
-import * as m184 from '@/shared/content/particle'
-import * as m185 from '@/shared/content/plantAnimation'
-import * as m186 from '@/shared/content/plantKinds'
-import * as m187 from '@/shared/content/planting'
-import * as m188 from '@/shared/content/presentation'
-import * as m189 from '@/shared/content/reanim'
-import * as m190 from '@/shared/content/renderOrder'
-import * as m191 from '@/shared/content/seedGroups'
-import * as m192 from '@/shared/content/strings'
-import * as m193 from '@/shared/content/teams'
-import * as m194 from '@/shared/content/zombieAnimation'
-import * as m195 from '@/shared/content/zombieStates'
-import * as m196 from '@/shared/debug/DebugCli'
-import * as m197 from '@/shared/kernel'
-import * as m198 from '@/shared/kernel/binary'
-import * as m199 from '@/shared/kernel/particles'
-import * as m200 from '@/shared/menu'
-import * as m201 from '@/shared/mod'
-import * as m202 from '@/shared/mod/ModAssets'
-import * as m203 from '@/shared/mod/ModHost'
-import * as m204 from '@/shared/mod/content'
-import * as m205 from '@/shared/protocol'
-import * as m206 from '@/shared/protocol/json'
-import * as m207 from '@/shared/protocol/packets'
-import * as m208 from '@/shared/protocol/snapshot'
-import * as m209 from '@/shared/random'
-import * as m210 from '@/shared/validate'
+import * as m87 from '@/client/music/FileTune'
+import * as m88 from '@/client/music/ModuleMusicWorklet'
+import * as m89 from '@/client/music/ModulePlayer'
+import * as m90 from '@/client/music/ModuleTune'
+import * as m91 from '@/client/music/MusicPlaybackSnapshot'
+import * as m92 from '@/client/music/MusicSystem'
+import * as m93 from '@/client/music/Tune'
+import * as m94 from '@/client/particle/ParticleAssets'
+import * as m95 from '@/client/particle/ParticlePlayer'
+import * as m96 from '@/client/particle/ParticlePlayerSnapshot'
+import * as m97 from '@/client/plants/BowlingNutView'
+import * as m98 from '@/client/plants/ChomperView'
+import * as m99 from '@/client/plants/FusePlantView'
+import * as m100 from '@/client/plants/GraveBusterView'
+import * as m101 from '@/client/plants/HypnoShroomView'
+import * as m102 from '@/client/plants/PlantView'
+import * as m103 from '@/client/plants/PlantViewRegistry'
+import * as m104 from '@/client/plants/PotatoMineView'
+import * as m105 from '@/client/plants/ProducerView'
+import * as m106 from '@/client/plants/ScaredyShroomView'
+import * as m107 from '@/client/plants/ShooterView'
+import * as m108 from '@/client/plants/SunShroomView'
+import * as m109 from '@/client/plants/WallNutView'
+import * as m110 from '@/client/plants/definitions'
+import * as m111 from '@/client/projectiles/MowingProjectileView'
+import * as m112 from '@/client/projectiles/ProjectileView'
+import * as m113 from '@/client/projectiles/ProjectileViewRegistry'
+import * as m114 from '@/client/reanim/ReanimAssets'
+import * as m115 from '@/client/reanim/ReanimPlaybackSnapshot'
+import * as m116 from '@/client/reanim/ReanimPlayer'
+import * as m117 from '@/client/reanim/clips'
+import * as m118 from '@/client/render/AnimationAtlas'
+import * as m119 from '@/client/render/KernelBatch'
+import * as m120 from '@/client/render/atlasFrame'
+import * as m121 from '@/client/screens/AchievementScreen'
+import * as m122 from '@/client/screens/AlmanacEntityView'
+import * as m123 from '@/client/screens/AlmanacScreen'
+import * as m124 from '@/client/screens/AlmanacText'
+import * as m125 from '@/client/screens/AlmanacZombiePortrait'
+import * as m126 from '@/client/screens/AwardAchievements'
+import * as m127 from '@/client/screens/AwardScreen'
+import * as m128 from '@/client/screens/ChallengeScreen'
+import * as m129 from '@/client/screens/MainMenuScreen'
+import * as m130 from '@/client/screens/MenuPageControls'
+import * as m131 from '@/client/screens/MenuPages'
+import * as m132 from '@/client/screens/MenuScreen'
+import * as m133 from '@/client/screens/PageFade'
+import * as m134 from '@/client/screens/ScreenAnimations'
+import * as m135 from '@/client/screens/ScreenTransition'
+import * as m136 from '@/client/screens/StartupScreen'
+import * as m137 from '@/client/screens/StoreScreen'
+import * as m138 from '@/client/sound/SoundSystem'
+import * as m139 from '@/client/ui/UI'
+import * as m140 from '@/client/ui/UIAssets'
+import * as m141 from '@/client/ui/UIButton'
+import * as m142 from '@/client/ui/UIDialog'
+import * as m143 from '@/client/ui/UIInput'
+import * as m144 from '@/client/ui/UILabel'
+import * as m145 from '@/client/ui/UIScroll'
+import * as m146 from '@/client/ui/UISlider'
+import * as m147 from '@/client/ui/UITooltip'
+import * as m148 from '@/client/ui/WheelPageTurner'
+import * as m149 from '@/client/ui/formatMoney'
+import * as m150 from '@/client/view/ClientViewport'
+import * as m151 from '@/client/view/EntityAttachments'
+import * as m152 from '@/client/view/FpsDisplay'
+import * as m153 from '@/client/view/IceTrapView'
+import * as m154 from '@/client/view/OriginalResolution'
+import * as m155 from '@/client/view/SpriteBlend'
+import * as m156 from '@/client/view/bakeSprite'
+import * as m157 from '@/client/view/layerPlayback'
+import * as m158 from '@/client/view/offBoard'
+import * as m159 from '@/client/view/tints'
+import * as m160 from '@/client/view/uiNode'
+import * as m161 from '@/client/zombies/DancerView'
+import * as m162 from '@/client/zombies/FlagZombieView'
+import * as m163 from '@/client/zombies/NewspaperView'
+import * as m164 from '@/client/zombies/PoleVaulterView'
+import * as m165 from '@/client/zombies/ZombieView'
+import * as m166 from '@/client/zombies/ZombieViewRegistry'
+import * as m167 from '@/client/zombies/definitions'
+import * as m168 from '@/client/zombies/zombieParts'
+import * as m169 from '@/core/GameClock'
+import * as m170 from '@/core/GameTween'
+import * as m171 from '@/platform/Haptics'
+import * as m172 from '@/platform/OptionsSettings'
+import * as m173 from '@/platform/debug/DebugCliCommands'
+import * as m174 from '@/platform/debug/GameDebugSettings'
+import * as m175 from '@/shared/channel'
+import * as m176 from '@/shared/content/DefinitionRegistry'
+import * as m177 from '@/shared/content/animation'
+import * as m178 from '@/shared/content/chooserPages'
+import * as m179 from '@/shared/content/craters'
+import * as m180 from '@/shared/content/font'
+import * as m181 from '@/shared/content/from'
+import * as m182 from '@/shared/content/gameplay'
+import * as m183 from '@/shared/content/gameplayTypes'
+import * as m184 from '@/shared/content/graves'
+import * as m185 from '@/shared/content/hitRects'
+import * as m186 from '@/shared/content/levelHelpers'
+import * as m187 from '@/shared/content/music'
+import * as m188 from '@/shared/content/parseGameplay'
+import * as m189 from '@/shared/content/particle'
+import * as m190 from '@/shared/content/plantAnimation'
+import * as m191 from '@/shared/content/plantKinds'
+import * as m192 from '@/shared/content/planting'
+import * as m193 from '@/shared/content/presentation'
+import * as m194 from '@/shared/content/reanim'
+import * as m195 from '@/shared/content/renderOrder'
+import * as m196 from '@/shared/content/seedGroups'
+import * as m197 from '@/shared/content/strings'
+import * as m198 from '@/shared/content/teams'
+import * as m199 from '@/shared/content/zombieAnimation'
+import * as m200 from '@/shared/content/zombieStates'
+import * as m201 from '@/shared/debug/DebugCli'
+import * as m202 from '@/shared/kernel'
+import * as m203 from '@/shared/kernel/binary'
+import * as m204 from '@/shared/kernel/particles'
+import * as m205 from '@/shared/menu'
+import * as m206 from '@/shared/mod'
+import * as m207 from '@/shared/mod/ModAssets'
+import * as m208 from '@/shared/mod/ModHost'
+import * as m209 from '@/shared/mod/content'
+import * as m210 from '@/shared/protocol'
+import * as m211 from '@/shared/protocol/json'
+import * as m212 from '@/shared/protocol/packets'
+import * as m213 from '@/shared/protocol/snapshot'
+import * as m214 from '@/shared/random'
+import * as m215 from '@/shared/validate'
 
 /** Every module a client Mod may get from its host, by its path under assets/scripts. */
 export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
@@ -301,128 +306,133 @@ export const CLIENT_HOST_MODULES: Readonly<Record<string, unknown>> = {
     'client/level/tutorialArrow': m84,
     'client/mowers/MowerView': m85,
     'client/mowers/MowerViewRegistry': m86,
-    'client/music/MusicPlaybackSnapshot': m87,
-    'client/music/MusicSystem': m88,
-    'client/particle/ParticleAssets': m89,
-    'client/particle/ParticlePlayer': m90,
-    'client/particle/ParticlePlayerSnapshot': m91,
-    'client/plants/BowlingNutView': m92,
-    'client/plants/ChomperView': m93,
-    'client/plants/FusePlantView': m94,
-    'client/plants/GraveBusterView': m95,
-    'client/plants/HypnoShroomView': m96,
-    'client/plants/PlantView': m97,
-    'client/plants/PlantViewRegistry': m98,
-    'client/plants/PotatoMineView': m99,
-    'client/plants/ProducerView': m100,
-    'client/plants/ScaredyShroomView': m101,
-    'client/plants/ShooterView': m102,
-    'client/plants/SunShroomView': m103,
-    'client/plants/WallNutView': m104,
-    'client/plants/definitions': m105,
-    'client/projectiles/MowingProjectileView': m106,
-    'client/projectiles/ProjectileView': m107,
-    'client/projectiles/ProjectileViewRegistry': m108,
-    'client/reanim/ReanimAssets': m109,
-    'client/reanim/ReanimPlaybackSnapshot': m110,
-    'client/reanim/ReanimPlayer': m111,
-    'client/reanim/clips': m112,
-    'client/render/AnimationAtlas': m113,
-    'client/render/KernelBatch': m114,
-    'client/render/atlasFrame': m115,
-    'client/screens/AchievementScreen': m116,
-    'client/screens/AlmanacEntityView': m117,
-    'client/screens/AlmanacScreen': m118,
-    'client/screens/AlmanacText': m119,
-    'client/screens/AlmanacZombiePortrait': m120,
-    'client/screens/AwardAchievements': m121,
-    'client/screens/AwardScreen': m122,
-    'client/screens/ChallengeScreen': m123,
-    'client/screens/MainMenuScreen': m124,
-    'client/screens/MenuPageControls': m125,
-    'client/screens/MenuPages': m126,
-    'client/screens/MenuScreen': m127,
-    'client/screens/PageFade': m128,
-    'client/screens/ScreenAnimations': m129,
-    'client/screens/ScreenTransition': m130,
-    'client/screens/StartupScreen': m131,
-    'client/screens/StoreScreen': m132,
-    'client/sound/SoundSystem': m133,
-    'client/ui/UI': m134,
-    'client/ui/UIAssets': m135,
-    'client/ui/UIButton': m136,
-    'client/ui/UIDialog': m137,
-    'client/ui/UIInput': m138,
-    'client/ui/UILabel': m139,
-    'client/ui/UIScroll': m140,
-    'client/ui/UISlider': m141,
-    'client/ui/UITooltip': m142,
-    'client/ui/WheelPageTurner': m143,
-    'client/ui/formatMoney': m144,
-    'client/view/ClientViewport': m145,
-    'client/view/EntityAttachments': m146,
-    'client/view/FpsDisplay': m147,
-    'client/view/IceTrapView': m148,
-    'client/view/OriginalResolution': m149,
-    'client/view/SpriteBlend': m150,
-    'client/view/bakeSprite': m151,
-    'client/view/layerPlayback': m152,
-    'client/view/offBoard': m153,
-    'client/view/tints': m154,
-    'client/view/uiNode': m155,
-    'client/zombies/DancerView': m156,
-    'client/zombies/FlagZombieView': m157,
-    'client/zombies/NewspaperView': m158,
-    'client/zombies/PoleVaulterView': m159,
-    'client/zombies/ZombieView': m160,
-    'client/zombies/ZombieViewRegistry': m161,
-    'client/zombies/definitions': m162,
-    'client/zombies/zombieParts': m163,
-    'core/GameClock': m164,
-    'core/GameTween': m165,
-    'platform/Haptics': m166,
-    'platform/OptionsSettings': m167,
-    'platform/debug/DebugCliCommands': m168,
-    'platform/debug/GameDebugSettings': m169,
-    'shared/channel': m170,
-    'shared/content/DefinitionRegistry': m171,
-    'shared/content/animation': m172,
-    'shared/content/chooserPages': m173,
-    'shared/content/craters': m174,
-    'shared/content/font': m175,
-    'shared/content/from': m176,
-    'shared/content/gameplay': m177,
-    'shared/content/gameplayTypes': m178,
-    'shared/content/graves': m179,
-    'shared/content/hitRects': m180,
-    'shared/content/levelHelpers': m181,
-    'shared/content/music': m182,
-    'shared/content/parseGameplay': m183,
-    'shared/content/particle': m184,
-    'shared/content/plantAnimation': m185,
-    'shared/content/plantKinds': m186,
-    'shared/content/planting': m187,
-    'shared/content/presentation': m188,
-    'shared/content/reanim': m189,
-    'shared/content/renderOrder': m190,
-    'shared/content/seedGroups': m191,
-    'shared/content/strings': m192,
-    'shared/content/teams': m193,
-    'shared/content/zombieAnimation': m194,
-    'shared/content/zombieStates': m195,
-    'shared/debug/DebugCli': m196,
-    'shared/kernel': m197,
-    'shared/kernel/binary': m198,
-    'shared/kernel/particles': m199,
-    'shared/menu': m200,
-    'shared/mod': m201,
-    'shared/mod/ModAssets': m202,
-    'shared/mod/ModHost': m203,
-    'shared/mod/content': m204,
-    'shared/protocol': m205,
-    'shared/protocol/json': m206,
-    'shared/protocol/packets': m207,
-    'shared/protocol/snapshot': m208,
-    'shared/random': m209,
-    'shared/validate': m210,
+    'client/music/FileTune': m87,
+    'client/music/ModuleMusicWorklet': m88,
+    'client/music/ModulePlayer': m89,
+    'client/music/ModuleTune': m90,
+    'client/music/MusicPlaybackSnapshot': m91,
+    'client/music/MusicSystem': m92,
+    'client/music/Tune': m93,
+    'client/particle/ParticleAssets': m94,
+    'client/particle/ParticlePlayer': m95,
+    'client/particle/ParticlePlayerSnapshot': m96,
+    'client/plants/BowlingNutView': m97,
+    'client/plants/ChomperView': m98,
+    'client/plants/FusePlantView': m99,
+    'client/plants/GraveBusterView': m100,
+    'client/plants/HypnoShroomView': m101,
+    'client/plants/PlantView': m102,
+    'client/plants/PlantViewRegistry': m103,
+    'client/plants/PotatoMineView': m104,
+    'client/plants/ProducerView': m105,
+    'client/plants/ScaredyShroomView': m106,
+    'client/plants/ShooterView': m107,
+    'client/plants/SunShroomView': m108,
+    'client/plants/WallNutView': m109,
+    'client/plants/definitions': m110,
+    'client/projectiles/MowingProjectileView': m111,
+    'client/projectiles/ProjectileView': m112,
+    'client/projectiles/ProjectileViewRegistry': m113,
+    'client/reanim/ReanimAssets': m114,
+    'client/reanim/ReanimPlaybackSnapshot': m115,
+    'client/reanim/ReanimPlayer': m116,
+    'client/reanim/clips': m117,
+    'client/render/AnimationAtlas': m118,
+    'client/render/KernelBatch': m119,
+    'client/render/atlasFrame': m120,
+    'client/screens/AchievementScreen': m121,
+    'client/screens/AlmanacEntityView': m122,
+    'client/screens/AlmanacScreen': m123,
+    'client/screens/AlmanacText': m124,
+    'client/screens/AlmanacZombiePortrait': m125,
+    'client/screens/AwardAchievements': m126,
+    'client/screens/AwardScreen': m127,
+    'client/screens/ChallengeScreen': m128,
+    'client/screens/MainMenuScreen': m129,
+    'client/screens/MenuPageControls': m130,
+    'client/screens/MenuPages': m131,
+    'client/screens/MenuScreen': m132,
+    'client/screens/PageFade': m133,
+    'client/screens/ScreenAnimations': m134,
+    'client/screens/ScreenTransition': m135,
+    'client/screens/StartupScreen': m136,
+    'client/screens/StoreScreen': m137,
+    'client/sound/SoundSystem': m138,
+    'client/ui/UI': m139,
+    'client/ui/UIAssets': m140,
+    'client/ui/UIButton': m141,
+    'client/ui/UIDialog': m142,
+    'client/ui/UIInput': m143,
+    'client/ui/UILabel': m144,
+    'client/ui/UIScroll': m145,
+    'client/ui/UISlider': m146,
+    'client/ui/UITooltip': m147,
+    'client/ui/WheelPageTurner': m148,
+    'client/ui/formatMoney': m149,
+    'client/view/ClientViewport': m150,
+    'client/view/EntityAttachments': m151,
+    'client/view/FpsDisplay': m152,
+    'client/view/IceTrapView': m153,
+    'client/view/OriginalResolution': m154,
+    'client/view/SpriteBlend': m155,
+    'client/view/bakeSprite': m156,
+    'client/view/layerPlayback': m157,
+    'client/view/offBoard': m158,
+    'client/view/tints': m159,
+    'client/view/uiNode': m160,
+    'client/zombies/DancerView': m161,
+    'client/zombies/FlagZombieView': m162,
+    'client/zombies/NewspaperView': m163,
+    'client/zombies/PoleVaulterView': m164,
+    'client/zombies/ZombieView': m165,
+    'client/zombies/ZombieViewRegistry': m166,
+    'client/zombies/definitions': m167,
+    'client/zombies/zombieParts': m168,
+    'core/GameClock': m169,
+    'core/GameTween': m170,
+    'platform/Haptics': m171,
+    'platform/OptionsSettings': m172,
+    'platform/debug/DebugCliCommands': m173,
+    'platform/debug/GameDebugSettings': m174,
+    'shared/channel': m175,
+    'shared/content/DefinitionRegistry': m176,
+    'shared/content/animation': m177,
+    'shared/content/chooserPages': m178,
+    'shared/content/craters': m179,
+    'shared/content/font': m180,
+    'shared/content/from': m181,
+    'shared/content/gameplay': m182,
+    'shared/content/gameplayTypes': m183,
+    'shared/content/graves': m184,
+    'shared/content/hitRects': m185,
+    'shared/content/levelHelpers': m186,
+    'shared/content/music': m187,
+    'shared/content/parseGameplay': m188,
+    'shared/content/particle': m189,
+    'shared/content/plantAnimation': m190,
+    'shared/content/plantKinds': m191,
+    'shared/content/planting': m192,
+    'shared/content/presentation': m193,
+    'shared/content/reanim': m194,
+    'shared/content/renderOrder': m195,
+    'shared/content/seedGroups': m196,
+    'shared/content/strings': m197,
+    'shared/content/teams': m198,
+    'shared/content/zombieAnimation': m199,
+    'shared/content/zombieStates': m200,
+    'shared/debug/DebugCli': m201,
+    'shared/kernel': m202,
+    'shared/kernel/binary': m203,
+    'shared/kernel/particles': m204,
+    'shared/menu': m205,
+    'shared/mod': m206,
+    'shared/mod/ModAssets': m207,
+    'shared/mod/ModHost': m208,
+    'shared/mod/content': m209,
+    'shared/protocol': m210,
+    'shared/protocol/json': m211,
+    'shared/protocol/packets': m212,
+    'shared/protocol/snapshot': m213,
+    'shared/random': m214,
+    'shared/validate': m215,
 }
