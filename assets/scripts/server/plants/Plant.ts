@@ -132,13 +132,17 @@ export class Plant {
     }
 
     /**
-     * The board sends it to sleep: a nocturnal plant at a time of day that is not night, never one its kind keeps awake
-     * (keepsAwake). The original has no awake plant fall asleep; at a time turned to day (`/time`)
-     * the others do.
+     * The board sends it to sleep: at a time of day its kind sleeps at (sleepTime), unless its kind keeps it awake
+     * (keepsAwake). The original has no awake plant fall asleep; at a time turned to day (`/time`) the others do.
      */
     sleeps(world: World): boolean {
+        return !this.keepsAwake() && this.sleepTime(world)
+    }
+
+    /** The level is at a time of day its kind sleeps at: a nocturnal plant at one that is not night. */
+    protected sleepTime(world: World): boolean {
         const level = world.resources.get(LevelStateResource)
-        return !this.keepsAwake() && isPlantAsleep(this.definition, level.board.times[level.time])
+        return isPlantAsleep(this.definition, level.board.times[level.time])
     }
 
     /** Its own waking starts (Plant::mWakeUpCounter): asleep meanwhile, it wakes PLANT_WAKE_TICKS on (updateWaking). */

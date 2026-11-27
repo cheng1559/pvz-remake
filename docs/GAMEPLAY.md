@@ -318,7 +318,7 @@ A level is played on a board (`board`) at one of the board's times of day (`time
 - The change takes 100 ticks. The lawn, shadows, craters, the house and the music fade from the old time to the new one.
 - After 50 ticks the level is at the new time:
   - At night, sleeping mushrooms wake over 70 ticks. Meanwhile their Zs stay and they stretch up and down on their base (`Plant::UpdateReanim`); then the Zs go and they play their awake animation.
-  - By day, mushrooms fall asleep at once. A grown Sun-shroom uses its big sleeping animation (`anim_bigsleep`).
+  - By day, mushrooms fall asleep at once: a shot about to be fired is not fired, a hiding Scaredy-shroom comes up first and then sleeps, and a growing Sun-shroom is grown at once. A grown Sun-shroom uses its big sleeping animation (`anim_bigsleep`).
   - A Doom-shroom or Ice-shroom lights its fuse as it wakes, with its planting sound.
   - Sky sun starts or stops falling as the new time has it.
 - When the change is over, the level's music (unless it has its own) and the house the zombies walk into are the new time's.
@@ -418,7 +418,7 @@ Costs and recharges are the seed definitions' `sunCost` and `cooldownTicks`; the
 
 ### Shared rules
 
-- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `Plant.asleep`, the server's one test of a plant asleep): it does nothing, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
+- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `Plant.asleep`, the server's one test of a plant asleep): it does nothing, the count to its next shot or sun waits, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
 - **Lit fuses stay awake.** A Doom-shroom or Ice-shroom whose fuse is lit does not fall asleep, even when the time turns to day.
 - **Shots leave a puff at the mouth** (`Plant::Fire`): the Scaredy-shroom's `PARTICLE_PUFFSHROOM_MUZZLE` at 27 and 13 from the shot's corner, the Puff-shroom's at 18 and 13, the Snow Pea's `PARTICLE_SNOWPEA_PUFF` at 8 and 13, drawn just over the row's lawn mowers. This is the plant presentation's `muzzle`, placed where `projectileFired` says the shot set off.
 - **Shots hit from where they stood as the tick began** (`Projectile::mX`, `GetProjectileRect`): a shot moves, then hits what its rect overlaps at that place, in whole pixels; a lawn mower set off looks there too, before it moves. A homing shot hits its target only once its own y lies between the target's top and bottom.

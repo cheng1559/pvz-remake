@@ -49,6 +49,14 @@ export class ScaredyShroom extends Shooter {
         return this.phase
     }
 
+    /**
+     * Not calm, it is awake until it is up again. At a time it sleeps at (the time turned to day) it comes up, zombie
+     * near or not, and falls asleep as it is up.
+     */
+    protected keepsAwake(): boolean {
+        return this.phase !== 'calm'
+    }
+
     act({ world, tick }: SystemContext): void {
         if (this.phaseTicks > 0) this.phaseTicks--
         const random = world.resources.get(RandomResource), fright = this.fright, shooter = this.definition.shooter!
@@ -67,10 +75,12 @@ export class ScaredyShroom extends Shooter {
                 if (this.phaseTicks === 0) next('scared', 0)
                 break
             case 'scared':
-                if (!near) next('raising', random.integer(fright.raiseTicks.min, fright.raiseTicks.max))
+                if (!near || this.sleepTime(world)) next('raising', random.integer(fright.raiseTicks.min, fright.raiseTicks.max))
                 break
             case 'raising':
-                if (this.phaseTicks === 0) next('calm', 0)
+                if (this.phaseTicks > 0) break
+                next('calm', 0)
+                if (this.sleepTime(world)) this.setSleeping(true, random)
                 break
         }
         if (this.phase !== 'calm') this.readyAtTick = tick + shooter.cadenceTicks.max - 1

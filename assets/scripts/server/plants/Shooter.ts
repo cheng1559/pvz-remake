@@ -1,4 +1,5 @@
 import type { SystemContext, World } from '@/server/state/World'
+import type { AnimationRandom } from '@/shared/content/animation'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
 import { PLANT_WIDTH, plantFacingX, plantTeam, shooterFront, teamDirection } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'
@@ -63,6 +64,12 @@ export class Shooter extends Plant {
         if (this.burst) this.burst.fireAtTick++
     }
 
+    /** Falling asleep (the time turned to day), it drops the shot it winds up to: its burst is not fired. */
+    setSleeping(asleep: boolean, random: AnimationRandom): void {
+        if (asleep) delete this.burst
+        super.setSleeping(asleep, random)
+    }
+
     /** Plant::DoBlink: one winding up to shoot misses its blink (Plant::mShootingCounter), as its firing clip has it do after. */
     blinkMisses(): boolean {
         return !!this.burst || super.blinkMisses()
@@ -70,8 +77,8 @@ export class Shooter extends Plant {
 
     attack({ world, commands, tick }: SystemContext): void {
         const definitions = this.definitions, definition = this.definition, shooter = this.shooter
-        // Mushrooms sleep on day boards.
-        if (this.asleep(world)) return
+        // A sleeping mushroom skips UpdateShooter, holding the launch counter.
+        if (this.asleep(world)) { this.readyAtTick++; return }
         const position = this.position
         const random = world.resources.get(RandomResource), events = world.resources.get(EventQueueResource)
         if (this.burst) {

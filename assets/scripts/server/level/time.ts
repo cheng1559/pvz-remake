@@ -35,9 +35,10 @@ export function createTimeChangeSystem(): GameSystem {
  * The level goes on at its board's time of day `id`, all on the lawn staying where it stands. What reads the time reads
  * that one from then on: whether it is night, and the sky sun as the level has it (levelSkySun). Not the original, which
  * keeps a level at one time:
- * - A plant in play that the day sends to sleep falls asleep at once (Plant.setSleeping). One the night wakes wakes
- *   in its own ticks (Plant.startWaking), as a coffee bean's does once the bean's own are over; a fuse plant lights
- *   its fuse as it wakes.
+ * - A plant in play that the day sends to sleep falls asleep at once (Plant.setSleeping), ending what it is in the
+ *   middle of: a shooter's shot is not fired, a growing sun-shroom is grown. A scaredy-shroom not calm comes up first
+ *   and falls asleep as it is up (its keepsAwake). One the night wakes wakes in its own ticks (Plant.startWaking), as
+ *   a coffee bean's does once the bean's own are over; a fuse plant lights its fuse as it wakes.
  * - A sky sun that starts falls first as on a level's start (Board::InitLevel), after now; one that stops falls no more.
  * The client hears `timeChanged` and shows the time (WorldSnapshot.time).
  */

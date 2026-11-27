@@ -49,9 +49,13 @@ export class SunShroom extends Producer {
 
     /**
      * Plant::SetSleeping's anim_sleep is the small one's. Grown, it sleeps big (`bigsleep`, anim_bigsleep, which the
-     * original draws off the board only: no board of its turns to day).
+     * original draws off the board only: no board of its turns to day). One growing as it falls asleep is grown at once.
      */
     setSleeping(asleep: boolean, random: AnimationRandom): void {
+        if (asleep && this.phase === 'growing') {
+            this.phase = 'big'
+            this.phaseTicks = 0
+        }
         super.setSleeping(asleep, random)
         if (asleep && this.phase === 'big' && this.animations?.body) this.animations.body.clip = 'bigsleep'
     }

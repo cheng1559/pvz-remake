@@ -193,3 +193,103 @@ test('a grown sun-shroom falls asleep big as the time turns to day (anim_bigslee
     run(game, PLANT_WAKE_TICKS)
     assert.deepEqual(shrooms(), [['big', false, 'body'], ['small', false, 'small']])
 })
+
+/** The plant of `typeId` as the save keeps it: what only its kind has (a shooter's next shot and its burst). */
+const saved = (game: LocalIntegratedGame, typeId: string) => (game.saveAtBoundary() as unknown as {
+    plants: Array<{ typeId: string, readyAtTick: number, burst?: unknown }>
+}).plants.find(each => each.typeId === typeId)!
+
+test('a mushroom the day sends to sleep drops the shot it winds up to, and asleep its next waits (Plant::mLaunchCounter)', () => {
+    const game = play('pvz:sandbox-night')
+    assert.ok(game.debugCommand('/plant puffshroom 3 1').ok)
+    assert.ok(game.debugCommand('/zombie normal 3 3').ok)
+    run(game)
+    const now = () => game.render().gameplayTick, puff = () => saved(game, 'pvz:puffshroom')
+    // The level goes on at day 10 ticks into a windup of its 29.
+    const start = () => puff().readyAtTick - TIME_SWITCH_TICKS + 10
+    while (start() < now()) run(game)
+    run(game, start() - now())
+    assert.ok(game.debugCommand('/time day').ok)
+    run(game, TIME_SWITCH_TICKS - 1)
+    assert.ok(puff().burst, 'winding up')
+    game.drainEvents()
+    run(game)
+    assert.deepEqual([plant(game, 'pvz:puffshroom')!.asleep, puff().burst], [true, undefined], 'asleep, its shot dropped')
+    const left = puff().readyAtTick - now()
+    run(game, 100)
+    assert.equal(game.drainEvents().some(event => event.type === 'projectileFired'), false)
+    assert.equal(puff().readyAtTick - now(), left, 'its next shot as far off as when it fell asleep')
+})
+
+/** A scaredy-shroom at 3 1 scared by a zombie in the row beside it (out of its aim), one far off in its own row to shoot at. */
+function scaredyShroom() {
+    const game = play('pvz:sandbox-night')
+    assert.ok(game.debugCommand('/plant scaredyshroom 3 1').ok)
+    assert.ok(game.debugCommand('/zombie normal 2 2').ok)
+    assert.ok(game.debugCommand('/zombie normal 3 9').ok)
+    const shown = () => {
+        const shroom = plant(game, 'pvz:scaredyshroom')!
+        return [shroom.own?.phase, shroom.asleep ?? false, shroom.animations!.body.clip]
+    }
+    /** The phases it goes through, a tick at a time, until it is asleep. */
+    const toSleep = () => {
+        const phases = [shown()[0]]
+        for (let tick = 0; tick < 400 && !shown()[1]; tick++) {
+            run(game)
+            if (shown()[0] !== phases.at(-1)) phases.push(shown()[0])
+        }
+        return phases
+    }
+    return { game, shown, toSleep }
+}
+
+test('a scaredy-shroom the day sends to sleep as it hides comes up first, zombie near or not, and falls asleep as it is up', () => {
+    const { game, shown, toSleep } = scaredyShroom()
+    for (let tick = 0; tick < 400 && shown()[0] !== 'scared'; tick++) run(game)
+    assert.deepEqual(shown(), ['scared', false, 'scaredIdle'])
+    assert.ok(game.debugCommand('/time day').ok)
+    run(game, TIME_SWITCH_TICKS)
+    assert.deepEqual(shown(), ['raising', false, 'grow'], 'awake, coming up')
+    game.drainEvents()
+    const start = game.render().gameplayTick
+    assert.deepEqual(toSleep(), ['raising', 'calm'])
+    const raised = game.render().gameplayTick - start
+    assert.ok(raised >= 84 && raised <= 143, `up in ${raised} ticks (fright.raiseTicks)`)
+    assert.deepEqual(shown(), ['calm', true, 'sleep'])
+    assert.deepEqual(clips(plant(game, 'pvz:scaredyshroom')!), [['body', 'sleep'], ['sleeping', 'sleeping']])
+    run(game, 200)
+    assert.equal(game.drainEvents().some(event => event.type === 'projectileFired'), false, 'no shot coming up or asleep')
+    assert.ok(game.debugCommand('/kill').ok)
+    changeTime(game, 'night')
+    run(game, PLANT_WAKE_TICKS)
+    assert.deepEqual(shown(), ['calm', false, 'body'])
+})
+
+test('a scaredy-shroom the day sends to sleep as it goes down goes all the way down, then comes up and falls asleep', () => {
+    const { game, shown, toSleep } = scaredyShroom()
+    for (let tick = 0; tick < 400 && shown()[0] !== 'lowering'; tick++) run(game)
+    assert.ok(game.debugCommand('/time day').ok)
+    run(game, TIME_SWITCH_TICKS)
+    assert.deepEqual(shown(), ['lowering', false, 'scared'])
+    assert.deepEqual(toSleep(), ['lowering', 'scared', 'raising', 'calm'])
+    assert.deepEqual(shown(), ['calm', true, 'sleep'])
+})
+
+test('a sun-shroom the day sends to sleep as it grows is grown at once, sleeping big, and wakes big', () => {
+    const game = play('pvz:sandbox-night')
+    assert.ok(game.debugCommand('/plant sunshroom 3 3').ok)
+    // 10 ticks into its growing (anim_grow, 100 ticks).
+    run(game, 12000 + 10)
+    const shown = () => {
+        const shroom = plant(game, 'pvz:sunshroom')!
+        return [shroom.own?.phase, shroom.asleep ?? false, shroom.animations!.body.clip]
+    }
+    assert.deepEqual(shown(), ['growing', false, 'grow'])
+    assert.ok(game.debugCommand('/time day').ok)
+    run(game, TIME_SWITCH_TICKS)
+    assert.deepEqual(shown(), ['big', true, 'bigsleep'])
+    run(game, TIME_CHANGE_TICKS - TIME_SWITCH_TICKS)
+    changeTime(game, 'night')
+    run(game, PLANT_WAKE_TICKS)
+    assert.deepEqual(shown(), ['big', false, 'body'])
+})
