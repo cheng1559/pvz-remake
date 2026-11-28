@@ -184,7 +184,7 @@ export class LevelInputPresenter {
         if (this.mobilePressReady(press)) {
             this.useCursor(press.point)
             if (this.game.render().cursor.mode !== 'none') this.game.command({ type: 'clearCursor' })
-        } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
+        } else if (press.cancelInside || press.leftSource) this.cancelPlanting()
     }
 
     private onMouseDown(event: EventMouse): void {

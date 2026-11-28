@@ -390,7 +390,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             conveyorPackets: conveyor ? [{ id: 17, seedId: 'pea', selected: false, x: 0, availability: {} }, { id: 29, seedId: 'pea', selected: false, x: 120, availability: {} }] : [],
         }
         const commands: any[] = [], pending: any[] = [], menu = ui.makeButton(680)
-        let pointer: any
+        let pointer: any, cancels = 0
         let selectedPacket: number | undefined
         const flush = () => {
             for (const command of pending.splice(0)) {
@@ -411,7 +411,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         }, {
             introComplete: true, bindTools() { return [] }, level: { award: { kind: 'seed' } },
             board: { bounds: { left: 0, right: 800 }, origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
-            audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
+            audio: { seedPacketSelected() {}, plantingCancelled() { cancels++ } }, resetCursor() {}, setPointer(value: any) { pointer = value },
             pointerOffsetY: () => 0, seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
             bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button, bindSunCounter: () => ({}),
         })
@@ -443,8 +443,12 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             assert.equal(conveyor ? commands.at(-1).packetId : commands.at(-1).seedId, conveyor ? 29 : 'sunflower')
             assert.equal(bank.packets[0].view.options.selected, false)
             assert.equal(bank.packets[1].view.options.selected, true, 'the server selection reaches the newly selected packet view')
+            touch(e.TOUCH_START, x); touch(e.TOUCH_END, x)
+            assert.deepEqual([snapshot.cursor.mode, cancels], ['none', 1], 'a tap on the held packet puts it back, with the cancel sound')
+            touch(e.TOUCH_START, x); touch(e.TOUCH_END, x)
+            assert.equal(snapshot.cursor.mode, 'seed', 'a tap picks it again')
             touch(e.TOUCH_START, x); touch(e.TOUCH_MOVE, 200, 250); touch(e.TOUCH_MOVE, x); touch(e.TOUCH_END, x)
-            assert.equal(snapshot.cursor.mode, 'none', 'dragging back to the packet cancels')
+            assert.deepEqual([snapshot.cursor.mode, cancels], ['none', 2], 'dragging back to the packet cancels, with the sound too')
             if (conveyor) {
                 snapshot.conveyorPackets = snapshot.conveyorPackets.slice(1)
                 snapshot.conveyorPackets[0].x = 0
