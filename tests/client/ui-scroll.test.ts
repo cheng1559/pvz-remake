@@ -52,6 +52,31 @@ test('achievement arrow keys use the GOTY speed: reset to 30 per press, minus 1 
     assert.equal(screen.scroll.offset, 435 + 29 + 29 + 406 - 435)
 })
 
+test('the More rock scrolls as the arrow keys do, from a speed of 22: 231px down, then back up', () => {
+    const { AchievementScreen } = loadScript('assets/scripts/client/screens/AchievementScreen.ts', (id: string) => ({
+        cc: { Component: class {}, KeyCode: { ARROW_UP: 1, ARROW_DOWN: 2 }, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
+        '@/client/sound/SoundSystem': { SoundEffect: { GraveButton: 'pvz:gravebutton' } },
+        '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
+    } as Record<string, unknown>)[id] ?? {})
+    const screen = new AchievementScreen()
+    screen.node = { isValid: true }
+    screen.scroll = { offset: 0 }
+    screen.more = { isHovering: false, onStateChange() {} }
+    const run = (ticks: number) => { for (let i = 0; i < ticks; i++) screen.update(0.01) }
+    screen.pressMore(); run(1)
+    assert.equal(screen.scroll.offset, 21, 'at its fastest from the first tick')
+    assert.equal(screen.more.pressSound, null, 'scrolling back up plays no sound')
+    run(40)
+    assert.equal(screen.scroll.offset, 231, '21 + 20 + ... + 1')
+    screen.pressMore(); run(40)
+    assert.equal(screen.scroll.offset, 0, 'in its Top state, back up')
+    assert.equal(screen.more.pressSound, 'pvz:gravebutton')
+    screen.pressMore(); run(5)
+    screen.onKeyDown({ keyCode: 1 }); run(40)
+    assert.equal(screen.scroll.offset, 21 + 20 + 19 + 18 + 17 - 435, 'an arrow press takes the scroll over')
+})
+
 /** UIScroll with stand-in nodes; `graphics` is the scrollbar's, `began` the touches its gesture began with. */
 function loadUIScroll(isMobileMode: () => boolean = () => false) {
     const state: { graphics?: { calls: unknown[][], fillColor: unknown, clear(): void, fillRect(...values: number[]): void }, began: unknown[] } = { began: [] }
