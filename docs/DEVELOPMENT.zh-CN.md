@@ -21,10 +21,10 @@
 
 PvZ Remake 使用两个工具链仓库的 `dev/pvz-remake` 分支。游戏在 `package.json` 中声明的 Creator 版本为 `4.0.0-alpha.35`。CLI 从 `packages/engine` 读取引擎源码。
 
-| 仓库 | 作用 | v0.2.0 核对的版本 |
+| 仓库 | 作用 | v0.2.1 核对的版本 |
 | --- | --- | --- |
-| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | 提供 `cocos preview`、`cocos build` 和 `cocos make`，包括 IPA 打包。 | [`e24f0f9`](https://github.com/cheng1559/cocos-cli/commit/e24f0f92ee8b15e223512331ba7b5285b7b1ae0b) |
-| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | 提供运行时与原生引擎，包括原生鼠标指针、低分辨率摄像机的指针输入，以及 DPI 和音频播放的修复。 | [`c987978`](https://github.com/cheng1559/cocos4/commit/c987978d37fe64fc180021806838de2dde78dc38) |
+| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | 提供 `cocos preview`、`cocos build` 和 `cocos make`，包括 IPA 打包。 | [`409c35b`](https://github.com/cheng1559/cocos-cli/commit/409c35bdf1294df45809dc3dcbf1a7b7116c032f) |
+| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | 提供运行时与原生引擎，包括原生鼠标指针、低分辨率摄像机的指针输入、模块音乐的音频流、macOS 触屏与触控板滚动，以及 DPI 和音频播放的修复。 | [`a2df3bd`](https://github.com/cheng1559/cocos4/commit/a2df3bd432c1aa1947a8c53e22d52ba3acb7a188) |
 
 全新搭建工具链时，请在游戏仓库之外进行。CLI 的安装说明使用 Node.js 22.17.0 和 `node-gyp`。其默认的 `npm run init` 会按 `repo.json` 选用上游引擎；下面的命令则把本游戏的引擎分叉放到引擎目录，并按两个分叉共同声明的标签获取原生库。
 

@@ -25,7 +25,7 @@
 
 PvZ Remake is an open-source remake of the PC version of *Plants vs. Zombies*. It follows the Steam Game of the Year edition, version 1.2.0.1096, is written in TypeScript on Cocos 4, and runs in the browser and on Windows, macOS, Android and iOS. The project aims to rebuild and extend the original on a modern technology stack: a cross-platform, more stable game for players, and an easier, more consistent way for the community to build on it.
 
-The current version is v0.2.0, with all 20 Day and Night levels of Adventure mode. Besides restoring the original gameplay, the project fixes a number of presentation and logic problems in the original and adds teams, a debug console and Mod support, described below.
+The current version is v0.2.1, with all 20 Day and Night levels of Adventure mode. Besides restoring the original gameplay, the project fixes a number of presentation and logic problems in the original and adds teams, a debug console and Mod support, described below.
 
 ## 🎮 How to Play
 
@@ -517,7 +517,7 @@ Released versions list what they contain; planned versions may change.
 - Web and mobile support
 - Debug console
 
-### v0.2.0 (current)
+### v0.2.0 (released)
 
 - Client/server architecture rewrite
 - Adventure mode (Night)
@@ -532,6 +532,15 @@ Released versions list what they contain; planned versions may change.
 - Mods and resource packs (ZIP installation, HD pack, Simplified Chinese pack, widescreen)
 - Graphics (original-resolution rendering, high-resolution mode, frame rate display, tilted seed packets)
 - Controls (keyboard hotkeys, original mouse cursors, touch haptics, muting and auto-pause on focus loss)
+
+### v0.2.1 (current)
+
+- Music (the original's tracker music, played live as the original plays it)
+- Debug console (health bars, slot numbers, collision view, planting anywhere, running ticks at once, changing the time of day, day and night sandboxes)
+- Mods (load order, changes to what the base defines, scaling the lawn and the held tools)
+- Mobile (touches at the side edges left to the hand holding the device, more touch haptics)
+- Performance (zombies, entity lists, particles and rendering)
+- Fixes (collisions, zombie attacks and the dancers, the Chomper, graves, tutorials, the seed chooser and the layout on wide screens, the macOS touch screen and trackpad, music on macOS)
 
 ### v0.3.0 (planned)
 

@@ -21,10 +21,10 @@ Building the game needs Node.js, Python, the Cocos toolchain and the files of a 
 
 PvZ Remake uses the `dev/pvz-remake` branch of both toolchain repositories. The game declares Creator `4.0.0-alpha.35` in `package.json`. The CLI reads its engine source from `packages/engine`.
 
-| Repository | Role | Revision checked for v0.2.0 |
+| Repository | Role | Revision checked for v0.2.1 |
 | --- | --- | --- |
-| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | Provides `cocos preview`, `cocos build` and `cocos make`, including IPA packaging. | [`e24f0f9`](https://github.com/cheng1559/cocos-cli/commit/e24f0f92ee8b15e223512331ba7b5285b7b1ae0b) |
-| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | Supplies the runtime and native engine, including native cursors, pointer input for the low-resolution camera, and fixes for DPI and audio playback. | [`c987978`](https://github.com/cheng1559/cocos4/commit/c987978d37fe64fc180021806838de2dde78dc38) |
+| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | Provides `cocos preview`, `cocos build` and `cocos make`, including IPA packaging. | [`409c35b`](https://github.com/cheng1559/cocos-cli/commit/409c35bdf1294df45809dc3dcbf1a7b7116c032f) |
+| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | Supplies the runtime and native engine, including native cursors, pointer input for the low-resolution camera, audio streams for the tracker music, the macOS touch screen and trackpad scrolling, and fixes for DPI and audio playback. | [`a2df3bd`](https://github.com/cheng1559/cocos4/commit/a2df3bd432c1aa1947a8c53e22d52ba3acb7a188) |
 
 For a fresh toolchain, start outside the game repository. The CLI setup guide uses Node.js 22.17.0 and `node-gyp`. Its default `npm run init` selects the upstream engine from `repo.json`; the commands below instead place the game's fork in the engine slot and fetch the native libraries at the tag declared by both forks.
 
