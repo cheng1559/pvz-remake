@@ -379,11 +379,6 @@ export class LevelSeedChooser {
         this.edge.setSiblingIndex(node.getSiblingIndex())
     }
 
-    /** Presses Let's Rock from the keyboard, as a click on it would; whether it could be pressed. */
-    pressStart(): boolean {
-        return this.start.trigger()
-    }
-
     /** Puts `node`, the chooser's sibling, right under it: over everything else, below the chooser's cards. */
     placeUnder(node: Node): void {
         const from = node.getSiblingIndex(), to = this.edge.getSiblingIndex()
@@ -547,11 +542,17 @@ export class LevelSeedChooser {
         return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
     }
 
-    private confirm(): void {
-        if (!this.start.interactable || !this.acceptsInput) return
+    /** Whether Let's Rock's start could go now: the button lit and the chooser taking input. */
+    get canConfirm(): boolean {
+        return this.start.interactable && this.acceptsInput
+    }
+
+    /** Let's Rock's start, also what R and the sun counter do in a repick; whether it went. */
+    confirm(): boolean {
+        if (!this.canConfirm) return false
         for (const choice of this.choices) { this.land(choice); choice.tooltip.hide() }
         const warnings = this.snapshot?.seedChooser?.warnings ?? []
-        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return }
+        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return true }
         this.warningOpen = true
         // DisplayRepickWarningDialog: each warning in turn; any repick stops the start.
         void (async () => {
@@ -563,5 +564,6 @@ export class LevelSeedChooser {
             this.warningOpen = false
             this.send({ type: 'confirmSeeds' })
         })()
+        return true
     }
 }

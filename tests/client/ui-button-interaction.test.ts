@@ -4,9 +4,11 @@ import test from 'node:test'
 import * as plantDefinitions from '@/client/plants/definitions'
 import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
+import * as debugCli from '@/shared/debug/DebugCli'
 
-// The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
-const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
+// The protocol's own helpers run as they are: what is loaded asks them whether the level stands still, or whether a
+// repick could start.
+const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol, '@/shared/debug/DebugCli': debugCli }
 
 // Exercise the real button/hover code with ordered capture/target events, without rendering Cocos.
 function setup() {
@@ -195,33 +197,52 @@ test("with cheat seeds on, R and on mobile a tap on the sun counter start a repi
     const board = new ui.Node()
     ui.root.addChild(board)
     const sun = ui.makeButton(300, board)
-    let repicking = false, starts = 0
+    let repicking = false, letsRock = true, starts = 0, phase = 'gameplay', bank: Record<string, unknown> = { seedPackets: [{}, {}] }
     const commands: string[] = []
     const presenter = new LevelInputPresenter(board, {
-        render: () => ({ result: 'playing', phase: 'gameplay', cursor: { mode: 'none' }, seedPackets: [], items: [], ...repicking ? { seedChooser: { repick: true } } : {} }),
+        render: () => ({ result: 'playing', phase, cursor: { mode: 'none' }, seedPackets: [], items: [], ...bank,
+            ...repicking ? { seedChooser: { repick: true, choosing: true } } : {} }),
         command() {}, debugCommand: (command: string) => commands.push(command), definitions: { items: {} },
     }, {
         introComplete: true, level: {}, bindSeedPackets: () => [], bindTools: () => [], bindMenu: () => ({}), resetCursor() {}, setPointer() {}, seedPacketAt: () => undefined,
         bindSunCounter(press: () => void) { sun.button.onClick = press; return sun.button },
-        pressSeedChooserStart: () => { starts++; return true },
+        confirmSeedChooser: () => { starts++; return true },
+        canConfirmSeedChooser: () => letsRock,
     })
     presenter.boardPixel = (event: any) => event.getUILocation()
-    const tap = () => { ui.dispatch(sun.node, ui.events.TOUCH_START, sun.node.x + 20); ui.dispatch(sun.node, ui.events.TOUCH_END, sun.node.x + 20) }
+    const press = () => ui.dispatch(sun.node, ui.events.TOUCH_START, sun.node.x + 20)
+    const lift = () => ui.dispatch(sun.node, ui.events.TOUCH_END, sun.node.x + 20)
+    const tap = () => { press(); lift() }
     const r = () => ui.input.emit(ui.events.KEY_DOWN, { keyCode: ui.keys.KEY_R })
     ui.settings.hotkeysEnabled = true
     try {
         presenter.start()
         tap()
         r()
-        assert.deepEqual([commands, starts], [[], 0], 'not with cheat seeds off')
+        assert.deepEqual([commands, starts, ui.haptics.length], [[], 0, 0], 'not with cheat seeds off')
         ui.settings.cheatSeedsEnabled = true
-        tap()
+        press()
+        assert.deepEqual([commands, ui.haptics.length], [[], 1], 'a press buzzes, as any button does')
+        lift()
         r()
-        assert.deepEqual(commands, ['/repick', '/repick'])
+        assert.deepEqual(commands, ['/repick', '/repick'], 'it repicks as the touch lifts')
+        for (const refused of [{ seedPackets: [] }, { seedPackets: [{}], conveyor: { ticks: 0 } }]) {
+            bank = refused
+            tap()
+            assert.deepEqual([commands.length, ui.haptics.length], [2, 1], 'with no bank to choose again it is no button: no buzz')
+        }
+        bank = { seedPackets: [{}, {}] }
+        phase = 'intro'
+        tap()
+        assert.deepEqual([commands.length, ui.haptics.length], [2, 1], 'nor before the level is in play')
+        phase = 'gameplay'
         repicking = true
         tap()
         r()
-        assert.deepEqual([commands.length, starts], [2, 2], "in the repick, its Let's Rock")
+        assert.deepEqual([commands.length, starts, ui.haptics.length], [2, 2, 2], "in the repick, its Let's Rock")
+        letsRock = false
+        tap()
+        assert.deepEqual([starts, ui.haptics.length], [2, 2], "nor while Let's Rock cannot be pressed")
         repicking = false
         ui.setMobile(false)
         tap()

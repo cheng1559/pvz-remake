@@ -2,7 +2,7 @@ import { Schedule } from '@/server/state/World'
 import { packetTeam } from '@/shared/content/teams'
 import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
-import { debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, repickRefusal, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
@@ -81,9 +81,8 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         }
         case 'repick': {
             const bank = world.resources.get(SeedBankResource)
-            // A repick's bank is the chooser's until the level goes on after it.
-            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
-            if (bank.conveyor || !bank.packets.length) return debugCondition('DEBUG_REPICK_NO_BANK')
+            const refusal = repickRefusal({ choosing: bank.choosing === true, repick: !!bank.repick, conveyor: !!bank.conveyor, slots: bank.packets.length })
+            if (refusal) return debugCondition(refusal)
             startRepick(world)
             return debugSuccess('Choose your seeds again')
         }

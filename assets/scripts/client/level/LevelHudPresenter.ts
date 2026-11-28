@@ -189,12 +189,11 @@ export class LevelHudPresenter {
         return this.menuButton
     }
 
-    /** The sun counter's box as a button, pressed as it is touched; whoever binds it says when it can be. */
+    /** The sun counter's box as a button, pressed as a touch on it lifts; whoever binds it says when it can be. */
     bindSunCounter(press: () => void): UIButton {
         const button = this.sunArea.addComponent(UIButton)
         button.changeCursor = false
         button.touchSlide = false
-        button.clickOnPress = true
         button.rightClickTriggers = false
         button.pressSound = null
         button.onClick = press

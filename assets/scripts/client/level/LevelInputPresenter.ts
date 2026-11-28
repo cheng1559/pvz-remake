@@ -5,6 +5,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics } from '@/platform/Haptics'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
+import { repickRefusal } from '@/shared/debug/DebugCli'
 import { boardCell, plantingCell } from './LevelGeometry'
 import { itemAt } from '@/shared/content/gameplay'
 import type { LevelGame } from './LevelGame'
@@ -73,6 +74,7 @@ export class LevelInputPresenter {
                 if (!this.enabled || button === menu && !this.view.canOpenMenu) return false
                 if (button === sunCounter && !(GameDebugSettings.isMobileMode() && GameDebugSettings.cheatSeedsEnabled)) return false
                 const snapshot = this.game.render()
+                if (button === sunCounter && !this.canRepick(snapshot)) return false
                 return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
             }
         }
@@ -344,12 +346,25 @@ export class LevelInputPresenter {
     }
 
     /**
-     * R, and on mobile the sun counter's box: with cheat seeds on, `/repick`, which says itself when the level has no
-     * bank to choose again; in a repick, its Let's Rock.
+     * R, and on mobile the sun counter's box: with cheat seeds on, `/repick`, which says itself when it cannot run; in a
+     * repick, Let's Rock's start itself (not a press of the button, so not its sound).
      */
     private repick(): void {
-        if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
+        if (this.game.render().seedChooser?.repick) this.view.confirmSeedChooser()
         else if (GameDebugSettings.cheatSeedsEnabled) this.game.debugCommand?.('/repick')
+    }
+
+    /**
+     * Whether the sun counter's repick would do anything now, so that one which would not is no button to press (and
+     * does not buzz): in play, as the level's other input waits for; in a repick, as Let's Rock's start could go; else
+     * as `/repick` would start one (repickRefusal).
+     */
+    private canRepick(snapshot: WorldSnapshot): boolean {
+        if (snapshot.phase !== 'gameplay' || !this.view.introComplete) return false
+        const chooser = snapshot.seedChooser
+        if (chooser?.repick) return this.view.canConfirmSeedChooser()
+        return repickRefusal({ choosing: chooser?.choosing === true, repick: false, conveyor: snapshot.conveyor !== undefined,
+            slots: snapshot.seedPackets.length }) === null
     }
 
     private cancelPlanting(): void {

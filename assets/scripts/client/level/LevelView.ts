@@ -628,9 +628,13 @@ export class LevelView {
         this.hud.showAdvice(advice.key, advice.args)
     }
 
-    /** Presses the chooser's Let's Rock from the keyboard; whether there was one to press. */
-    pressSeedChooserStart(): boolean {
-        return this.seedChooser?.pressStart() ?? false
+    /** The chooser's Let's Rock start, for R and the sun counter in a repick; whether it went. */
+    confirmSeedChooser(): boolean {
+        return this.seedChooser?.confirm() ?? false
+    }
+
+    canConfirmSeedChooser(): boolean {
+        return this.seedChooser?.canConfirm ?? false
     }
 
     /** Takes the level's chooser, opened with the level or later by a repick; Mods wrap it to add to every chooser. */

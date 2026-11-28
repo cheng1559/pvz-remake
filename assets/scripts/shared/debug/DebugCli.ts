@@ -79,6 +79,17 @@ export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, me
 export const debugCondition = (key: string, ...args: (string | number | boolean)[]): DebugCliResult =>
     ({ ok: false, failure: 'condition', key, ...(args.length ? { args: args.map(String) } : {}) })
 export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, message })
+
+/**
+ * Why `/repick` cannot start a repick now, as its condition's key: a chooser open (a repick's is the chooser's until
+ * the level goes on after it), or no bank to choose again. Null when it can. The server's bank and the client's
+ * snapshot both answer it.
+ */
+export function repickRefusal(bank: { choosing: boolean, repick: boolean, conveyor: boolean, slots: number }): string | null {
+    if (bank.choosing || bank.repick) return 'DEBUG_FINISH_CHOOSING'
+    if (bank.conveyor || !bank.slots) return 'DEBUG_REPICK_NO_BANK'
+    return null
+}
 /**
  * A switch turned over, as advice: DEBUG_SWITCH_ON or DEBUG_SWITCH_OFF with the switch's name, DEBUG_SWITCH_{NAME}
  * (`/perf plants` is DEBUG_SWITCH_PERF_PLANTS).
