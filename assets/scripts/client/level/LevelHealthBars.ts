@@ -10,6 +10,7 @@ import type { WorldSnapshot } from '@/shared/protocol/index'
 import { PlantView } from '@/client/plants/PlantView'
 import { ZombieView } from '@/client/zombies/ZombieView'
 import type { LevelEntityRenderer } from './LevelEntityRenderer'
+import { overlayPixels } from './LevelGeometry'
 
 const BAR_WIDTH = 50
 const BAR_HEIGHT = 3
@@ -30,14 +31,15 @@ type Part = { health: number, color: Color }
  * health, as wide for any in a black frame, centred over its body the way it faces (the hitbox `/hitboxes` outlines; of
  * a rising zombie, what is up out of the ground), and with `/id` its slot of its list (EntityList) in its body's bottom
  * right. A zombie's bar is its body's health, then its helm's, then its shield's, out of all three at their full: the
- * armor, which goes first, empties it from the right.
+ * armor, which goes first, empties it from the right. Both in the screen's pixels (overlayPixels), at their own size
+ * however the lawn is scaled, as the seed bank keeps its own: only where they go follows the lawn.
  */
 export class LevelHealthBars {
     private node: Node | null = null
     private graphics: Graphics | null = null
     private readonly slots = new Map<number, UILabel>()
 
-    constructor(private readonly stage: Pick<LevelEntityRenderer, 'layer' | 'addScenery' | 'view'>, private readonly definitions: GameplayDefinitions,
+    constructor(private readonly stage: Pick<LevelEntityRenderer, 'layer' | 'addScenery' | 'view' | 'lawnScale'>, private readonly definitions: GameplayDefinitions,
         private readonly ui: UI, private readonly font: BitmapFontAssets) {}
 
     sync(snapshot: WorldSnapshot): void {
@@ -50,12 +52,12 @@ export class LevelHealthBars {
         node.active = true
         const graphics = this.graphics ??= uiNode({ name: 'Bars', parent: node, graphics: true }).graphics!
         graphics.clear()
+        const pixels = overlayPixels(node, this.stage.lawnScale())
         const shown = new Set<number>()
-        // Over `body`, the entity's body on the board.
+        // Over `body`, the entity's body on the board. The board's y runs down from its top, the layer's up from its middle.
         const show = (entity: { entityId: number, slot: number }, body: Rect, parts: Part[], full: number) => {
-            // The board's y runs down from its top, the layer's up from its middle.
-            const left = body.x + (body.width - BAR_WIDTH) / 2 - 400, top = 300 - body.y
-            const bottom = top + BAR_GAP + BORDER
+            const left = pixels.x(body.x + body.width / 2) - BAR_WIDTH / 2
+            const bottom = pixels.y(body.y) + BAR_GAP + BORDER
             if (bars) {
                 graphics.fillColor = FRAME
                 graphics.rect(left - BORDER, bottom - BORDER, BAR_WIDTH + 2 * BORDER, BORDER)
@@ -84,7 +86,7 @@ export class LevelHealthBars {
             // In the body's bottom right, its right edge a pixel clear of the `/hitboxes` outline (Graphics::DrawRect: its
             // right column one past the body's last, its bottom row under the body's last). A label's y runs down to its
             // baseline.
-            label.setPosition(body.x + body.width - 400 - BAR_GAP, -(top - body.height + BAR_GAP))
+            label.setPosition(pixels.x(body.x + body.width) - BAR_GAP, -(pixels.y(body.y + body.height) + BAR_GAP))
         }
         // A plant's or zombie's body as its view has it (PlantView.hitRects, ZombieView.hitRects); none until the view is
         // made.

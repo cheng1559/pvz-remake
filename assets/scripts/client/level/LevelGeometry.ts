@@ -18,6 +18,20 @@ export function seedPacketX(index: number, slots: number): number {
     return slots <= 7 ? index * 59 + 85 : slots === 8 ? index * 54 + 81 : slots === 9 ? index * 52 + 80 : index * 51 + 79
 }
 
+/**
+ * A debug overlay among the lawn's entities, drawn in the screen's pixels: its node takes back the lawn's scale, as the
+ * seed bank's layer does (LevelView.pinScreen), so a line a pixel wide stays one when the lawn is shown smaller (a high
+ * view's 600/720). Gives where a board point is in the node, on the whole pixel it is shown at (the lawn's middle being
+ * on one): from the layer's middle, its y up.
+ */
+export function overlayPixels(node: { scale: { x: number }, setScale(x: number, y: number, z: number): void }, scale: number) {
+    if (node.scale.x !== 1 / scale) node.setScale(1 / scale, 1 / scale, 1)
+    return {
+        x: (x: number) => Math.round((x - 400) * scale),
+        y: (y: number) => Math.round((300 - y) * scale),
+    }
+}
+
 export function boardCell(board: BoardDefinition, x: number, y: number) {
     const column = Math.floor((x - board.origin.x) / board.cell.width)
     const row = Math.floor((y - board.origin.y) / board.cell.height)

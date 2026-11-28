@@ -3,6 +3,7 @@ import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as zombieStatesModule from '@/shared/content/zombieStates'
+import * as levelGeometryModule from '@/client/level/LevelGeometry'
 
 const { DEBUG_OVERLAY_ORDER, renderOrder } = renderOrderModule
 
@@ -20,10 +21,11 @@ test('/hitboxes outlines as Board::DrawDebugObjectRects does, each rect with Gra
         rect(x: number, y: number, width: number, height: number) { this.path.push([x, y, width, height]) },
         fill() { fills.push([[this.fillColor.r, this.fillColor.g, this.fillColor.b], ...this.path]); this.path = [] },
     }
+    const node = { scale: { x: 1 }, setScale(x: number) { this.scale = { x } } }
     const modules: Record<string, unknown> = {
-        cc: { Color }, '@/client/view/uiNode': { uiNode: () => ({ node: {}, graphics }) },
+        cc: { Color }, '@/client/view/uiNode': { uiNode: () => ({ node, graphics }) },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { hitboxesVisible: true } },
-        '@/shared/content/renderOrder': renderOrderModule, '@/shared/content/zombieStates': zombieStatesModule,
+        '@/shared/content/renderOrder': renderOrderModule, '@/shared/content/zombieStates': zombieStatesModule, './LevelGeometry': levelGeometryModule,
         '@/client/plants/PlantView': { PlantView: class {} }, '@/client/zombies/ZombieView': { ZombieView: class {} },
     }
     const { LevelHitboxes } = loadScript('assets/scripts/client/level/LevelHitboxes.ts', id => modules[id] ?? {})
@@ -37,7 +39,8 @@ test('/hitboxes outlines as Board::DrawDebugObjectRects does, each rect with Gra
         13: { body: { x: 510, y: 200, width: 60, height: 80 }, attack: { x: 570, y: 200, width: 800, height: 80 } },
         1: rising, 2: rising,
     }).map(([id, rects]) => [Number(id), { hitRects: () => rects }]))
-    const hitboxes = new LevelHitboxes({ layer: {}, addScenery() {}, view: (id: number) => views.get(id) }, definitions)
+    let scale = 1
+    const hitboxes = new LevelHitboxes({ layer: {}, addScenery() {}, view: (id: number) => views.get(id), lawnScale: () => scale }, definitions)
     hitboxes.sync({
         // Neither one whose view is still being made, nor a dying zombie, is outlined.
         plants: [11, 12, 13, 14].map(entityId => ({ entityId })),
@@ -55,9 +58,18 @@ test('/hitboxes outlines as Board::DrawDebugObjectRects does, each rect with Gra
         // An attack rect that spans the board goes unoutlined.
         outline(GREEN, 510, 200, 60, 80),
         outline(GREEN, 536, 160, 42, 55), outline(RED, 520, 160, 50, 55),
-        // The pea where the frame draws it, between two ticks.
-        outline(RED, 285.5, 250.2, 55, 40),
+        // The pea where the frame draws it, between two ticks (285.5, 250.2), on the whole pixels it is shown at.
+        outline(RED, 286, 250, 55, 40),
     ])
+    assert.equal(node.scale.x, 1)
+
+    // In a high view the lawn is shown at 600/720: the layer takes that back, so each line is still a screen pixel wide,
+    // and the chomper's edges go to the whole pixels they are shown at (x 110 and 170 at 290 and 230 left of the
+    // middle, y 200 and 280 at 100 and 20 above it, each by 600/720).
+    scale = 600 / 720
+    hitboxes.sync({ plants: [{ entityId: 11 }], zombies: [], projectiles: [], mowers: [] })
+    assert.equal(node.scale.x, 720 / 600)
+    assert.deepEqual(fills[0], [GREEN, [-242, 82, 51, 1], [-242, 16, 51, 1], [-242, 17, 1, 65], [-192, 17, 1, 65]])
 })
 
 test("/hp draws over each plant and zombie a bar as wide for any, a zombie's armor in it after its body, and its slot in its bottom right", () => {
@@ -67,10 +79,12 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     }
     class Node {
         active = true
+        scale = { x: 1 }
         parent?: Node
         readonly children: Node[] = []
         constructor(readonly name = '') {}
         setParent(parent: Node) { parent.children.push(this); this.parent = parent }
+        setScale(x: number) { this.scale = { x } }
         destroy() { this.parent!.children.splice(this.parent!.children.indexOf(this), 1) }
     }
     const rects: number[][] = []
@@ -98,7 +112,7 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     const settings = { hpVisible: true, idVisible: true }
     const modules: Record<string, unknown> = {
         cc: { Color }, '@/client/view/uiNode': { uiNode }, '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
-        '@/shared/content/renderOrder': renderOrderModule,
+        '@/shared/content/renderOrder': renderOrderModule, './LevelGeometry': levelGeometryModule,
         '@/client/zombies/ZombieView': { ZombieView: class {} },
     }
     const { LevelHealthBars } = loadScript('assets/scripts/client/level/LevelHealthBars.ts', id => modules[id] ?? {})
@@ -108,9 +122,11 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     const bodies = new Map([[3, { x: 110, y: 205, width: 40, height: 60 }],
         [7, { x: 530, y: 110, width: 50, height: 100 }], [8, { x: 530, y: 160, width: 50, height: 50 }], [9, { x: 530, y: 300, width: 50, height: 0 }]])
     const layer = new Node('EntityLayer'), scenery: Array<[string, number]> = []
+    let scale = 1
     const bars = new LevelHealthBars({
         layer, addScenery: (node: Node, order: number) => scenery.push([node.name, order]),
         view: (id: number) => bodies.has(id) ? { hitRects: () => ({ body: bodies.get(id) }) } : undefined,
+        lawnScale: () => scale,
     }, definitions, ui, {})
     const plant = { entityId: 3, slot: 1, health: 2000, maxHealth: 4000 }
     const zombie = { entityId: 7, slot: 4, typeId: 'test:cone', x: 500, y: 100, health: 270, maxHealth: 270, helmHealth: 185, shieldHealth: 0 }
@@ -147,6 +163,15 @@ test("/hp draws over each plant and zombie a bar as wide for any, a zombie's arm
     // One whose view is still being made goes without.
     bars.sync({ plants: [{ ...plant, entityId: 4 }], zombies: [] })
     assert.deepEqual([rects.length, shown()], [0, []])
+
+    // In a high view the lawn is shown at 600/720: the layer takes that back, the bar and the slot keep their own size,
+    // and they go where the plant's body is shown, on whole pixels (its middle 270 left of the layer's, its top 95 above
+    // and its bottom 35 above it, each by 600/720).
+    scale = 600 / 720
+    bars.sync({ plants: [plant], zombies: [] })
+    const high = labels.filter(({ node }) => node.parent!.children.includes(node)).map(({ text, at }) => [text, ...at])
+    assert.deepEqual([layer.children[0].scale.x, rects.slice(0, 5), high], [720 / 600, [...frame(-250, 81), [-250, 81, 50]], [['1', -209, -30]]])
+    scale = 1
     Object.assign(settings, { hpVisible: false, idVisible: false })
     bars.sync({ plants: [plant], zombies: [zombie] })
     assert.equal(layer.children[0].active, false)
