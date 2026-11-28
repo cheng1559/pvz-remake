@@ -18,6 +18,7 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as zombieAnimationModule from '@/shared/content/zombieAnimation'
 import * as teamsModule from '@/shared/content/teams'
+import * as hitRectsModule from '@/shared/content/hitRects'
 import * as zombieStatesModule from '@/shared/content/zombieStates'
 import * as presentationModule from '@/shared/content/presentation'
 import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
@@ -1254,6 +1255,31 @@ test("the winner's blend into its walk goes on by the game over's ticks, its pla
     view.syncGameOverWalk({ entityId: 1 }, parent, 30, 300, 100)
     assert.deepEqual(steps, [['blend', 0.05], ['seek', 0.05], ['blend', 0.15], ['seek', 0.2], ['blend', 1.1], ['seek', 0.3]],
         'its approach and walk both take the blend on, before its pose is drawn where the walk is')
+})
+
+test("the winner's /hitboxes, /hp and /id go with its walk into the house, not where the server left it", () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { '@/shared/content/teams': teamsModule, '@/shared/content/hitRects': hitRectsModule })
+    // Its ground track goes 10 along a second of its 1 s walk, whose frames are spread over 0.9 s.
+    const ground = (seconds: number) => seconds * 10
+    const player = {
+        loadedId: 'pvz:walk', durationSeconds: 1, fps: 12, lastFrameTimeSeconds: 0.9, sampleTrack: (_: string, seconds: number) => ({ x: ground(seconds) }),
+        advanceBlend() {}, seek() {},
+    }
+    const context = { content: { definitions: { zombies: { 'test:zombie': {
+        body: { x: 36, y: 0, width: 42, height: 115 }, attack: { x: 20, y: 0, width: 20, height: 115 },
+    } } } } }
+    const node = { parent: null as unknown, active: true, setParent(to: unknown) { this.parent = to }, setPosition() {} }
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        node, shadowNode: null, scale: 1, gameOverTicks: 0, layers: { player: () => player }, context,
+        presentation: { parts: { ground: '_ground' } }, playback: () => ({ fps: 12, timeSeconds: 0 }), placeShadow() {},
+    })
+    const standing = Object.assign(Object.create(ZombieView.prototype), { context })
+    // Where the server left it; the game over takes it to x 450 on the doorway's row, y 250, then half a second in.
+    const left = { entityId: 1, typeId: 'test:zombie', x: 500, y: 200 }
+    assert.deepEqual(view.hitRects(left), standing.hitRects(left))
+    view.syncGameOverWalk({ ...left, x: 450 }, {}, 50, 250, 100)
+    const walked = (ground(0.5 * 0.9) - ground(0)) / 0.9
+    assert.deepEqual(view.hitRects(left), standing.hitRects({ ...left, x: 450 - walked, y: 250 }))
 })
 
 test("the level's award is collected by its own view: its sounds and feel, the starburst, its glow gone and its own effect behind it", async () => {

@@ -103,6 +103,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private rising = false
     /** How far the game over has gone at its last syncGameOverWalk, in ticks: its blend goes on by what has gone since. */
     private gameOverTicks = 0
+    /** Where its walk into the house had it on the board at the last syncGameOverWalk, which the server no longer moves. */
+    private walkPlace?: { x: number, y: number }
     /** The zombies have won: a winner takes its walk into the house at once (bodyBlend). */
     protected won = false
     /** Where its body's clip was at the last snapshot, for the marks of its steps it has come to since. */
@@ -382,15 +384,16 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
 
     /**
      * Its body and attack rects, the ones the server goes by (zombieRectAt: Zombie::GetZombieRect, GetZombieAttackRect),
-     * on the board where `zombie` has it stand as the frame draws it, not in the server's whole pixels: what `/hitboxes`
-     * outlines.
+     * on the board where `zombie` has it stand as the frame draws it, not in the server's whole pixels, or where its walk
+     * into the house has it: what `/hitboxes` outlines.
      */
     hitRects(zombie: ZombieSnapshot): { body: Rect, attack: Rect } {
         const definition = this.context.content.definitions.zombies[zombie.typeId], team = zombieTeam(zombie)
         const rising = zombie.riseTicks ? { rise: this.riseOf(zombie), ticks: zombie.riseTicks } : undefined
+        const { x, y } = this.walkPlace ?? zombie
         return {
-            body: zombieRectAt(definition.body, team, zombie.x, zombie.y, rising),
-            attack: zombieRectAt(this.attackRect(zombie), team, zombie.x, zombie.y, rising),
+            body: zombieRectAt(definition.body, team, x, y, rising),
+            attack: zombieRectAt(this.attackRect(zombie), team, x, y, rising),
         }
     }
 
@@ -459,7 +462,8 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const ground = this.presentation.parts.ground
         const groundAt = (seconds: number) => player.sampleTrack(ground, seconds % cycle / cycle * last)?.x ?? 0
         const distance = ((Math.floor(time / cycle) - Math.floor(start / cycle)) * (groundAt(cycle - 1e-9) - groundAt(0)) + groundAt(time) - groundAt(start)) * cycle / last
-        this.node.setPosition(zombie.x - 400 - distance * this.scale, 300 - y)
+        this.walkPlace = { x: zombie.x - distance * this.scale, y }
+        this.node.setPosition(this.walkPlace.x - 400, 300 - y)
         this.placeShadow()
         // Its player stands still with the lawn, so a blend it was in as the zombies won (one that had just stopped
         // eating) goes on by the game over's own ticks.

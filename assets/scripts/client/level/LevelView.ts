@@ -716,7 +716,16 @@ export class LevelView {
     }
 
     updateGameOver(dt: number): boolean {
-        return this.gameOver.update(dt)
+        const over = this.gameOver.update(dt)
+        // Once the winner's walk into the house has it where this frame draws it.
+        if (this.lastSnapshot) this.syncOverlays(this.lastSnapshot)
+        return over
+    }
+
+    /** `/hitboxes`, `/hp` and `/id` over the entities where they are drawn this frame. */
+    private syncOverlays(snapshot: WorldSnapshot): void {
+        this.hitboxes.sync(snapshot)
+        this.healthBars.sync(snapshot)
     }
 
     seedPacketAt(snapshot: WorldSnapshot, index: number) { return this.hud.seedBank.packetAt(snapshot, index) }
@@ -784,8 +793,8 @@ export class LevelView {
         this.rule?.sync?.(snapshot, events, this.introComplete)
         this.plantingLine?.sync(snapshot)
         for (const event of events) this.audio.play(event)
-        this.hitboxes.sync(snapshot)
-        this.healthBars.sync(snapshot)
+        // In a lost level, after the winner's walk (updateGameOver).
+        if (snapshot.result !== 'lost') this.syncOverlays(snapshot)
         if (snapshot.result === 'lost') {
             this.end.cancelWarnings()
             this.gameOver.sync(snapshot, events)
