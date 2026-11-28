@@ -408,7 +408,7 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     assert.deepEqual(synced, [current], 'a view made is shown as its entity is now, not as it was when it was asked for')
     await board.restore({ entities: [{ kind, entityId: 1 }], flashes: [{ entityId: 1, tick: 0, ticks: 25 }] })
     assert.equal(restored, true)
-    assert.equal(board.flashes.zombie(1, 5).flash, 20, 'the board takes back its flashes with what its views kept')
+    assert.equal(board.flashes.zombie(1, 5).body, 20, 'the board takes back its flashes with what its views kept')
     assert.deepEqual(synced, [current, current])
     assert.equal(node.active, true, 'paused restore must reveal entities without waiting for another tick')
     settings.perfPlantsVisible = settings.perfZombiesVisible = false
@@ -814,7 +814,7 @@ test('a screen door zombie sets its shield\'s colors once for a flash, and again
     const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
     const overrides: string[] = []
     const player = { loadedId: 'pvz:door_zombie_eat', setExtraAdditiveDraw() {}, setTrackRenderOverride(track: string) { overrides.push(track) } }
-    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, presentation, flash: { flash: 0, through: false, past: false } })
+    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, presentation, flash: { body: 0, shield: 0, recoil: 0 } })
     const zombie = { shieldHealth: 1100, state: 'eating' }
     view.applyHitFlash(zombie)
     view.applyHitFlash(zombie)
@@ -1210,7 +1210,7 @@ test("the board's flashes are raised by their handlers before the frame's views 
     const { PlantView } = clientStubs['@/client/plants/PlantView'] as any
     const drawn: number[] = []
     const board = renderer(LevelEntityRenderer, { zombies: { create(context: any) {
-        return Object.assign(new ZombieView(), { sync(zombie: any, world: any) { drawn.push(context.stage.flashes.zombie(zombie.entityId, world.gameplayTick).flash) } })
+        return Object.assign(new ZombieView(), { sync(zombie: any, world: any) { drawn.push(context.stage.flashes.zombie(zombie.entityId, world.gameplayTick).body) } })
     } } })
     board.content.views.events = { of: (type: string, time: string) => type === 'zombieHit' && time === 'before' ? [EntityFlashes.zombieHit] : [] }
     board.syncLayerOrder = () => {}
@@ -1223,7 +1223,7 @@ test("the board's flashes are raised by their handlers before the frame's views 
     assert.equal(board.view(1), board.view(1, ZombieView))
     // Entity 9 came and went between two frames: its flash is no entity's.
     board.sync({ ...snapshot, gameplayTick: 12 }, { added: [], removed: [] }, [
-        { eventId: 1, type: 'zombieHit', data: { entityId: 1 } }, { eventId: 2, type: 'zombieHit', data: { entityId: 9 } }])
+        { eventId: 1, type: 'zombieHit', data: { entityId: 1, body: true } }, { eventId: 2, type: 'zombieHit', data: { entityId: 9, body: true } }])
     assert.deepEqual(drawn.slice(-1), [25], 'a hit shows in the frame it comes in')
     assert.deepEqual(JSON.parse(JSON.stringify(await board.snapshot())), { entities: [], flashes: [{ entityId: 1, tick: 12, ticks: 25 }] })
 })
