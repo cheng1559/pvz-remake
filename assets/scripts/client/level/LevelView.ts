@@ -1,5 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { chooserSeeds, type GameplayDefinitions } from '@/shared/content/gameplay'
+import { cheatSeedEntries } from '@/shared/content/chooserPages'
 import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import { LevelHitboxes } from './LevelHitboxes'
 import { LevelHealthBars } from './LevelHealthBars'
@@ -73,9 +74,8 @@ export class LevelView {
     private boardHud?: LevelBoardHud
     private seedChooser?: LevelSeedChooser
     private seedChooserSend: (command: GameCommand) => void = () => {}
-    /** Builds a chooser for a level that opened none, the first time a repick asks for one. */
-    private openSeedChooser?: (chooser: NonNullable<WorldSnapshot['seedChooser']>) => Promise<LevelSeedChooser>
-    private openingSeedChooser = false
+    /** The chooser a level that opened none made as it loaded, until its first repick takes it. */
+    private spareSeedChooser?: LevelSeedChooser
     /** Only animations this view disabled are eligible to resume. */
     private readonly heldAnimations = new Set<Component>()
     private standingStill = false
@@ -303,23 +303,25 @@ export class LevelView {
         const rulePresentation = levelRulePresentation(content.presentation, level)
         const graveRise = rulePresentation?.graveRise ?? content.presentation.graves.rise
         const audio = new LevelAudioPresenter(presentation.board.music)
-        // Made below; the opening chooser comes before it.
+        // Made below; the chooser comes before it.
         let view: LevelView | undefined
-        const createSeedChooser = async (chooser: NonNullable<WorldSnapshot['seedChooser']>) => {
-            const created = await LevelSeedChooser.create(ui, content, hud, chooser.availableSeeds, chooser.slots, root, seedId => {
-                // Board::SeedNotRecommendedForLevel, on the installed land boards.
-                const seed = content.definitions.seeds[seedId]
-                if (seed.kind !== 'plant') return undefined
-                // The time it is at: the level's own as it opens, any `/time` made at a repick.
-                if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.times[view?.time ?? time].night) return 'NOCTURNAL_WARNING'
-                if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
-                if (seed.placement === 'water') return 'NOT_RECOMMENDED_FOR_LEVEL'
-                return undefined
-            }, { almanac: player.almanacZombies !== undefined, store: player.store }, chooser.entries, chooser.cheatSeeds === true)
-            created.placeBefore(cursorLayer)
-            return created
-        }
-        const seedChooser = initial.seedChooser === undefined ? undefined : await createSeedChooser(initial.seedChooser)
+        // Every level makes its chooser as it loads, with every card a chooser can show (`/cheatseed`'s offer: the grid's
+        // every seed and its further pages), so that none is made in play: the offer it has then only picks the cards it
+        // shows (layOut). A level that opens without one keeps it for its first repick.
+        const everySeed = chooserSeeds(content.definitions)
+        const chooser = await LevelSeedChooser.create(ui, content, hud, everySeed, initial.seedChooser?.slots ?? initial.seedPackets.length, root, seedId => {
+            // Board::SeedNotRecommendedForLevel, on the installed land boards.
+            const seed = content.definitions.seeds[seedId]
+            if (seed.kind !== 'plant') return undefined
+            // The time it is at: the level's own as it opens, any `/time` made at a repick.
+            if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.times[view?.time ?? time].night) return 'NOCTURNAL_WARNING'
+            if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
+            if (seed.placement === 'water') return 'NOT_RECOMMENDED_FOR_LEVEL'
+            return undefined
+        }, { almanac: player.almanacZombies !== undefined, store: player.store }, cheatSeedEntries(content.definitions, everySeed), true)
+        chooser.placeBefore(cursorLayer)
+        // The chooser the level opens with.
+        const seedChooser = initial.seedChooser === undefined ? undefined : chooser
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
@@ -432,8 +434,8 @@ export class LevelView {
         entityRenderer.uiOnLawn = (x, y) => view.uiOnLawn(x, y)
         entityRenderer.lawnScale = () => view.lawnScale
         entityRenderer.shake = (x, y, haptic) => view.shakeBoard(x, y, haptic)
-        view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
+        else view.spareSeedChooser = chooser
         if (initial.tools || level.conveyor || initial.tutorial.dave) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
         }
@@ -762,15 +764,11 @@ export class LevelView {
         if (slots > this.seedBankSlots) { this.seedBankSlots = slots; this.applySeedBankSlots(slots) }
         const repick = snapshot.seedChooser?.repick === true
         this.audio.holdMusic(repick)
-        if (repick && !this.seedChooser && this.openSeedChooser && !this.openingSeedChooser) {
-            this.openingSeedChooser = true
-            void this.openSeedChooser(snapshot.seedChooser!).then(chooser => {
-                this.attachSeedChooser(chooser)
-                if (this.lastSnapshot) chooser.sync(this.lastSnapshot)
-                this.syncSeedChooserIntro()
-            }).finally(() => { this.openingSeedChooser = false })
+        // A level that opened without a chooser takes the one it made as it loaded at its first repick.
+        if (repick && !this.seedChooser && this.spareSeedChooser) {
+            this.attachSeedChooser(this.spareSeedChooser)
+            this.spareSeedChooser = undefined
         }
-        this.hud.seedBank.awaitingChooser = repick && !this.seedChooser
         this.standStill(repick)
         if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
         this.money = snapshot.money

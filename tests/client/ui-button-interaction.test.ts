@@ -352,7 +352,7 @@ test('a belt packet shows once its picture is drawn, in its place on the belt fo
     } finally { bank.destroy?.(); ui.cleanup() }
 })
 
-test('a repick keeps the bank packets until its chooser is built, then leaves the slots to the chooser cards', () => {
+test('a repick leaves the bank slots to the chooser cards', () => {
     const ui = setup()
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const definitions = { seeds: { pea: { kind: 'plant', id: 'pvz:peashooter', sunCost: 100 } }, items: {} }
@@ -365,11 +365,6 @@ test('a repick keeps the bank packets until its chooser is built, then leaves th
             seedChooser: { choosing: true, repick: true, slots: 1 },
             seedPackets: [{ seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} }] }
         const node = (bank.packets as any[])[0].view.node
-        // The first repick of a level that opened no chooser builds one: until then the bank would be empty.
-        bank.awaitingChooser = true
-        bank.sync(snapshot, [], true, null, false)
-        assert.equal(node.active, true)
-        bank.awaitingChooser = false
         bank.sync(snapshot, [], true, null, false)
         assert.equal(node.active, false)
     } finally { bank.destroy?.(); ui.cleanup() }

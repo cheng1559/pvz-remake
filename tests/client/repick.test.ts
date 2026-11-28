@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as chooserPages from '@/shared/content/chooserPages'
+import * as gameplay from '@/shared/content/gameplay'
 import * as protocol from '@/shared/protocol'
 
 class Component { enabled = true; isValid = true; node?: unknown }
@@ -182,6 +183,33 @@ test('a chooser lays its pages out from the offer it has now, as /cheatseed turn
     // Off again: the grid is the owned seeds once more, on its single page.
     chooser.layOut(false, ['pvz:pea'], [])
     assert.deepEqual([shown.at(-1), turner.node.active, added.length], [['pvz:pea:0'], false, count + 1 + entries.length])
+})
+
+test("a chooser made with every card a chooser can show, as a level makes its own as it loads, makes none for any offer", () => {
+    const definitions = { seeds: { 'pvz:pea': { kind: 'plant', position: 0 }, 'pvz:sun': { kind: 'plant', position: 3 },
+        'pvz:normal': { kind: 'zombie', position: 0, hidden: true } } } as any
+    const available = gameplay.chooserSeeds(definitions), entries = chooserPages.cheatSeedEntries(definitions, available)
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/protocol': protocol, '@/shared/content/chooserPages': chooserPages,
+    })
+    let added = 0
+    const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+        definitions, choices: [] as Array<{ key: string }>, pages: [], page: 0, offerKey: '', pageTurners: [],
+        addChoice(card: protocol.ChooserEntry) {
+            added++
+            const choice = { ...card, key: protocol.chooserEntryKey(card), view: { raiseIcon() {} } }
+            this.choices.push(choice)
+            return choice
+        },
+        showCards() {},
+    })
+    // As the level makes it; then an offer without cheat seeds, and `/cheatseed` turned on, only show fewer or more of them.
+    chooser.layOut(true, available, entries)
+    const made = added
+    chooser.layOut(false, ['pvz:pea'], [])
+    chooser.layOut(true, available, entries)
+    assert.deepEqual([made, added], [available.length + entries.length, made])
 })
 
 test('the level stands still for a pause and for a repick alike, which is all the lawn asks', () => {

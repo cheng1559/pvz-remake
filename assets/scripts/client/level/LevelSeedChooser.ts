@@ -156,8 +156,9 @@ export class LevelSeedChooser {
         // A card's two views, its grid shadow and the card itself, with its tooltip and button.
         this.addChoice = (card: ChooserEntry): Choice => {
             const seed = content.definitions.seeds[card.seedId]
+            // Never shaded: a card in the chooser has no cooldown, and the bank in play has packets of its own.
             const args = { definitions: content.presentation, name: `Choose-${cardKey(card)}`, parent: this.cards, layer: parent.layer,
-                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost }
+                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost, shade: false }
             const views = [new SeedPacketView({ ...args, name: `ChosenShadow-${cardKey(card)}`, parent: shadows, iconLayer: this.cardIcons }),
                 new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
             const subject = packetSubject(content.presentation, seed)

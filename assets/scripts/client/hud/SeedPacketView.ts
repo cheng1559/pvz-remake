@@ -43,7 +43,10 @@ export interface SeedPacketViewArgs {
     iconLayer?: Node
     /** Where text drawn on the packet goes (a hotkey), above every packet's picture (`labels`). */
     labelLayer?: Node
-    /** false: never shaded for a cooldown or a selection, so without the dark copy that takes (the almanac's). */
+    /**
+     * false: never shaded for a cooldown or a selection nor framed as selected, so without the dark copy and the frame
+     * those take (the almanac's, the chooser's).
+     */
     shade?: boolean
 }
 
@@ -127,7 +130,7 @@ export class SeedPacketView {
             for (const child of [...this.node.children]) if (ICON_PARTS.has(child.name)) child.setParent(this.top, false)
         }
         this.cooldownClip = args.shade === false ? undefined : this._createCooldownClip(args)
-        this.selectedHighlight = this._createSelectedHighlight(args)
+        this.selectedHighlight = args.shade === false ? undefined : this._createSelectedHighlight(args)
         if (this.top?.parent === this.node) this.top.setSiblingIndex(this.node.children.length - 1)
         if (this.mirrored) this.setMirrored(true)
     }
