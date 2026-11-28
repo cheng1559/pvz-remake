@@ -187,13 +187,13 @@ Several Mods can be enabled at once and stack. For example, with the HD pack and
 
 | Mod | Content |
 | --- | --- |
-| [Widescreen](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
-| [Widescreen Edition music](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0) | The music of PvZ Widescreen Edition in place of the game's tracks |
-| [JiangNan PvZ2 pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
-| [Chinese pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
-| [HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0) | HD resources: every image at 2x and bitmap fonts at 4x |
-| [Chinese HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0) | The HD resources and Simplified Chinese in one package, usable alone |
-| [Extra buttons pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
+| [Widescreen](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.1) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
+| [Widescreen Edition music](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.1) | The music of PvZ Widescreen Edition in place of the game's tracks |
+| [JiangNan PvZ2 pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.1) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
+| [Chinese pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.1) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
+| [HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.1) | HD resources: every image at 2x and bitmap fonts at 4x |
+| [Chinese HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.1) | The HD resources and Simplified Chinese in one package, usable alone |
+| [Extra buttons pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.1) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
 
 #### How It Works
 
