@@ -277,19 +277,20 @@ export function parseSavedPlayback(value: unknown): ReanimPlaybackSnapshot | nul
 
 function parseFlashes(value: unknown): FlashSnapshot[] {
     const flashes = array(value, 'Level flashes').map((value, index) => parseFlash(value, `Level flashes[${index}]`))
-    unique(flashes.map(flash => flash.entityId), 'Level flash entity ID')
+    unique(flashes.map(flash => `${flash.entityId}${flash.part ? `:${flash.part}` : ''}`), 'Level flash entity ID and part')
     return flashes
 }
 
 function parseFlash(value: unknown, name: string): FlashSnapshot {
-    const flash = exact(value, ['entityId', 'tick', 'ticks'], name, ['through', 'past'])
-    for (const key of ['through', 'past']) if (flash[key] !== undefined && flash[key] !== true) throw new TypeError(`${name}.${key} must be true`)
+    const flash = exact(value, ['entityId', 'tick', 'ticks'], name, ['part'])
+    const raw = flash.part
+    const part = raw === 'shield' || raw === 'recoil' ? raw : undefined
+    if (raw !== undefined && !part) throw new TypeError(`${name}.part must be shield or recoil`)
     return {
         entityId: positiveInteger(flash.entityId, `${name}.entityId`),
         tick: nonNegativeInteger(flash.tick, `${name}.tick`),
         ticks: nonNegativeInteger(flash.ticks, `${name}.ticks`),
-        ...(flash.through ? { through: true as const } : {}),
-        ...(flash.past ? { past: true as const } : {}),
+        ...(part ? { part } : {}),
     }
 }
 

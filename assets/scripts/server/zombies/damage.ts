@@ -44,16 +44,19 @@ export function damageZombie(
     const definition = definitions.zombies[zombie.typeId]
     const shield = !hit.helmOnly && !hit.bypassShield && zombie.shieldHealth > 0
     const events = world.resources.get(EventQueueResource)
-    // The client flashes the zombie. While worn, the hit timer belongs to the shield; an exact break leaves no body hit
-    // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both, and one
-    // that comes past a worn shield (`past`) only the body, as TakeBodyDamage alone runs for DAMAGE_BYPASSES_SHIELD.
-    if (hit.flash !== false) emitServerEvent(events, 'zombieHit', {
-        entityId: entity,
-        ...(shield && (hit.shieldOnly ? damage >= zombie.shieldHealth : damage === zombie.shieldHealth) && !hit.hitsShieldAndBody
-            ? { flash: false } : {}),
-        ...(shield && hit.hitsShieldAndBody ? { through: true } : {}),
-        ...(hit.bypassShield && zombie.shieldHealth > 0 ? { past: true } : {}),
-    })
+    // The client flashes what the hit reaches, each part by its own counter as Zombie::TakeDamage's parts set them:
+    // TakeShieldDamage the shield's (`shield`, mShieldJustGotShotCounter) and, unless the hit reaches the body as well
+    // (DAMAGE_HITS_SHIELD_AND_BODY), its recoil (`recoil`, mShieldRecoilCounter); TakeHelmDamage and TakeBodyDamage the
+    // body's (`body`, mJustGotShotCounter), which a hit the shield takes whole leaves as it is.
+    if (hit.flash !== false) {
+        const reachesBody = !hit.shieldOnly && (!shield || hit.hitsShieldAndBody || damage > zombie.shieldHealth)
+        emitServerEvent(events, 'zombieHit', {
+            entityId: entity,
+            ...(shield ? { shield: true } : {}),
+            ...(shield && !hit.hitsShieldAndBody ? { recoil: true } : {}),
+            ...(reachesBody ? { body: true } : {}),
+        })
+    }
     // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
     // mind-controlled zombies only because the original's chills are all the plants'; a chill reaches whatever a
     // hostile attack hits, so an enemy snow pea chills a zombie on the plants' side.

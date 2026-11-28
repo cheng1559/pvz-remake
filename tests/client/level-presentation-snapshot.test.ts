@@ -37,7 +37,7 @@ function snapshot(): any {
         }, {
             kind: 'item', entityId: 4, data: { animation: null },
         }],
-        flashes: [{ entityId: 1, tick: 10, ticks: 25 }, { entityId: 2, tick: 12, ticks: 25, through: true }],
+        flashes: [{ entityId: 1, tick: 10, ticks: 25 }, { entityId: 2, tick: 12, ticks: 25, part: 'shield' }],
         particles: [{
             instanceId: 1,
             owner: { kind: 'entity', entityId: 99, slot: 'award-back-effects', x: 0, y: 0, z: 0 },
@@ -98,8 +98,8 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
         }))
     }), /before the intro ends/)
     assert.throws(invalid(value => { value.entities[1].entityId = 2 }), /entity ID must be unique/)
-    assert.throws(invalid(value => { value.flashes[1].entityId = 1 }), /flash entity ID must be unique/)
-    assert.throws(invalid(value => { value.flashes[1].through = false }), /flashes\[1\]\.through must be true/)
+    assert.throws(invalid(value => { value.flashes[1].entityId = 1; delete value.flashes[1].part }), /flash entity ID and part must be unique/)
+    assert.throws(invalid(value => { value.flashes[1].part = 'body' }), /flashes\[1\]\.part must be shield or recoil/)
     assert.throws(invalid(value => { delete value.flashes }), /flashes is required/, 'the board keeps its flashes, not each view')
     assert.throws(invalid(value => { value.particles[1].instanceId = 1 }), /particle instance ID must be unique/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 151 }), /progressMeterWidth/)
