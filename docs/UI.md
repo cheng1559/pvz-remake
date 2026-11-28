@@ -415,14 +415,14 @@ A button's `tooltip` is a string or `{ text, title?, warning?, font?, maxWidth?,
 
 #### Scroll areas
 
-`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors?, wheelDuration? })` creates a vertical `UIScroll` with the GOTY `ScrollbarWidget`: 8 px wide, its left edge 6 px inside the area's right edge, no arrow buttons. Add labels, images or other nodes to `scroll.content`, using `scroll.contentWidth` for layout (7 px narrower while the bar shows).
+`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors? })` creates a vertical `UIScroll` with the GOTY `ScrollbarWidget`: 8 px wide, its left edge 6 px inside the area's right edge, no arrow buttons. Add labels, images or other nodes to `scroll.content`, using `scroll.contentWidth` for layout (7 px narrower while the bar shows).
 
-- `scroll.offset` scrolls to a pixel offset at once; `scroll.scrollTo(offset, seconds)` animates there with a double S curve.
+- `scroll.offset` scrolls to a pixel offset at once.
 - Call `scroll.setContentHeight(height, drawnHeight?)` after the content changes. `drawnHeight` lets the range reach drawn content taller than the measured one without changing the thumb.
 - The component owns clipping, the bar's automatic visibility, the original thumb drawing and dragging, track paging (a held track pages again after 25 updates of 10 ms, then every 5), touch inertia and listener cleanup. It runs on the global clock.
 - `wheelStep` is the pixels per wheel notch (12 by default). A notch is a wheel delta of 120; a touchpad's smaller deltas move proportionally less, at most one notch per event. Each event moves where the list is going, and the list glides there, the same share of the way left each moment (about two thirds in 0.05 s), so a touchpad's events, which come faster than frames and in whole points as it slows, still scroll it evenly.
 - `pageHeight` (the height by default) is how far a track click pages, and scrolling stops with that much content showing. `colors` are the bar's six `ScrollbarWidget` colors (track, track while paging, thumb, edge, shadow, highlight); the default is the zombie almanac's set.
-- `scrollbar: false` hides the bar and keeps the full content width. `wheelDuration` eases each wheel step in and out over that many seconds instead.
+- `scrollbar: false` hides the bar and keeps the full content width.
 
 #### Sliders, checkboxes and selects
 

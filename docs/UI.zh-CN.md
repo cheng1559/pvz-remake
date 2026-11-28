@@ -415,14 +415,14 @@ ui.button(parent, {
 
 #### 滚动区域
 
-`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors?, wheelDuration? })` 创建垂直滚动的 `UIScroll`，滚动条为年度版的 `ScrollbarWidget`：宽 8 px，左边缘位于区域右边缘以内 6 px，没有箭头按钮。把文本标签、图片或其他节点加到 `scroll.content` 中，并以 `scroll.contentWidth` 排版（显示滚动条时窄 7 px）。
+`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors? })` 创建垂直滚动的 `UIScroll`，滚动条为年度版的 `ScrollbarWidget`：宽 8 px，左边缘位于区域右边缘以内 6 px，没有箭头按钮。把文本标签、图片或其他节点加到 `scroll.content` 中，并以 `scroll.contentWidth` 排版（显示滚动条时窄 7 px）。
 
-- `scroll.offset` 立即滚动到指定像素偏移；`scroll.scrollTo(offset, seconds)` 以双 S 曲线动画滚动过去。
+- `scroll.offset` 立即滚动到指定像素偏移。
 - 内容变化后调用 `scroll.setContentHeight(height, drawnHeight?)`。`drawnHeight` 让滚动范围覆盖比测量高度更高的绘制内容，而不改变滑块。
 - 组件负责裁剪、滚动条的自动显隐、原版滑块的绘制与拖动、滑槽翻页（按住滑槽时，经过 25 次 10 ms 的更新后再次翻页，此后每 5 次翻一页）、触摸惯性以及监听器清理，运行在全局时钟上。
 - `wheelStep` 是每格滚轮滚动的像素数（默认 12）。一格对应滚轮增量 120；触控板较小的增量按比例滚动更少，每个事件最多一格。每个事件只改变列表要去的位置，列表每一刻都滑过剩下距离的同样比例（0.05 秒约滑过三分之二）。触控板的事件比画面帧来得快，快停时又是一个点一个点地来，列表照样滚得均匀。
 - `pageHeight`（默认等于高度）是点击滑槽时翻页的距离，滚动到底时仍保留这么多内容可见。`colors` 是滚动条的六种 `ScrollbarWidget` 颜色（滑槽、翻页中的滑槽、滑块、边缘、阴影、高光）；默认使用僵尸图鉴的配色。
-- `scrollbar: false` 隐藏滚动条并保留完整的内容宽度。`wheelDuration` 改为让每格滚轮在这么多秒内缓入缓出。
+- `scrollbar: false` 隐藏滚动条并保留完整的内容宽度。
 
 #### 滑块、复选框与下拉选择
 

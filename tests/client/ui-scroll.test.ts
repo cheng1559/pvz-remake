@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
-import * as animationModule from '@/shared/content/animation'
 
 test('cached achievements refresh earned flags for the active profile and reset scroll and More state', async () => {
     let earned = true, requests = 0
@@ -108,7 +107,6 @@ function loadUIScroll(isMobileMode: () => boolean = () => false) {
             },
             getWheelScrollSteps: (event: { steps: number }) => event.steps,
         },
-        '@/shared/content/animation': animationModule,
         '@/client/view/uiNode': { uiNode },
         '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode } },
@@ -130,14 +128,10 @@ test('a scroll area built before /mobile is switched on takes touch drags once i
 
 test('the wheel glides: each event moves where the list goes, and each frame closes the same share of the way', () => {
     const { module: { UIScroll } } = loadUIScroll()
-    const make = (wheelDuration?: number) => {
-        const scroll = new UIScroll()
-        scroll.node = {}
-        scroll.initialize({ width: 258, height: 100, contentHeight: 1000, wheelStep: 80, wheelDuration })
-        return scroll
-    }
+    const scroll = new UIScroll()
+    scroll.node = {}
+    scroll.initialize({ width: 258, height: 100, contentHeight: 1000, wheelStep: 80 })
     const wheel = (scroll: any, steps: number) => scroll.onWheel({ steps, propagationStopped: false })
-    const scroll = make()
     wheel(scroll, -1)
     assert.equal(scroll.offset, 0, 'a notch does not jump')
     scroll.update(0.05)
@@ -158,12 +152,6 @@ test('the wheel glides: each event moves where the list goes, and each frame clo
     scroll.offset = 10
     scroll.update(0.05)
     assert.equal(scroll.offset, 10, 'setting the offset stops the glide')
-
-    // A wheelDuration eases each step in and out instead.
-    const eased = make(0.2)
-    wheel(eased, -1)
-    eased.update(0.1)
-    assert.equal(eased.offset, 80 * animationModule.easeInOutCurve(0.5))
 })
 
 test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track paging and layered thumb', () => {
