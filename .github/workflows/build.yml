@@ -24,8 +24,9 @@ permissions:
 
 env:
   # This run's converted resources and icons, handed from the content job to the platform jobs through the cache
-  # (unlike artifacts, caches are not downloadable by the public).
-  CONTENT_KEY: content-${{ github.run_id }}-${{ github.run_attempt }}
+  # (unlike artifacts, caches are not downloadable by the public). Keyed by the run alone: a platform job run again
+  # without the content job ("re-run failed jobs") takes what the run converted first.
+  CONTENT_KEY: content-${{ github.run_id }}
   CONTENT_PATHS: |
     assets/resources/base.zip
     build-templates/web-mobile/game.ico
