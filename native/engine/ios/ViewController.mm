@@ -54,23 +54,35 @@ CHHapticPattern *rumblePattern(NSTimeInterval duration, float intensity, BOOL fa
     return [[[CHHapticPattern alloc] initWithEvents:@[event] parameterCurves:curves error:error] autorelease];
 }
 
+/**
+ * Core Haptics' engine, running; nil where the device has none. Making and starting it takes about 50 ms on the main
+ * thread, the game's, so the view controller does it as the app starts rather than at the first explosion. Once it
+ * runs, a start costs nothing, and one stopped since starts again.
+ */
+API_AVAILABLE(ios(13.0)) CHHapticEngine *rumbleEngine() {
+    if (![CHHapticEngine capabilitiesForHardware].supportsHaptics) return nil;
+    static CHHapticEngine *engine;
+    NSError *error = nil;
+    if (!engine) {
+        engine = [[CHHapticEngine alloc] initAndReturnError:&error];
+        engine.playsHapticsOnly = YES;
+        engine.autoShutdownEnabled = YES;
+    }
+    if (!engine || ![engine startAndReturnError:&error]) {
+        NSLog(@"[Haptics] Failed to start: %@", error);
+        return nil;
+    }
+    return engine;
+}
+
 /** The rumbles, with Core Haptics: an explosion's 0.28 s from full intensity to none, a pulse's 0.15 s held at 0.35. */
 void playRumble(NSString *style) {
     if (@available(iOS 13.0, *)) {
-        if (![CHHapticEngine capabilitiesForHardware].supportsHaptics) return;
-        static CHHapticEngine *engine;
+        CHHapticEngine *engine = rumbleEngine();
+        if (!engine) return;
         static NSMutableDictionary<NSString *, CHHapticPattern *> *patterns;
         static id<CHHapticPatternPlayer> player;
         NSError *error = nil;
-        if (!engine) {
-            engine = [[CHHapticEngine alloc] initAndReturnError:&error];
-            engine.playsHapticsOnly = YES;
-            engine.autoShutdownEnabled = YES;
-        }
-        if (!engine || ![engine startAndReturnError:&error]) {
-            NSLog(@"[Haptics] Failed to start: %@", error);
-            return;
-        }
         if (!patterns) patterns = [[NSMutableDictionary alloc] init];
         CHHapticPattern *pattern = patterns[style];
         if (!pattern) {
@@ -92,6 +104,14 @@ void playRumble(NSString *style) {
 @end
 
 @implementation ViewController
+
+- (instancetype)init {
+    if ((self = [super init])) {
+        // The rumbles' engine, ready before the first explosion (rumbleEngine).
+        if (@available(iOS 13.0, *)) rumbleEngine();
+    }
+    return self;
+}
 
 + (void)playHapticFeedback:(NSString *)style {
     void (^feedback)(void) = ^{
