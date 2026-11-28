@@ -134,8 +134,9 @@ export class LevelInputPresenter {
     private onTouchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
         if (this.mobilePress) { event.propagationStopped = true; return }
+        // A tap that takes Dave's speech on is felt, as a touch on a button is.
         if (this.view.dialogReady) {
-            this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
+            this.game.command({ type: 'advanceDialog' }); Haptics.play(); event.propagationStopped = true; return
         }
         const snapshot = this.game.render()
         if (levelStandsStill(snapshot) || snapshot.result !== 'playing') return

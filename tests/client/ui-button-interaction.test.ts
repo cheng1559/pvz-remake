@@ -185,8 +185,9 @@ test("a mobile tap answers Dave's seed-slot offer before the lawn can advance hi
         assert.deepEqual(answers, [true, false])
         assert.deepEqual(commands, [])
         ui.hover.endModalBlock(dialog)
+        const felt = ui.haptics.length
         ui.dispatch(board, ui.events.TOUCH_START, 270)
-        assert.deepEqual(commands, ['advanceDialog'])
+        assert.deepEqual([commands, ui.haptics.length - felt], [['advanceDialog'], 1], "a tap takes Dave's speech on, felt")
     } finally { presenter.destroy(); ui.cleanup() }
 })
 

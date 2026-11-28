@@ -146,6 +146,7 @@ Feedback is given when:
 - an almanac entry is chosen, or a zombie in the intro's street opens its entry;
 - a seed packet or a tool is picked up, the held packet is put back, or a packet that cannot be picked up is touched while one is held;
 - a card is chosen or sent back in the seed chooser;
+- Crazy Dave's speech is tapped on to its next line;
 - a plant, zombie seed, grave or crater is put down, or a plant is shovelled;
 - the level award is collected, or the mallet hits a zombie: these are stronger;
 - the main menu's Adventure button flashes as the game starts: each dark flash is felt lightly for 0.15 s;
