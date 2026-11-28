@@ -214,7 +214,7 @@ The settings keep the `pvz-remake:settings:options` storage key.
 
 - The main menu slides up and the achievements page rises from below (see [Transitions and fades](#transitions-and-fades)). The page reads the achievement definitions (the gameplay `achievements` table: the base game's 21 in the original order, which Mods may extend) and the active player's earned IDs through `getAchievements()`, when it is built and again each time it is shown, which also scrolls it back to the top. Triggers, granting and the award page's list are described in [Achievements](ACHIEVEMENTS.md).
 - The layout follows `AchievementsWidget`: two columns 290 px apart, rows 57 px apart from y 178, 70 px atlas cells drawn at 0.8 scale (56 px), green titles and wrapped white bitmap descriptions. Earned achievements have bright icons (alpha 255), the rest faint ones (alpha 32). Mods may replace the whole background layer (the top, the tiled holes and the China at the bottom) without touching the decorations or the controls.
-- The list scrolls with the wheel, the Up and Down keys, dragging (in mobile mode) and the More rock at the bottom right. The shared `UIScroll` scrolls 80 px per wheel notch with no easing. The More rock scrolls 230 px down over 0.25 s, to the rest of the list; pressed again, in its Top state, it scrolls back up. Only scrolling down plays the rock sound. Touch dragging has inertia; all motion follows the global clock.
+- The list scrolls with the wheel, the Up and Down keys, dragging (in mobile mode) and the More rock at the bottom right. The shared `UIScroll` scrolls 80 px per wheel notch, gliding there. The More rock scrolls 230 px down over 0.25 s, to the rest of the list; pressed again, in its Top state, it scrolls back up. Only scrolling down plays the rock sound. Touch dragging has inertia; all motion follows the global clock.
 - The arrow keys follow GOTY's `AchievementsWidget::KeyDown`: each press sets the speed to 30, which drops by 1 every 10 ms while moving that many pixels (about 435 px a press); key repeats reset the speed instead of adding to it.
 - The button at the top left returns to the menu. The tiled underground background and this return control move with the content. Scrolling never requests data or grants achievements.
 
@@ -420,9 +420,9 @@ A button's `tooltip` is a string or `{ text, title?, warning?, font?, maxWidth?,
 - `scroll.offset` scrolls to a pixel offset at once; `scroll.scrollTo(offset, seconds)` animates there with a double S curve.
 - Call `scroll.setContentHeight(height, drawnHeight?)` after the content changes. `drawnHeight` lets the range reach drawn content taller than the measured one without changing the thumb.
 - The component owns clipping, the bar's automatic visibility, the original thumb drawing and dragging, track paging (a held track pages again after 25 updates of 10 ms, then every 5), touch inertia and listener cleanup. It runs on the global clock.
-- `wheelStep` is the pixels per wheel notch (12 by default). A notch is a wheel delta of 120; a touchpad's smaller deltas move proportionally less, at most one notch per event.
+- `wheelStep` is the pixels per wheel notch (12 by default). A notch is a wheel delta of 120; a touchpad's smaller deltas move proportionally less, at most one notch per event. Each event moves where the list is going, and the list glides there, the same share of the way left each moment (about two thirds in 0.05 s), so a touchpad's events, which come faster than frames and in whole points as it slows, still scroll it evenly.
 - `pageHeight` (the height by default) is how far a track click pages, and scrolling stops with that much content showing. `colors` are the bar's six `ScrollbarWidget` colors (track, track while paging, thumb, edge, shadow, highlight); the default is the zombie almanac's set.
-- `scrollbar: false` hides the bar and keeps the full content width. `wheelDuration` turns on the previous double-S easing for wheel steps.
+- `scrollbar: false` hides the bar and keeps the full content width. `wheelDuration` eases each wheel step in and out over that many seconds instead.
 
 #### Sliders, checkboxes and selects
 

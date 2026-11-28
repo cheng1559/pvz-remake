@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
+import * as animationModule from '@/shared/content/animation'
 
 test('cached achievements refresh earned flags for the active profile and reset scroll and More state', async () => {
     let earned = true, requests = 0
@@ -80,7 +81,9 @@ function loadUIScroll(isMobileMode: () => boolean = () => false) {
                 stopInertia() {} cancel() {} applyInertiaY() {}
                 beginTouch(event: unknown) { state.began.push(event) }
             },
+            getWheelScrollSteps: (event: { steps: number }) => event.steps,
         },
+        '@/shared/content/animation': animationModule,
         '@/client/view/uiNode': { uiNode },
         '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode } },
@@ -98,6 +101,44 @@ test('a scroll area built before /mobile is switched on takes touch drags once i
     mobile = true
     scroll.beginTouch('mobile')
     assert.deepEqual(state.began, ['mobile'])
+})
+
+test('the wheel glides: each event moves where the list goes, and each frame closes the same share of the way', () => {
+    const { module: { UIScroll } } = loadUIScroll()
+    const make = (wheelDuration?: number) => {
+        const scroll = new UIScroll()
+        scroll.node = {}
+        scroll.initialize({ width: 258, height: 100, contentHeight: 1000, wheelStep: 80, wheelDuration })
+        return scroll
+    }
+    const wheel = (scroll: any, steps: number) => scroll.onWheel({ steps, propagationStopped: false })
+    const scroll = make()
+    wheel(scroll, -1)
+    assert.equal(scroll.offset, 0, 'a notch does not jump')
+    scroll.update(0.05)
+    assert.equal(scroll.offset.toFixed(2), (80 * (1 - Math.exp(-1))).toFixed(2), 'in 0.05 s all but a third of the way')
+    // A touchpad's events can come two in a frame, and slowing, as whole points (here 0.1 of a notch each): they add up
+    // to where the list goes, and it gets there in ever smaller steps, never back.
+    wheel(scroll, -0.1)
+    wheel(scroll, -0.1)
+    const moves: number[] = []
+    for (let frame = 0; frame < 60 && scroll.wheelTarget !== null; frame++) {
+        const before = scroll.offset
+        scroll.update(1 / 60)
+        moves.push(scroll.offset - before)
+    }
+    assert.equal(scroll.offset, 96)
+    assert.ok(moves.every((move, i) => move > 0 && (i === 0 || move <= moves[i - 1] + 0.5)), moves.join(', '))
+    wheel(scroll, -1)
+    scroll.offset = 10
+    scroll.update(0.05)
+    assert.equal(scroll.offset, 10, 'setting the offset stops the glide')
+
+    // A wheelDuration eases each step in and out instead.
+    const eased = make(0.2)
+    wheel(eased, -1)
+    eased.update(0.1)
+    assert.equal(eased.offset, 80 * animationModule.easeInOutCurve(0.5))
 })
 
 test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track paging and layered thumb', () => {
