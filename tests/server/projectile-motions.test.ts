@@ -155,7 +155,7 @@ test('a lobbed projectile comes down past a shield onto the body, where a straig
         for (let tick = 1; tick < 1000 && world.hasEntity(pea); tick++) schedule.run(world, tick)
         const zombie = world.zombies.get(target)!, impact = world.resources.get(EventQueueResource).events.find(event => event.type === 'projectileImpact')!
         const flash = world.resources.get(EventQueueResource).events.find(event => event.type === 'zombieHit')!
-        return [zombie.maxHealth - zombie.health, definitions.zombies['pvz:screendoor'].shield!.health - zombie.shieldHealth, impact.data.shield, flash.data.body, impact.data.above]
+        return [zombie.maxHealth - zombie.health, definitions.zombies['pvz:screendoor'].shield!.health - zombie.shieldHealth, impact.data.shield, flash.data.past, impact.data.above]
     }
     assert.deepEqual(hit(STRAIGHT), [0, 20, 'door', undefined, undefined], 'it flies into the door')
     assert.deepEqual(hit(LOB), [20, 0, undefined, true, true], 'Projectile::GetDamageFlags: DAMAGE_BYPASSES_SHIELD, the body flashes, and its splat stays where it came down')

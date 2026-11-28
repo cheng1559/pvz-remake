@@ -61,7 +61,7 @@ export interface ZombieViewContext {
 
 
 /** Off the board a zombie is whole: it swaps in none of the sprites of a damaged one. */
-const NO_FLASH: ZombieFlash = { body: 0, shield: 0, recoil: 0 }
+const NO_FLASH: ZombieFlash = { flash: 0, through: false, past: false }
 
 /**
  * A zombie, drawn by its animation (ZombieDefinition.animation): one player for its body, showing the clip its layer
@@ -97,7 +97,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private mowerDriver: ReanimPlayer | null = null
     /** The zombie as it was last shown. */
     protected latestZombie: ShownZombie | null = null
-    /** Its hit flashes in the frame being drawn: its body's (Zombie::mJustGotShotCounter), its shield's and the shield's recoil. */
+    /** Its hit flash (Zombie::mJustGotShotCounter) in the frame being drawn. */
     protected flash = NO_FLASH
     /** Its body is coming up out of a grave (syncRise). */
     private rising = false
@@ -718,25 +718,27 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
      */
     private applyHitFlash(zombie: ShownZombie, force = false): void {
         const shield = zombie.shieldHealth > 0 ? this.presentation.shield : undefined
-        const burned = zombie.state === 'burned'
-        // Each by its own counter: a hit on the shield leaves the body's highlight running, and one past it the shield's.
-        const { body } = this.flash
-        const flash = shield ? this.flash.shield : 0, recoil = shield ? this.flash.recoil : 0
+        // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom); one that
+        // came past the shield (a lobbed projectile) flashes only the body.
+        const { through, past } = this.flash
+        const bodyFlash = shield && !through && !past ? 0 : this.flash.flash
+        const flash = past ? 0 : this.flash.flash
         // Most frames change nothing of it: the same flash on the same player is not set again.
-        const drawn = ((body * 32 + flash) * 16 + recoil) * 4 + (shield ? 2 : 0) + (burned ? 1 : 0)
+        const drawn = ((bodyFlash * 1024 + flash) * 8) + (through ? 4 : 0) + (shield ? 2 : 0) + (zombie.state === 'burned' ? 1 : 0)
         if (!force && drawn === this.flashDrawn && this.player === this.flashPlayer) return
         this.flashDrawn = drawn
         this.flashPlayer = this.player
-        const grayness = Math.min(255, body * 10)
-        this.player?.setExtraAdditiveDraw(body > 0, new Color(grayness, grayness, grayness, 255))
+        const grayness = Math.min(255, bodyFlash * 10)
+        this.player?.setExtraAdditiveDraw(bodyFlash > 0, new Color(grayness, grayness, grayness, 255))
         if (shield && this.player) {
+            const burned = zombie.state === 'burned'
             const gray = Math.min(255, flash * 10)
             this.player.setTrackRenderOverride(shield.track, {
                 color: burned ? Color.BLACK : flash > 0 ? new Color(gray, gray, gray) : Color.WHITE,
                 extraAdditive: !burned && flash > 0,
                 extraAdditiveColor: Color.WHITE,
-                // mShieldRecoilCounter's 12 ticks take the shield from 3px to the right back to its place.
-                offsetX: recoil / 4,
+                // Shield flash lasts 25 ticks; recoil lasts the first 12 and starts 3px to the right.
+                offsetX: through ? 0 : Math.max(0, flash - 13) / 4,
             })
         }
     }

@@ -427,10 +427,10 @@ test('fume-shrooms hit every zombie in reach at once, through the newspaper and 
     }
     const paperHit = () => events.find(event => event.type === 'zombieHit' && event.data.entityId === paper)!.data
     assert.deepEqual(health(paper), [before[0][0] - 20, before[0][1] - 20], 'DAMAGE_HITS_SHIELD_AND_BODY')
-    assert.deepEqual(paperHit(), { entityId: paper, shield: true, body: true }, 'the paper flashes without recoiling, and the body flashes too')
+    assert.deepEqual(paperHit(), { entityId: paper, through: true }, 'the paper flashes without recoiling, and the body flashes too')
     damageZombie(world, definitions, paper, 20)
     events = drainServerEvents(world.resources.get(EventQueueResource))
-    assert.deepEqual(paperHit(), { entityId: paper, shield: true, recoil: true }, 'a pea hit flashes and recoils the paper alone')
+    assert.deepEqual(paperHit(), { entityId: paper }, 'a pea hit recoils the paper again')
     assert.deepEqual(health(near), [0, before[1][1] - 20])
     assert.deepEqual(health(far), before[2], 'beyond the 340px reach')
     assert.equal([...world.projectiles].map(projectile => projectile.id).length, 0)
