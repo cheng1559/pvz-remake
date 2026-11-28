@@ -289,6 +289,7 @@ test('winning advances the current profile once and exposes the next installed l
     assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
         descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true, achievements: [] })
     assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
+    assert.deepEqual((await api.getPurse()).ownedTools, ['pvz:shovel'], 'the shovel is the player\'s once collected')
     for (const [index, kind, seed] of [[5, 'seed', 'pvz:potatomine'], [6, 'seed', 'pvz:snowpea'], [7, 'seed', 'pvz:chomper'], [8, 'seed', 'pvz:repeater'], [9, 'note', undefined], [10, 'seed', 'pvz:puffshroom']] as const) {
         level = levels.levels[`pvz:adventure-1-${index}`]
         const award = await api.completeLevel()
@@ -333,8 +334,8 @@ test("Crazy Dave's seed-slot offer saves the upgrade or a refusal together with 
     const { api, profiles } = fixture()
     await api.createUser('Alice')
     await api.setCoins(80)
-    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0, ownedSeeds: ['pvz:peashooter'] })
-    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1, ownedSeeds: ['pvz:peashooter'] })
+    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0, ownedSeeds: ['pvz:peashooter'], ownedTools: [] })
+    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1, ownedSeeds: ['pvz:peashooter'], ownedTools: [] })
     assert.equal(profiles.getCurrentProfile()!.declinedPacketUpgrades, 1, 'the refusal count is saved')
     await assert.rejects(api.recordPacketUpgradeOffer(true, 81), /not paid for/, 'a purchase must take the price')
     assert.equal((await api.getPurse()).packetUpgrades, 0)

@@ -25,7 +25,7 @@ ZIP is the only way to install a Mod.
 3. Tick the Mods to enable and use the arrows to order them (see [Priority and load order](#priority-and-load-order)).
 4. Click **Apply** and confirm the restart.
 
-The manager window shows `Loading...` first, and the list once the installed Mods have been read.
+The manager window shows the `LOADING` text (`LOADING...`) first, and the list once the installed Mods have been read.
 
 ### What Import does
 
@@ -245,15 +245,22 @@ The gameplay tables a Mod can add to:
 
 The presentation tables a Mod can add to are `plants`, `zombies`, `projectiles`, `gridItems`, `items`, `awards`, `tools`, `foley`, `boards`, `screens`, `clips`, `levels`, `rules`, `challenges`, `store` and `almanac`. `items` is indexed by dropped item ID, `awards` by level award ID, `rules` by the level rule's `kind`, `store` by store item ID, and `almanac` by the ID of the plant or zombie the almanac shows.
 
-Both sides follow the same rules: new IDs only in the Mod's own namespace, and an entry under anyone else's ID changes it. The base package also has settings outside these tables: the gameplay `settings` and the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. A Mod changes them by writing the same key. Any other top-level key is an error.
+Both sides follow the same rules: new IDs only in the Mod's own namespace, and an entry under anyone else's ID changes it. The base package also has settings outside these tables: the gameplay `settings` and the presentation `settings`, `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. A Mod changes them by writing the same key. Any other top-level key is an error.
 
 Presentation definitions are as strict as gameplay definitions: each object accepts only its own fields, and an extra, misspelled or moved field (such as `vault` in a zombie presentation) reports `... is not supported`.
 
 A new level must be registered in both the gameplay `levels` (rules and waves) and the presentation `levels` (intro, lawn and hints).
 
+A level also names its board (`board`) and the time of day it is played at (`time`), one of the board's `times`.
+
+- A gameplay board gives its layout once (`rows`, `columns`, `origin`, `cell`, `bounds`, `riseFromGrave`) and, under `times.<name>`, what changes with the time: `night`, `graveZombies`, `skySun`.
+- A presentation board gives the game over once (`gameOver`: the `title` image, the places of the door's `interior` and `doorway`, `clipX`, `winnerY`, `panX`) and, under `times.<name>`, each time's `background`, `backgroundX`, `lawn`, `plantShadow`, `music` and `door` (its `interior` and `doorway` images).
+- A board's door images must be the same size at every time, each pixel drawn whole or not at all. `python3 -m tools.pvz.doors` makes a Mod's own front yard door images so.
+- To add a time to another namespace's board, write it under that board's `times`.
+
 ### Changing what is defined
 
-An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
+An entry a Mod writes under an ID of another namespace (the base game's or another Mod's) changes that definition instead of adding one. So does a block of settings outside the tables written under its key: the gameplay `settings`, or the presentation `settings`, `mainMenu`, `conveyor`, `storeDialogue`, `iceTrap`, `graves`, `dave` and `seedPackets`. Each is a JSON merge patch (RFC 7386). The example Mod's `levels.json` has a level of its own and a change to 1-1:
 
 ```json
 {
@@ -378,6 +385,11 @@ A zombie's `dance` makes it dance to the board's shared beat (`DANCE_BEAT`): on 
 - A leader first moonwalks for `moonwalkTicks` on the `moonwalk` clip (which has an `fps` and a `ground` recorded by direction of travel) at that clip's own pace. A chill does not affect it; one frozen during the moonwalk stands where it is once thawed until the moonwalk ends.
 - It then plays `point` (which has an `fps` and a `hold`) to snap its fingers, summoning `backup` (which must be a zombie with a `dance` and no `lead`) to each place `{ row, x }` in `troupe`. Row and x are relative to the leader, mirrored left to right on the plants' side. The backup dancers rise from the ground within `riseTicks`.
 - After that it holds still for `holdTicks`. When backup dancers are missing it waits `summonTicks`, then summons again on the arm-raising beat once its x is within `summonBeforeX`.
+- `dance.rise` is how a backup dancer comes up when it is summoned (see [Rising out of the ground](#rising-out-of-the-ground)); without it, it comes up as from a grave.
+
+#### Rising out of the ground
+
+A zombie rising out of a grave comes up as its board's `riseFromGrave: { depth, riseTicks, settleTicks }` has it, and a summoned backup dancer as its `dance.rise` has it, with the same fields. Its body sits `depth` below and comes up over the last `riseTicks` of its rise. The ground hides as much of it as it sits below, plus the ticks it has still to rise, at most `settleTicks`. Its body and attack rects come down with it, less the height the ground hides. The presentation's `graves.zombie.clip` (a backup dancer's `dance.rise.clip`) is the area its body is drawn in as it rises. Which zombies rise from graves is the level's `graveZombies`, or else its time of day's `graveZombies` that the level's waves or pool bring, all of them on a level that names no zombies.
 
 #### Projectile range
 
@@ -399,7 +411,7 @@ The bowling nut is of the plant kind `bowlingnut`. The values of its `bowling` c
 - The presentation of a zombie with a `dance` can have `dance: { music?, spotlight?, rise? }`:
   - `music` is played when a leader first snaps its fingers (with no more than 15 zombies on the board), and stopped when no leading dancer is left on the board.
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` is the leader's spotlight after its first snap: `floor` is drawn under it and `beam` over it, its color cycling through `colors` by age.
-  - `rise` is how backup dancers rise from the ground, with the same fields as a grave zombie's rise (`depth`, `riseTicks`, `clip`), plus a `particle` and `sounds` for when the rise starts.
+  - `rise` is how backup dancers are drawn rising from the ground: a `clip` as a grave zombie's, plus a `particle` and `sounds` for when the rise starts.
 - `steps: { effect, marks: [{ at, x, y }] }`: each time the walk animation reaches `at` (a fraction of the clip's length), it plays `effect` once at the zombie's position plus (`x`, `y`), one layer below the zombie, mirrored when it walks right (the Football Zombie's dust).
 
 #### Plant presentation
@@ -441,7 +453,7 @@ Achievements are written in the gameplay `achievements` table, from ID to `{ tit
 | `pvz:bowling` | `plants`, `hits` |
 | `pvz:coin-streak` | `items`, `coins` |
 | `pvz:sun-held` | `sun` |
-| `pvz:win-planting` | `boards`, `skipRules`, `only` / `never` |
+| `pvz:win-planting` | `boards` / `times`, `skipRules`, `only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
 A Mod's new achievements can use these types directly. When a new way of judging is needed, register one with `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` (`registry` is the host module `gameplay/registry`, the instance of `server/registry/GameplayRegistry`). `observe` receives the event, the settings and this achievement's state in the level (kept in the save). To make a base achievement count a Mod's plants, change its `trigger` under its ID in the Mod's own `achievements`.
@@ -481,7 +493,7 @@ An item's look is in the presentation `store` table, by the same ID: `sprite`, `
 
 ### Tools
 
-Tools are in the gameplay `tools` table, from ID to `{ kind }`, where `kind` says what the tool does; for now there is only `shovel` (digs up the plant in a cell). A level's `tools` and awards with `kind: "tool"` must name existing tools, and every tool also needs its look in the presentation `tools`; a missing one is a load failure.
+Tools are in the gameplay `tools` table, from ID to `{ kind }`, where `kind` says what the tool does; for now there is only `shovel` (digs up the plant in a cell). A tool award records the tool in the profile when the level is won; from then on every level has it but one with `tools` of its own, which has only those. A level's `tools` and awards with `kind: "tool"` must name existing tools, and every tool also needs its look in the presentation `tools`; a missing one is a load failure.
 
 ## Resources
 
@@ -492,6 +504,7 @@ All resource categories share one set of definitions:
 | `sprites` | An object | See [Images](#images). |
 | `fonts` | A font JSON path | See [Fonts](#fonts). |
 | `audio` | A file path | MP3 or WAV. |
+| `tracker` | A file path | A tracker module: MO3, XM, IT, S3M, MOD or MPTM. |
 | `json` | A file path | Plain JSON, including the `pvz:strings` text table. |
 | `text` | A file path | Plain text. |
 | `reanim` | A file path | Reanim animations (schemaVersion 3), which record their source `fps`. |
@@ -539,7 +552,12 @@ All text lives in a single text table merged by key, `pvz:strings`.
 
 Each background music track is one `music` resource with the ID `pvz:<track name>`. The base game's tracks are `day_grasswalk`, `night_moongrains`, `choose_seeds`, `title_theme`, `zen_garden`, `puzzle`, `minigame`, `conveyer` and `final_boss`.
 
-The format is in `shared/content/music.ts` (schemaVersion 3): duration, loop points, stems as audio resource IDs (`main`, with optional `drums` and `hihats`), and optionally the original's burst sections. A music Mod registers the track it replaces under the same ID, and the other tracks stay the base game's.
+The format is in `shared/content/music.ts`. Every tune is schemaVersion 4, in one of two forms:
+
+- A module tune, as the base game's are: its `parts` (`main`, with optional `drums` and `hihats`), each a tracker resource (`module`) with the `order` it plays from (and an optional `row`) and the ranges of channels heard (`channels`, every one when absent). Optionally the original's `burstScheme`: `day`, or `night` with the two orders the drums start at on an even and an odd order of the melody (`drumsJumpOrders`).
+- A recording: one audio resource (`audio`) and its duration (`durationSec`). It loops whole.
+
+A music Mod registers the track it replaces under the same ID, and the other tracks stay the base game's.
 
 ## Animation clips
 
@@ -583,6 +601,8 @@ XML conversion always goes through `tools/pvz/particles.py`. For the base packag
 
 Scripts play particles with `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })`, and every platform uses the same C++ core. `whenReady()` waits for loading; `snapshot()` and `ParticlePlayer.restore()` use the same save structure.
 
+The base presentation `settings`' `particles` gives how many particle effects, emitters and particles may be alive at once, as the original's particle pools do (1024 each). While an effect would not fit, `ParticlePlayer.spawn` and the board's `spawnParticle` return `null` and play nothing, and a particle that would not fit is not spawned. `ParticlePlayer.restore()` always brings back what a save kept.
+
 The old particle format and old particle saves are no longer accepted; existing Mods' particle resources must be converted and packed again.
 
 ## Sound
@@ -598,6 +618,8 @@ Client scripts play effects through `SoundSystem.play(id, options)` (`client/sou
 | `pauseWithGame` | Follows board pause. Independent sounds can also set this in their Foley definition; a call can override that flag. |
 
 For example, `SoundSystem.play(id, { channel: 'dancer', ifBusy: 'keep', pauseWithGame: true })` plays one disco effect across all dancers. Use `isChannelActive(channel)` to check occupancy and `stopChannel(channel)` to cancel playback or a pending load. Pass a presentation sound list directly to `SoundSystem.playSounds(sounds)`.
+
+When the game window is hidden, a sound that does not loop and does not pause with the game stops. Looping sounds and those that pause with the game go on when the window comes back.
 
 ## Scripting
 
@@ -736,7 +758,7 @@ Zombies are divided by the gameplay definition's `kind` (`zombie` by default; th
 - Register it with `registry.zombies.register(assets.id, kind, Class)`, then write `kind` in the zombie definition.
 - To show the client something of its own, override `snapshotOwn()` to return a JSON object. It appears in the snapshot's `own`, and the client's matching view class reads it with `this.own(zombie, field, validate)`.
 - Each zombie is an instance of its class, in the world's `zombies` list. The instance's fields are saved as they are, so they can only be plain data (refer to another zombie by its entity id). A subclass gives its own fields initial values in its constructor and overrides `restoreOwn(fields, name)` to read them back from the save, taking and validating its own and passing the rest to `super.restoreOwn`.
-- A class's own definition fields (`vault`, `dance`, `enrage`) may only be written with the class that takes them, and the class's static `config` lists which ones it takes. The pole vaulter's `vault.evades` lists the targeting keys that leave it out while it holds its pole.
+- A class's own definition fields (`vault`, `dance`, `enrage`) may only be written with the class that takes them, and the class's static `config` lists which ones it takes. The pole vaulter's `vault.evades` lists the targeting keys that leave it out while it holds its pole. Its attack rect is `vault.attack` while it holds its pole, `vault.airborneAttack` in the air and `vault.landedAttack` once it is down.
 
 #### Projectile kinds
 
@@ -779,12 +801,18 @@ Both base views give subclasses the same members:
 | `root` | The node the layers are in; moving it moves the whole picture. |
 | `clip(name)`, `ownFrames(reanimId)`, `particle(...)`, `flash` | Helpers for clips, frames, particles and the hit flash. |
 | `own(entity, field, validate)` | Reads the kind's own snapshot data (`snapshotOwn`). |
+| `hitRects(entity)` | Its body and attack rects, the ones the server goes by, where the frame draws the entity rather than in the server's whole pixels. `/hitboxes`, `/hp` and `/id` draw by them. A kind whose server class goes by other rects overrides it. |
 
 Derive cosmetic effects from the authoritative tick and the snapshot rather than a clock of the view's own, so pausing does not keep emitting particles.
 
 ### Entity data
 
-The world (`server/state/World`) is a set of lists separated by type: `plants`, `zombies`, `projectiles`, `mowers`, `gridItems` and `items`. Each holds the objects themselves by id and is iterated in id order, with no ECS components.
+The world (`server/state/World`) is a set of lists separated by type: `plants`, `zombies`, `projectiles`, `mowers`, `gridItems` and `items`. Each holds the objects themselves in slots and is iterated in slot order, with no ECS components.
+
+- A new object takes the slot freed last, or else a new one after the others; of those freed in one tick, the highest is taken first (`Board::ProcessDeleteQueue`).
+- A slot freed in a tick is taken again only from the next.
+- Ids are never reused.
+- The zombies in the street as a level opens hold the first slots of `zombies` until the intro is over (`CutScene::PlaceStreetZombies`), and the level's first zombies take them.
 
 To keep data of your own on an entity, put it in the entity's `extensions[id]` (a JSON object), where `id` is a qualified ID in your own namespace, registered first with `registry.extensions.register(id, validate?)` (IDs in `pvz:` are refused).
 
@@ -936,7 +964,7 @@ The base game's `assets/resources/base.zip` shares `manifest.json`, `content.jso
 
 - The base package always loads first and cannot be disabled or uninstalled.
 - Its source, `mods/pvz-base/content.json`, indexes categorized JSON as a Mod does, merged into `assets/gameplay.json` and `assets/presentation.json` when packed.
-- The base gameplay also provides `settings` (schemaVersion, the sun and money caps `economy`, the seed bank `seedBank`, the flag waves' `flagWave` and the Zen Garden's `zenGarden`), the full levels, the default text and the seed catalog. Mods loaded later add content in their own namespaces.
+- The base gameplay also provides `settings` (schemaVersion, the sun and money caps `economy`, the seed bank `seedBank`, the flag waves' `flagWave` and the Zen Garden's `zenGarden`), which the server reads, and the presentation `settings` (the particle limits `particles`), which only the client reads; the full levels, the default text and the seed catalog. Mods loaded later add content in their own namespaces.
 - Every resource (particles included) is registered explicitly in the source `content.json`'s `resources`; packing does not scan for missing ones.
 
 Packing and publishing:

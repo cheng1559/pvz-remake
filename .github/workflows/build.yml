@@ -66,8 +66,8 @@ jobs:
 
       - name: Install the converter's dependencies
         run: |
-          brew install ffmpeg libopenmpt
-          python -m pip install pillow
+          brew install ffmpeg
+          python -m pip install pillow numpy
 
       - name: Convert resources and generate icons
         run: |
@@ -134,7 +134,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
           retention-days: 1
 
   macos:

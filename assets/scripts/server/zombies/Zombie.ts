@@ -220,6 +220,11 @@ export class Zombie {
         return this.definition.attack
     }
 
+    /** While it rises, whether it was called up into a troupe (PHASE_DANCER_RISING) rather than out of a grave (zombieRise). */
+    calledUp(): boolean {
+        return false
+    }
+
     /** Zombie::EatPlant: a plant in its way it does not bite, true if so (a leader's moonwalk ends there). */
     passesPlant(): boolean {
         return false
@@ -269,10 +274,11 @@ export class Zombie {
      * What the client is shown of it, with what only its kind shows (snapshotOwn). Made for every zombie every tick, so
      * it is built field by field, without spreads.
      */
-    snapshot(): ZombieSnapshot {
+    snapshot(world: World): ZombieSnapshot {
         const { position } = this, own = this.snapshotOwn()
         const snapshot: ZombieSnapshot = {
             entityId: this.id,
+            slot: world.zombies.slot(this.id)!,
             typeId: this.typeId,
             state: this.state,
             x: position.x, y: position.y, row: position.row,

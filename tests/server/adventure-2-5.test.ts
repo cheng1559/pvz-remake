@@ -40,6 +40,11 @@ function whackAll(server: IntegratedGameServer, snapshot: WorldSnapshot) {
     }
 }
 
+/** Ticks on until every zombie is up out of its grave: under the ground the mallet misses it (GetZombieRect). */
+function riseFully(server: IntegratedGameServer) {
+    for (let tick = 0; tick < 200 && server.snapshot().zombies.some(zombie => zombie.riseTicks); tick++) server.tick()
+}
+
 test('2-5 opens on nine graves from column 4 with three ready packets, no sun and no shovel', () => {
     assert.equal(levels.levels['pvz:adventure-2-4'].nextLevel, 'pvz:adventure-2-5')
     assert.deepEqual(levels.levels['pvz:adventure-2-5'].award, { kind: 'seed', id: 'pvz:hypnoshroom' })
@@ -75,6 +80,9 @@ test('zombies rise from graves at once and fast, and the mallet takes helms then
     assert.ok(events.includes('nextWaveComing'), 'the awooga before the first wave')
     assert.equal(server.snapshot().gameplayTick, 200, 'Challenge::StartLevel counts the first wave down from 200')
     assert.ok(risen.length >= 1 && risen.every(zombie => zombie.typeId === 'pvz:normal'), 'wave 1 raises one plain zombie')
+    whackAll(server, server.snapshot())
+    assert.equal(server.snapshot().zombies.length, risen.length, 'still under the ground, it is missed')
+    riseFully(server)
     whackAll(server, server.snapshot())
     assert.equal(server.snapshot().zombies.length, 0, 'a bare zombie dies at once')
     assert.ok(server.drainEvents().some(event => event.type === 'zombieWhacked'))
@@ -252,6 +260,7 @@ test("the rule keeps Challenge's numbers unless a level writes its own, and chec
     let risen = server.snapshot().zombies
     for (let tick = 0; tick < 200 && !risen.length; tick++) risen = server.tick().zombies
     assert.equal(risen.length, 3)
+    riseFully(server)
     whackAll(server, server.snapshot())
     assert.equal(server.snapshot().zombies.length, 0)
     assert.equal(debug(server, '/zombie buckethead 3 7')?.ok, true)

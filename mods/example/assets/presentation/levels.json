@@ -1,7 +1,6 @@
 {
   "example:testing": {
     "intro": {
-      "previewCapacity": 10,
       "sod": "pvz:sod1row",
       "x": 19,
       "y": 265,

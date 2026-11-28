@@ -9,6 +9,11 @@ export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
 /** Board pixel where collected money flies to: the coin bank at the bottom left. */
 export const COIN_BANK_TARGET = { x: 39, y: 558 } as const
 
+/** The sun that falls on `level` at the time of day `time`: the level's own, or none when it says null, or the time's. */
+export function levelSkySun(level: Pick<LevelDefinition, 'skySun'>, time: Pick<BoardTime, 'skySun'>): string | undefined {
+    return level.skySun === undefined ? time.skySun : level.skySun ?? undefined
+}
+
 /** Coin::UpdateCollected: where a collected item flies, money to the coin bank and the rest to the sun counter. */
 export function collectTarget(item: Pick<ItemDefinition, 'kind'> | undefined): { readonly x: number, readonly y: number } {
     return item?.kind === 'money' ? COIN_BANK_TARGET : SUN_BANK_TARGET
@@ -136,15 +141,41 @@ export const MOWER_READY_X = -21
 /** Where the intro brings each row's mower on from, rolling it in to MOWER_READY_X (CutScene::UpdateIntro's CalcPosition). */
 export const MOWER_INTRO_X = -80
 
+/**
+ * A board: a lawn laid out once (a yard: the front yard; a pool's, a roof's), at the times of day it is played at
+ * (`times`), as the original's backgrounds are a yard by day or by night (Board::StageIsNight, StageHasPool,
+ * StageHasRoof). A level goes from one of its board's times to another (`/time`) with everything on it where it stands.
+ */
 export interface BoardDefinition {
-    /** Nocturnal plants sleep on boards that are not at night. */
-    night?: boolean
     bounds: { left: number; right: number }
     rows: number
     columns: number
     origin: Point
     cell: { width: number; height: number }
+    /** How a zombie comes up out of a grave on it (Zombie::UpdateZombieRiseFromGrave). */
+    riseFromGrave: ZombieRise
+    /** Its times of day by name (`day`, `night`): what of it changes with the time. */
+    times: Record<string, BoardTime>
 }
+
+/** A board at a time of day (BoardDefinition.times). */
+export interface BoardTime {
+    /** Nocturnal plants sleep at a time that is not night. */
+    night?: boolean
+    /** Board::PickGraveRisingZombieType: the zombies that rise from graves at it, by weight, for a level that names none
+     *  of its own (LevelDefinition.graveZombies). */
+    graveZombies?: Array<{ id: string; weight: number }>
+    /** The sun that falls from its sky (Board::UpdateSunSpawning), for a level that names none of its own; none at night. */
+    skySun?: string
+}
+
+/**
+ * `/time`'s change of time of day: the ticks the lawn takes to turn to the new time's (LevelState.timeChange). Not the
+ * original, which never changes a level's time.
+ */
+export const TIME_CHANGE_TICKS = 100
+/** The ticks the lawn has turned when the level goes on at the new time (changeTime): halfway. */
+export const TIME_SWITCH_TICKS = TIME_CHANGE_TICKS / 2
 
 interface SeedCommon {
     /**
@@ -259,7 +290,7 @@ export interface PlantDefinition {
     kind?: string
     occupiesCell?: boolean
     plantingOffset?: { min: Point; max: Point }
-    /** Mushrooms: asleep, doing nothing, on a board that is not at night. */
+    /** Mushrooms: asleep, doing nothing, at a time of day that is not night. */
     nocturnal?: boolean
     /**
      * Kept from the cold: no snow pea or ice-shroom chills it, so none freezes it either (the torchwood). Its kind keeps
@@ -438,8 +469,9 @@ export interface PlantAnimationDefinition extends AnimationDefinition {
     /**
      * Plant::DoBlink: every `ticks` (400 to 799 by default) the `blink` layer, over the others, plays one of these
      * clips, drawn by their weights (written `clip` for one, `{clip: weight}` for several: a nut's three); not while
-     * the plant is about to shoot or asleep. With `phases`, only while it is in one of them, the first blink
-     * `first` ticks after it comes to one (an armed potato mine's, 400 to 4399).
+     * the plant winds up to shoot or plays a clip it fires with (`fire`), nor, counting down, while it is asleep. With
+     * `phases`, only while it is in one of them, the first blink `first` ticks after it comes to one (an armed potato
+     * mine's, 400 to 4399). A shot ends its blink (Plant::EndBlink).
      */
     blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; phases?: PlantPhase[]; first?: { min: number; max: number } }
 }
@@ -520,9 +552,6 @@ export interface ZombieDefinition {
      * Every zombie has them: its value also sets the odds of the loot it drops (Zombie::DropLoot).
      */
     wave: { points: number; weight: number; firstWave?: number }
-    /** Board::PickGraveRisingZombieType: rises with its wave weight from the graves of levels that allow it; levels
-     *  with their own graves name their zombies instead. */
-    graveRise?: boolean
     /** Runs at the first plant (its `run` clip) and vaults over it once (its `jump`). */
     vault?: {
         runSpeedPerTick: { min: number; max: number }
@@ -532,6 +561,8 @@ export interface ZombieDefinition {
          * original's on Wall-nut Bowling (Zombie::ZombieInitialize, UpdateZombiePolevaulter), whose plants all roll.
          */
         bowlingAttack?: Rect
+        /** Its attack rect in the air (Zombie::GetZombieAttackRect in PHASE_POLEVAULTER_IN_VAULT). */
+        airborneAttack: Rect
         landedAttack: Rect
         landingOffset: number
         /**
@@ -558,6 +589,21 @@ export interface ZombieDefinition {
  */
 export interface ZombieDance {
     lead?: DanceLead
+    /** How it comes up out of the ground, called up into a troupe (PHASE_DANCER_RISING); out of a grave otherwise. */
+    rise?: ZombieRise
+}
+
+/**
+ * How a zombie comes up out of the ground while it rises (`riseTicks`), out of a grave (BoardDefinition.riseFromGrave,
+ * PHASE_RISING_FROM_GRAVE) or called up into a troupe (ZombieDance.rise, PHASE_DANCER_RISING): Zombie::GetDrawPos. Its
+ * body sits `depth` below and comes up over the last `riseTicks` of its rise (mAltitude, mBodyY); the ground hides as
+ * much of it as it sits below, and the ticks it has still to rise, at most `settleTicks`, more (mClipHeight). Its body
+ * and attack rects come down with it and are as much shorter (GetZombieRect, GetZombieAttackRect).
+ */
+export interface ZombieRise {
+    depth: number
+    riseTicks: number
+    settleTicks: number
 }
 
 /** Zombie::UpdateZombieDancer: how a dancer leads its troupe. */
@@ -718,7 +764,12 @@ export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: num
 export interface LevelRule { kind: string; count: number; settings: JsonObject }
 
 export interface LevelDefinition {
-    adventureIndex: number
+    /**
+     * Its number in the Adventure (1-1's 1, 2-1's 11): the HUD's "Level 1-1", and what the original's checks of the
+     * level number compare (Board::mLevel). A level outside the Adventure (the test levels) has none: it shows its name
+     * (its presentation's `nameKey`) and is past every such check, as the original's other modes are (pastAdventureLevel).
+     */
+    adventureIndex?: number
     /**
      * Coin::MouseHitTest in Whack-a-Zombie (IsWhackAZombieLevel): every item, the award too, takes clicks `size` further
      * around and `height` more below, where it has no `clickPadding` of its own.
@@ -728,33 +779,54 @@ export interface LevelDefinition {
     /** False: the level grants no achievements (debug and test levels). */
     achievements?: boolean
     board: string
+    /** The time of day it is played at, one of its board's (BoardDefinition.times); `/time` may change it in play. */
+    time: string
     activeRows: number[]
     startingSun: number
     /**
-     * A fixed bank. Without it and a conveyor, the bank follows the original: the available seeds fill it when they
-     * fit (the first adventure's first seven levels), and the seed chooser opens when there are more.
+     * A fixed bank, `null` an empty slot (the sandboxes' ten, for `/seed` to fill). Without it and a conveyor, the bank
+     * follows the original: the available seeds fill it when they fit (the first adventure's first seven levels), and
+     * the seed chooser opens when there are more.
      */
-    seedPackets?: string[]
+    seedPackets?: Array<string | null>
     /** `team`: `zombies` places a plant on the zombies' side, facing left. */
     initialPlants?: Array<{ seedId: string; row: number; column: number; team?: Team }>
     /** Board::CanPlantAt on Wall-nut Bowling: the player plants nothing right of `column` (the red line). */
     plantingLine?: { column: number }
     /** The mower waiting at each active row's end, set off when a zombie reaches it: a projectile that mows. */
     lawnMower: string
-    /** The sun that falls from the sky; omitted at night (Board::UpdateSunSpawning). */
-    skySun?: string
+    /**
+     * The sun that falls from the sky (Board::UpdateSunSpawning): its time's (BoardTime.skySun) when left out,
+     * this one when named, none when null (Wall-nut Bowling, the conveyor levels).
+     */
+    skySun?: string | null
     /** Board::AddGraveStones: per column, graves on random free rows. */
     graves?: Array<{ column: number; count: number }>
-    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, it comes
-     *  from the zombies' `graveRise`; a lawn with graves must end up with some. */
+    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, its
+     *  time's that the level's waves or pool bring (mZombieAllowed), all of them where it names no zombies; a lawn
+     *  with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
-    /** The waves as listed; a level has these or `rules`. */
+    /**
+     * The waves as listed; a level has these or `rules`, or neither: a level without waves (the sandboxes) has no
+     * zombies but those put down, and never ends, its award never dropping.
+     */
     waves?: LevelWave[]
     /** The level rule that builds the waves when the level starts and may change the level's play. */
     rules?: LevelRule
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     /** Ticks to the first wave; 1800 when omitted (ZOMBIE_COUNTDOWN_FIRST_WAVE). */
     firstWaveTicks?: number
+    /**
+     * CutScene::PlaceStreetZombies: the street's slots for the level's zombies, STREET_CAPACITY (10) unless given
+     * (streetZombies). The original gives 18 on its levels 10, 20, 30 and 40 (the conveyor belt levels and Stormy Night)
+     * and 15 on level 25 (Big Trouble Little Zombie).
+     */
+    previewCapacity?: number
+    /**
+     * Board::PickZombieWaves: the most zombies a wave's random picks fill it up to, MAX_ZOMBIES_IN_WAVE (50) unless
+     * given (planWaves); the zombies a wave lists come whatever their number.
+     */
+    waveCapacity?: number
     conveyor?: {
         initialSeed?: string
         initialDelayTicks?: number
@@ -772,14 +844,15 @@ export interface LevelDefinition {
      * Scary Potter and similar levels); planting still recharges them (SeedPacket::WasPlanted).
      */
     openingRecharge?: false
-    /** The tools the level offers instead of the ones earlier levels awarded (CutScene::ShowShovel). */
+    /** The tools the level offers instead of the ones the player has collected (CutScene::ShowShovel): Whack a Zombie's none. */
     tools?: string[]
     nextLevel?: string
     /** Its scripted flow (CutScene, the tutorials): a registered TutorialScript's ID. A level without one has none. */
     tutorial?: string
     /**
-     * `tool` also becomes usable in later levels (the shovel); `unlock` is only collected and shown (the almanac), and
-     * its award page button can open the page it unlocks before the next level (AwardScreen::StartButtonPressed).
+     * `tool` and `unlock` record what they give in the profile when the level is won: a tool every level with tools has
+     * from then on (the shovel), an unlock its main menu entry (the almanac), whose award page button can open the page
+     * it unlocks before the next level (AwardScreen::StartButtonPressed).
      */
     award: { kind: 'seed'; id: string }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }

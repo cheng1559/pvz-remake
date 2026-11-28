@@ -50,7 +50,7 @@ test('the board saves the flashes of its entities alone, and a restore puts back
     hear(flashes, 4, [EntityFlashes.zombieHit, 'zombieHit', { entityId: 7, past: true }], [EntityFlashes.plantHit, 'plantHit', { plantId: 2 }],
         [EntityFlashes.produced, 'sunDrained', { entityId: 9, sun: 25 }])
     const saved = flashes.snapshot(entityId => entityId !== 9)
-    assert.deepEqual(saved, [{ entityId: 2, tick: 4, ticks: 25 }, { entityId: 7, tick: 4, ticks: 25, past: true }], 'by entity, and none of what is gone')
+    assert.deepEqual(saved, [{ entityId: 7, tick: 4, ticks: 25, past: true }, { entityId: 2, tick: 4, ticks: 25 }], 'as they came, and none of what is gone')
     const restored = new EntityFlashes()
     hear(restored, 4, [EntityFlashes.plantHit, 'plantHit', { plantId: 5 }])
     restored.restore(saved)

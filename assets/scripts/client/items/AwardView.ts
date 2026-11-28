@@ -7,6 +7,7 @@ import type { EntityView, StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { plantPacket } from '@/client/plants/definitions'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 import { uiNode } from '@/client/view/uiNode'
 import type { ItemSnapshot } from '@/shared/protocol/index'
 import type { ItemViewContext } from './ItemView'
@@ -20,7 +21,8 @@ const AWARD_GROW_TICKS = 400
 
 /**
  * The level's award, an item of its own (Coin::Draw for the award coins): its picture, or the packet of the seed it gives
- * with a larger one for when it is shown off, with the arrow or glow behind it once it has landed.
+ * with a larger one for when it is shown off, with the arrow or glow behind it once it has landed. Its node is placed
+ * here but never scaled, so a Mod may scale it, with all it holds, about its middle.
  */
 export class AwardView implements EntityView<ItemSnapshot> {
     /** The effects behind it. */
@@ -74,13 +76,15 @@ export class AwardView implements EntityView<ItemSnapshot> {
         const { node, stage } = this.context, award = stage.level.award, size = levelAwardSize(award)
         const ticks = stage.levelEndTicks(), collected = item.state === 'collecting' && ticks >= 0
         let { x, y, scale } = item
-        // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size; a
-        // note fades out where it is instead.
+        // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size on
+        // the screen, wherever the lawn is moved or scaled and whatever a Mod scales its node by; a note fades out where it
+        // is instead.
         this.collectProgress = collected && award.kind !== 'note' ? animateCurveFloat(0, AWARD_MOVE_TICKS, ticks, 0, 1, 'ease-out') : 0
         if (collected && award.kind !== 'note') {
-            x += (400 - size.width / 2 - x) * this.collectProgress
-            y += (200 - size.height / 2 - y) * this.collectProgress
-            scale = animateCurveFloat(0, AWARD_GROW_TICKS, ticks, 1.01, 2, 'ease-in-out')
+            const middle = stage.uiOnLawn(400, 200)
+            x += (middle.x - size.width / 2 - x) * this.collectProgress
+            y += (middle.y - size.height / 2 - y) * this.collectProgress
+            scale = animateCurveFloat(0, AWARD_GROW_TICKS, ticks, 1.01, 2 / (stage.lawnScale() * node.scale.x), 'ease-in-out')
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: collected && award.kind === 'note' ? Math.round(item.alpha * Math.max(0, 1 - ticks / 15)) : item.alpha })
@@ -127,6 +131,7 @@ export class AwardView implements EntityView<ItemSnapshot> {
     static readonly collected: StageEvent = (stage, event) => {
         void SoundSystem.play(SoundEffect.SeedLift)
         void SoundSystem.play(SoundEffect.Drop)
+        Haptics.play('medium')
         const { entityId, x, y } = event.data
         if (typeof entityId === 'number' && typeof x === 'number' && typeof y === 'number') stage.view(entityId, AwardView)?.collect(x, y)
     }

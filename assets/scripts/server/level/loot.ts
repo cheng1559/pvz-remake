@@ -1,5 +1,6 @@
 import type { CommandBuffer, EntityRemover, World } from '@/server/state/World'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, pastAdventureLevel } from '@/shared/content/gameplay'
+import { zombieTeam } from '@/shared/content/teams'
 import { EconomyStateResource, LevelStateResource, RandomResource, TutorialResource, WaveResource } from '../state/resources'
 import { lawnMowerCount, readyMowers } from './lawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
@@ -7,6 +8,7 @@ import { levelAwardDropped, tryDropLevelAward } from './levelAward'
 import { spawnItem } from '../items/itemSpawn'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule, zombieValue } from '../rules/registry'
+import { zombieRect } from '../combat/targets'
 
 const SILVER = 'pvz:coin_silver', GOLD = 'pvz:coin_gold', DIAMOND = 'pvz:diamond'
 
@@ -18,22 +20,28 @@ export function canDropLoot(world: World): boolean {
     // Bare system worlds (tests, previews) have no level progress and no loot.
     if (!world.resources.has(TutorialResource)) return false
     return !world.resources.get(TutorialResource).firstAdventure ||
-        world.resources.get(LevelStateResource).definition.adventureIndex >= FIRST_LOOT_LEVEL
+        pastAdventureLevel(world.resources.get(LevelStateResource).definition, FIRST_LOOT_LEVEL - 1)
 }
 
-/** Zombie::DropLoot: the award check comes first, then one roll per zombie. */
+/**
+ * Zombie::DropLoot: the award check comes first, then one roll per zombie. A zombie put down on the plants' side, which
+ * the original does not have, drops no money; a mind-controlled one, an enemy turned, does, as the original's DropLoot
+ * does not check mMindControlled.
+ */
 export function dropZombieLoot(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
     const zombie = world.zombies.get(entity), position = zombie?.position
     if (!zombie || !position) return
     tryDropLevelAward(world, definitions, remover, entity)
+    if (zombieTeam(zombie) === 'plants' && !zombie.mindControlled) return
     if (zombie.droppedLoot) return
     if (levelAwardDropped(world) || !canDropLoot(world)) return
     const level = world.resources.get(LevelStateResource).definition
     zombie.droppedLoot = true
-    const body = definitions.zombies[zombie.typeId].body
     // GetZombieDefinition().mZombieValue, the same points the wave picker spends on it.
     const value = zombieValue(level, definitions, zombie.typeId)
-    dropLootPiece(world, definitions, position.x + body.x + body.width / 2, position.y + body.y + body.height / 4, value)
+    // From the middle of Zombie::GetZombieRect, a quarter of the way down, in whole pixels.
+    const rect = zombieRect(world, definitions, zombie)
+    dropLootPiece(world, definitions, rect.x + Math.trunc(rect.width / 2), rect.y + Math.trunc(rect.height / 4), value)
 }
 
 /**

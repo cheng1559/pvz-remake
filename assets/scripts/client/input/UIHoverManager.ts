@@ -1,4 +1,4 @@
-import { input, Input, Node, type EventMouse, type EventTouch, type Vec2 } from 'cc'
+import { input, Input, Node, screen, type EventMouse, type EventTouch, type Vec2 } from 'cc'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { CursorManager } from './CursorManager'
 
@@ -10,6 +10,10 @@ export interface UIHoverClient {
     handleTouch?(event: EventTouch): void
 }
 
+const TOUCH_EVENTS = [Input.EventType.TOUCH_START, Input.EventType.TOUCH_MOVE, Input.EventType.TOUCH_END, Input.EventType.TOUCH_CANCEL] as const
+/** In mobile mode a touch that starts this close to the screen's left or right edge, in points, is the hand holding the device. */
+const EDGE_GUARD_POINTS = 24
+
 /** Shared hover/cursor ownership, following the reference UIHoverManager. */
 export class UIHoverManager {
     private static readonly clients = new Set<UIHoverClient>()
@@ -17,6 +21,8 @@ export class UIHoverManager {
     private static root: Node | null = null
     private static pointer: UIHoverPointer | null = null
     private static blocks = 0
+    /** The touches turned away at the edges (turnsAway), by ID, until they end. */
+    private static readonly guarded = new Set<number>()
     /** The cursor while nothing is hovered. */
     private static idleCursor: 'default' | 'none' = 'default'
     static hasHover = false
@@ -42,12 +48,13 @@ export class UIHoverManager {
             root.on(event, this.trackMouse, this, true)
             input.on(event, this.trackMouse, this)
         }
-        for (const event of [Input.EventType.TOUCH_START, Input.EventType.TOUCH_MOVE, Input.EventType.TOUCH_END, Input.EventType.TOUCH_CANCEL] as const) {
+        for (const event of TOUCH_EVENTS) {
+            // First, so a touch turned away reaches neither the root's other listeners nor any node under it.
+            root.on(event, this.guardEdges, this, true)
             root.on(event, this.rememberTouchEvent, this, true)
-            input.on(event, this.rememberTouchEvent, this)
+            input.on(event, this.inputTouch, this)
         }
         root.on(Input.EventType.TOUCH_START, this.beginTouch, this)
-        input.on(Input.EventType.TOUCH_START, this.beginTouch, this)
     }
 
     static stop(): void {
@@ -55,12 +62,13 @@ export class UIHoverManager {
             this.root?.off(event, this.trackMouse, this, true)
             input.off(event, this.trackMouse, this)
         }
-        for (const event of [Input.EventType.TOUCH_START, Input.EventType.TOUCH_MOVE, Input.EventType.TOUCH_END, Input.EventType.TOUCH_CANCEL] as const) {
+        for (const event of TOUCH_EVENTS) {
+            this.root?.off(event, this.guardEdges, this, true)
             this.root?.off(event, this.rememberTouchEvent, this, true)
-            input.off(event, this.rememberTouchEvent, this)
+            input.off(event, this.inputTouch, this)
         }
         this.root?.off(Input.EventType.TOUCH_START, this.beginTouch, this)
-        input.off(Input.EventType.TOUCH_START, this.beginTouch, this)
+        this.guarded.clear()
         this.root = null
         this.pointer = null
         this.blocks = 0
@@ -96,6 +104,38 @@ export class UIHoverManager {
             for (const client of this.clients) client.handleTouch?.(event)
         }
         this.refreshHoverStates()
+    }
+
+    /**
+     * Whether a touch is the hand holding the device: in mobile mode one that starts within EDGE_GUARD_POINTS of the
+     * screen's left or right edge, and each later event of it until it ends. One that starts further in may move to the
+     * edge. A touch's location is in the screen's pixels, as the debug console's corner reads it (GameApp).
+     */
+    private static turnsAway(event: EventTouch): boolean {
+        const touch = event.touch!, id = touch.getID()
+        if (event.type === Input.EventType.TOUCH_START) {
+            // A new touch may take the ID of one whose end never came.
+            this.guarded.delete(id)
+            const band = EDGE_GUARD_POINTS * screen.devicePixelRatio, x = touch.getLocation().x
+            if (!GameDebugSettings.isMobileMode() || (x >= band && x <= screen.windowSize.width - band)) return false
+            this.guarded.add(id)
+            return true
+        }
+        if (!this.guarded.has(id)) return false
+        if (event.type === Input.EventType.TOUCH_END || event.type === Input.EventType.TOUCH_CANCEL) this.guarded.delete(id)
+        return true
+    }
+
+    /** On the root, before its other listeners: a touch turned away goes no further, to no node under it. */
+    private static guardEdges(event: EventTouch): void {
+        if (this.turnsAway(event)) event.propagationStopped = event.propagationImmediateStopped = true
+    }
+
+    /** A touch no node took, from the input itself: turned away as on the root, else remembered, and begun as it starts. */
+    private static inputTouch(event: EventTouch): void {
+        if (this.turnsAway(event)) return
+        this.rememberTouchEvent(event)
+        if (event.type === Input.EventType.TOUCH_START) this.beginTouch(event)
     }
 
     private static beginTouch(event: EventTouch): void {

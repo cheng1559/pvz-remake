@@ -13,7 +13,7 @@ import { TICK_SECONDS } from '@/shared/protocol'
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
-const options = { levelId: 'pvz:seed-chooser-test', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
+const options = { levelId: 'pvz:adventure-1-9', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
 const seeds = chooserSeeds(definitions)
 const setup = (save?: JsonValue) => {
     const game = new LocalIntegratedGame(definitions, levels)
@@ -51,9 +51,16 @@ test('the bank fills with the available seeds while they fit and opens the choos
     const owning = new LocalIntegratedGame(definitions, levels)
     owning.start({ ...options, levelId: 'pvz:adventure-1-1', ownedSeeds: ['pvz:hypnoshroom', 'test:missing', 'pvz:peashooter'] })
     assert.deepEqual(owning.render().seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:hypnoshroom'])
-    // CutScene::ShowShovel: the 1-4 award, from 1-5 on a first adventure and on every replay.
-    const owned = (levelId: string, firstAdventure: boolean) => start(levelId, firstAdventure).tools?.owned
-    assert.deepEqual([owned('pvz:adventure-1-4', true), owned('pvz:adventure-1-5', true), owned('pvz:adventure-1-1', false)], [undefined, ['pvz:shovel'], ['pvz:shovel']])
+    // The 1-4 award is the player's once collected, on any level but Whack a Zombie (its `tools`); without a player,
+    // and with /cheatseed, it counts as collected.
+    const owned = (levelId: string, ownedTools?: string[], cheatSeeds = false) => {
+        const game = new LocalIntegratedGame(definitions, levels)
+        game.start({ ...options, levelId, ...(ownedTools ? { ownedTools } : {}), ...(cheatSeeds ? { cheatSeeds } : {}) })
+        return game.render().tools?.owned
+    }
+    assert.deepEqual([owned('pvz:adventure-1-5', []), owned('pvz:adventure-1-1', ['pvz:shovel']), owned('pvz:adventure-1-1'),
+        owned('pvz:adventure-2-5', ['pvz:shovel']), owned('pvz:adventure-1-1', [], true), owned('pvz:adventure-2-5', [], true)],
+    [undefined, ['pvz:shovel'], ['pvz:shovel'], undefined, ['pvz:shovel'], undefined])
 })
 
 test('seed choice is authoritative, ordered, capacity checked and works at an input-only boundary', () => {
@@ -142,7 +149,7 @@ test("chooser levels share the original seeds' grid without a per-level pool, an
         readBaseContent().gameplay, [{
             ownerId: 'test', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
-                levels: { 'test:chooser': { ...levels.levels[options.levelId] } },
+                levels: { 'test:chooser': { ...source('levels').levels[options.levelId] } },
             },
         }],
     )
@@ -268,23 +275,30 @@ test("a Mod's cards count like owned seeds towards the slots and opening the cho
     }
 })
 
-test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty, and /seed fills or empties any slot", () => {
+test("/cheatseed's Let's Rock takes fewer cards, none at all included, and leaves the other slots empty, and /seed fills or replaces any slot", () => {
     {
+        const empty = new LocalIntegratedGame(definitions, levels, undefined, true)
+        empty.start({ ...options, cheatSeeds: true })
+        command(empty, { type: 'confirmSeeds' })
+        assert.equal(empty.render().seedChooser?.choosing, false, 'an empty bank starts too')
+        assert.deepEqual(slotSeeds(empty), Array(10).fill(null))
+        command(empty, { type: 'completeIntro' })
+        assert.equal(empty.render().phase, 'gameplay')
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
         game.start({ ...options, cheatSeeds: true })
-        command(game, { type: 'confirmSeeds' })
-        assert.equal(game.render().seedChooser?.choosing, true, 'not with an empty bank')
         for (const seedId of seeds.slice(0, 4)) command(game, { type: 'chooseSeed', seedId })
         command(game, { type: 'confirmSeeds' })
-        assert.deepEqual(slotSeeds(game), [...seeds.slice(0, 4), null, null])
+        // The switch gives the bank every slot, ten.
+        assert.deepEqual(slotSeeds(game), [...seeds.slice(0, 4), null, null, null, null, null, null])
         assert.equal(game.render().seedChooser?.choosing, false)
         command(game, { type: 'completeIntro' })
-        // An empty slot takes a seed; a filled one gives its packet up.
-        for (const line of ['/seed 5 peashooter', '/seed 2 empty']) assert.equal(game.debugCommand(line).ok, true, line)
-        assert.deepEqual(slotSeeds(game), [seeds[0], null, seeds[2], seeds[3], 'pvz:peashooter', null])
-        assert.equal(game.debugCommand('/seed 7 peashooter').ok, false, 'the bank has six slots')
+        // An empty slot takes a seed; a filled one takes another.
+        for (const line of ['/seed 5 peashooter', '/seed 2 wallnut']) assert.equal(game.debugCommand(line).ok, true, line)
+        assert.deepEqual(slotSeeds(game), [seeds[0], 'pvz:wallnut', seeds[2], seeds[3], 'pvz:peashooter', null, null, null, null, null])
+        assert.equal(game.debugCommand('/seed 11 peashooter').ok, false, 'the bank has ten slots')
+        assert.equal(game.debugCommand('/seed 6 empty').failure, 'condition', 'a slot is filled, not emptied')
         // An empty slot cannot be picked.
-        game.command({ type: 'selectSeed', seedId: seeds[1], slot: 1 })
+        game.command({ type: 'selectSeed', seedId: seeds[1], slot: 5 })
         game.update(0)
         assert.equal(game.render().cursor.mode, 'none')
         assert.deepEqual(slotSeeds(setup(game.saveAtBoundary())), slotSeeds(game), 'empty slots survive saving')
@@ -297,14 +311,14 @@ test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty
 })
 
 test('a bank /cheatseed widened loads, with the switch on or off: a save holds its bank whole', () => {
-    // Three owned seeds alone fill a bank of three, without a chooser; the cheat cards open one of six.
+    // Three owned seeds alone fill a bank of three, without a chooser; the cheat cards open one of all ten slots.
     const start = { ...options, ownedSeeds: seeds.slice(0, 3), cheatSeeds: true }
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(start)
     for (const seedId of seeds.slice(0, 2)) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
     command(game, { type: 'completeIntro' })
-    assert.equal(game.render().seedPackets.length, 6)
+    assert.equal(game.render().seedPackets.length, 10)
     const save = game.saveAtBoundary()
     for (const cheatSeeds of [true, false]) {
         const loaded = new LocalIntegratedGame(definitions, levels, undefined, true)
@@ -366,8 +380,8 @@ test('/cheatseed offers every grid seed, owned or not, and its pages, counted to
     }
     assert.equal(start(false).render().seedChooser, undefined)
     const chooser = start(true).render().seedChooser!
-    // Owning the Peashooter alone, every grid seed is there all the same.
-    assert.deepEqual([chooser.slots, chooser.cheatSeeds, chooser.availableSeeds], [6, true, seeds])
+    // Owning the Peashooter alone, every grid seed is there all the same, and every slot, the upgrades counted as bought.
+    assert.deepEqual([chooser.slots, chooser.cheatSeeds, chooser.availableSeeds], [10, true, seeds])
     assert.deepEqual(chooser.entries, cheatSeedEntries(definitions, seeds))
     const game = start(true)
     command(game, { type: 'chooseSeed', seedId: 'pvz:sunflower' })
@@ -394,7 +408,8 @@ test('/cheatseed turns over in any state, an open chooser taking it up at once, 
     const choosing = game.debugCommand('/cheatseed')
     assert.deepEqual([choosing.ok, choosing.enabled], [true, true])
     const offered = game.render().seedChooser!
-    assert.deepEqual([offered.cheatSeeds, offered.entries], [true, cheatSeedEntries(definitions, seeds)])
+    // Its slots are the level's: the switch gives them all only as a level starts.
+    assert.deepEqual([offered.cheatSeeds, offered.entries, offered.slots], [true, cheatSeedEntries(definitions, seeds), 6])
     assert.deepEqual([game.debugCommand('/cheatseed').enabled, game.render().seedChooser?.cheatSeeds], [false, undefined])
     for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
@@ -431,7 +446,7 @@ test('partial and confirmed seed choices survive saving without reselecting or l
 test('/repick stands the level still and chooses the bank again, its cards still chosen, keeping their recharge as Survival does', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
-    assert.deepEqual(game.debugCommand('/seed 1 empty'), { ok: false, failure: 'condition', key: 'DEBUG_REQUIRES_LEVEL', args: ['seed'] })
+    assert.deepEqual(game.debugCommand('/seed 1 peashooter'), { ok: false, failure: 'condition', key: 'DEBUG_REQUIRES_LEVEL', args: ['seed'] })
     const first = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea']
     for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
@@ -455,7 +470,7 @@ test('/repick stands the level still and chooses the bank again, its cards still
     game.update(0)
     assert.equal(game.lastRejection?.code, 'choosing-seeds', 'nothing but the choice goes on')
     assert.equal(game.debugCommand('/repick').ok, false, 'one repick at a time')
-    assert.equal(game.debugCommand('/seed 1 empty').failure, 'condition')
+    assert.equal(game.debugCommand('/seed 1 peashooter').failure, 'condition')
 
     // A card the bank held picks its recharge up again; any other is ready.
     for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
@@ -486,7 +501,7 @@ test('/repick stands the level still and chooses the bank again, its cards still
     command(game, { type: 'confirmSeeds' })
     const confirmed = game.render()
     const second = ['pvz:chomper', 'pvz:cherrybomb', 'pvz:repeater', 'pvz:peashooter', 'pvz:sunflower', 'pvz:wallnut']
-    assert.equal(game.debugCommand('/seed 1 empty').failure, 'condition', 'the chooser is still closing')
+    assert.equal(game.debugCommand('/seed 1 peashooter').failure, 'condition', 'the chooser is still closing')
     assert.deepEqual([confirmed.seedChooser?.choosing, confirmed.seedChooser?.repick, chosen(game)], [false, true, second])
     game.update(TICK_SECONDS)
     assert.equal(game.render().gameplayTick, confirmed.gameplayTick, "after Let's Rock the level waits for the chooser to lift out")
@@ -501,6 +516,52 @@ test('/repick stands the level still and chooses the bank again, its cards still
     game.update(0)
     assert.equal(game.lastRejection?.code, 'not-choosing-seeds', 'only after a repick')
     assert.deepEqual(slotSeeds(setup(game.saveAtBoundary())), slotSeeds(game), 'the chosen bank saves as one chosen at the start')
+})
+
+test("/cheatseed turned off in a repick lets Let's Rock take every owned card, the slots left over empty", () => {
+    const levelId = 'pvz:adventure-1-3', ownedSeeds = adventureSeeds(levels, levelId)
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ ...options, levelId, firstAdventure: true, ownedSeeds, cheatSeeds: true })
+    const { slots } = game.render().seedChooser!
+    assert.equal(slots, definitions.seedBank.maxSlots, 'the switch on as the level starts gives every slot')
+    for (const seedId of [...ownedSeeds, 'pvz:chomper']) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    assert.equal(game.debugCommand('/repick').ok, true)
+    assert.equal(game.debugCommand('/cheatseed').enabled, false)
+    // The repick keeps the bank's slots, more than the owned cards: Let's Rock takes them all chosen.
+    command(game, { type: 'chooseSeed', seedId: ownedSeeds[0] })
+    game.command({ type: 'confirmSeeds' })
+    game.update(0)
+    assert.equal(game.lastRejection?.code, 'seed-choice-incomplete', 'an owned card left out keeps it waiting')
+    command(game, { type: 'chooseSeed', seedId: ownedSeeds[0] })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'finishRepick' })
+    assert.deepEqual(slotSeeds(game), [...ownedSeeds.slice(1), 'pvz:chomper', ownedSeeds[0], ...Array(slots - ownedSeeds.length - 1).fill(null)])
+})
+
+test('/cheatseed turned off leaves a chooser its slots, in play and while choosing', () => {
+    const levelId = 'pvz:adventure-1-3', ownedSeeds = adventureSeeds(levels, levelId)
+    const start = () => {
+        const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+        game.start({ ...options, levelId, firstAdventure: true, ownedSeeds, cheatSeeds: true })
+        for (const seedId of [...ownedSeeds, 'pvz:chomper']) command(game, { type: 'chooseSeed', seedId })
+        return game
+    }
+    const { maxSlots } = definitions.seedBank
+    // In play: the bank keeps its slots, the empty ones too.
+    const playing = start()
+    command(playing, { type: 'confirmSeeds' })
+    command(playing, { type: 'completeIntro' })
+    assert.equal(playing.debugCommand('/cheatseed').enabled, false)
+    assert.deepEqual([playing.render().seedChooser?.slots, playing.render().seedPackets.length], [maxSlots, maxSlots])
+    // While choosing, more cards chosen than are owned: the one not owned can go back, and Let's Rock takes the owned ones.
+    const choosing = start()
+    assert.equal(choosing.debugCommand('/cheatseed').enabled, false)
+    assert.deepEqual([choosing.render().seedChooser?.slots, chosen(choosing)], [maxSlots, [...ownedSeeds, 'pvz:chomper']])
+    command(choosing, { type: 'chooseSeed', seedId: 'pvz:chomper' })
+    command(choosing, { type: 'confirmSeeds' })
+    assert.deepEqual(slotSeeds(choosing), [...ownedSeeds, ...Array(maxSlots - ownedSeeds.length).fill(null)])
 })
 
 test('/repick opens the chooser on a level that deals its bank, which goes back to a dealt bank afterwards, but not on a conveyor', () => {
@@ -572,7 +633,7 @@ test("a repick asks nothing before its Let's Rock, not even a level's own warnin
     assert.equal(game.render().seedChooser?.warnings, undefined, 'a repick does not')
 })
 
-test('/seed works on a conveyor belt: its packets from the left, empty takes one off, a team kept and saved', () => {
+test('/seed works on a conveyor belt: its packets from the left, a team kept and saved', () => {
     const start = { ...options, levelId: 'pvz:adventure-1-10', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-10') }
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(start)
@@ -595,9 +656,9 @@ test('/seed works on a conveyor belt: its packets from the left, empty takes one
     assert.deepEqual(belt(), ['pvz:snowpea', 'pvz:wallnut@zombies'])
     // A held packet that /seed changes is put down.
     command(game, { type: 'selectConveyorPacket', packetId: first.id })
-    assert.equal(game.debugCommand('/seed 1 empty').ok, true)
-    assert.deepEqual([belt(), game.render().cursor.mode], [['pvz:wallnut@zombies'], 'none'])
+    assert.equal(game.debugCommand('/seed 1 peashooter').ok, true)
+    assert.deepEqual([belt(), game.render().cursor.mode], [['pvz:peashooter', 'pvz:wallnut@zombies'], 'none'])
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ ...start, save: game.saveAtBoundary() })
-    assert.deepEqual(belt(restored), ['pvz:wallnut@zombies'], 'the side is saved')
+    assert.deepEqual(belt(restored), ['pvz:peashooter', 'pvz:wallnut@zombies'], 'the side is saved')
 })

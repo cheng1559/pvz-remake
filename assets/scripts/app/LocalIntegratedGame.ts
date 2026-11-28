@@ -8,17 +8,24 @@ import { TICK_SECONDS, type GameCommand, type JsonValue, type StartSessionPacket
 import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
+/** A game played checks one frame in this many of its server's: one a second (LocalGameChannel). */
+export const PLAYED_FRAME_CHECKS = 100
+
 export class LocalIntegratedGame {
-    private readonly channel = new LocalGameChannel()
+    private readonly channel: LocalGameChannel
     private readonly host: IntegratedGameHost
-    private readonly client = new IntegratedGameClient(this.channel)
+    private readonly client: IntegratedGameClient
 
     constructor(
         readonly definitions: GameplayDefinitions,
         levels: GameplayLevels,
         gameplay = new GameplayRegistry(),
         debugEnabled = false,
+        /** Of its server's frames, one in this many is checked whole; 1 checks every one (LocalGameChannel). */
+        frameChecks = 1,
     ) {
+        this.channel = new LocalGameChannel(frameChecks)
+        this.client = new IntegratedGameClient(this.channel)
         this.host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels, gameplay), this.channel, debugEnabled)
     }
 
@@ -70,6 +77,22 @@ export class LocalIntegratedGame {
     update(dtSeconds: number): void {
         this.host.update(dtSeconds)
         this.client.update()
+    }
+
+    /**
+     * `/step`: `ticks` fixed ticks at once (IntegratedGameHost.fastForward), after what waits to be sent. A paused game
+     * runs them too and stays paused.
+     */
+    fastForward(ticks: number): void {
+        this.update(0)
+        const paused = this.currentSnapshot?.paused === true
+        if (paused) {
+            this.command({ type: 'resume' })
+            this.update(0)
+        }
+        this.host.fastForward(ticks)
+        if (paused) this.command({ type: 'pause' })
+        this.update(0)
     }
 
     render() {

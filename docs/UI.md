@@ -31,13 +31,14 @@ Every control listens only to the events of the current mode, so a touch that th
 - **Shovel**: press the shovel to pick it up, drag to aim, and lift to dig; dragging back onto its button cancels.
 - **Collecting**: a finger dragged across the lawn collects the sun and coins along its path.
 - **One finger**: the lawn follows one finger from touch to release. A pause discards the gesture.
+- **Edges**: a touch that starts within 24 points of the screen's left or right edge is taken for the hand holding the device and does nothing, and it does not keep the lawn from the next finger. One that starts further in can still move to the edge.
 - **Buttons**: sliding from one button onto another moves the press to the button under the finger, and lifting activates that one.
 - **Lists** scroll by dragging and keep moving briefly after release. The thin scroll bar can be dragged, and tapping its track pages.
 - **Sliders**: drag the knob, or tap the slot to move the knob there.
 - **Dialogs** can be dragged by their frame.
 - **Store**: a purchase starts when the finger lifts, so holding an item shows its description first. With a mouse it starts on the press.
 - **Text fields** open the on-screen keyboard; the game draws the text itself. On iOS the fields use the ASCII keyboard with autocorrection off.
-- **Debug console**: double-tap the bottom-right corner of the screen (100 CSS pixels square) within 350 ms. This works in mobile mode and on any mobile device.
+- **Debug console**: double-tap the bottom-right corner of the screen (100 CSS pixels square, without its outer 24 points, see Edges) within 350 ms. This works in mobile mode and on any mobile device.
 
 ### Keyboard
 
@@ -140,9 +141,15 @@ Text fields keep the system I-beam. The images are extracted from the original e
 
 Feedback is given when:
 
-- a finger touches or slides onto a button (seed packets, tools, chooser cards, almanac cards and the main menu's trophy excepted);
+- a finger touches or slides onto a button (seed packets, tools, chooser cards, almanac cards, the zombies in the intro's street and the main menu's trophy excepted);
 - a slider's knob passes each twentieth of its range;
-- an almanac entry is chosen;
+- an almanac entry is chosen, or a zombie in the intro's street opens its entry;
+- a seed packet or a tool is picked up, the held packet is put back, or a packet that cannot be picked up is touched while one is held;
+- a card is chosen or sent back in the seed chooser;
+- Crazy Dave's speech is tapped on to its next line;
+- a plant, zombie seed, grave or crater is put down, or a plant is shovelled;
+- the level award is collected, or the mallet hits a zombie: these are stronger;
+- the main menu's Adventure button flashes as the game starts: each dark flash is felt lightly for 0.15 s;
 - the board shakes, such as for an explosion; the strongest shake of a frame decides the strength.
 
 An explosion's feedback waits 40 ms of game time and takes precedence over lighter feedback; feedback within 40 ms of the last one is merged.
@@ -207,8 +214,8 @@ The settings keep the `pvz-remake:settings:options` storage key.
 
 - The main menu slides up and the achievements page rises from below (see [Transitions and fades](#transitions-and-fades)). The page reads the achievement definitions (the gameplay `achievements` table: the base game's 21 in the original order, which Mods may extend) and the active player's earned IDs through `getAchievements()`, when it is built and again each time it is shown, which also scrolls it back to the top. Triggers, granting and the award page's list are described in [Achievements](ACHIEVEMENTS.md).
 - The layout follows `AchievementsWidget`: two columns 290 px apart, rows 57 px apart from y 178, 70 px atlas cells drawn at 0.8 scale (56 px), green titles and wrapped white bitmap descriptions. Earned achievements have bright icons (alpha 255), the rest faint ones (alpha 32). Mods may replace the whole background layer (the top, the tiled holes and the China at the bottom) without touching the decorations or the controls.
-- The list scrolls with the wheel, the Up and Down keys, dragging (in mobile mode) and the More rock at the bottom right. The shared `UIScroll` scrolls 80 px per wheel notch with no easing. The More rock scrolls 230 px down over 0.25 s, to the rest of the list; pressed again, in its Top state, it scrolls back up. Only scrolling down plays the rock sound. Touch dragging has inertia; all motion follows the global clock.
-- The arrow keys follow GOTY's `AchievementsWidget::KeyDown`: each press sets the speed to 30, which drops by 1 every 10 ms while moving that many pixels (about 435 px a press); key repeats reset the speed instead of adding to it.
+- The list scrolls with the wheel, the Up and Down keys, dragging (in mobile mode) and the More rock at the bottom right. The shared `UIScroll` scrolls 80 px per wheel notch, gliding there. The More rock scrolls as the arrow keys do, from a speed of 22 (231 px), down to the rest of the list; pressed again, in its Top state, it scrolls back up. Only scrolling down plays the rock sound. Touch dragging has inertia; all motion follows the global clock.
+- The arrow keys follow GOTY's `AchievementsWidget::KeyDown`: each press sets the speed to 30, which drops by 1 every 10 ms while moving that many pixels (about 435 px a press); key repeats reset the speed instead of adding to it. A press or the More rock takes over a scroll still on its way, as in GOTY.
 - The button at the top left returns to the menu. The tiled underground background and this return control move with the content. Scrolling never requests data or grants achievements.
 
 ### Gardens, Help and the award page
@@ -245,15 +252,15 @@ The debug console's history (64 commands) is kept under `pvz-remake:debug:cli-hi
 
 ### The level's UI
 
-- **Menu button**: the original 117×46 stone button at the top right, at (681, -10), created by `LevelHudPresenter` and shown after the level intro (not after a loss). It ignores the right button. While a seed packet or tool is held, a click on it only drops it; otherwise it opens the in-game [Options](#options) dialog. Pausing is described in [Pausing, focus and saving](#pausing-focus-and-saving).
-- **Seed bank and tools**: bank and conveyor packets share `LevelSeedBank`'s views, buttons and tooltips; `LevelBoardHud` lays out the tools. The key labels shown while hotkeys are on are described in [Hotkeys](#hotkeys).
+- **Menu button**: the original 117×46 stone button at the top right, at (681, -10), created by `LevelHudPresenter` and shown after the level intro (not after a loss). It ignores the right button. While a seed packet or tool is held, a click on it only drops it; otherwise it opens the in-game [Options](#options) dialog. Pausing is described in [Pausing, focus and saving](#pausing-focus-and-saving). It stands in the level's controls (`LevelView.controls`, `LevelControls`), which keep their margin from the UI area's right edge and take the buttons Mods add beside it (`LevelHudOptions.controlsParent`); they are drawn in the seed bank's layer unless a Mod moves them.
+- **Seed bank and tools**: bank and conveyor packets share `LevelSeedBank`'s views, buttons and tooltips; `LevelBoardHud` lays out the tools. The key labels shown while hotkeys are on are described in [Hotkeys](#hotkeys). While the seeds are chosen the bank stands at the UI area's left edge, beside the chooser; in play it stands where the original has it in the 800 layout, and once they are chosen it goes from one place to the other with the camera's pan back to the lawn, starting and stopping with it (a repick's slide takes it there and back).
 - **Seed chooser** (`LevelSeedChooser`, the original `SeedChooserScreen`): the server decides which seeds are offered and chosen; the client moves the panel and the cards.
   - The panel drops in during the level intro, 516 px over intro ticks 400–425, and lifts out over 450–475 (`CutScene`'s `TimeSeedChoserSlideOnStart` and the rest); a repick follows the same timeline.
   - The grid has 8 columns 53 px apart, five rows 73 px apart, or six rows 70 px apart once a card sits at places 40–47; a seed not yet unlocked leaves a silhouette in its place.
   - Click or tap a card to put it in the seed bank, and a chosen card to send it back. Cards fly between the grid and the bank over 25 ticks (15 when moving between slots), and a new click lands every flying card first.
   - Tooltips describe each card. A card the level does not recommend is greyed (to 115 while it waits in the grid), and its tooltip carries a red warning.
   - Let's Rock (`seed`, yellow font) looks enabled exactly while the bank is full; with `/cheatseed`, once any card is chosen. If the level has warnings, each then asks in turn, and Re-pick goes back to choosing.
-  - ALMANAC and SHOP (`seedSmall`) appear once the almanac and the store are unlocked, when `LawnApp::CanShowAlmanac` and `CanShowStore` allow, and open over the paused level, its music playing on; a repick has neither. Clicking a zombie on the street opens its almanac entry.
+  - ALMANAC and SHOP (`seedSmall`) appear once the almanac and the store are unlocked, when `LawnApp::CanShowAlmanac` and `CanShowStore` allow, and open over the paused level, its music playing on; a repick has neither. They keep their margins from the UI area's right edge, while the rest of the chooser keeps to its left edge. Clicking a zombie on the street opens its almanac entry.
   - With `/cheatseed`, `(Prev Page)` and `(Next Page)` use the `text` skin.
 - **Touch planting** uses the gestures described in [Touch](#touch); `LevelInputPresenter` handles them. Swipe collection samples every 24 px, selection highlights reuse `SeedPacketView`'s mobile mode, and planting uses the existing backend commands.
 
@@ -389,7 +396,7 @@ The `UIButton` component also has `touchSlide` (follow the finger and activate o
 A button's `tooltip` is a string or `{ text, title?, warning?, font?, maxWidth?, gap?, offset?, surface?, fixed? }`. The popup uses the original's colors: a pale yellow box with a black border, the text in Pico129 (`packetCost`), an optional title in Pix118Bold and an optional warning line in red.
 
 - It follows the actual hover, appears below the anchor (`gap`, 4 px by default), flips above it when there is no room, and stays within the enclosing viewport, mask or Canvas, 2 px from its edges.
-- Long text wraps by the original's rules, at the first break at or after the target width; CJK text can break between characters, except before closing and after opening punctuation.
+- Long text wraps by the original's rules (`ToolTipWidget::GetLines`): at the first space at or past the target width, and at each newline. Text without spaces, such as Chinese, breaks only at the newlines written into it.
 - `offset: [x, y]` moves it right and down before edge clamping. The gardens' tooltip uses it (see [Gardens, Help and the award page](#gardens-help-and-the-award-page)).
 - `fixed` puts the popup's top-left corner at the anchor's (a `ToolTipWidget` at a fixed position, as the main menu's trophy uses); `surface` draws it on another node when the control is inside a clipped area.
 - `ui.tooltip(anchor, options)` creates one for manual `show()` and `hide()`, with settable `text`, `title` and `warning`. Disabling the anchor hides the popup; destroying it removes it.
@@ -408,14 +415,14 @@ A button's `tooltip` is a string or `{ text, title?, warning?, font?, maxWidth?,
 
 #### Scroll areas
 
-`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors?, wheelDuration? })` creates a vertical `UIScroll` with the GOTY `ScrollbarWidget`: 8 px wide, its left edge 6 px inside the area's right edge, no arrow buttons. Add labels, images or other nodes to `scroll.content`, using `scroll.contentWidth` for layout (7 px narrower while the bar shows).
+`ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, pageHeight?, scrollbar?, colors? })` creates a vertical `UIScroll` with the GOTY `ScrollbarWidget`: 8 px wide, its left edge 6 px inside the area's right edge, no arrow buttons. Add labels, images or other nodes to `scroll.content`, using `scroll.contentWidth` for layout (7 px narrower while the bar shows).
 
-- `scroll.offset` scrolls to a pixel offset at once; `scroll.scrollTo(offset, seconds)` animates there with a double S curve.
+- `scroll.offset` scrolls to a pixel offset at once.
 - Call `scroll.setContentHeight(height, drawnHeight?)` after the content changes. `drawnHeight` lets the range reach drawn content taller than the measured one without changing the thumb.
 - The component owns clipping, the bar's automatic visibility, the original thumb drawing and dragging, track paging (a held track pages again after 25 updates of 10 ms, then every 5), touch inertia and listener cleanup. It runs on the global clock.
-- `wheelStep` is the pixels per wheel notch (12 by default). A notch is a wheel delta of 120; a touchpad's smaller deltas move proportionally less, at most one notch per event.
+- `wheelStep` is the pixels per wheel notch (12 by default). A notch is a wheel delta of 120; a touchpad's smaller deltas move proportionally less, at most one notch per event. Each event moves where the list is going, and the list glides there, the same share of the way left each moment (about two thirds in 0.05 s), so a touchpad's events, which come faster than frames and in whole points as it slows, still scroll it evenly.
 - `pageHeight` (the height by default) is how far a track click pages, and scrolling stops with that much content showing. `colors` are the bar's six `ScrollbarWidget` colors (track, track while paging, thumb, edge, shadow, highlight); the default is the zombie almanac's set.
-- `scrollbar: false` hides the bar and keeps the full content width. `wheelDuration` turns on the previous double-S easing for wheel steps.
+- `scrollbar: false` hides the bar and keeps the full content width.
 
 #### Sliders, checkboxes and selects
 

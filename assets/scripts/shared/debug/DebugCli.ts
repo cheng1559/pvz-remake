@@ -1,11 +1,27 @@
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
+import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
+
 /** `plants`: the plant seeds, which /plant takes; `seeds`: every seed, zombie seeds too, which /seed takes. */
-export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[] }
+export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[], times: string[] }
+
+/** The installed gameplay content by the names the commands take, for completion and the /level check. */
+export function debugCliCatalog(definitions: GameplayDefinitions, levels: GameplayLevels): DebugCliCatalog {
+    return {
+        plants: Object.entries(definitions.seeds).filter(([, seed]) => seed.kind === 'plant').map(([id]) => id.replace(/^pvz:/, '')),
+        seeds: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
+        zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
+        items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
+        levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
+        times: [...new Set(Object.values(definitions.boards).flatMap(board => Object.keys(board.times)))],
+    }
+}
 interface DebugCliOutcome {
-    action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level'
+    action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level' | 'step'
     levelId?: string
     /** For `goto`. */
     page?: DebugGotoPage
-    catalog?: DebugCliCatalog
+    /** For `step`: the fixed ticks the level runs at once. */
+    ticks?: number
     /** A switch's state after the command turned it over (`/cooldown` and the like). */
     enabled?: boolean
     /** Advice the client shows after a success: a string table key, its %s filled with `args`, string keys themselves. */
@@ -22,8 +38,8 @@ export type DebugCliResult = DebugCliOutcome & (
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 /** The switches: each command turns its switch over and says where it now stands as advice (debugSwitchAdvice). */
-export const DEBUG_SWITCHES = ['autopause', 'hotkeys', 'haptics', 'cursor', 'highresolution', 'tilted', 'cooldown', 'suncost', 'plantinvincible', 'cheatseed', 'fps',
-    'hitboxes', 'mobile', 'fullscreen', 'resize'] as const
+export const DEBUG_SWITCHES = ['autopause', 'hotkeys', 'haptics', 'cursor', 'highresolution', 'tilted', 'cooldown', 'suncost', 'plantinvincible', 'plantanywhere', 'cheatseed', 'fps',
+    'hitboxes', 'hp', 'id', 'mobile', 'fullscreen', 'resize'] as const
 /** The /perf switches, one per category. */
 export const DEBUG_PERF_SWITCHES = ['plants', 'zombies', 'particles', 'sfx', 'logic'] as const
 /** The menu pages /goto opens (MenuPageId); the splash, title and award screens only come in their own order. */
@@ -42,7 +58,9 @@ const builtins: CommandSpec[] = [
     { name: 'item', parameters: ['{item_name}', '[row]', '[col]'], minimum: 1 },
     { name: 'damage', parameters: ['{damage}'], minimum: 1 },
     { name: 'level', parameters: ['{level}'], minimum: 1 },
+    { name: 'time', parameters: ['{time_of_day}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
+    { name: 'step', parameters: [`{1-${MAX_TICKS_PER_UPDATE}}`], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
     ...DEBUG_SWITCHES.map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'sharpness', parameters: ['{0-1}'], minimum: 1 },
@@ -57,12 +75,21 @@ const builtins: CommandSpec[] = [
 // Wrap the read instead of mutating the table so host.dispose() also removes Mod syntax.
 export const specs = { list: (): readonly CommandSpec[] => builtins }
 
-/** `/seed {slot} empty`: the name that empties a bank slot instead of naming a seed. */
-export const EMPTY_SLOT = 'empty'
 export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, message, failure: 'syntax' })
 export const debugCondition = (key: string, ...args: (string | number | boolean)[]): DebugCliResult =>
     ({ ok: false, failure: 'condition', key, ...(args.length ? { args: args.map(String) } : {}) })
 export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, message })
+
+/**
+ * Why `/repick` cannot start a repick now, as its condition's key: a chooser open (a repick's is the chooser's until
+ * the level goes on after it), or no bank to choose again. Null when it can. The server's bank and the client's
+ * snapshot both answer it.
+ */
+export function repickRefusal(bank: { choosing: boolean, repick: boolean, conveyor: boolean, slots: number }): string | null {
+    if (bank.choosing || bank.repick) return 'DEBUG_FINISH_CHOOSING'
+    if (bank.conveyor || !bank.slots) return 'DEBUG_REPICK_NO_BANK'
+    return null
+}
 /**
  * A switch turned over, as advice: DEBUG_SWITCH_ON or DEBUG_SWITCH_OFF with the switch's name, DEBUG_SWITCH_{NAME}
  * (`/perf plants` is DEBUG_SWITCH_PERF_PLANTS).
@@ -117,8 +144,8 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     }
     if (!token && !allowEmpty) return []
     const spec = commands.find(spec => spec.name === name)
-    const dynamic = name === 'seed' && index === 2 ? catalog?.seeds && [...catalog.seeds, EMPTY_SLOT] : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
-        : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
+    const dynamic = name === 'seed' && index === 2 ? catalog?.seeds : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
+        : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : name === 'time' ? catalog?.times : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
     return values.filter(option => option.toLowerCase().startsWith(token.toLowerCase()))
         .map(option => value.slice(0, start) + option)

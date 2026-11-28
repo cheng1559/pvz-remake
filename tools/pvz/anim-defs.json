@@ -244,12 +244,14 @@
         "anim_idle",
         "anim_sleep",
         "anim_bigidle",
+        "anim_bigsleep",
         "anim_grow"
       ],
       "exports": {
         "anim_idle": "pvz:sunshroom",
         "anim_sleep": "pvz:sunshroom_sleep",
         "anim_bigidle": "pvz:sunshroom_big",
+        "anim_bigsleep": "pvz:sunshroom_bigsleep",
         "anim_grow": "pvz:sunshroom_grow"
       }
     },

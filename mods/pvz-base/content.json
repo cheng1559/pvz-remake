@@ -15,6 +15,7 @@
     "levels": "gameplay/levels.json"
   },
   "presentation": {
+    "settings": "presentation/settings.json",
     "clips": "presentation/definitions/clips.json",
     "screens": "presentation/definitions/screens.json",
     "conveyor": "presentation/definitions/conveyor.json",
@@ -1219,16 +1220,16 @@
       },
       "pvz:background1_gameover_interior_overlay": {
         "file": "assets/images/background1_gameover_interior_overlay.png",
-        "width": 70,
-        "height": 195,
+        "width": 109,
+        "height": 279,
         "rect": [
           0,
-          1,
-          69,
-          193
+          0,
+          109,
+          279
         ],
         "offset": [
-          -0.5,
+          0,
           0
         ],
         "borders": [
@@ -1240,7 +1241,7 @@
       },
       "pvz:background1_gameover_mask": {
         "file": "assets/images/background1_gameover_mask.png",
-        "width": 47,
+        "width": 48,
         "height": 248,
         "rect": [
           0,
@@ -1249,7 +1250,7 @@
           248
         ],
         "offset": [
-          0,
+          -0.5,
           0
         ],
         "borders": [
@@ -1303,12 +1304,12 @@
       },
       "pvz:background2_gameover_interior_overlay": {
         "file": "assets/images/background2_gameover_interior_overlay.png",
-        "width": 108,
+        "width": 109,
         "height": 279,
         "rect": [
           0,
           0,
-          108,
+          109,
           279
         ],
         "offset": [
@@ -1324,13 +1325,13 @@
       },
       "pvz:background2_gameover_mask": {
         "file": "assets/images/background2_gameover_mask.png",
-        "width": 46,
-        "height": 241,
+        "width": 48,
+        "height": 248,
         "rect": [
           0,
           0,
-          45,
-          241
+          47,
+          248
         ],
         "offset": [
           -0.5,
@@ -50193,16 +50194,6 @@
       "pvz:pix118bold": "assets/fonts/pix118bold.json"
     },
     "audio": {
-      "pvz:choose_seeds": "assets/audio/music/choose_seeds.mp3",
-      "pvz:conveyer": "assets/audio/music/conveyer.mp3",
-      "pvz:day_grasswalk_drums": "assets/audio/music/day_grasswalk_drums.mp3",
-      "pvz:day_grasswalk_hihats": "assets/audio/music/day_grasswalk_hihats.mp3",
-      "pvz:day_grasswalk_main": "assets/audio/music/day_grasswalk_main.mp3",
-      "pvz:final_boss": "assets/audio/music/final_boss.mp3",
-      "pvz:minigame": "assets/audio/music/minigame.mp3",
-      "pvz:puzzle": "assets/audio/music/puzzle.mp3",
-      "pvz:title_theme": "assets/audio/music/title_theme.mp3",
-      "pvz:zen_garden": "assets/audio/music/zen_garden.mp3",
       "pvz:achievement": "assets/audio/sfx/achievement.mp3",
       "pvz:awooga": "assets/audio/sfx/awooga.mp3",
       "pvz:balloon_pop": "assets/audio/sfx/balloon_pop.mp3",
@@ -50371,9 +50362,11 @@
       "pvz:zombie_falling_1": "assets/audio/sfx/zombie_falling_1.mp3",
       "pvz:zombie_falling_2": "assets/audio/sfx/zombie_falling_2.mp3",
       "pvz:zombiesonyourlawn": "assets/audio/sfx/zombiesonyourlawn.mp3",
-      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3",
-      "pvz:night_moongrains_drums": "assets/audio/music/night_moongrains_drums.mp3",
-      "pvz:night_moongrains_main": "assets/audio/music/night_moongrains_main.mp3"
+      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3"
+    },
+    "tracker": {
+      "pvz:mainmusic": "assets/music/modules/mainmusic.mo3",
+      "pvz:mainmusic_hihats": "assets/music/modules/mainmusic_hihats.mo3"
     },
     "json": {
       "pvz:strings": "assets/json/strings.json"
@@ -50538,7 +50531,8 @@
       "pvz:backup_dancer_walk": "assets/reanim/backup_dancer_walk.json",
       "pvz:backup_dancer_armraise": "assets/reanim/backup_dancer_armraise.json",
       "pvz:backup_dancer_eat": "assets/reanim/backup_dancer_eat.json",
-      "pvz:backup_dancer_death": "assets/reanim/backup_dancer_death.json"
+      "pvz:backup_dancer_death": "assets/reanim/backup_dancer_death.json",
+      "pvz:sunshroom_bigsleep": "assets/reanim/sunshroom_bigsleep.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

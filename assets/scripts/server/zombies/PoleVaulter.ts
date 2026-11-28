@@ -4,6 +4,7 @@ import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { JsonObject } from '@/shared/protocol'
 import { boolean } from '@/shared/validate'
 import { PLANT_WIDTH, teamDirection, ZOMBIE_WIDTH, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { vaultAttack } from '@/shared/content/hitRects'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { TICKS_PER_SECOND, playZombie, stepZombie, zombieBody, zombiePace } from './animation'
@@ -60,8 +61,8 @@ export class PoleVaulter extends Zombie {
             return true
         }
         if (!this.hasPole || !this.hasHead || this.state !== 'walking') return false
-        const team = zombieTeam(this)
-        const target = plants(zombieFacingRect(this.vault.attack, team), zombieFacingRect(this.vault.bowlingAttack ?? this.vault.attack, team))
+        const team = zombieTeam(this), attack = this.attackRect()
+        const target = plants(zombieFacingRect(attack, team), zombieFacingRect(this.vault.bowlingAttack ?? attack, team))
         if (!target) return false
         this.startVault(target.plant.position, random, target.rolling)
         return true
@@ -72,9 +73,9 @@ export class PoleVaulter extends Zombie {
         return !this.hasPole && super.eats()
     }
 
-    /** What it eats with once it has vaulted (`vault.landedAttack`). */
+    /** Its vault's attack rect as it is now (vaultAttack): what it vaults with, then what it eats with once down. */
     attackRect(): ZombieDefinition['attack'] {
-        return this.vault.landedAttack
+        return vaultAttack(this.vault, this.state, this.hasPole)
     }
 
     /** Zombie::WalkIntoHouse: one that comes to the house still holding its pole lets it go (PHASE_POLEVAULTER_POST_VAULT). */

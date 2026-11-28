@@ -13,6 +13,7 @@ import { startSession, type CommandResult, type ServerContent, type Session } fr
 import { snapshot } from './snapshot'
 import { getActiveTutorial } from '../tutorials/index'
 import { AchievementsResource } from '../achievements/achievements'
+import { OwnedToolsResource } from '../seeds/tools'
 
 export type { CommandRejectionCode } from './session'
 
@@ -34,8 +35,9 @@ export class IntegratedGameServer {
             : restoreSession(this.content, packet.save, packet.levelId, packet.mods)
         // The switches are not saved; `/cheatseed` comes with the start, as it shapes the chooser the level opens with.
         if (packet.cheatSeeds) this.setCheatSeeds(true)
-        // The profile owns the achievements, so a save does not keep them.
+        // The profile owns the achievements and the tools collected, so a save does not keep them.
         this.session.world.resources.get(AchievementsResource).earned = new Set(packet.earnedAchievements)
+        if (packet.ownedTools) this.session.world.resources.set(OwnedToolsResource, [...packet.ownedTools])
         if (packet.save === undefined) return this.snapshot()
         // The purse lives in the profile and may have changed in the store since this save; take it from the session.
         const economy = this.session.world.resources.get(EconomyStateResource)
@@ -89,6 +91,8 @@ export class IntegratedGameServer {
     /** Advances one fixed tick without building a snapshot. */
     step(): void {
         const session = this.requireSession()
+        // LawnApp::UpdateFrames runs Board::ProcessDeleteQueue before each update, paused or not.
+        session.world.freeSlots()
         if (this.processBoundaryCommands()) return
         const level = session.world.resources.get(LevelStateResource)
         // Plant::Update: the plants on the lawn of such an intro go on as in play, while the level waits.

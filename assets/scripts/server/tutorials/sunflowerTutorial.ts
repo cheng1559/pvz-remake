@@ -3,7 +3,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { SeedBankResource, TutorialResource, WaveResource } from '../state/resources'
 import type { TutorialScript } from './index'
 import { displayAdviceOnce } from './advice'
-import { packetAvailability, selectedSeedId } from '../seeds/seedBank'
+import { bankLacks, packetAvailability, selectedSeedId } from '../seeds/seedBank'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { plantsInPlay } from '../level/lawn'
 
@@ -20,10 +20,11 @@ function advice(world: World, key: string): void {
 function initialize(world: World, firstAdventure: boolean): void {
     const tutorial = world.resources.get(TutorialResource)
     tutorial.firstAdventure = firstAdventure
-    tutorial.step = firstAdventure ? 'pick-sunflower' : 'complete'
+    tutorial.step = firstAdventure && !tutorial.skipped ? 'pick-sunflower' : 'complete'
     if (!firstAdventure) return
-    tutorial.promptAtTick = 500
-    // Board::InitZombieWaves: the first adventure's level 2 waits twice ZOMBIE_COUNTDOWN for its first wave.
+    if (!tutorial.skipped) tutorial.promptAtTick = 500
+    // Board::InitZombieWaves: the first adventure's level 2 waits twice ZOMBIE_COUNTDOWN for its first wave, the
+    // tutorial skipped too.
     world.resources.get(WaveResource).nextWaveAtTick = 5000
 }
 
@@ -49,7 +50,7 @@ function noteSeedReady(world: World, definitions: GameplayDefinitions, tick: num
     }
 }
 
-function notePlantPlaced(world: World, definitions: GameplayDefinitions, tick: number, plantId: string): void {
+function notePlantPlaced(world: World, tick: number, plantId: string): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'complete') return
     const count = [...plantsInPlay(world)].filter(plant => plant.typeId === 'pvz:sunflower').length
@@ -59,7 +60,13 @@ function notePlantPlaced(world: World, definitions: GameplayDefinitions, tick: n
         tutorial.promptAtTick = undefined
         const waves = world.resources.get(WaveResource)
         if (waves.index === 0) waves.nextWaveAtTick = tick + 999
-    } else tutorial.step = sunflowerReady(world, definitions, tick) ? 'pick-sunflower' : 'refresh-sunflower'
+    }
+}
+
+/** Any card put down, a plant or not: back to picking the Sunflower, or to waiting for it. */
+function noteSeedPlaced(world: World, definitions: GameplayDefinitions, tick: number): void {
+    const tutorial = world.resources.get(TutorialResource)
+    if (tutorial.step !== 'complete') tutorial.step = sunflowerReady(world, definitions, tick) ? 'pick-sunflower' : 'refresh-sunflower'
 }
 
 function update(world: World, _definitions: GameplayDefinitions, tick: number): void {
@@ -75,11 +82,13 @@ function update(world: World, _definitions: GameplayDefinitions, tick: number): 
 }
 
 export const sunflowerTutorial: TutorialScript = {
+    skips: world => bankLacks(world, 'pvz:sunflower'),
     initialize,
     update,
     seedSelected: noteSeedSelected,
     seedCanceled: noteSeedCanceled,
-    plantPlaced: notePlantPlaced,
+    plantPlaced: (world, _definitions, tick, plantId) => notePlantPlaced(world, tick, plantId),
+    seedPlaced: (world, definitions, tick) => noteSeedPlaced(world, definitions, tick),
     seedReady(world, definitions, tick, seedId) {
         if (seedId === 'pvz:sunflower') noteSeedReady(world, definitions, tick)
     },

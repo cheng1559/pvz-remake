@@ -100,7 +100,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
             text: ui.text('MAIN_MENU_BUTTON'), x: 107, y: 327, width: 209, clickSound: null,
             onClick: () => options.levelIntro ? close(options.onMainMenu) : confirmAction({
                 title: ui.text('LEAVE_GAME_HEADER'), message: ui.text('LEAVE_GAME'),
-                confirmText: ui.text('LEAVE_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), height: 350,
+                confirmText: ui.text('LEAVE_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'),
             }, options.onMainMenu),
         })
     } else {

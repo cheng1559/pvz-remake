@@ -9,23 +9,22 @@
 | 环境 | 用途 |
 | --- | --- |
 | Node.js 22.17.0 与 `node-gyp` | Cocos CLI（其安装说明的要求）以及项目的 Node 工具 |
-| Python 3.10 及以上（以 `python3` 调用）与 Pillow | `build:content`、`build:icons` 和 `test:tools`，它们都调用 `python3` |
-| ffmpeg | 编码音乐与音效；从 `PATH` 中查找，或在 `/opt/homebrew/bin`、`/usr/local/bin` 中查找 |
-| libopenmpt | 渲染原版的音乐模块；作为系统库查找，或使用 `LIBOPENMPT_PATH` 指定的路径，或在常见目录中查找（Windows 上为当前目录、`C:\msys64\mingw64\bin`、`C:\msys64\ucrt64\bin` 和 `C:\Program Files\OpenMPT`；macOS 上为 `/opt/homebrew/lib`、`/usr/local/lib` 和 `/usr/lib`） |
+| Python 3.10 及以上（以 `python3` 调用）与 Pillow、NumPy | `build:content`、`build:icons` 和 `test:tools`，它们都调用 `python3` |
+| ffmpeg | 编码音效；从 `PATH` 中查找，或在 `/opt/homebrew/bin`、`/usr/local/bin` 中查找 |
 | 对应平台的开发工具 | 原生构建，如构建 macOS 和 iOS 版本需要 Xcode |
 | Inno Setup 6 | Windows 安装包 |
 | Xcode 命令行工具（`codesign`、`SetFile`） | macOS 磁盘映像 |
-| Emscripten（`em++` 位于 `PATH` 中） | 仅在重新编译共享 C++ 内核（`npm run build:kernel`）时需要 |
+| Emscripten（`em++` 位于 `PATH` 中） | 仅在重新编译共享 C++ 内核和音乐播放器（`npm run build:kernel`、`npm run build:music`）时需要 |
 | 原版游戏文件 | 导入资源，见[原版游戏文件](#原版游戏文件) |
 
 ## 工具链
 
 PvZ Remake 使用两个工具链仓库的 `dev/pvz-remake` 分支。游戏在 `package.json` 中声明的 Creator 版本为 `4.0.0-alpha.35`。CLI 从 `packages/engine` 读取引擎源码。
 
-| 仓库 | 作用 | v0.2.0 核对的版本 |
+| 仓库 | 作用 | v0.2.1 核对的版本 |
 | --- | --- | --- |
-| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | 提供 `cocos preview`、`cocos build` 和 `cocos make`，包括 IPA 打包。 | [`e24f0f9`](https://github.com/cheng1559/cocos-cli/commit/e24f0f92ee8b15e223512331ba7b5285b7b1ae0b) |
-| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | 提供运行时与原生引擎，包括原生鼠标指针、低分辨率摄像机的指针输入，以及 DPI 和音频播放的修复。 | [`c987978`](https://github.com/cheng1559/cocos4/commit/c987978d37fe64fc180021806838de2dde78dc38) |
+| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | 提供 `cocos preview`、`cocos build` 和 `cocos make`，包括 IPA 打包。 | [`409c35b`](https://github.com/cheng1559/cocos-cli/commit/409c35bdf1294df45809dc3dcbf1a7b7116c032f) |
+| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | 提供运行时与原生引擎，包括原生鼠标指针、低分辨率摄像机的指针输入、模块音乐的音频流、macOS 触屏与触控板滚动，以及 DPI 和音频播放的修复。 | [`a2df3bd`](https://github.com/cheng1559/cocos4/commit/a2df3bd432c1aa1947a8c53e22d52ba3acb7a188) |
 
 全新搭建工具链时，请在游戏仓库之外进行。CLI 的安装说明使用 Node.js 22.17.0 和 `node-gyp`。其默认的 `npm run init` 会按 `repo.json` 选用上游引擎；下面的命令则把本游戏的引擎分叉放到引擎目录，并按两个分叉共同声明的标签获取原生库。
 
@@ -99,10 +98,9 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 ### 音乐与音效
 
-- 音乐和音效由现有的 `tools/pvz/music/convert.py` 与 `tools/pvz/audio.py` 流程转换为 MP3。
-- 音乐使用 LAME VBR 质量 2，音效使用质量 4，采样率均为 44.1 kHz。
-- 动态音乐的各个音轨保留开头的静音、增益以及循环与节拍元数据。每首曲目都是独立的音乐资源（`pvz:<tune>`），因此模组注册相同的 ID 即可替换单首曲目。
-- 这样可以减小下载与安装包体积，但解码后的 PCM 内存不会按相同比例缩小。
+- 音效由 `tools/pvz/audio.py` 转换为 MP3，使用 LAME VBR 质量 4，采样率 44.1 kHz。
+- 音乐直接复制原版的 tracker 模块（`tools/pvz/music/tunes.py`）：`mainmusic.mo3` 和 `mainmusic_hihats.mo3` 成为 tracker 资源 `pvz:mainmusic` 和 `pvz:mainmusic_hihats`。每首曲目都是独立的音乐资源（`pvz:<tune>`），列出 Music::PlayMusic 播放的各部分，因此模组注册相同的 ID 即可替换单首曲目。
+- 游戏自己播放这些模块，见[音乐](ARCHITECTURE.zh-CN.md#音乐)。
 
 ### 鼠标指针
 
@@ -142,12 +140,15 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 | `npm run mod:hosts` | 重新生成模组可获取的宿主模块列表 |
 | `npm run build:icons`（或 `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe`） | 从程序的图标生成应用图标 |
 | `npm run build:kernel` | 把共享 C++ 内核（`native/engine/common/kernel`）编译为 WebAssembly |
+| `npm run build:music` | 把音乐播放器（`native/engine/common/music`，含 libopenmpt）编译为 WebAssembly |
 | **预览与构建** | |
 | `npm run preview:debug`、`npm run preview:release` | 以调试或非调试模式启动预览服务器 |
 | `npm run build:web:debug` | 调试版网页构建 |
+| `npm run build:web:benchmark` | 用于性能基准的发布版网页构建，见[性能基准](#性能基准) |
+| `npm run bench -- <A> [<B>]` | 在已构建的游戏上对比性能基准，见[性能基准](#性能基准) |
 | `npm run compile:{platform}:release` | 原生平台的发布构建，见[构建发布版本](#构建发布版本) |
 
-`build:kernel` 把生成的模块写入 `assets/scripts/shared/kernel/binary.ts`，该文件已提交到仓库，因此其他构建不需要 Emscripten。原生构建直接编译同一份内核源码。
+`build:kernel` 把生成的模块写入 `assets/scripts/shared/kernel/binary.ts`，该文件已提交到仓库，因此其他构建不需要 Emscripten。原生构建直接编译同一份内核源码。`build:music` 同样写入 `assets/resources/music/pvz_music.bin`。
 
 ## 测试
 
@@ -174,7 +175,7 @@ npm run build:web:debug
 | 平台 | 命令 | 输出 |
 | --- | --- | --- |
 | 网页 | `npm run build:web:release` | `build/web-mobile/` 中的 Web 构建 |
-| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{version}-windows-x64-setup.exe`；打包需要 Inno Setup 6 |
+| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{version}-windows-x64-setup.exe` 和压缩包 `dist/pvz-remake-v{version}-windows-x64.zip`；打包需要 Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` 和 `compile:macos:x64:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{version}-macos-arm64.dmg`（Apple 芯片）和 `-macos-x64.dmg`（Intel）；仅能在 macOS 上构建 |
 | Android | `npm run compile:android:arm64:release` | `build/android-arm64-release/` 中的 arm64 安装包；32 位设备使用 `compile:android:armv7:release`，输出到 `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | 未签名的 IPA `build/ios/pvz-remake-mobile-unsigned.ipa`，需要自行签名；仅能在 macOS 上构建 |
@@ -199,7 +200,7 @@ npm run build:web:debug
 ### Windows
 
 1. `npm run compile:windows:release` 先清除构建目录中的旧资源（见[原生构建输出](#原生构建输出)），再构建并编译出 `build/windows/proj/Release/pvz-remake.exe`。
-2. `npm run package:windows` 用 Inno Setup 6 编译 `tools/installer/windows.iss`，并传入 `package.json` 中的版本号，生成 `dist/pvz-remake-v{version}-windows-x64-setup.exe`。缺少 Release 可执行文件时报错。
+2. `npm run package:windows` 从 Release 构建中取出游戏可执行文件、其 DLL 和 `Resources/`，并用编译它的 Visual Studio 的 C++ 运行库（`Microsoft.VC143.CRT`）替换 Cocos 复制来的旧版，玩家无需另装 Visual C++ 运行库。随后用 Inno Setup 6 编译 `tools/installer/windows.iss`，并传入 `package.json` 中的版本号，生成 `dist/pvz-remake-v{version}-windows-x64-setup.exe`；再用同样的文件生成 `dist/pvz-remake-v{version}-windows-x64.zip`，解压后是一个 `Plants vs. Zombies` 文件夹，可直接从中运行游戏。缺少 Release 可执行文件时报错。
 
 打包脚本按以下顺序查找 `ISCC.exe`：环境变量 `ISCC`，`%LOCALAPPDATA%\Programs`、`%ProgramFiles(x86)%` 和 `%ProgramFiles%` 下的 `Inno Setup 6` 目录，最后是 `PATH`。
 
@@ -275,7 +276,25 @@ iOS 禁止 JIT，V8 只能以解释器方式运行，JavaScript 的开销远高�
 
 ### 高负载对比
 
-使用 `/level pvz:stress-test` 并开启 `/fps`：40 株植物对 160 只僵尸。`/perf {plants|zombies|particles|sfx|logic}` 可以每次关闭一部分，见[调试指令文档](DEBUG_CLI.zh-CN.md#性能开关)。
+使用 `/level pvz:stress-test` 并开启 `/fps`：40 株植物对 1023 只僵尸。`/perf {plants|zombies|particles|sfx|logic}` 可以每次关闭一部分，见[调试指令文档](DEBUG_CLI.zh-CN.md#性能开关)。
+
+### 性能基准
+
+性能基准（`app/Benchmark.ts`）每次都以完全相同的方式运行压力测试，并测量其中的耗时：
+
+1. `npm run build:web:benchmark` 生成 Release 网页版，输出到 `build/web-benchmark/`，脚本以 Chrome 110 及以上版本为目标。
+2. `npm run bench -- <A> [<B>]` 在一个或两个构建上多次运行基准，输出每个构建在各次运行中的中位数和范围。对比两个构建时，还给出 B 相对于 A 的变化，变化处于各次运行的波动范围内时标记为“~”。
+
+目标可以是网页构建目录（用全新的无头 Chrome 打开），也可以是原生可执行文件或 macOS 应用。两个目标轮流运行（先 A 后 B，再先 B 后 A），每次都使用全新的浏览器或进程。可用选项：
+
+- `--scenario steady`（默认）测量压力测试开局 10 秒后的视图、动画和绘制，此后服务端静止；`--scenario combat` 从正式开始起运行，包括服务端。两个场景中植物都无敌，僵尸会一直啃食到结束。
+- `--frames 1200` 和 `--rounds 3` 分别设置每次运行计时的帧数（计时前先预热 120 帧）和每个目标的运行次数。
+- `--screenshots <目录>` 保存每次网页运行的最后一帧，并统计它与第一次运行的画面相差的像素数。
+- `--chrome <路径>` 指定浏览器。
+
+每次运行的都是同一局游戏：关卡使用固定种子；无论一帧实际花了多久，每帧都让游戏推进 1/60 秒；客户端的 `Math.random` 按帧号设定种子。每次运行给出整帧（平均值、中位数、p99 和 1% low，即最慢的 1% 帧的平均值）、更新、更新中服务端的逻辑步、引擎的绘制、绘制调用数，以及服务端最后一个快照的校验值。校验值相同说明两次运行的是同一局游戏。
+
+网页版在地址中加 `?benchmark=combat&frames=1200`，或原生版在命令行中加 `--benchmark=combat --frames=1200 --benchmark-out=<文件>` 启动时，游戏会运行基准，在加载界面加载完所有资源后开始。全新的浏览器或安装中没有玩家档案，它会创建名为 Benchmark 的玩家。结果输出到控制台和 `globalThis.pvzBenchmark`；原生版还会写入该文件（默认为游戏数据目录中的 `benchmark.json`），然后退出游戏。
 
 ### 调试版本
 

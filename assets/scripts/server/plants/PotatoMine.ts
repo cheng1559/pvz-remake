@@ -1,11 +1,12 @@
 import type { SystemContext, World } from '@/server/state/World'
 import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import { animateCurve } from '@/shared/content/animation'
-import { plantFacingRect, plantTeam, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { plantFacingRect, plantTeam } from '@/shared/content/teams'
 import type { JsonObject } from '@/shared/protocol'
 import { nonNegativeInteger, oneOf } from '@/shared/validate'
 import { POTATO_MINE_PHASES, type PotatoMinePhase } from '@/shared/content/plantKinds'
 import { rectOverlap } from '../combat/collision'
+import { zombieRect } from '../combat/targets'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { isTargetableZombie } from '../zombies/damage'
@@ -101,10 +102,9 @@ function flashMineLight(world: World, definitions: GameplayDefinitions, plant: P
     const team = plantTeam(plant), reach = plantFacingRect(definition.mine!.attack, team)
     let distance = Infinity
     for (const zombie of world.zombies) {
-        const at = zombie.position
-        if (at.row !== position.row || !isTargetableZombie(zombie, team)) continue
-        const rect = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        distance = Math.min(distance, Math.max(0, -rectOverlap({ x: position.x + reach.x, width: reach.width }, { x: at.x + rect.x, width: rect.width })))
+        if (zombie.position.row !== position.row || !isTargetableZombie(zombie, team)) continue
+        // Zombie::GetZombieRect, in whole pixels.
+        distance = Math.min(distance, Math.max(0, -rectOverlap({ x: position.x + reach.x, width: reach.width }, zombieRect(world, definitions, zombie))))
     }
     const frames = definition.animation!.clips[light.clip].frames, { near, far, fast } = MINE_LIGHT
     const round = animateCurve(far, near, distance, frames, fast)

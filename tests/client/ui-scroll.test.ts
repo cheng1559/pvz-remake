@@ -51,8 +51,34 @@ test('achievement arrow keys use the GOTY speed: reset to 30 per press, minus 1 
     assert.equal(screen.scroll.offset, 435 + 29 + 29 + 406 - 435)
 })
 
-test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track paging and layered thumb', () => {
-    let graphics: { calls: unknown[][], fillColor: unknown, clear(): void, fillRect(...values: number[]): void } | undefined
+test('the More rock scrolls as the arrow keys do, from a speed of 22: 231px down, then back up', () => {
+    const { AchievementScreen } = loadScript('assets/scripts/client/screens/AchievementScreen.ts', (id: string) => ({
+        cc: { Component: class {}, KeyCode: { ARROW_UP: 1, ARROW_DOWN: 2 }, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
+        '@/client/sound/SoundSystem': { SoundEffect: { GraveButton: 'pvz:gravebutton' } },
+        '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
+    } as Record<string, unknown>)[id] ?? {})
+    const screen = new AchievementScreen()
+    screen.node = { isValid: true }
+    screen.scroll = { offset: 0 }
+    screen.more = { isHovering: false, onStateChange() {} }
+    const run = (ticks: number) => { for (let i = 0; i < ticks; i++) screen.update(0.01) }
+    screen.pressMore(); run(1)
+    assert.equal(screen.scroll.offset, 21, 'at its fastest from the first tick')
+    assert.equal(screen.more.pressSound, null, 'scrolling back up plays no sound')
+    run(40)
+    assert.equal(screen.scroll.offset, 231, '21 + 20 + ... + 1')
+    screen.pressMore(); run(40)
+    assert.equal(screen.scroll.offset, 0, 'in its Top state, back up')
+    assert.equal(screen.more.pressSound, 'pvz:gravebutton')
+    screen.pressMore(); run(5)
+    screen.onKeyDown({ keyCode: 1 }); run(40)
+    assert.equal(screen.scroll.offset, 21 + 20 + 19 + 18 + 17 - 435, 'an arrow press takes the scroll over')
+})
+
+/** UIScroll with stand-in nodes; `graphics` is the scrollbar's, `began` the touches its gesture began with. */
+function loadUIScroll(isMobileMode: () => boolean = () => false) {
+    const state: { graphics?: { calls: unknown[][], fillColor: unknown, clear(): void, fillRect(...values: number[]): void }, began: unknown[] } = { began: [] }
     const uiNode = (options: { graphics?: boolean }) => {
         const transform = {
             width: 0, height: 0,
@@ -60,25 +86,77 @@ test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track p
             convertToNodeSpaceAR: (point: { y: number }) => ({ y: point.y }),
         }
         const node = { active: true, isValid: true, on() {}, off() {}, setPosition() {}, getComponent: () => transform }
-        if (options.graphics) graphics = {
+        if (options.graphics) state.graphics = {
             calls: [], fillColor: null,
             clear() { this.calls.length = 0 },
             fillRect(...values: number[]) { this.calls.push([this.fillColor, ...values]) },
         }
-        return { node, transform, graphics }
+        return { node, transform, graphics: state.graphics }
     }
-    const { UIScroll, scrollbarThumb, ZOMBIE_SCROLLBAR_COLORS } = loadScript('assets/scripts/client/ui/UIScroll.ts', (id: string) => ({
+    const module = loadScript('assets/scripts/client/ui/UIScroll.ts', (id: string) => ({
         cc: {
             _decorator: { ccclass: () => (value: unknown) => value }, Component: class {},
             Color: class { constructor(public r: number, public g: number, public b: number, public a = 255) {} },
             input: { on() {}, off() {} }, Input: { EventType: {} }, Mask: { Type: {} }, Node: { EventType: {} },
             UITransform: class {}, Vec3: class { constructor(public x: number, public y: number) {} },
         },
-        '@/client/input/ScrollGesture': { TouchScrollGesture: class { stopInertia() {} cancel() {} applyInertiaY() {} } },
+        '@/client/input/ScrollGesture': {
+            TouchScrollGesture: class {
+                stopInertia() {} cancel() {} applyInertiaY() {}
+                beginTouch(event: unknown) { state.began.push(event) }
+            },
+            getWheelScrollSteps: (event: { steps: number }) => event.steps,
+        },
         '@/client/view/uiNode': { uiNode },
         '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
-        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => false } },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode } },
     } as Record<string, unknown>)[id] ?? {})
+    return { module, state }
+}
+
+test('a scroll area built before /mobile is switched on takes touch drags once it is', () => {
+    let mobile = false
+    const { module: { UIScroll }, state } = loadUIScroll(() => mobile)
+    const scroll = new UIScroll()
+    scroll.node = {}
+    scroll.initialize({ width: 258, height: 100, contentHeight: 400 })
+    scroll.beginTouch('desktop')
+    mobile = true
+    scroll.beginTouch('mobile')
+    assert.deepEqual(state.began, ['mobile'])
+})
+
+test('the wheel glides: each event moves where the list goes, and each frame closes the same share of the way', () => {
+    const { module: { UIScroll } } = loadUIScroll()
+    const scroll = new UIScroll()
+    scroll.node = {}
+    scroll.initialize({ width: 258, height: 100, contentHeight: 1000, wheelStep: 80 })
+    const wheel = (scroll: any, steps: number) => scroll.onWheel({ steps, propagationStopped: false })
+    wheel(scroll, -1)
+    assert.equal(scroll.offset, 0, 'a notch does not jump')
+    scroll.update(0.05)
+    assert.equal(scroll.offset.toFixed(2), (80 * (1 - Math.exp(-1))).toFixed(2), 'in 0.05 s all but a third of the way')
+    // A touchpad's events can come two in a frame, and slowing, as whole points (here 0.1 of a notch each): they add up
+    // to where the list goes, and it gets there in ever smaller steps, never back.
+    wheel(scroll, -0.1)
+    wheel(scroll, -0.1)
+    const moves: number[] = []
+    for (let frame = 0; frame < 60 && scroll.wheelTarget !== null; frame++) {
+        const before = scroll.offset
+        scroll.update(1 / 60)
+        moves.push(scroll.offset - before)
+    }
+    assert.equal(scroll.offset, 96)
+    assert.ok(moves.every((move, i) => move > 0 && (i === 0 || move <= moves[i - 1] + 0.5)), moves.join(', '))
+    wheel(scroll, -1)
+    scroll.offset = 10
+    scroll.update(0.05)
+    assert.equal(scroll.offset, 10, 'setting the offset stops the glide')
+})
+
+test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track paging and layered thumb', () => {
+    const { module: { UIScroll, scrollbarThumb, ZOMBIE_SCROLLBAR_COLORS }, state } = loadUIScroll()
+    const graphics = () => state.graphics
 
     // Almanac box 170px high with a page of 85%: a 2px overflow still leaves 27px of thumb travel.
     const { size, position } = scrollbarThumb(170, 172, 144.5, 27.5)
@@ -114,11 +192,11 @@ test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track p
     ticks(1)
     assert.equal(scroll.offset, 300, 'then every 5 updates')
     const color = (value: unknown) => ZOMBIE_SCROLLBAR_COLORS.indexOf(value)
-    assert.equal(color(graphics!.calls[1][0]), 1, 'the held lower track uses the paging color')
+    assert.equal(color(graphics()!.calls[1][0]), 1, 'the held lower track uses the paging color')
     ticks(1)
     assert.equal(scroll.paging, 0, 'paging stops once the thumb reaches the pointer')
     scroll.releaseBar(event(90))
-    assert.deepEqual(graphics!.calls.map(([value, ...rect]) => [color(value), ...rect.map(Number)]), [
+    assert.deepEqual(graphics()!.calls.map(([value, ...rect]) => [color(value), ...rect.map(Number)]), [
         [0, 0, -87, 8, 87], [0, 0, -100, 8, 13],
         [2, 0, -100, 8, 25],
         [5, 1, -77, 6, 1], [5, 1, -99, 1, 23],

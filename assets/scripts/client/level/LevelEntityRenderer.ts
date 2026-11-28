@@ -11,9 +11,10 @@ import { PlantView } from '@/client/plants/PlantView'
 import type { LevelParticleOwnerSnapshot, LevelPresentationSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell } from './LevelGeometry'
+import { BoardShadows } from './BoardShadows'
 import { EntityFlashes } from './EntityFlashes'
 import { canShovel, cellPlant } from '@/shared/content/planting'
-import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType } from './LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelStage, type ViewType, worldTime } from './LevelStage'
 
 /** What every frame is heard as, once its own events are: StageEventRegistry's `frame` handlers (the disco music's end). */
 const FRAME_EVENT: ServerEvent = { eventId: 0, type: 'frame', data: {} }
@@ -21,6 +22,8 @@ const FRAME_EVENT: ServerEvent = { eventId: 0, type: 'frame', data: {} }
 /** What an entity of the board is, by the list of the server's snapshot it is in. */
 type EntityKind = 'plant' | 'zombie' | 'projectile' | 'mower' | 'gridItem' | 'item'
 type Positioned = { entityId: number, typeId: string, row: number, x: number, y: number }
+/** A node of the layer with its place in the draw order. */
+type LayerEntry = { node: Node, order: number }
 
 /** Each kind's list in a snapshot. */
 const LISTS: Record<EntityKind, (world: WorldSnapshot) => readonly { entityId: number, typeId: string }[]> = {
@@ -45,10 +48,15 @@ export class LevelEntityRenderer implements LevelStage {
     private readonly entities = new Map<number, Entity>()
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
+    coinBankOffset = (): number => 0
+    uiOnLawn = (x: number, y: number): { x: number, y: number } => ({ x, y })
+    lawnScale = (): number => 1
+    timeBlend: LevelStage['timeBlend'] = () => undefined
     levelEndTicks = (): number => -1
     shake: LevelStage['shake'] = () => {}
     private readonly creationTasks = new Map<number, Promise<void>>()
     readonly flashes = new EntityFlashes()
+    readonly shadows: BoardShadows
     private pointer?: { x: number; y: number }
     private lastSnapshot?: WorldSnapshot
     private highlightedPlant?: number
@@ -65,11 +73,14 @@ export class LevelEntityRenderer implements LevelStage {
         private readonly awardLayer: Node,
         readonly intro: LevelIntro,
         readonly graveRise: LevelStage['graveRise'],
-    ) {}
+    ) {
+        this.shadows = new BoardShadows(layer)
+    }
 
     get quiet(): boolean { return this.firstFrame || this.restoring }
     get level(): LevelDefinition { return this.content.levels.levels[this.lastSnapshot!.levelId] }
     get gameplayTick(): number { return this.lastSnapshot?.gameplayTick ?? 0 }
+    get time(): string { return worldTime(this.content, this.lastSnapshot!) }
 
     addScenery(node: Node, order: number, entityId?: number): void { this.scenery.set(node, { order, ...(entityId === undefined ? {} : { entityId }) }) }
 
@@ -142,7 +153,7 @@ export class LevelEntityRenderer implements LevelStage {
         }
         // A flash of an entity that came and went between two frames is no entity's.
         const flashes = this.flashes.snapshot(entityId => this.entities.has(entityId))
-        return { entities: entities.sort((left, right) => left.entityId - right.entityId), flashes }
+        return { entities, flashes }
     }
 
     /** The flashes and what each view kept come back, and the board is shown again quietly, as it was. */
@@ -189,6 +200,8 @@ export class LevelEntityRenderer implements LevelStage {
         // What the frame no longer has goes once its events are heard: what fell off a zombie gone with it (a puff) flies
         // from where it last was.
         for (const id of changes.removed) this.remove(id)
+        // Once every view has placed its own.
+        this.shadows.sync()
         this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
         this.firstFrame = false
@@ -213,7 +226,7 @@ export class LevelEntityRenderer implements LevelStage {
         this.spawnParticle(order, { id: effect, ...boardToLayer(x, y), tint, mirrored, recycle: true })
     }
 
-    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer {
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer | null {
         return ParticlePlayer.spawn({ ...args, parent: this.particleLayer(order), renderOrder: order })
     }
 
@@ -285,22 +298,42 @@ export class LevelEntityRenderer implements LevelStage {
         }
     }
 
-    /** Everything of the layer that has a place in the draw order, with it. */
-    private collectLayerEntries(snapshot: WorldSnapshot): { node: Node, order: number, entityId?: number }[] {
-        const entries: { node: Node, order: number, entityId?: number }[] = []
-        for (const [node, entry] of this.scenery) {
-            if (node.isValid) entries.push({ node, ...entry })
-            else this.scenery.delete(node)
+    /** What syncLayerOrder last put in order, as collected, and the layer's children then. */
+    private orderedEntries?: LayerEntry[]
+    private orderedChildren = 0
+
+    /**
+     * Everything of the layer that has a place in the draw order, with it, listed as an equal order draws
+     * (syncLayerOrder). Board::DrawGameObjects draws those by the objects' addresses, so a list's entities in slot
+     * order: as the snapshot lists them (EntityList). The original's lists lie apart in memory, so between them the
+     * kinds' order stands in. Scenery goes with its entity while that is listed and after the entities once it is gone
+     * (the original's remains are reanimations, of a list of their own); the particles come last.
+     */
+    private collectLayerEntries(snapshot: WorldSnapshot): LayerEntry[] {
+        const entries: LayerEntry[] = [], after: LayerEntry[] = [], withEntity = new Map<number, LayerEntry[]>()
+        for (const [node, { order, entityId }] of this.scenery) {
+            if (!node.isValid) this.scenery.delete(node)
+            else if (entityId === undefined) after.push({ node, order })
+            else {
+                let own = withEntity.get(entityId)
+                if (!own) withEntity.set(entityId, own = [])
+                own.push({ node, order })
+            }
         }
         for (const kind of KINDS) for (const value of LISTS[kind](snapshot)) {
+            const own = withEntity.get(value.entityId)
+            if (own) { entries.push(...own); withEntity.delete(value.entityId) }
             const entity = this.entities.get(value.entityId), order = this.orderOf(kind, value as Positioned)
             if (!entity?.node.isValid || order === undefined) continue
-            entries.push({ node: entity.node, order, entityId: value.entityId })
+            entries.push({ node: entity.node, order })
             // Shadows lie on the ground layer, under every row's plants and zombies.
             const shadow = entity.view?.shadowNode
-            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', (value as Positioned).row, SHADOW_RENDER_OFFSET), entityId: value.entityId })
+            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', (value as Positioned).row, SHADOW_RENDER_OFFSET) })
         }
+        for (const own of withEntity.values()) entries.push(...own)
+        entries.push(...after)
         for (const [order, node] of this.particleHolders) entries.push({ node, order })
+        for (const entry of this.shadows.entries()) entries.push(entry)
         return entries
     }
 
@@ -329,8 +362,14 @@ export class LevelEntityRenderer implements LevelStage {
 
     syncLayerOrder(snapshot: WorldSnapshot): void {
         const entries = this.collectLayerEntries(snapshot)
-        // Equal orders keep entities in creation order, then what was added at their order (an entity's own particles).
-        entries.sort((left, right) => left.order - right.order || (left.entityId ?? Infinity) - (right.entityId ?? Infinity))
+        // Most frames nothing joins, leaves or changes its order: the children are then in order already.
+        const last = this.orderedEntries, count = this.layer.children.length
+        if (last && count === this.orderedChildren && last.length === entries.length &&
+            entries.every((entry, index) => entry.node === last[index].node && entry.order === last[index].order)) return
+        this.orderedEntries = entries.slice()
+        this.orderedChildren = count
+        // Stable: an equal order keeps the order they are listed in.
+        entries.sort((left, right) => left.order - right.order)
         // Unlisted children (an entity leaving the snapshot) keep their place; comparing by index instead would move every
         // node after one of them. Most nodes are already in place, so the engine is called only for the rest.
         const layer = this.layer, children = layer.children, listed = new Set<Node>()

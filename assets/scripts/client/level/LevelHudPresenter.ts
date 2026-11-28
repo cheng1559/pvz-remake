@@ -56,6 +56,8 @@ export interface LevelHudOptions {
     cursorPlant: PlantPreview
     gridPlant: PlantPreview
     sunText: UILabel
+    /** The sun counter's box, which bindSunCounter makes a button. */
+    sunArea: Node
     progressMeter: Node
     progressFillClip: Node
     progressFill: Node
@@ -101,6 +103,7 @@ export class LevelHudPresenter {
     readonly seedBank: LevelSeedBank
     private readonly advice: AdviceWidget
     private readonly sunText: UILabel
+    private readonly sunArea: Node
     private readonly tutorialArrowLayer: Node
     private readonly tutorialLawnFlash: Node
 
@@ -112,11 +115,12 @@ export class LevelHudPresenter {
         this.seedBank = new LevelSeedBank(options)
         this.advice = new AdviceWidget({ ui: options.ui, node: options.adviceNode, parent: options.adviceParent, font: options.adviceFont })
         this.sunText = options.sunText
+        this.sunArea = options.sunArea
         this.tutorialArrowLayer = options.tutorialArrowLayer
         this.tutorialLawnFlash = options.tutorialLawnFlash
         this.progress = new LevelProgressMeter(options.ui, options.level, {
             meter: options.progressMeter, fillClip: options.progressFillClip, fill: options.progressFill, head: options.progressHead, levelText: options.levelText,
-        })
+        }, options.presentation.nameKey)
         this.coinBank = new LevelCoinBank(options.content.definitions.items, options.coinBank)
         this.preview = new LevelPlantingPreview(options.content, options.level, options, options.levelRule)
         UIHoverManager.registerClient(this.hoverClient)
@@ -183,6 +187,17 @@ export class LevelHudPresenter {
     bindMenu(open: () => void): UIButton {
         this.menuButton.onClick = open
         return this.menuButton
+    }
+
+    /** The sun counter's box as a button, pressed as a touch on it lifts; whoever binds it says when it can be. */
+    bindSunCounter(press: () => void): UIButton {
+        const button = this.sunArea.addComponent(UIButton)
+        button.changeCursor = false
+        button.touchSlide = false
+        button.rightClickTriggers = false
+        button.pressSound = null
+        button.onClick = press
+        return button
     }
 
     sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean, menuVisible = introComplete): void {

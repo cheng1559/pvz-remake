@@ -1,7 +1,8 @@
 import { modErrorOwner, modFaults, ModRuntimeError } from '@/shared/mod/ModHost'
 import { BlockInputEvents, Node } from 'cc'
+import { DEBUG } from 'cc/env'
 import { isZombieOnScreen } from '@/shared/content/zombieStates'
-import { LocalIntegratedGame } from './LocalIntegratedGame'
+import { LocalIntegratedGame, PLAYED_FRAME_CHECKS } from './LocalIntegratedGame'
 import { loadInstalledMods } from './ModLoader'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from '@/shared/menu'
@@ -48,6 +49,8 @@ export interface LevelController {
     isWon(): boolean
     countZombiesOnScreenForMusic(): number
     debugCommand(command: string): DebugCliResult
+    /** `/step`: the level runs `ticks` fixed ticks at once, and the board shows where they leave it. */
+    fastForward(ticks: number): void
     /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
     /** `keepMusic`: the board waits but its music plays on (a page opened from the seed chooser). */
     pause(quiet?: boolean, keepMusic?: boolean): void
@@ -105,6 +108,8 @@ export function createLevelController(
         let scene: LevelScene | undefined
         try {
             const content = await loadIntegratedGameContent()
+            // A save of a level no longer installed (a removed test level, a Mod's) is one of other content.
+            if (save && !content.levels.levels[save.levelId]) throw new IncompatibleSaveError(`Level is not installed: ${save.levelId}`)
             if (!content.levels.levels[save?.levelId ?? levelId]) throw new Error(`Level is not installed: ${save?.levelId ?? levelId}`)
             const { base } = content
             if (save) {
@@ -124,14 +129,18 @@ export function createLevelController(
                 : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
             const playerName = profile?.name || 'Player'
             const earnedAchievements = profile ? (await menuApi.getAchievements()).items.filter(item => item.earned).map(item => item.id) : undefined
-            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
+            // A debug build checks every frame its server sends, so that what a Mod writes wrong is told of at once; a
+            // release build one a second.
+            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true, DEBUG ? 1 : PLAYED_FRAME_CHECKS)
+            // The tools collected come from the profile, a loaded save's level too. Without a player every one is there.
+            const ownedTools = profile && 'ownedTools' in purse ? { ownedTools: purse.ownedTools } : {}
             const startOptions = save ? {
-                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements, ...ownedTools,
                 randomSeed: save.server.random.state, cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements, ...ownedTools,
                 randomSeed: Math.floor(Math.random() * 0x100000000), cheatSeeds: GameDebugSettings.cheatSeedsEnabled,
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
                 // Without a player every seed is there, as on a replay.
@@ -158,11 +167,12 @@ export function createLevelController(
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, startOptions, lifecycle)
             if (save) await restoring(save, () => scene!.restorePresentation(save.client))
-            // A level's switches start as DEFAULT_DEBUG_RULES (recharge and sun cost on, invincibility off), saved or not;
-            // the preferences turn over those that differ.
+            // A level's switches start as DEFAULT_DEBUG_RULES (recharge and sun cost on, invincibility and planting
+            // anywhere off), saved or not; the preferences turn over those that differ.
             if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown')
             if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost')
             if (GameDebugSettings.plantInvincible) game.debugCommand('/plantinvincible')
+            if (GameDebugSettings.plantAnywhere) game.debugCommand('/plantanywhere')
             if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
@@ -296,6 +306,11 @@ export function createLevelController(
             const result = current.game.debugCommand(command)
             current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
             return result
+        },
+        fastForward(ticks) {
+            if (!current?.root.isValid) return
+            current.game.fastForward(ticks)
+            current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
         },
         isPaused() {
             return current?.root.isValid === true && current.scene.isPaused()

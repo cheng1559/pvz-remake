@@ -11,6 +11,36 @@ export const LEVEL_AWARD = 'pvz:level-award'
 /** A seed packet's size (IMAGE_SEEDS' cel): in the bank, in the chooser, and a seed award's. */
 export const SEED_PACKET_SIZE = Object.freeze({ width: 50, height: 70 })
 
+/**
+ * The level comes after the Adventure's level `index` (Board::mLevel > index), as a level outside the Adventure
+ * (`adventureIndex` absent) always does: the original's other modes pass every check of the level number.
+ */
+export function pastAdventureLevel(level: LevelDefinition, index: number): boolean {
+    return level.adventureIndex === undefined || level.adventureIndex > index
+}
+
+/** The level has waves, listed or built by its rule: one without (the sandboxes) has none due and never ends. */
+export function levelHasWaves(level: LevelDefinition): boolean {
+    return level.waves !== undefined || level.rules !== undefined
+}
+
+/** CutScene::PlaceStreetZombies: the street's slots for a level's zombies, where the level gives none (`previewCapacity`). */
+export const STREET_CAPACITY = 10
+
+/**
+ * CutScene::PlaceStreetZombies: the zombies standing in the street as the level opens, the level's slots apportioned
+ * from the counts of its waves' zombies, leaving out the zombie that leads the flag waves (`flagZombie`:
+ * GameplayDefinitions.flagWave's, the flag zombie). The original makes each a zombie of its list (ZOMBIE_WAVE_CUTSCENE),
+ * whose slots the level's first zombies take once the intro is over (Board::RemoveCutsceneZombies): the server holds as
+ * many (EntityList.reserve), and the client draws them.
+ */
+export function streetZombies(level: LevelDefinition, counts: Readonly<Record<string, number>>, flagZombie: string): string[] {
+    const capacity = level.previewCapacity ?? STREET_CAPACITY
+    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && id !== flagZombie)
+    const total = entries.reduce((sum, [, count]) => sum + count, 0)
+    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
+}
+
 /** The level award's size on the lawn (Coin::CoinInitialize's mWidth, mHeight): a seed award's is its packet's. */
 export function levelAwardSize(award: LevelDefinition['award']): { readonly width: number; readonly height: number } {
     return award.kind === 'seed' ? SEED_PACKET_SIZE : award
@@ -65,12 +95,14 @@ export function rowGroundY(board: BoardDefinition, row: number): number {
 }
 
 /**
- * The tools a game has: the ones levels award (the 1-4 shovel), from the level after on a first adventure and on
- * every level of a replay (CutScene::ShowShovel).
+ * The tools a level has: the ones levels award (the 1-4 shovel) that the profile records (`owned`), on any level but
+ * one with tools of its own (Whack a Zombie's none). CutScene::ShowShovel: the original shows the shovel from the
+ * level after the one that drops it; here the collected award records it. Without a player (`owned` absent) and with
+ * `/cheatseed` (`cheatSeeds`), every one counts as collected.
  */
-export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
+export function levelTools(levels: GameplayLevels, level: LevelDefinition, owned: readonly string[] | undefined, cheatSeeds: boolean): string[] {
     if (level.tools) return [...level.tools]
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
-        .sort((a, b) => a.adventureIndex - b.adventureIndex)
-    return [...new Set(awards.filter(entry => !firstAdventure || entry.adventureIndex < level.adventureIndex).map(entry => entry.award.id))]
+        .sort((a, b) => (a.adventureIndex ?? Number.MAX_SAFE_INTEGER) - (b.adventureIndex ?? Number.MAX_SAFE_INTEGER))
+    return [...new Set(awards.map(entry => entry.award.id).filter(id => owned === undefined || cheatSeeds || owned.includes(id)))]
 }

@@ -6,8 +6,9 @@ import { plantsInPlay } from '../level/lawn'
 
 /**
  * Plant::UpdateAbilities: what each plant does of its own (Plant.act: a fuse, a mine, a chomper, a sun-shroom's growth,
- * a grave buster, a scaredy-shroom's fright), by its kind. Plant::Update returns early while it is asleep, and a plant
- * chilled or frozen sits out the ticks it does (chill.ts).
+ * a grave buster, a scaredy-shroom's fright), by its kind. A plant waking counts its waking down first, and acts the
+ * tick it wakes; Plant::Update returns early while it is asleep, and a plant chilled or frozen sits out the ticks it
+ * does (chill.ts).
  */
 export function createPlantAbilitySystem(_definitions: GameplayDefinitions): GameSystem {
     return {
@@ -18,7 +19,9 @@ export function createPlantAbilitySystem(_definitions: GameplayDefinitions): Gam
             if (level.result === 'lost' || level.paused) return
             // An earlier plant's blast or bite may take one out: it is passed over.
             for (const plant of plantsInPlay(world)) {
-                if (plantSkipsTick(plant) || plant.asleep(world)) continue
+                if (plantSkipsTick(plant)) continue
+                plant.updateWaking(context)
+                if (plant.asleep(world)) continue
                 plant.act(context)
             }
         },

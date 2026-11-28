@@ -25,6 +25,13 @@ function addWaveHealth(total: number, zombie: Zombie): number {
     return Math.trunc(Math.fround(total + health))
 }
 
+/** How many of each zombie the level's waves bring, which the intro's street shows (streetZombies). */
+export function waveZombieCounts(world: World): Record<string, number> {
+    const counts: Record<string, number> = {}
+    for (const wave of world.resources.get(WaveResource).plan) for (const id of wave.zombies) counts[id] = (counts[id] ?? 0) + 1
+    return counts
+}
+
 /**
  * Board::NextWaveComing, once for each wave as it is about to come (`waves.index`): the final wave's banner before the
  * last one, and the awooga before the first or else the siren where `siren` says (a flag wave; on Whack-a-Zombie, the

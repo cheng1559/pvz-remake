@@ -16,13 +16,15 @@ import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import { SEED_CHOOSER_SLIDE } from '../LevelSeedChooser'
+import { SEED_BANK_X } from '../LevelGeometry'
 import { createOffBoardZombie } from '@/client/view/offBoard'
 import type { ZombieView } from '@/client/zombies/ZombieView'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { streetZombies, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -32,7 +34,7 @@ const PAN_RIGHT_START = 150
 const PAN_RIGHT_END = 350
 const PAN_LEFT_START = 450
 const PAN_LEFT_END = 600
-/** CutScene's TimeSeedBankRightStart: the bank slides from its choosing place back right as the camera pans left. */
+/** CutScene's TimeSeedBankRightStart: the bank slides its own 10 right (SEED_BANK_X) as the camera pans left. */
 const SEED_BANK_RIGHT_START = 475
 const ROLL_SOD_START = 600
 const ROLL_SOD_END = 800
@@ -44,16 +46,6 @@ const SEED_BANK_DURATION = 25
 const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
-
-/**
- * CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster, leaving out the zombie that
- * leads the flag waves (GameplayDefinitions.flagWave, the flag zombie).
- */
-export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: Pick<GameplayDefinitions, 'flagWave'>, capacity: number): string[] {
-    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && id !== definitions.flagWave.zombie)
-    const total = entries.reduce((sum, [, count]) => sum + count, 0)
-    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
-}
 
 /**
  * A street's zombie, drawn by its view as it stands off the board (CutScene::PlaceAZombie makes a zombie of
@@ -127,7 +119,7 @@ export class AdventureIntro implements LevelIntro {
             ready.pause()
         }
         const previewTypes = new Map<Node, string>()
-        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.definitions, layout.previewCapacity)
+        const types = layout.pan === false ? [] : streetZombies(level, previewZombies, content.definitions.flagWave.zombie)
         const introPositions: Array<{ x: number, y: number, order: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
@@ -170,6 +162,11 @@ export class AdventureIntro implements LevelIntro {
         intro.seedChooser = context.seedChooser === true
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
+        // With every part off, it is over before it starts: everything is where it ends.
+        if (intro.complete) {
+            intro.destroyed = true
+            intro.sync()
+        }
         if (context.previewTooltipSurface) {
             intro.installPreviewTooltips(context.ui, context.previewTooltipSurface, content.definitions, context.almanacZombies ?? [], context.openAlmanacZombie)
         }
@@ -195,6 +192,8 @@ export class AdventureIntro implements LevelIntro {
                 const typeId = this.previewTypes.get(node)!
                 if (!openAlmanacZombie || !almanacZombies.includes(typeId)) return
                 tooltip.hide()
+                // Felt only as it opens the almanac, as an almanac entry chosen is.
+                Haptics.play()
                 void SoundSystem.play(SoundEffect.Tap)
                 openAlmanacZombie(typeId)
             }
@@ -226,7 +225,7 @@ export class AdventureIntro implements LevelIntro {
         private readonly bank: Node,
         private readonly houseName: Node,
         private readonly audio: LevelAudioPresenter,
-    ) { if (layout.stationary) this.ticks = SEED_BANK_START }
+    ) { if (layout.pan === false) this.ticks = PAN_LEFT_END }
 
     get complete(): boolean {
         return this.ticks >= this.endTick
@@ -235,18 +234,23 @@ export class AdventureIntro implements LevelIntro {
     private graveTicks = 0
     private seedChooser = false
     private get sodTicks(): number { return this.layout.rolls.length ? ROLL_SOD_END - ROLL_SOD_START : 0 }
-    private get readyStart(): number { return INTRO_BASE_END + this.sodTicks + this.graveTicks }
+    /** Without the entrance, nothing is left between the pan's end and Ready, Set, Plant but the sod and the graves. */
+    private get readyStart(): number { return (this.layout.entrance === false ? PAN_LEFT_END : INTRO_BASE_END) + this.sodTicks + this.graveTicks }
     get graveStartTick(): number | undefined { return this.graveTicks ? PAN_LEFT_END + this.sodTicks : undefined }
     private get endTick(): number { return this.readyStart + (this.layout.readySetPlant ? READY_SET_PLANT_TICKS : 0) }
 
     get elapsedTicks(): number { return this.ticks }
+
+    laidSod(): string | undefined {
+        return !this.sodTicks || this.ticks >= ROLL_SOD_END ? this.layout.sod : undefined
+    }
 
     /**
      * CutScene::UpdateIntro: each row's mower shows once its TimeLawnMowerStart has passed (the higher rows' later),
      * after the lawn is rolled and the graves are up, and comes on over TimeLawnMowerDuration.
      */
     mowerArrival(row: number): number {
-        if (this.complete) return 1
+        if (this.complete || this.layout.entrance === false) return 1
         const start = LAWN_MOWER_START + this.sodTicks + this.graveTicks + (2 - row) * 5
         return Math.max(0, Math.min(1, (this.ticks - start) / LAWN_MOWER_DURATION))
     }
@@ -339,7 +343,7 @@ export class AdventureIntro implements LevelIntro {
             hit.active = tick === SEED_CHOOSER_SLIDE.onEnd
             if (!hit.active) tooltip.hide()
         }
-        const boardX = this.layout.stationary ? 0 : tick <= PAN_RIGHT_START
+        const boardX = this.layout.pan === false ? 0 : tick <= PAN_RIGHT_START
             ? 220
             : tick <= PAN_RIGHT_END
                 ? animateCurve(PAN_RIGHT_START, PAN_RIGHT_END, tick, 220, -380, 'ease-in-out')
@@ -364,18 +368,33 @@ export class AdventureIntro implements LevelIntro {
         }
 
         const houseNameTicks = Math.max(0, HOUSE_NAME_DURATION - tick)
-        this.houseName.active = !this.hasOpeningDialog && !this.layout.stationary && houseNameTicks > 0
+        this.houseName.active = !this.hasOpeningDialog && this.layout.pan !== false && houseNameTicks > 0
         uiNode({ node: this.houseName, opacity: Math.min(255, houseNameTicks * 15) })
 
-        // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop.
+        // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop. Its slides
+        // are unrounded, for smooth ones.
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
-        // The bank drops with the chooser (CutScene's TimeSeedBankOnStart).
+        // The bank drops with the chooser (CutScene's TimeSeedBankOnStart). Without the entrance it is where it ends.
         const bankStart = this.seedChooser ? SEED_CHOOSER_SLIDE.onStart : SEED_BANK_START + this.sodTicks
-        this.bank.active = !this.layout.hiddenSeedBank && tick > bankStart
+        const inPlace = this.layout.entrance === false
+        this.bank.active = !this.layout.hiddenSeedBank && (inPlace || tick > bankStart)
         this.bank.setPosition(
-            animateCurve(SEED_BANK_RIGHT_START, PAN_LEFT_END, tick, 0, 10, 'ease-in-out'),
-            animateCurve(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
+            SEED_BANK_X * this.bankSlid(SEED_BANK_RIGHT_START),
+            inPlace ? 0 : animateCurveFloat(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0, 'ease-in-out'),
         )
+    }
+
+    /**
+     * The bank's place comes back from the UI area's left edge as the camera pans back (TimePanLeftStart), the two
+     * starting and stopping together, whether or not this intro pans.
+     */
+    bankSettled(): number {
+        return this.bankSlid(PAN_LEFT_START)
+    }
+
+    /** How far the bank has slid right from `start` to the pan's end, unrounded; without the entrance it is there. */
+    private bankSlid(start: number): number {
+        return this.layout.entrance === false ? 1 : animateCurveFloat(start, PAN_LEFT_END, this.ticks, 0, 1, 'ease-in-out')
     }
 
     private startSodRoll(): void {

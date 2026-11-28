@@ -12,6 +12,7 @@ import { ProjectileView } from '@/client/projectiles/ProjectileView'
 import { AwardView } from '@/client/items/AwardView'
 import { ItemView } from '@/client/items/ItemView'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 import { ZombieView } from '@/client/zombies/ZombieView'
 import { DancerView } from '@/client/zombies/DancerView'
 import { NewspaperView } from '@/client/zombies/NewspaperView'
@@ -40,9 +41,11 @@ export type StageEventTime = 'before' | 'after'
 /**
  * Board::DoPlantingEffects: the dirt of a plant put down, over everything, and the sound of putting it down;
  * Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too, and a grave seed goes down alike.
+ * Each is felt as it is heard.
  */
 const planted: StageEvent = (stage, event, world) => {
     void SoundSystem.play(SoundEffect.Plant, { foley: true })
+    Haptics.play()
     if (event.type !== 'plantPlaced') return
     const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
     if (plant) stage.spawnParticle(renderOrder('top'), { id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74) })
@@ -83,6 +86,7 @@ export class StageEventRegistry {
             plantFiring: ShooterView.fired, plantAreaAttack: ShooterView.areaAttack, mineRising: PotatoMineView.rose, plantExploded: PlantView.exploded,
             plantFroze: FusePlantView.froze, iceReleased,
             plantGrew: SunShroomView.grew, sunProduced: ProducerView.produced, plantChilled: PlantView.chilled, plantMowered: PlantView.mowered,
+            plantAwoke: PlantView.awoke,
             bowlingImpact: BowlingNutView.bowled, chomperBit: ChomperView.bit, graveBusted: GraveBusterView.busted,
             projectileFired: ProjectileView.fired, projectileImpact: ProjectileView.impact, mowerActivated: MowerView.activated,
             zombieChewedPlant: ZombieView.chewed, zombieChewedZombie: ZombieView.chewed, plantEaten: ZombieView.ate, zombieAteZombie: ZombieView.ate,

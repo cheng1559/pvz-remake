@@ -103,6 +103,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             musicFrames.push({ ticks, zombies: context.zombiesOnScreen })
         } } },
         '@/client/dialogs/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
+        // Gameplay content a broken Mod keeps from loading: the CLI opens without its names.
+        '@/client/game/loadIntegratedGameContent': { loadGameplayContent: () => Promise.reject(new Error('A broken Mod')) },
         '@/client/dialogs/PackageDialog': { showPackageDialog: async () => {
             managerPaused.push(paused)
             packageDialogs++
@@ -174,7 +176,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             return true
         },
         getLevelDefinition: () => ({}),
-        debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
+        debugCommand: () => ({ ok: true }),
         hide() { commits.push('hide-game'); running = false },
         deleteSave() {},
         async saveIfRunning() { saves++; return null },
@@ -526,7 +528,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
 test('focus loss pauses once, hides silently, mutes without auto-pause only when hidden, and regaining focus leaves the pause dialog open', async () => {
     const listeners = new Map<string, () => void>()
     const events = { on: (key: string, f: () => void) => listeners.set(key, f), off: (key: string) => listeners.delete(key) }
-    let focused = true, paused = false, saves = 0, dialogs = 0, eligible = true, muted = false
+    let focused = true, paused = false, saves = 0, dialogs = 0, eligible = true, muted = false, hides = 0
     // Each change of the focus mute, as SoundSystem acts only on a change.
     const mute: boolean[] = []
     const settings = { autoPauseEnabled: true }
@@ -540,9 +542,11 @@ test('focus loss pauses once, hides silently, mutes without auto-pause only when
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
         '@/client/sound/SoundSystem': { SoundSystem: {
             setFocusMuted(value: boolean) { if (value !== muted) mute.push(muted = value) },
+            windowHidden() { hides++ },
             play() { assert.fail('unexpected pause sound') },
         } },
         '@/client/dialogs/MenuDialog': { showMenuDialog() { dialogs++; return { node: {} } } },
+        './Benchmark': { benchmarkRunning: () => false, launchBenchmarkRequest: () => null },
     }
     const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', id => modules[id] ?? {}, {
         window: { addEventListener: events.on, removeEventListener: events.off },
@@ -589,6 +593,7 @@ test('focus loss pauses once, hides silently, mutes without auto-pause only when
         }
         assert.equal(dialogs, 1)
         assert.equal(saves, 4, 'hiding still saves once when auto-pause is skipped')
+        assert.equal(hides, 4, 'every hide stops the sounds that would be heard late')
     } finally { app.removeFocusListeners() }
     assert.equal(listeners.size, 0)
 })

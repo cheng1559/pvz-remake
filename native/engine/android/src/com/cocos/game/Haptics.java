@@ -12,6 +12,8 @@ public class Haptics {
     // The iOS explosion is a 0.28s rumble fading from full intensity to zero.
     private static final int EXPLOSION_STEPS = 14;
     private static final long EXPLOSION_STEP_MS = 20;
+    // The iOS pulse is a 0.15s rumble held at 0.35 of full intensity.
+    private static final int PULSE_AMPLITUDE = Math.round(0.35f * 255);
     private static Vibrator sVibrator;
 
     // Called from the game thread through native.reflection.
@@ -45,6 +47,9 @@ public class Haptics {
             }
             return VibrationEffect.createWaveform(timings, amplitudes, -1);
         }
+        if ("pulse".equals(style)) {
+            return VibrationEffect.createOneShot(duration(style), vibrator.hasAmplitudeControl() ? PULSE_AMPLITUDE : VibrationEffect.DEFAULT_AMPLITUDE);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             int id = "heavy".equals(style) ? VibrationEffect.EFFECT_HEAVY_CLICK
                 : "medium".equals(style) ? VibrationEffect.EFFECT_CLICK : VibrationEffect.EFFECT_TICK;
@@ -58,6 +63,7 @@ public class Haptics {
     private static long duration(String style) {
         switch (style) {
             case "explosion": return 120;
+            case "pulse": return 150;
             case "heavy": return 35;
             case "medium": return 20;
             default: return 10;

@@ -1,10 +1,11 @@
 import type { ToolButton } from './LevelBoardHud'
 import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, UITransform, type Vec2, Vec3 } from 'cc'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
+import { repickRefusal } from '@/shared/debug/DebugCli'
 import { boardCell, plantingCell } from './LevelGeometry'
 import { itemAt } from '@/shared/content/gameplay'
 import type { LevelGame } from './LevelGame'
@@ -29,7 +30,6 @@ interface MobilePress {
 export class LevelInputPresenter {
     private enabled = false
     private started = false
-    private previousSpeed = 1
     private readonly buttons: UIButton[] = []
     private seedButtons: UIButton[] = []
     private toolButtons: ToolButton[] = []
@@ -66,11 +66,15 @@ export class LevelInputPresenter {
             if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
             else this.onMenu()
         })
-        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu)
+        // On mobile, with cheat seeds on, the sun counter's box is R.
+        const sunCounter = this.view.bindSunCounter(() => this.repick())
+        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu, sunCounter)
         for (const button of this.buttons) {
             button.canInteract = () => {
                 if (!this.enabled || button === menu && !this.view.canOpenMenu) return false
+                if (button === sunCounter && !(GameDebugSettings.isMobileMode() && GameDebugSettings.cheatSeedsEnabled)) return false
                 const snapshot = this.game.render()
+                if (button === sunCounter && !this.canRepick(snapshot)) return false
                 return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
             }
         }
@@ -113,6 +117,7 @@ export class LevelInputPresenter {
         if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
+        Haptics.play()
         if (snapshot.cursor.mode !== 'none' && (!replace || packet.selected)) {
             this.cancelPlanting()
             return
@@ -129,8 +134,9 @@ export class LevelInputPresenter {
     private onTouchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode() || !this.acceptsBoardInput) return
         if (this.mobilePress) { event.propagationStopped = true; return }
+        // A tap that takes Dave's speech on is felt, as a touch on a button is.
         if (this.view.dialogReady) {
-            this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
+            this.game.command({ type: 'advanceDialog' }); Haptics.play(); event.propagationStopped = true; return
         }
         const snapshot = this.game.render()
         if (levelStandsStill(snapshot) || snapshot.result !== 'playing') return
@@ -145,6 +151,7 @@ export class LevelInputPresenter {
         // Other buttons (Menu, a Mod's controls) keep their normal capture when no plant is held.
         if (!held && !tool && index < 0 && UIButton.at(location, event.windowId)?.interactable) return
         const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
+        if (packet && held && !pickable) Haptics.play()
         if (packet && (!held || pickable)) {
             // Selection replaces the server's held packet atomically; a queued clear is not visible here yet.
             this.selectSeedPacket(index, true)
@@ -178,7 +185,7 @@ export class LevelInputPresenter {
         if (this.mobilePressReady(press)) {
             this.useCursor(press.point)
             if (this.game.render().cursor.mode !== 'none') this.game.command({ type: 'clearCursor' })
-        } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
+        } else if (press.cancelInside || press.leftSource) this.cancelPlanting()
     }
 
     private onMouseDown(event: EventMouse): void {
@@ -234,9 +241,11 @@ export class LevelInputPresenter {
 
     private onPointerLeave(event: EventMouse): void {
         if (!this.enabled || GameDebugSettings.isMobileMode()) return
-        // Changing the hovered child also emits leave events inside the board.
-        const { x, y } = this.boardPixel(event)
-        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) return
+        // Changing the hovered child also emits leave events inside the level; only leaving the screen counts.
+        const ui = event.getUILocation(), transform = uiNode({ node: this.node }).transform
+        const local = transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y)), { width, height } = transform.contentSize
+        const left = -width * transform.anchorX, bottom = -height * transform.anchorY
+        if (local.x >= left && local.x < left + width && local.y >= bottom && local.y < bottom + height) return
         this.view.setPointer()
     }
 
@@ -262,6 +271,7 @@ export class LevelInputPresenter {
         if (!this.enabled) return
         const cursor = this.game.render().cursor
         if (cursor.mode !== 'none' && (!replace || cursor.mode === 'tool' && cursor.toolId === toolId)) { this.cancelPlanting(); return }
+        Haptics.play()
         this.game.command({ type: 'selectTool', toolId })
         // A touch move can arrive before the next frame; confirm selection at the input boundary.
         this.game.update(0)
@@ -325,15 +335,7 @@ export class LevelInputPresenter {
             if (levelStandsStill(snapshot) || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
             this.selectSeedPacket(packetIndex, true)
         }
-        else if (event.keyCode === KeyCode.KEY_D) {
-            if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }
-            else gameClock.setSpeed(this.previousSpeed)
-        }
-        // `/repick`, which says itself when the level has no bank to choose again; in a repick, its Let's Rock.
-        else if (event.keyCode === KeyCode.KEY_R) {
-            if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
-            else this.game.debugCommand?.('/repick')
-        }
+        else if (event.keyCode === KeyCode.KEY_R) this.repick()
         // `/suncost` and `/cooldown`, run as the CLI runs them: the preference kept for later levels, the advice shown.
         else if (event.keyCode === KeyCode.KEY_S || event.keyCode === KeyCode.KEY_C) {
             const game = this.game
@@ -344,6 +346,28 @@ export class LevelInputPresenter {
         }
     }
 
+    /**
+     * R, and on mobile the sun counter's box: with cheat seeds on, `/repick`, which says itself when it cannot run; in a
+     * repick, Let's Rock's start itself (not a press of the button, so not its sound).
+     */
+    private repick(): void {
+        if (this.game.render().seedChooser?.repick) this.view.confirmSeedChooser()
+        else if (GameDebugSettings.cheatSeedsEnabled) this.game.debugCommand?.('/repick')
+    }
+
+    /**
+     * Whether the sun counter's repick would do anything now, so that one which would not is no button to press (and
+     * does not buzz): in play, as the level's other input waits for; in a repick, as Let's Rock's start could go; else
+     * as `/repick` would start one (repickRefusal).
+     */
+    private canRepick(snapshot: WorldSnapshot): boolean {
+        if (snapshot.phase !== 'gameplay' || !this.view.introComplete) return false
+        const chooser = snapshot.seedChooser
+        if (chooser?.repick) return this.view.canConfirmSeedChooser()
+        return repickRefusal({ choosing: chooser?.choosing === true, repick: false, conveyor: snapshot.conveyor !== undefined,
+            slots: snapshot.seedPackets.length }) === null
+    }
+
     private cancelPlanting(): void {
         if (this.game.render().cursor.mode === 'none') return
         this.game.command({ type: 'clearCursor' })
@@ -352,7 +376,6 @@ export class LevelInputPresenter {
 
     private boardPixel(event: EventTouch | EventMouse): { x: number, y: number } {
         const ui = event.getUILocation()
-        const local = uiNode({ node: this.node }).transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y))
-        return { x: local.x + WIDTH / 2 - this.view.worldShift, y: HEIGHT / 2 - local.y }
+        return this.view.lawnPointAt(ui.x, ui.y)
     }
 }

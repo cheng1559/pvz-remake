@@ -13,7 +13,9 @@ export interface ResourceSprite {
     animations?: string[]
 }
 
-export const RESOURCE_FILES = ['fonts', 'audio', 'json', 'text', 'reanim', 'particles', 'music', 'prefabs'] as const
+export const RESOURCE_FILES = ['fonts', 'audio', 'tracker', 'json', 'text', 'reanim', 'particles', 'music', 'prefabs'] as const
+/** The tracker module formats a module tune plays (libopenmpt reads these and more). */
+export const TRACKER_FILE = /\.(mo3|xm|it|s3m|mod|mptm)$/i
 export type ResourceManifest = { sprites: Record<string, ResourceSprite> } & Record<typeof RESOURCE_FILES[number], Record<string, string>>
 export interface ModContent { resources: ResourceManifest; gameplay?: string; presentation?: string }
 export type ContentFiles = Readonly<Record<string, Uint8Array>>
@@ -67,6 +69,7 @@ export function parseModContent(value: unknown, files: ContentFiles, checkFiles 
         qualifiedId(id)
         relativeFile(file)
         if (kind === 'audio' && !/\.(mp3|wav)$/i.test(file)) throw new Error(`Mod audio must be MP3 or WAV: ${id}`)
+        if (kind === 'tracker' && !TRACKER_FILE.test(file)) throw new Error(`A tracker resource must be an MO3, XM, IT, S3M, MOD or MPTM module: ${id}`)
         if (!checkFiles) continue
         if (!files[file]) throw new Error(`Missing ZIP file: ${file}`)
         if (['json', 'reanim', 'particles', 'music'].includes(kind)) contentJson(files, file)

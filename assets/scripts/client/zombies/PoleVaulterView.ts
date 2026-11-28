@@ -1,4 +1,5 @@
-import { ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { type Rect, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { vaultAttack } from '@/shared/content/hitRects'
 import type { ZombieSnapshot } from '@/shared/protocol/index'
 import { boolean } from '@/shared/validate'
 import type { StageEvent } from '@/client/level/LevelStage'
@@ -17,6 +18,11 @@ export class PoleVaulterView extends ZombieView {
     protected bodyBlend(zombie: ShownZombie): number {
         const landing = this.bodyClip === ZOMBIE_CLIPS.jump && (zombie.state === 'walking' || zombie.state === 'eating')
         return landing ? 0 : super.bodyBlend(zombie)
+    }
+
+    /** Its vault's attack rect as it is now (vaultAttack: PoleVaulter.attackRect). */
+    protected attackRect(zombie: ZombieSnapshot): Rect {
+        return vaultAttack(this.context.content.definitions.zombies[zombie.typeId].vault!, zombie.state, this.own(zombie, 'hasPole', boolean) ?? true)
     }
 
     /** Mowed as it lands from its vault, with no walking snapshot between: its walk stands in for the driver to take. */

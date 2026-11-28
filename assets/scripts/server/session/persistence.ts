@@ -39,7 +39,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     })]))
     const wave = world.resources.get(WaveResource), eventQueue = world.resources.get(EventQueueResource)
     return parseServerSaveSnapshot({
-        schemaVersion: 5,
+        schemaVersion: 6,
         boardSeed: world.resources.get(BoardSeedResource),
         levelId: level.id,
         mods: mods.map(mod => ({ ...mod })),
@@ -47,7 +47,11 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         gameplayTick,
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
-        level: { phase: level.phase, result: level.result, paused: level.paused, ...(level.iceTrap ? { iceTrap: { ...level.iceTrap } } : {}) },
+        level: {
+            phase: level.phase, result: level.result, paused: level.paused, ...(level.iceTrap ? { iceTrap: { ...level.iceTrap } } : {}),
+            ...(level.time === level.definition.time ? {} : { time: level.time }),
+            ...(level.timeChange ? { timeChange: { ...level.timeChange } } : {}),
+        },
         // The upgrades owned are the profile's, which a restore takes again (EconomyState.ownedUpgrades).
         economy: asSaved({ ...world.resources.get(EconomyStateResource), ownedUpgrades: undefined }),
         ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: asSaved(world.resources.get(PacketUpgradeOfferResource)) } : {}),
@@ -99,7 +103,14 @@ export function restoreSession(
         save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
         throw new Error('Saved wave row history does not match the level')
     }
+    // The time of day `/time` put it at and the two the lawn turns between, which its board must have still; one it
+    // has no more makes the save one this game cannot run.
     const board = definitions.boards[definition.board]
+    const change = save.level.timeChange
+    for (const id of [save.level.time ?? definition.time, change?.from, change?.to]) {
+        if (id === undefined) continue
+        if (!Object.hasOwn(board.times, id)) throw new Error(`Saved time of day is not on its board: ${id}`)
+    }
     const cells = save.gridItems
     if (new Set(cells.map(item => `${item.typeId}:${item.column}:${item.row}`)).size !== cells.length) throw new Error('Saved grid items share a cell')
     // The conveyor system runs on a level's belt with the save's.
@@ -121,6 +132,7 @@ export function restoreSession(
         definition,
         board,
         ...save.level,
+        time: save.level.time ?? definition.time,
     })
     world.resources.set(EconomyStateResource, {
         ...jsonRoundTrip(save.economy), sun: Math.min(definitions.economy.maxSun, save.economy.sun), ownedUpgrades: 0,

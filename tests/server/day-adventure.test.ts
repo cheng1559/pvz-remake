@@ -140,7 +140,8 @@ test('each day level runs both flag warnings, restores the planned waves and col
                     assert.deepEqual(resumed.drainEvents(), game.drainEvents())
                 }
             }
-            assert.deepEqual(game.snapshot().zombies.map(zombie => zombie.typeId), plan[wave])
+            // In the order they came: their slots reuse those of the zombies the save left out.
+            assert.deepEqual(game.snapshot().zombies.sort((a, b) => a.entityId - b.entityId).map(zombie => zombie.typeId), plan[wave])
         }
         assert.equal(flags, index === 6 || index === 8 ? 1 : 2)
         const saved = game.save()

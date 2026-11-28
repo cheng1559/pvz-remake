@@ -6,8 +6,8 @@ import type { Plant } from '../plants/Plant'
 /** What stands on the lawn, as the shared cell rules (shared/content/planting, graveAt) and the level read it. */
 
 /**
- * The plants in play (Plant.inPlay), in id order: what the lawn takes for its plants, every system but the squashing of
- * a mowed one and what is saved or shown of all of them (World.plants).
+ * The plants in play (Plant.inPlay), in slot order (EntityList): what the lawn takes for its plants, every system but
+ * the squashing of a mowed one and what is saved or shown of all of them (World.plants).
  */
 export function* plantsInPlay(world: World): Generator<Plant> {
     for (const plant of world.plants) if (plant.inPlay) yield plant

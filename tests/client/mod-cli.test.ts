@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as cli from '@/shared/debug/DebugCli'
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
 import * as menu from '@/shared/menu'
 import { ModHost } from '@/shared/mod/ModHost'
 import { DefinitionSources } from '@/shared/content/DefinitionRegistry'
@@ -61,6 +62,11 @@ test('plant invincibility is saved only after a successful server command', asyn
     assert.equal(settings().plantInvincible, true)
     assert.equal((await executeDebugCliCommand('/plantinvincible', true, () => cli.debugSwitched('plantinvincible', false))).ok, true)
     assert.equal(settings().plantInvincible, false)
+    // /plantanywhere is kept the same way; outside a level it turns the preference alone, for the levels to come.
+    assert.equal((await executeDebugCliCommand('/plantanywhere', false, () => { throw new Error('no level') })).enabled, true)
+    assert.equal(settings().plantAnywhere, true)
+    assert.equal((await executeDebugCliCommand('/plantanywhere', true, () => cli.debugSwitched('plantanywhere', false))).ok, true)
+    assert.equal(settings().plantAnywhere, false)
 })
 
 test('FPS and cursor commands persist their settings and work without an active level', async () => {
@@ -99,6 +105,19 @@ test('FPS and cursor commands persist their settings and work without an active 
     assert.equal(cursorRefreshes, 1)
     assert.deepEqual((await run('/perf plants')).advice, { key: 'DEBUG_SWITCH_OFF', args: ['DEBUG_SWITCH_PERF_PLANTS'] })
     assert.equal(GameDebugSettings.perfPlantsVisible, false, 'performance switches last only while the game runs')
+})
+
+test('/step asks the level to run that many ticks at once, from one to as many as an update runs', async () => {
+    const { executeDebugCliCommand } = load('platform/debug/DebugCliCommands', {
+        '@/shared/debug/DebugCli': cli, '@/shared/protocol': { MAX_TICKS_PER_UPDATE } })
+    // Its results come from the script's own realm: spread, they compare as plain objects.
+    const run = async (command: string, running = true) =>
+        ({ ...await executeDebugCliCommand(command, running, () => assert.fail('the level runs them, not a game command')) })
+    assert.deepEqual(await run('/step 1000'), { ...cli.debugSuccess('Running 1000 ticks'), action: 'step', ticks: 1000 })
+    for (const command of ['/step', '/step 0', '/step -3', '/step 1.5', '/step many', '/step 1001']) {
+        assert.equal((await run(command)).failure, 'syntax', command)
+    }
+    assert.deepEqual(await run('/step 10', false), { ...cli.debugCondition('DEBUG_REQUIRES_LEVEL', 'step') })
 })
 
 test('client Mod commands reuse parsing and completion, and disappear when their host is disposed', async () => {

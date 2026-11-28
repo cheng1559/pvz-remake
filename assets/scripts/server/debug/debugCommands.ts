@@ -2,7 +2,7 @@ import { Schedule } from '@/server/state/World'
 import { packetTeam } from '@/shared/content/teams'
 import type { Session } from '../session/session'
 import { planting } from '../seeds/planting'
-import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, repickRefusal, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
@@ -25,6 +25,7 @@ import { DebugRulesResource, getDebugRules } from './debugRules'
 import { AchievementsResource, grantAchievement } from '../achievements/achievements'
 import { spawnLevelAward } from '../level/levelAward'
 import { cellPosition, LEVEL_AWARD, zombieRowY } from '@/shared/content/gameplay'
+import { startTimeChange } from '../level/time'
 
 export const executor = { execute: executeCommand }
 
@@ -37,7 +38,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
     const { world, definitions, gameplayTick: tick } = session
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
-    const preference = ['cooldown', 'suncost', 'plantinvincible', 'collect', 'cheatseed'].includes(name)
+    const preference = ['cooldown', 'suncost', 'plantinvincible', 'plantanywhere', 'collect', 'cheatseed'].includes(name)
     // The purse and the achievements are no board state, so /money and /achievement also work in the intro (Crazy
     // Dave's offer checks the purse there).
     const anyPhase = name === 'money' || name === 'achievement'
@@ -80,9 +81,8 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         }
         case 'repick': {
             const bank = world.resources.get(SeedBankResource)
-            // A repick's bank is the chooser's until the level goes on after it.
-            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
-            if (bank.conveyor || !bank.packets.length) return debugCondition('DEBUG_REPICK_NO_BANK')
+            const refusal = repickRefusal({ choosing: bank.choosing === true, repick: !!bank.repick, conveyor: !!bank.conveyor, slots: bank.packets.length })
+            if (refusal) return debugCondition(refusal)
             startRepick(world)
             return debugSuccess('Choose your seeds again')
         }
@@ -96,9 +96,8 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             const bank = world.resources.get(SeedBankResource)
             // A repick's bank is the chooser's until the level goes on after it.
             if (bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
-            // `empty` clears the slot; a seed fills an empty one or replaces the packet there.
-            const empty = args[1].toLowerCase() === EMPTY_SLOT
-            const seedId = empty ? undefined : findType(definitions.seeds, args[1])
+            // A seed fills an empty slot or replaces the packet there.
+            const seedId = findType(definitions.seeds, args[1])
             const slot = debugInteger(args[0])
             // `team`: the side of what it puts down, kept only when not the seed's own (packetTeam).
             const side = args[2]?.toLowerCase()
@@ -107,14 +106,9 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
                 // The belt's packets from the left.
                 const conveyor = bank.conveyor, count = conveyor.packets.length
                 if (slot === null || slot < 1 || slot > count) return debugSyntax(count ? `Use slot 1-${count}` : 'The conveyor belt is empty')
-                if (!empty && !seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
+                if (!seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
                 const packet = conveyor.packets[slot - 1]
                 if (bank.selection.mode === 'conveyor' && bank.selection.packetId === packet.id) bank.selection = { mode: 'none' }
-                if (!seedId) {
-                    // The packets after it close the gap as the belt moves, as after a planting.
-                    conveyor.packets.splice(slot - 1, 1)
-                    return debugSuccess(`Conveyor slot ${slot}: ${EMPTY_SLOT}`)
-                }
                 const team = sideOf(seedId)
                 packet.card = { seedId, ...(team ? { team } : {}) }
                 return debugSuccess(`Conveyor slot ${slot}: ${seedId}${team ? ` (${team})` : ''}`)
@@ -122,12 +116,8 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)
             }
-            if (!empty && !seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
+            if (!seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
             if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
-            if (!seedId) {
-                bank.packets[slot - 1] = null
-                return debugSuccess(`Seed slot ${slot}: ${EMPTY_SLOT}`)
-            }
             // A bank may hold the same seed twice; each slot keeps its own recharge.
             const packet = bank.packets[slot - 1] ??= { seedId, readyAtTick: tick, cooldownTotal: 0 }
             packet.seedId = seedId
@@ -192,6 +182,15 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
             }
             return debugSuccess(`${name}: ${zombies.length} zombie(s)`)
         }
+        case 'time': {
+            // Another time of day of the level's board, the lawn turning to it (level/time.ts): what stands on it stays
+            // where it is. None while the lawn turns.
+            const time = Object.keys(level.board.times).find(name => name.toLowerCase() === args[0].toLowerCase())
+            if (!time) return debugCondition('DEBUG_TIME_NOT_ON_BOARD', args[0])
+            if (level.timeChange) return debugCondition('DEBUG_TIME_CHANGING')
+            startTimeChange(level, time)
+            return debugSuccess(`Time: ${time}`)
+        }
         case 'win':
         case 'lose':
             level.result = name === 'win' ? 'won' : 'lost'
@@ -240,6 +239,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
         case 'cooldown':
         case 'suncost':
         case 'plantinvincible':
+        case 'plantanywhere':
         case 'collect': {
             const rules = { ...getDebugRules(world) }
             if (name === 'collect') {
@@ -248,7 +248,7 @@ function executeCommand(session: Session, command: DebugCliCommand): DebugCliRes
                 return debugSuccess(`${name}: ${args[0]}`)
             }
             // A switch turns over.
-            const rule = ({ cooldown: 'cooldown', suncost: 'sunCost', plantinvincible: 'plantInvincible' } as const)[name]
+            const rule = ({ cooldown: 'cooldown', suncost: 'sunCost', plantinvincible: 'plantInvincible', plantanywhere: 'plantAnywhere' } as const)[name]
             const enabled = rules[rule] = !rules[rule]
             if (rule === 'cooldown' && !enabled) for (const packet of world.resources.get(SeedBankResource).packets) if (packet) packet.readyAtTick = 0
             world.resources.set(DebugRulesResource, rules)

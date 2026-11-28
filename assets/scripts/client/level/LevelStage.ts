@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { getBoardPresentation } from './boards/definitions'
+import { boardTimeLook } from './boards/definitions'
 import type { HapticStyle } from '@/platform/Haptics'
 import type { Color, Node, SpriteFrame } from 'cc'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
@@ -7,6 +7,8 @@ import type { ParticlePlayer, ParticleSpawnArgs } from '@/client/particle/Partic
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationSound } from '@/shared/content/presentation'
 import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { TimeBlending } from './TimeBlends'
+import type { BoardShadows } from './BoardShadows'
 import type { EntityFlashes } from './EntityFlashes'
 import type { LevelIntro } from './LevelIntro'
 import type { LevelEntitySnapshot } from './LevelPresentationSnapshot'
@@ -21,10 +23,22 @@ export function boardToLayer(x: number, y: number): { x: number, y: number } {
     return { x: x - WIDTH / 2, y: HEIGHT / 2 - y }
 }
 
-/** The board's plant shadow (BoardPresentation.plantShadow, the darker one at night); off the board the day's. */
-export async function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
-    const id = (stage && getBoardPresentation(content.presentation, stage.level.board).plantShadow) ?? 'pvz:plantshadow'
-    return modResources.sprite(id)
+/** The time of day a frame's level is at: its own, unless `/time` put it at another (WorldSnapshot.time). */
+export function worldTime(content: Content, world: Pick<WorldSnapshot, 'time' | 'levelId'>): string {
+    return world.time ?? content.levels.levels[world.levelId].time
+}
+
+/**
+ * The plant shadow of the board `boardId` at its time of day `time` (BoardTimePresentation.plantShadow, the darker one
+ * at night); the day's without one.
+ */
+export function boardPlantShadow(content: Content, boardId: string, time: string): Promise<SpriteFrame> {
+    return modResources.sprite(boardTimeLook(content.presentation, boardId, time).plantShadow ?? 'pvz:plantshadow')
+}
+
+/** The board's plant shadow (boardPlantShadow) at the time it is now; off the board the day's. */
+export function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
+    return stage ? boardPlantShadow(content, stage.level.board, stage.time) : modResources.sprite('pvz:plantshadow')
 }
 
 /**
@@ -42,7 +56,10 @@ export interface EntityView<Entity = unknown> {
     restore?(snapshot: LevelEntitySnapshot): void | Promise<void>
     /** What the view made outside its node goes with it. */
     destroy?(): void
-    /** Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. */
+    /**
+     * Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. A
+     * zombie's on the board is one of the board's instead (LevelStage.shadows).
+     */
     readonly shadowNode?: Node
     /** The nodes of its own that particles go under, by name: a save keeps a particle's place by them. */
     readonly particleAnchors?: Readonly<Record<string, Node>>
@@ -60,11 +77,18 @@ export type ViewType<V> = abstract new (...args: never[]) => V
 export interface LevelStage {
     /** The layer the board's entities and effects are in. */
     readonly layer: Node
+    /**
+     * The board's shadows: its zombies', drawn a row at a time on the ground (add), and its plants', projectiles' and
+     * mowers', drawn on their own sprites (attach), which change and blend with the time of day alike.
+     */
+    readonly shadows: BoardShadows
     readonly content: Content
     readonly intro: LevelIntro
     /** The level being played, and the gameplay tick of the frame being drawn. */
     readonly level: LevelDefinition
     readonly gameplayTick: number
+    /** The time of day the level is at in the frame being drawn: its own, or another `/time` put it at (worldTime). */
+    readonly time: string
     /**
      * Plants' and zombies' flashes (Plant::mEatenFlashCountdown, Zombie::mJustGotShotCounter), raised by the server's
      * events (EntityFlashes' handlers), kept with the board across a save.
@@ -79,6 +103,21 @@ export interface LevelStage {
     readonly graveRise: { readonly particle: string, readonly sounds: readonly PresentationSound[] }
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset(): number
+    /** How far the coin bank sits from its 800-wide layout position, at the UI area's left edge: what money flies to. */
+    coinBankOffset(): number
+    /**
+     * Where a point of the screen UI, in the HUD's 800x600 layout (y down), is on the lawn, wherever a Mod moves or
+     * scales the lawn (LevelView.setWorldView): what sun, money and the award fly to.
+     */
+    uiOnLawn(x: number, y: number): { x: number, y: number }
+    /** The size the lawn is shown at (LevelView.setWorldView); the screen UI keeps its own. */
+    lawnScale(): number
+    /**
+     * `/time`'s change of time of day as it is drawn now (TimeBlends.blending): the time it blends from, the one it
+     * blends into and its weight, for what blends in its own place as it syncs (a crater); none while none goes on. It
+     * goes by the lawn's turning, not by the time the level is at, which is the new one from halfway on.
+     */
+    timeBlend(): TimeBlending | undefined
     /** Ticks since the level was won (Board::UpdateLevelEndSequence), -1 before. */
     levelEndTicks(): number
     /** Board::ShakeBoard by (x, y), felt as `haptic`: of a frame's shakes, the strongest is felt once. */
@@ -91,14 +130,15 @@ export interface LevelStage {
     particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored?: boolean): void
     /**
      * A particle effect on the board at a draw order, in the layer's coordinates, played as `args` say. Every particle
-     * of the board is drawn at its order among the rest this way, and a save puts it back the same way.
+     * of the board is drawn at its order among the rest this way, and a save puts it back the same way. None while
+     * the particle pools are full (ParticlePlayer.spawn).
      */
-    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer | null
     /** A particle of the board (spawnParticle) goes to another draw order, as a projectile's trail does with its projectile. */
     reorderParticle(player: ParticlePlayer, order: number): void
     /**
-     * A node of the layer takes its place in the draw order until it is destroyed. `entityId`: among what else is at
-     * that order, it goes where that entity does.
+     * A node of the layer takes its place in the draw order until it is destroyed. Among what else is at that order it
+     * goes after the entities, or where the entity `entityId` does while the snapshot lists it.
      */
     addScenery(node: Node, order: number, entityId?: number): void
     /** An entity's node. */

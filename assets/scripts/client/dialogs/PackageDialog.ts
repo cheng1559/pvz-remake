@@ -72,7 +72,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         text, font: 'profile', color: TEXT_COLOR, width, align: 'center',
         y: Math.floor((LIST_HEIGHT - metrics.height) / 2) - metrics.ascentPadding,
     })
-    const loading = notice(list.node, 'Loading...')
+    const loading = notice(list.node, ui.text('LOADING'))
     // Paint Loading before reading and unpacking installed Mods.
     await waitForPreloadFrame()
     if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog

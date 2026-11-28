@@ -20,7 +20,6 @@ import { lawnPlants, plantInPlay } from '../level/lawn'
 import { gridItems } from '../gridItems/gridItems'
 import { placeCrater } from '../gridItems/craters'
 import { craterAt } from '@/shared/content/craters'
-import { isPlantAsleep } from '../plants/sleep'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -115,6 +114,7 @@ export const planting = {
             return code
         }
         const team = selectedTeam(seedBank) ?? seedTeam(seed)
+        const placed = () => getActiveTutorial(world)?.seedPlaced?.(world, definitions, gameplayTick, seedId)
         const refusal = plantingRefusal(sessionLawn(session), seed, team, row, column)
         if (refusal) {
             // Board::MouseDownWithPlant: the line's advice once a game; Board::DisplayAdvice remembers a grave's help
@@ -128,6 +128,7 @@ export const planting = {
             const entity = planting.placeZombie(session, seed.id, row, column, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.id, row, column })
+            placed()
             return
         }
         if (seed.kind === 'grave') {
@@ -135,12 +136,14 @@ export const planting = {
             placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
+            placed()
             return
         }
         if (seed.kind === 'crater') {
             placeCrater(world, definitions, row, column, seed.craterTicks, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'craterPlaced', { seedId, row, column })
+            placed()
             return
         }
         if (session.plantingAdvice) {
@@ -151,6 +154,7 @@ export const planting = {
         const entity = planting.createPlant(session, seedId, row, column, team)
         spendSeed(session, seed, packet, sunCost)
         getActiveTutorial(world)?.plantPlaced?.(world, definitions, gameplayTick, seed.id)
+        placed()
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: seed.id,
@@ -195,7 +199,7 @@ export const planting = {
         if (team === 'zombies') plant.team = team
         world.insert(world.plants, plant)
         plant.start(random, gameplayTick)
-        startPlantAnimations(plant, definition, isPlantAsleep(definition, level.board), random)
+        startPlantAnimations(plant, definition, plant.asleep(world), random)
         return entity
     },
 
@@ -210,7 +214,7 @@ function sessionLawn(session: Session): PlantingLawn {
     const { world } = session
     const { definition, board } = world.resources.get(LevelStateResource)
     return {
-        level: definition, board, rule: levelRule(world),
+        level: definition, board, rule: levelRule(world), anywhere: getDebugRules(world).plantAnywhere,
         plantAt: (row, column) => {
             const entity = planting.findPlantAt(session, row, column)
             return entity === undefined ? undefined : plantInPlay(world, entity)

@@ -4,34 +4,52 @@ import { adviceShown, displayAdviceOnce } from './advice'
 import type { TutorialScript } from './index'
 import { levelAwardDropped } from '../level/levelAward'
 import { plantsInPlay } from '../level/lawn'
+import { bankLacks } from '../seeds/seedBank'
 
 const FIRST_SUN_DELAY_TICKS = 400
 const FIRST_WAVE_DELAY_TICKS = 99
 const SECOND_SEED_PROMPT_DELAY_TICKS = 400
+const PEASHOOTER = 'pvz:peashooter'
 
 function canUpdate(world: World): boolean {
     const level = world.resources.get(LevelStateResource)
     return level.result === 'playing' && !level.paused && !levelAwardDropped(world)
 }
 
-function notePlantPlaced(world: World, tick: number): void {
-    const tutorial = world.resources.get(TutorialResource)
-    if (!tutorial.firstAdventure || tutorial.step === 'complete') return
-    const plantCount = [...plantsInPlay(world)].length
-    if (plantCount === 1) {
-        tutorial.step = 'first-plant-done'
-        world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
-    } else if (plantCount >= 2) {
-        tutorial.step = 'complete'
-        tutorial.promptAtTick = undefined
-        world.resources.get(WaveResource).nextWaveAtTick = tick + FIRST_WAVE_DELAY_TICKS
-    }
+/**
+ * The Peashooters on the lawn: the first lets the sky sun fall, the second starts the waves. The original counts every
+ * plant (Board::MouseDownWithPlant's mPlants.mSize >= 2), where the bank has only the Peashooter.
+ */
+const peashooters = (world: World) => [...plantsInPlay(world)].filter(plant => plant.typeId === PEASHOOTER).length
+
+function letSunFall(world: World, tick: number): void {
+    world.resources.get(TutorialResource).step = 'first-plant-done'
+    world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
 }
 
-function noteSeedSelected(world: World): void {
+function startWaves(world: World, tick: number): void {
+    const tutorial = world.resources.get(TutorialResource)
+    tutorial.step = 'complete'
+    tutorial.promptAtTick = undefined
+    world.resources.get(WaveResource).nextWaveAtTick = tick + FIRST_WAVE_DELAY_TICKS
+}
+
+function notePlantPlaced(world: World, tick: number, seedId: string): void {
+    const tutorial = world.resources.get(TutorialResource)
+    if (!tutorial.firstAdventure || tutorial.step === 'complete' || seedId !== PEASHOOTER) return
+    const count = peashooters(world)
+    if (count === 1) letSunFall(world, tick)
+    else if (count >= 2) startWaves(world, tick)
+}
+
+/** The Peashooter picked up; another card picked up puts a held Peashooter back, as it does not count. */
+function noteSeedSelected(world: World, seedId: string): void {
     const tutorial = world.resources.get(TutorialResource)
     if (!tutorial.firstAdventure) return
-    if (tutorial.step === 'pick-first-seed') tutorial.step = 'plant-first-seed'
+    if (seedId !== PEASHOOTER) {
+        if (tutorial.step === 'plant-first-seed') tutorial.step = 'pick-first-seed'
+        else if (tutorial.step === 'plant-second-seed') tutorial.step = 'pick-second-seed'
+    } else if (tutorial.step === 'pick-first-seed') tutorial.step = 'plant-first-seed'
     else if (tutorial.step === 'enough-sun' || tutorial.step === 'pick-second-seed') {
         tutorial.step = 'plant-second-seed'
         tutorial.promptAtTick = undefined
@@ -65,16 +83,21 @@ function noteSeedReady(world: World, tick: number): void {
 
 export const plantingTutorial: TutorialScript = {
     blocksStart: true,
+    skips: world => bankLacks(world, PEASHOOTER),
+    skipped(world, tick) {
+        // What the Peashooters would let go: the sky sun, unless the first is down, and the waves.
+        const step = world.resources.get(TutorialResource).step
+        if (step === 'pick-first-seed' || step === 'plant-first-seed') letSunFall(world, tick)
+        startWaves(world, tick)
+    },
     initialize(world, firstAdventure) {
-        if (firstAdventure) world.resources.get(TutorialResource).step = 'pick-first-seed'
+        const tutorial = world.resources.get(TutorialResource)
+        if (firstAdventure && !tutorial.skipped) tutorial.step = 'pick-first-seed'
     },
     beforeSun(world, tick) {
         if (!canUpdate(world)) return
         const tutorial = world.resources.get(TutorialResource)
-        if (tutorial.step === 'pick-first-seed' && [...plantsInPlay(world)].length >= 1) {
-            tutorial.step = 'first-plant-done'
-            world.resources.get(SkySunResource).atTick = tick + FIRST_SUN_DELAY_TICKS
-        }
+        if (tutorial.step === 'pick-first-seed' && peashooters(world) >= 1) letSunFall(world, tick)
     },
     sunSpawned(world) {
         const tutorial = world.resources.get(TutorialResource)
@@ -92,19 +115,15 @@ export const plantingTutorial: TutorialScript = {
             tutorial.step = 'pick-second-seed'
             tutorial.promptAtTick = undefined
         }
-        if (tutorial.step !== 'complete' && [...plantsInPlay(world)].length >= 2) {
-            tutorial.step = 'complete'
-            tutorial.promptAtTick = undefined
-            world.resources.get(WaveResource).nextWaveAtTick = tick + FIRST_WAVE_DELAY_TICKS
-        }
+        if (tutorial.step !== 'complete' && peashooters(world) >= 2) startWaves(world, tick)
     },
     seedSelected: noteSeedSelected,
     seedCanceled: (world, _definitions, tick) => noteSeedCanceled(world, tick),
     seedReady(world, _definitions, tick, seedId) {
-        if (seedId === 'pvz:peashooter') noteSeedReady(world, tick)
+        if (seedId === PEASHOOTER) noteSeedReady(world, tick)
     },
     sunCollected(world, tick, seedId, canAfford) {
-        if (seedId === 'pvz:peashooter') noteSunCollected(world, tick, canAfford)
+        if (seedId === PEASHOOTER) noteSunCollected(world, tick, canAfford)
     },
-    plantPlaced(world, _definitions, tick) { notePlantPlaced(world, tick) },
+    plantPlaced(world, _definitions, tick, seedId) { notePlantPlaced(world, tick, seedId) },
 }

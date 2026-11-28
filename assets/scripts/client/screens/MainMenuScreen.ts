@@ -9,6 +9,7 @@ import { MusicSystem } from '@/client/music/MusicSystem'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { Haptics } from '@/platform/Haptics'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
@@ -69,6 +70,8 @@ export class MainMenuScreen extends Component {
     private grassDelay = 0.5
     private startingSeconds: number | null = null
     private laughPlayed = false
+    /** The Adventure button's flash as the game starts, every 0.1 s dark or light. */
+    private flash = -1
     private menu!: MainMenuDefinition
 
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
@@ -383,6 +386,7 @@ export class MainMenuScreen extends Component {
             for (const button of this.flowerButtons) button.enabled = true
             this.startingSeconds = 0
             this.laughPlayed = false
+            this.flash = -1
             MusicSystem.stop()
             void SoundSystem.play(SoundEffect.LoseMusic)
             void SoundSystem.play(SoundEffect.DirtRise, { foley: true })
@@ -420,8 +424,11 @@ export class MainMenuScreen extends Component {
         }
         if (this.startingSeconds === null) return
         this.startingSeconds += dt
-        const shade = Math.floor(this.startingSeconds / 0.1) % 2 === 0 ? 80 : 255
-        this.setAdventureShade(shade)
+        // Each dark flash is felt, a light pulse a little longer than the flash.
+        const flash = Math.floor(this.startingSeconds / 0.1)
+        if (flash % 2 === 0 && flash !== this.flash) Haptics.play('pulse')
+        this.flash = flash
+        this.setAdventureShade(flash % 2 === 0 ? 80 : 255)
         if (!this.laughPlayed && this.startingSeconds >= 1.25) {
             this.laughPlayed = true
             void SoundSystem.play(SoundEffect.EvilLaugh)

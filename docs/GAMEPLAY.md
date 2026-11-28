@@ -70,13 +70,14 @@ The adventure rule (`server/rules/adventure.ts`) builds the waves as `Board::Pic
 3. **Level multiplier** (`pointsScale`): ×4 on Wall-nut Bowling (1-5), ×3 on the conveyor levels 1-10 and 2-10.
 4. **Introduced zombies** (`fixedZombies`) are put on their waves: the middle wave and the last.
 5. **The final wave** gets one of each weighted zombie in the level's pool that it does not have yet (`PutInMissingZombies`).
-6. **The rest** of the points is spent at random by the pool's weights, among the zombies that cost no more than what is left and are allowed on that wave (`firstWave`).
+6. **The rest** of the points is spent at random by the pool's weights, among the zombies that cost no more than what is left and are allowed on that wave (`firstWave`), until the wave holds 50 zombies (`MAX_ZOMBIES_IN_WAVE`; a level's `waveCapacity` gives its own).
 
 A zombie costs its `zombiePool` entry's points, otherwise its own `wave.points` (table in [Zombies](#zombies)). Each zombie of a wave picks its row as the original does: the last two picks are smoothed out, and a row whose lawn mower has just gone off is picked far less often for the next wave and half as often for the one after.
 
 Timing (`server/level/waves.ts`, `Board::UpdateZombieSpawning`):
 
 - The first wave comes at the level's `firstWaveTicks`, 1800 when none is given (`ZOMBIE_COUNTDOWN_FIRST_WAVE`).
+- A level with neither `waves` nor `rules` (the sandboxes `pvz:sandbox-day` and `pvz:sandbox-night`) has no waves: no zombies come but those put down, its award never drops and it never ends.
 - The next wave comes 2500–3099 ticks after the last, or 4500 before a flag wave.
 - From 400 ticks after a wave comes, once its zombies are worn down to 50–65 % of their starting health (rolled for each wave), the next wave comes within 200 ticks; before a flag wave, only once they are all gone. A wave's health counts the body and the helm in full and a shield at 0.2 (`Board::TotalZombiesHealthInWave`), for its zombies on the zombies' side that are walking, eating or in the air.
 - A flag wave's huge-wave warning appears 5 ticks before it is due and then holds it for 751 ticks; its sound plays 25 ticks in, and the music bursts with 700 ticks left at night and 400 by day.
@@ -87,10 +88,10 @@ Timing (`server/level/waves.ts`, `Board::UpdateZombieSpawning`):
 
 #### 1-1 to 1-4
 
-- **1-1** is played on row 3 alone with four waves of Zombies. On a first adventure the planting tutorial (`plantingTutorial`) holds the first wave and the sky sun back until the first plant. Award: Sunflower.
-- **1-2** uses rows 2–4. On a first adventure the Sunflower tutorial (`sunflowerTutorial`) prompts the player to plant Sunflowers. Award: Cherry Bomb.
+- **1-1** is played on row 3 alone with four waves of Zombies. On a first adventure the planting tutorial (`plantingTutorial`) holds the sky sun and the waves back: the first Peashooter planted lets the sun fall, and the second starts the waves (the original counts any two plants on the lawn, `Board::MouseDownWithPlant`, where the bank has only the Peashooter). Without a Peashooter in the bank the tutorial is skipped. Award: Sunflower.
+- **1-2** uses rows 2–4. On a first adventure the Sunflower tutorial (`sunflowerTutorial`) prompts the player to plant Sunflowers; without a Sunflower in the bank it is skipped. Award: Cherry Bomb.
 - **1-3** uses rows 2–4 and introduces the Conehead on waves 5 and 8. Award: Wall-nut.
-- **1-4** uses all five rows. Award: the Shovel, a tool award.
+- **1-4** uses all five rows. Award: the Shovel, a tool award. It records the shovel in the profile's `tools` when the level is won; from then on every level has it but one with tools of its own (Whack a Zombie has none) (the original's level 5, `CutScene::ShowShovel`).
 - On 1-3, 1-4, 1-6 and 1-7, on a first adventure, the more-sun reminder (`moreSunTutorial`, `Board::UpdateTutorial`) asks for more Sunflowers once five waves have come, while fewer than three are planted and a Sunflower packet is ready. It never delays the waves.
 
 #### 1-5: Wall-nut Bowling
@@ -132,7 +133,7 @@ These levels follow the reference `Challenge.h`, `Board::PickZombieWaves`, `Chal
 
 ### Night: 2-1 to 2-10
 
-The night levels reuse the shared level and chooser flow on the night lawn. No sun falls from the sky. The night music uses the same `MusicSystem`, reproducing scheme 2's next-order drum entry and melody crossfade, and keeps the separate drum phase in presentation saves.
+The night levels reuse the shared level and chooser flow on the night lawn. No sun falls from the sky. The night music uses the same `MusicSystem`, reproducing scheme 2's drum entry at the melody's next order and its melody crossfade; presentation saves keep where each part is.
 
 #### Graves
 
@@ -152,8 +153,8 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 **After the last wave.**
 
 - 200 ticks after the final wave, every fully risen grave on the lawn (not only the level's own) raises one zombie, picked by the level's `graveZombies` weights, over 150 ticks. None rises once the award has dropped. A grave raises its zombies on its own side.
-- `graveZombies` names the zombies at their wave weights; with none given, the pool's zombies that can rise from graves (`graveRise`: Zombie, Conehead, Buckethead) are used.
-- `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie`: how deep it starts and its clip, the original's `Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos` and `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change these values.
+- `graveZombies` names the zombies at their wave weights. A level that names none takes its time of day's `graveZombies` that its waves or pool bring (`Board::PickGraveRisingZombieType`, `mZombieAllowed`), and all of them if it names no zombies, as the sandboxes: Zombie, Conehead and Buckethead by day, Zombie and Conehead at night.
+- A zombie comes up as its board's `riseFromGrave` has it (`Zombie::UpdateZombieRiseFromGrave`, `GetDrawPos`): its body and attack rects come up with it, less what the ground hides. `GraveView` draws the original stone and mound atlases, and `ZombieView` clips the emerging body by the presentation's `graves.zombie.clip`, the original's `DrawReanim` values. The clip is in board pixels whatever the zombie's size. A resource pack may change it.
 
 #### 2-1
 
@@ -168,6 +169,7 @@ The night levels reuse the shared level and chooser flow on the night lawn. No s
 
 - Twenty waves (flags on 10 and 20) of Zombies, Coneheads, Bucketheads, Newspaper and Flag Zombies, on 2-1's graves, which raise Zombies or Coneheads 4000:4000 after the final wave.
 - On a first adventure Dave says lines 1401–1402, with `{MONEY}` and `{UPGRADE_COST}` replaced by the current coins and the price of the next seed-slot upgrade.
+- Not in the original, where 2-1's savings cap keeps a first adventure below the price (`packetUpgradeTeaser`): Dave says 1401–1402 only while the next upgrade is out of reach. A player who can already afford it here (from `/money`, a Mod or the profile) is offered it instead, the first slot as from 2-3 on or the second as from 2-6 on, and one who owns both, or whom Dave no longer pitches to (declined twice), hears nothing.
 - Award: the Fume-shroom, which leads to 2-3.
 
 #### 2-3
@@ -301,6 +303,28 @@ These presentation settings are `pvz:whack-a-zombie` in `presentation/definition
 - The Grave Buster limit (2-10) is applied before those weights.
 - The belt stops once the level award has dropped.
 
+### Boards
+
+A level is played on a board (`board`) at one of the board's times of day (`time`). A board has the same layout at every time; its `times` give what differs: whether it is night, the zombies its graves raise (`graveZombies`) and the sun that falls from the sky (`skySun`).
+
+- The front yard (`pvz:frontyard`) has a day and a night. Sun falls from the sky by day (`pvz:sun`), not at night.
+- 1-1 to 1-4 are played on the unsodded front yard (`pvz:frontyard-unsodded`), which has only a day. Each level lays its own sod over it: one row in 1-1, three in 1-2 and 1-3, the whole lawn in 1-4.
+- A level can name its own sky sun (`skySun`), or none with `null`. Wall-nut Bowling (1-5) and the conveyor belt level (1-10) have none.
+- The first sky sun falls 425 to 700 ticks into play (`Board::InitLevel`).
+- Once 1-4's sod is laid, the whole lawn is drawn as one picture. **Differs from the original**, which keeps drawing the sod strip over the unsodded lawn.
+
+`/time` (see [Debug Console](DEBUG_CLI.md#time)) changes a level in play to another time of day of its board. The original has no such change.
+
+- The change takes 100 ticks. The lawn, shadows, craters, the house and the music fade from the old time to the new one.
+- After 50 ticks the level is at the new time:
+  - At night, sleeping mushrooms wake over 70 ticks. Meanwhile their Zs stay and they stretch up and down on their base (`Plant::UpdateReanim`); then the Zs go and they play their awake animation.
+  - By day, mushrooms fall asleep at once: a shot about to be fired is not fired, a hiding Scaredy-shroom comes up first and then sleeps, and a growing Sun-shroom is grown at once. A grown Sun-shroom uses its big sleeping animation (`anim_bigsleep`).
+  - A Doom-shroom or Ice-shroom lights its fuse as it wakes, with its planting sound.
+  - Sky sun starts or stops falling as the new time has it.
+- When the change is over, the level's music (unless it has its own) and the house the zombies walk into are the new time's.
+- At a time other than its own, a level shows that time's whole lawn instead of its own sod.
+- Pausing holds the change, and so does losing. A save keeps the time and a change in progress.
+
 ## Seeds and the seed chooser
 
 ### Seed definitions
@@ -326,12 +350,12 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 
 ### Bank size and when the chooser opens
 
-- A level's `conveyor` gives a belt and its `seedPackets` a fixed bank. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
-- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`). Levels list no slot count or candidate pool.
+- A level's `conveyor` gives a belt and its `seedPackets` a fixed bank, `null` an empty slot. Otherwise the bank follows the original (`Board::InitLevel`): it takes every available seed when they fit, and the chooser opens when there are more.
+- Slots are `settings.seedBank.baseSlots` (6) plus the seed-slot upgrades bought, capped at `maxSlots` (10) and at the number of available seeds (`Board::GetNumSeedsInBank`); a level started with `/cheatseed` on counts every upgrade as bought. An open chooser keeps its slots when fewer cards are offered later (`/cheatseed` turned off). Levels list no slot count or candidate pool.
 - The client builds `maxSlots` packets up front, so a slot bought during the intro only shows one more.
 - `server/seeds/seedChooser.ts` supplies the grid, validates the choices and the confirmation, and saves their order and opening recharges.
-- A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when `/cheatseed`'s Let's Rock starts with fewer cards than slots; a short bank from an older save gets its empty slots back when loaded.
-- An empty slot draws nothing and cannot be picked; `/seed` fills or empties any slot.
+- A bank lists its slots in order, an empty one as `null`. While choosing, the chosen packets come one after another, and taking one out moves the rest up. `finishSeedChoice` starts the level and leaves the unchosen slots empty, which only happens when Let's Rock starts with fewer cards than slots: under `/cheatseed`, or with every card offered chosen once it is turned off; a short bank from an older save gets its empty slots back when loaded.
+- An empty slot draws nothing and cannot be picked; `/seed` fills any slot or replaces its packet.
 - A seed's opening recharge (`initialCooldownTicks`) applies when the level starts: a 5000-tick seed starts at 3500 and a 3000-tick one at 2000, as in the original; a level with `openingRecharge: false` starts them ready.
 
 ### The chooser
@@ -342,7 +366,7 @@ These seeds are project additions (see [Teams and the Hypno-shroom](TEAMS.md)); 
 - **Warnings.** Before the level starts, the chooser warns as the level script's `chooserWarnings` lists, in order (`SeedChooserScreen::OnStartButton`); then, without a sun producer in the bank, it gives the sun warning (`SEED_CHOOSER_SUN_WARNING`, or the script's `sunWarning`). Choosing to repick at any warning stops the start.
 - **Drawing order.** Chooser cards and their pictures are drawn in reading order, each over the one before, as `SeedChooserScreen::Draw` and `SeedBank::Draw` go left to right. `LevelSeedChooser` places each seed at its position, leaving the places of locked seeds empty, rather than by preview image indices, and runs its presentation on the shared clock.
 - **Mouse wheel.** The wheel over the level turns the chooser's pages while it is out (`/cheatseed`'s pages). The level root listens for it, because a node of its own listening for any mouse event would take every press over it (`NodeEventProcessor._handleMouseDown`), such as the Menu button's. Mods may restyle the page buttons (`LevelSeedChooser.pageTurners`) and wrap `LevelView.attachSeedChooser` to add to every chooser.
-- Use `/level pvz:seed-chooser-test` to test the chooser.
+- To test the chooser, start a level with `/cheatseed` on: every seed is offered, more than the slots, so the chooser opens on any level without a fixed bank or a conveyor.
 
 ### Repick
 
@@ -394,8 +418,10 @@ Costs and recharges are the seed definitions' `sunCost` and `cooldownTicks`; the
 
 ### Shared rules
 
-- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `isPlantAsleep`, the server's one test of a plant asleep): it does nothing, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
+- **Sleep.** A night plant (`nocturnal`, the mushrooms) on a lawn that is not at night sleeps (`Plant::mIsAsleep`, `Plant.asleep`, the server's one test of a plant asleep): it does nothing, the count to its next shot or sun waits, its blink waits, and zombies eat it as any plant, even one whose awake form they would leave alone.
+- **Lit fuses stay awake.** A Doom-shroom or Ice-shroom whose fuse is lit does not fall asleep, even when the time turns to day.
 - **Shots leave a puff at the mouth** (`Plant::Fire`): the Scaredy-shroom's `PARTICLE_PUFFSHROOM_MUZZLE` at 27 and 13 from the shot's corner, the Puff-shroom's at 18 and 13, the Snow Pea's `PARTICLE_SNOWPEA_PUFF` at 8 and 13, drawn just over the row's lawn mowers. This is the plant presentation's `muzzle`, placed where `projectileFired` says the shot set off.
+- **Shots hit from where they stood as the tick began** (`Projectile::mX`, `GetProjectileRect`): a shot moves, then hits what its rect overlaps at that place, in whole pixels; a lawn mower set off looks there too, before it moves. A homing shot hits its target only once its own y lies between the target's top and bottom.
 - **Producers on the zombies' side** (the Sunflower, the Sun-shroom) make no sun. Each time they would, they take what that sun is worth (25, or a small Sun-shroom's 15) from the player's bank, down to 0 (the `sunDrained` event), glowing as they would and flashing the sun counter red with the buzzer. **Differs from the original**, where plants have no side (see [Teams and the Hypno-shroom](TEAMS.md)).
 - **Saves.** Ability states such as the Sun-shroom's growth and the Grave Buster's progress are saved.
 - **Almanac and level share their look.** Installed plants use their level animations in the almanac, with the same body coordinates, scale and shadow.
@@ -466,6 +492,7 @@ Awarded by 2-5; its ability works from 2-6. See [Teams and the Hypno-shroom](TEA
 - It idles as any plant (10–15 fps, also off the board). Awake, it goes down with its fuse lit: its animation's `fuse` state plays `explode` at 23 fps as it is planted (`Plant::UpdateDoomShroom`).
 - The fuse burns 100 ticks, the three parts of its head shaking by up to 1, 2 and 2 px each tick (`Reanimation::SetShakeOverride`; the plant presentation's `shake`, drawn by `ReanimPlayer.setTrackOffset`).
 - It then deals 1800 within 250 px, three rows each way, and leaves a [crater](#craters) in its cell for 18000 ticks (`fuse.crater`).
+- Its blast's sound plays as foley: blasts within 100 ms of each other are heard once. **Differs from the original**, which plays it every time.
 
 ### Craters
 
@@ -486,9 +513,10 @@ Wall-nut Bowling's rules are in [1-5](#1-5-wall-nut-bowling).
 - `pvz:bowling-wallnut` and `pvz:bowling-explodenut` are plants and seeds of their own, configured in the gameplay and presentation JSON. Only the Wall-nut's art is reused; the plain Wall-nut takes no part in bowling.
 - Their kind is `bowlingnut` (`BowlingNut` on the server, `BowlingNutView` on the client), whose fields `direction` and `hits` are the way it rolls and the strikes so far.
 - Their `bowling` must give the attack rect `attack` (`Plant::GetPlantAttackRect`). `bounceSpeed` (2), `damage` (1800), `helmDamage` (900) and `shieldDamage` (400) take `Plant::UpdateBowling`'s values unless a plant gives its own. `bouncedBreaks` lists the shields a full strike breaks through after a bounce (the plain nut's `["door"]`) and is empty unless given.
+- A nut strikes the leftmost hostile zombie or plant its attack rect reaches, a zombie that has lost its head too (`Plant::FindTargetZombie`).
 - The explosive nut goes off at the first touch and deals no strike of its own.
 - The settings are checked by exact keys as the content loads, not when a nut is planted.
-- A nut rolls by the `ground` of its body layer's rolling clip (`wallnut_roll`'s `_ground`), with the same `groundStep` zombies walk by (`Reanimation::GetTrackVelocity`).
+- A nut rolls by the `ground` of its body layer's rolling clip (`wallnut_roll`'s `_ground`), with the same `groundStep` zombies walk by (`Reanimation::GetTrackVelocity`). It goes in whole pixels (`Plant::mX`), what is left of one dropped each tick: two or three a tick.
 - Rolling down a row, a nut is drawn with the row above (`BowlingNutView.drawnRow`, `Plant::UpdateBowling`). Its rolling sound when put down (`SOUND_BOWLING` in `Board::MouseDownWithPlant`) is the nut's own `plantedSounds`.
 - Flags: `occupiesCell: false` makes a moving plant hold no cell and be nothing to bite; `low: true` makes a low plant that hostile projectiles fly over (see [Teams and the Hypno-shroom](TEAMS.md)); the presentation's `layer: "projectile"` draws a rolling nut on its row's projectile layer (`Plant::CalcRenderOrder` on bowling levels).
 
@@ -514,7 +542,7 @@ From `mods/pvz-base/gameplay/definitions/zombies.json`. Health is the body's; ar
 A zombie looks for something to eat on every 4th tick of its age, every 8th while chilled (`bite.cadenceTicks`, `Zombie::CheckIfPreyCaught`):
 
 - It looks only with its head on. A zombie without one goes on eating or walking as it was.
-- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant put down that it overlaps by 20.
+- It looks for an enemy zombie first, then a plant. Its attack rect reaches from where it stood as the tick began, in whole pixels (`Zombie::mX`), and takes the first plant in slot order that it overlaps by 20. Of plants stacked on one cell it takes the one in the highest slot (`Board::GetTopPlantAt`).
 - Finding one, it starts eating in that tick and bites it at once, for 4 (`bite.damage`). An awake Hypno-shroom is bitten without harm.
 - Finding nothing while it eats, it stops and walks on from the next tick. Between the ticks it looks on, it goes on as it was.
 - At each chew of its eat clip it looks again for the plant it chews, which flashes (`Zombie::AnimateChewSound`).
@@ -578,7 +606,7 @@ The dancers are the zombies with a `dance`, of the `dancer` kind (`Dancer`, `ser
 - A plant in its way ends the moonwalk without being bitten (`Zombie::EatPlant`).
 - A leader that stops eating during its moonwalk (an enemy zombie in its way) walks on its walk clip until its moonwalk time is through, facing the way it goes. The original draws it turned round all that while, and for one frame even when that time is already up, since it stops eating after its dance has been updated (`Zombie::UpdatePlaying`; see the README's [Bug Fixes](../README.md#bug-fixes)).
 - It then snaps its fingers (`point`), its speed picked as it does, and as the snap ends calls up its `backup` into each place of its `troupe`: a row above and a row below, and 100 px behind and ahead in its own row (turned round on the plants' side). No dancer is called up into a row zombies do not walk.
-- Each Backup Dancer comes up out of the ground over 150 ticks, standing still and untouchable as a grave's zombie is (`riseTicks`), with `PARTICLE_DANCER_RISE` and the rumble (`dancerCalledUp`, the backup's `dance.rise` presentation).
+- Each Backup Dancer comes up out of the ground over 150 ticks, standing still and untouchable as a grave's zombie is (`riseTicks`), with `PARTICLE_DANCER_RISE` and the rumble (`dancerCalledUp`, the backup's `dance.rise` presentation). One on the plants' side has its dirt come up under its feet, where its shadow is, turned round with it (`riseDirt`); the original leaves it where a hostile one's is.
 - The leader holds the pose for 200 ticks.
 
 **Music.** The first snap starts the disco music when at most 15 zombies are about (`dancerSnapped`, `FOLEY_DANCER`). It stops once no dancer with its head is dancing, by the client's `frame` handler. It pauses with the game and stops as the level ends (`FOLEYFLAGS_MUTE_ON_PAUSE`: `pauseWithGame`, `pauseGameSounds`, `stopGameSounds`).
@@ -642,9 +670,9 @@ Coins follow `Board::DropLootPiece`.
 | 250 × *v* | Gold coin | 5 coins, shown as $50 | about 0.8 % |
 | 2500 × *v* | Silver coin | 1 coin, shown as $10 | 7.5 % |
 
-- **When coins drop.** Nothing drops once the award has. During the first adventure, coins drop from level 11 (2-1) on; after the adventure is finished, on every level (`Board::CanDropLoot`). Wall-nut Bowling drops none. No level setting is involved.
+- **When coins drop.** Nothing drops once the award has. During the first adventure, coins drop from level 11 (2-1) on; after the adventure is finished, on every level (`Board::CanDropLoot`). A level outside the Adventure, such as a test level, drops them on a first adventure too. Wall-nut Bowling drops none. No level setting is involved.
 - **2-1's first-adventure rules.** Its script adds `loot.firstCoinAfterWave`, which guarantees a first coin with a pickup arrow after wave 5, and `loot.savingsCap` (75 coins, the first slot's price), which stops any drop that would bring the coins, counting the ones in flight and a gold coin for each lawn mower still on the lawn, to the upgrade price.
-- **Collecting.** Coins are `kind: "money"` items that spin once landed and fly to the bottom-left coin bank. The bank shows for 1000 ticks and fades over its last 15; it also shows when the game is paused (not by the debug console's pause) and stands beside Crazy Dave while he is out.
+- **Collecting.** Coins are `kind: "money"` items that spin once landed and fly to the bottom-left coin bank. The bank shows for 1000 ticks and fades over its last 15; it also shows when the game is paused (not by the debug console's pause) and stands beside Crazy Dave while he is out. It keeps its margin from the UI area's left edge, and coins fly to it there (`LevelStage.coinBankOffset`); beside Dave it stays at its place in the 800 layout he stands in.
 - **Lawn mowers.** From 200 ticks after the award, each unused lawn mower turns into a gold coin every 40 ticks, from the bottom row up, with a rising note.
 - **The purse.** The profile owns it: starting and restoring a level take the coins and seed-slot upgrades from it, and every change in the level (including `/money`) is written back at once.
 - The `items` presentation table supplies the items' visuals, animations and sounds.
@@ -676,3 +704,4 @@ Each is described in its section above. The README's [Bug Fixes](../README.md#bu
 - The dance beat follows the level's ticks, not the app's updates, so pausing cannot steer it.
 - A dancer that reaches the house switches to its walk; on the plants' side its spotlight turns round with it.
 - The dancers' almanac windows are drawn at their lawn size.
+- Once 1-4 has rolled its sod, the day's lawn is drawn whole as one picture.

@@ -8,11 +8,12 @@ import { animateCurve } from '@/shared/content/animation'
 import { craterAt } from '@/shared/content/craters'
 import { damageZombie, destroyZombie } from '../zombies/damage'
 import { damagePlant } from '../plants/damage'
-import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantTeam, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { Team } from '@/shared/protocol'
 import { pickWeighted } from '@/shared/random'
 import { circleRectOverlap } from '../combat/collision'
+import { plantRect, zombieRect } from '../combat/targets'
 import { graves as lawnGraves, placeGrave, raiseZombieFromGrave } from '../gridItems/graves'
 import { plantInPlay, plantsInPlay } from '../level/lawn'
 import { gridItems } from '../gridItems/gridItems'
@@ -228,17 +229,17 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     const { hammerRadius, hammerDamage } = whackSettings(world.resources.get(LevelStateResource).definition.rules!)
     // Lower rows draw in front; within a row a zombie is over a plant, and the later of two alike over the earlier.
     let top: { entity: number; row: number; plant?: true } | undefined
-    const reached = (position: { x: number; y: number }, body: { x: number; y: number; width: number; height: number }) =>
-        circleRectOverlap(x, y - 20, hammerRadius, { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height })
+    const reached = (rect: { x: number; y: number; width: number; height: number }) => circleRectOverlap(x, y - 20, hammerRadius, rect)
     for (const plant of plantsInPlay(world)) {
         const { id: entity, position } = plant
-        if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(position, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))) continue
+        if (!isHostile(plantTeam(plant), HAMMER_TEAM) || !reached(plantRect(definitions, plant))) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row, plant: true }
     }
     for (const zombie of world.zombies) {
         if (isDeadOrDying(zombie) || !isHostile(zombieTeam(zombie), HAMMER_TEAM)) continue
         const { id: entity, position } = zombie
-        if (!reached(position, definitions.zombies[zombie.typeId].body)) continue
+        // Challenge::MouseDownWhackAZombie: Zombie::GetZombieRect, in whole pixels.
+        if (!reached(zombieRect(world, definitions, zombie))) continue
         if (!top || position.row >= top.row) top = { entity, row: position.row }
     }
     if (!top) return

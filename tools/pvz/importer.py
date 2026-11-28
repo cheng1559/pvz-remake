@@ -18,7 +18,8 @@ from .particles import convert_directory as convert_particles
 from .strings import convert_lawnstrings, merge_project_strings
 from .audio import copy_sounds
 from .cursors import extract_cursors
-from .music.convert import convert_music, split_manifest
+from .doors import make_alike as make_doors_alike
+from .music.tunes import import_music
 
 from . import ROOT, BASE_MOD as MOD
 from .pak import extracted_pak
@@ -40,7 +41,7 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     index_path = mod / 'content.json'
     index = json.loads(index_path.read_text())
     resources = index.setdefault('resources', {})
-    for kind in ('sprites', 'fonts', 'audio', 'json', 'text', 'reanim', 'particles', 'music', 'prefabs'):
+    for kind in ('sprites', 'fonts', 'audio', 'tracker', 'json', 'text', 'reanim', 'particles', 'music', 'prefabs'):
         resources.setdefault(kind, {})
     assets = mod / 'assets'
 
@@ -60,6 +61,8 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     print('[content] Images and alpha channels', flush=True)
     images = convert_images(raw / 'reanim', assets / 'images')
     images += convert_images(raw / 'images', assets / 'images', raw / 'properties/resources.xml')
+    # The front yard's house door, alike by day and by night for `/time`'s blend (tools/pvz/doors.py).
+    make_doors_alike(assets / 'images')
     particle_images = convert_images(raw / 'particles', assets / 'images/particles')
     # The mouse cursors are only in the executable: pvz:cursor_pointer, pvz:cursor_hand, pvz:cursor_dragging.
     for name, image in cursors.items():
@@ -112,16 +115,22 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     merge_project_strings(file, Path(__file__).with_name('ui-strings.json'))
     register('json', 'pvz:strings', file)
 
-    print('[content] Sound effects and music stems', flush=True)
+    print('[content] Sound effects and music', flush=True)
+    # Both are this import's alone: made afresh, so nothing an earlier one wrote is packed or registered.
+    for directory, kinds in ((assets / 'audio', ('audio',)), (assets / 'music', ('tracker', 'music'))):
+        shutil.rmtree(directory, ignore_errors=True)
+        for kind in kinds:
+            resources[kind] = {}
     copy_sounds(raw / 'sounds', assets / 'audio/sfx', overwrite=True)
-    convert_music(raw / 'sounds', assets / 'audio/music', overwrite=True)
     for file in sorted((assets / 'audio').rglob('*.mp3')):
         register('audio', f'pvz:{file.stem}', file)
-    # Each tune is its own music resource (pvz:<tune>), so a Mod replaces one tune by registering the same ID.
-    music = assets / 'audio/music/music_manifest.json'
-    for tune, file in split_manifest(music, assets / 'music').items():
-        register('music', f'pvz:{tune}', file)
-    music.unlink()
+    # The game plays the original's modules; each tune is its own music resource (pvz:<tune>), so a Mod replaces one
+    # tune by registering the same ID.
+    modules, tunes = import_music(raw / 'sounds', assets / 'music/modules', assets / 'music')
+    for id, file in modules.items():
+        register('tracker', id, file)
+    for id, file in tunes.items():
+        register('music', id, file)
 
     file = assets / 'prefabs/ui/level.prefab'
     file.parent.mkdir(parents=True, exist_ok=True)

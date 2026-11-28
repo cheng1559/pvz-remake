@@ -27,7 +27,7 @@
 3. 勾选要启用的模组，用箭头调整顺序（见[优先级与加载顺序](#优先级与加载顺序)）。
 4. 点击**应用**（Apply）并确认重启。
 
-管理器窗口先显示 `Loading...`，读取完已安装的模组后再显示列表。
+管理器窗口先显示文本 `LOADING`（`LOADING...`），读取完已安装的模组后再显示列表。
 
 ### 导入时会发生什么
 
@@ -247,15 +247,22 @@ my-mod/
 
 模组可以添加内容的表现表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`clips`、`levels`、`rules`、`challenges`、`store` 和 `almanac`。其中 `items` 以掉落物 ID 为键，`awards` 以关卡奖励 ID 为键，`rules` 以关卡规则的 `kind` 为键，`store` 以商店物品 ID 为键，`almanac` 以图鉴所展示的植物或僵尸 ID 为键。
 
-两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，写在别人 ID 下的条目会修改它。基础内容包还有一些不属于这些表的设置：玩法侧的 `settings`，以及表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。模组写同样的键来修改它们。写入其他顶层键都会报错。
+两侧遵循相同的规则：新 ID 只能位于模组自己的命名空间，写在别人 ID 下的条目会修改它。基础内容包还有一些不属于这些表的设置：玩法侧的 `settings`，以及表现侧的 `settings`、`mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。模组写同样的键来修改它们。写入其他顶层键都会报错。
 
 表现定义与玩法定义一样严格：每个对象只接受自己的字段，多出、拼错或放错位置的字段（如写在僵尸表现中的 `vault`）会报告 `... is not supported`。
 
 新关卡必须同时在玩法 `levels`（规则与波次）和表现 `levels`（开场、草坪与提示）中注册。
 
+关卡还要写明所在场景（`board`）和进行的时段（`time`），时段必须是该场景 `times` 中的一个。
+
+- 玩法场景写一次布局（`rows`、`columns`、`origin`、`cell`、`bounds`、`riseFromGrave`），在 `times.<名称>` 下写随时段变化的部分：`night`、`graveZombies`、`skySun`。
+- 表现场景写一次失败演出（`gameOver`：标题图 `title`、门内 `interior` 和门框 `doorway` 的位置、`clipX`、`winnerY`、`panX`），在 `times.<名称>` 下写各时段的 `background`、`backgroundX`、`lawn`、`plantShadow`、`music` 和 `door`（门内、门框两张图）。
+- 同一场景各时段的门图大小必须相同，每个像素要么完整绘制，要么不绘制。模组自带的前院门图可用 `python3 -m tools.pvz.doors` 处理。
+- 要给其他命名空间的场景加时段，写在那个场景的 `times` 下。
+
 ### 修改已有定义
 
-模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
+模组写在其他命名空间 ID（基础游戏的或其他模组的）下的条目会修改该定义，而不是新增一个。写在对应键下的表外设置块也一样：玩法侧的 `settings`，表现侧的 `settings`、`mainMenu`、`conveyor`、`storeDialogue`、`iceTrap`、`graves`、`dave` 和 `seedPackets`。每处修改都是一个 JSON 合并补丁（RFC 7386）。示例模组的 `levels.json` 里既有自己的关卡，也有对 1-1 的修改：
 
 ```json
 {
@@ -380,6 +387,11 @@ my-mod/
 - 领舞者先用 `moonwalk` 片段（带有 `fps`，以及按行进方向记录的 `ground`）以该片段自身的节奏太空步 `moonwalkTicks`。减速对此无效；太空步期间被冰冻的，解冻后原地站立直到太空步结束。
 - 随后播放 `point`（带有 `fps` 和 `hold`）打响指，把 `backup`（必须是带 `dance` 且没有 `lead` 的僵尸）召唤到 `troupe` 中的每个位置 `{ row, x }`。行和 x 相对于领舞者，在植物方会左右镜像。伴舞在 `riseTicks` 内从地下升起。
 - 之后静止 `holdTicks`。伴舞不全时先等待 `summonTicks`，再在其 x 进入 `summonBeforeX` 以内后的举手拍上再次召唤。
+- `dance.rise` 是伴舞被召唤时升起的方式（见[从地下升起](#从地下升起)）；没有时按从墓碑爬出的方式升起。
+
+#### 从地下升起
+
+从墓碑爬出的僵尸按所在场地的 `riseFromGrave: { depth, riseTicks, settleTicks }` 升起，被召唤的伴舞按自己的 `dance.rise` 升起，字段相同。身体起初在地下 `depth` 处，在升起的最后 `riseTicks` 内升上来。地面遮住的高度等于它在地下的深度，再加上还剩的升起步数，后者最多 `settleTicks`。身体框和攻击框随身体下移，并减去地面遮住的高度。表现定义的 `graves.zombie.clip`（伴舞为 `dance.rise.clip`）是升起时绘制身体的区域。从墓碑爬出哪些僵尸由关卡的 `graveZombies` 决定；关卡未指定时，取所在时段 `graveZombies` 中本关波次或出怪池出现过的僵尸，关卡完全没有写僵尸时取全部。
 
 #### 子弹射程
 
@@ -401,7 +413,7 @@ my-mod/
 - 带 `dance` 的僵尸，其表现可以有 `dance: { music?, spotlight?, rise? }`：
   - `music` 在领舞者第一次打响指时播放（场上僵尸不超过 15 个时），场上没有领舞者时停止。
   - `spotlight: { floor, floorOffset, beam, beamOffset, scale, colors, colorsFrom, colorTicks, colorStep }` 是领舞者第一次打响指后的聚光灯：`floor` 画在它下方，`beam` 画在它上方，颜色随时间在 `colors` 中循环。
-  - `rise` 是伴舞从地下升起的方式，字段与墓碑僵尸的升起相同（`depth`、`riseTicks`、`clip`），另有升起开始时的 `particle` 和 `sounds`。
+  - `rise` 是伴舞从地下升起时的绘制方式：与墓碑僵尸相同的 `clip`，另有升起开始时的 `particle` 和 `sounds`。
 - `steps: { effect, marks: [{ at, x, y }] }`：行走动画每次到达 `at`（片段长度的比例）时，在僵尸位置加 (`x`, `y`) 处播放一次 `effect`，位于僵尸下面一层，向右走时镜像（橄榄球僵尸的扬尘）。
 
 #### 植物表现
@@ -443,7 +455,7 @@ my-mod/
 | `pvz:bowling` | `plants`、`hits` |
 | `pvz:coin-streak` | `items`、`coins` |
 | `pvz:sun-held` | `sun` |
-| `pvz:win-planting` | `boards`、`skipRules`、`only` / `never` |
+| `pvz:win-planting` | `boards` / `times`、`skipRules`、`only` / `never` |
 | `pvz:mind-controlled` | `zombies` |
 
 模组新增的成就可以直接使用这些类型。需要新的判断方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`registry` 是宿主模块 `gameplay/registry`，即 `server/registry/GameplayRegistry` 的实例）。`observe` 接收事件、设置，以及该成就在本关中的状态（保存在存档中）。要让基础成就把模组的植物也计算在内，在模组自己的 `achievements` 中按它的 ID 修改 `trigger`。
@@ -483,7 +495,7 @@ my-mod/
 
 ### 工具
 
-工具写在玩法 `tools` 表中，从 ID 映射到 `{ kind }`，`kind` 表示工具的作用；目前只有 `shovel`（铲除格子中的植物）。关卡的 `tools` 和 `kind: "tool"` 的奖励必须指向已有的工具，每个工具还需要在表现 `tools` 中有外观；缺少即加载失败。
+工具写在玩法 `tools` 表中，从 ID 映射到 `{ kind }`，`kind` 表示工具的作用；目前只有 `shovel`（铲除格子中的植物）。工具奖励会在通关时把工具记入玩家档案，此后每关都有，但自带 `tools` 的关卡只有它自己的工具。关卡的 `tools` 和 `kind: "tool"` 的奖励必须指向已有的工具，每个工具还需要在表现 `tools` 中有外观；缺少即加载失败。
 
 ## 资源
 
@@ -494,6 +506,7 @@ my-mod/
 | `sprites` | 对象 | 见[图像](#图像)。 |
 | `fonts` | 字体 JSON 路径 | 见[字体](#字体)。 |
 | `audio` | 文件路径 | MP3 或 WAV。 |
+| `tracker` | 文件路径 | tracker 模块：MO3、XM、IT、S3M、MOD 或 MPTM。 |
 | `json` | 文件路径 | 普通 JSON，包括 `pvz:strings` 文本表。 |
 | `text` | 文件路径 | 纯文本。 |
 | `reanim` | 文件路径 | Reanim 动画（schemaVersion 3），记录其源 `fps`。 |
@@ -541,7 +554,12 @@ my-mod/
 
 每首背景音乐是一个 `music` 资源，ID 为 `pvz:<曲名>`。基础游戏的曲目有 `day_grasswalk`、`night_moongrains`、`choose_seeds`、`title_theme`、`zen_garden`、`puzzle`、`minigame`、`conveyer` 和 `final_boss`。
 
-格式定义在 `shared/content/music.ts` 中（schemaVersion 3）：时长、循环点、以音频资源 ID 表示的分轨（`main`，以及可选的 `drums` 和 `hihats`），以及可选的原版爆发段落。音乐模组用相同 ID 注册要替换的曲目，其余曲目仍使用基础游戏的。
+格式定义在 `shared/content/music.ts` 中。曲目都是 schemaVersion 4，分两种：
+
+- 模块曲目，基础游戏的曲目都是这种：各部分 `parts`（`main`，以及可选的 `drums` 和 `hihats`），每部分是一个 tracker 资源（`module`），给出开始播放的 `order`（以及可选的 `row`）和听得到的声道范围（`channels`，不写则全部声道）。可选原版的爆发方案 `burstScheme`：`day`，或 `night` 加上鼓在主旋律偶数和奇数 order 时开始的两个 order（`drumsJumpOrders`）。
+- 录音：一个音频资源（`audio`）和时长（`durationSec`），整首循环。
+
+音乐模组用相同 ID 注册要替换的曲目，其余曲目仍使用基础游戏的。
 
 ## 动画片段
 
@@ -585,6 +603,8 @@ XML 转换始终经由 `tools/pvz/particles.py`。对于基础内容包，它会
 
 脚本用 `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })` 播放粒子，所有平台使用同一个 C++ 核心。`whenReady()` 等待加载完成；`snapshot()` 和 `ParticlePlayer.restore()` 使用相同的存档结构。
 
+基础表现层 `settings` 中的 `particles` 规定同时存活的粒子特效、发射器和粒子各有多少，和原版的粒子池一样（各 1024 个）。特效放不下时，`ParticlePlayer.spawn` 和棋盘的 `spawnParticle` 返回 `null`，什么也不播放；粒子放不下时不会生成。`ParticlePlayer.restore()` 总会恢复存档中保存的粒子。
+
 旧的粒子格式和旧的粒子存档已不再接受；现有模组的粒子资源需要重新转换并打包。
 
 ## 音效
@@ -600,6 +620,8 @@ XML 转换始终经由 `tools/pvz/particles.py`。对于基础内容包，它会
 | `pauseWithGame` | 跟随场地暂停。独立的音效也可以在其 Foley 定义中设置该项；单次调用可以覆盖这个设置。 |
 
 例如 `SoundSystem.play(id, { channel: 'dancer', ifBusy: 'keep', pauseWithGame: true })` 让所有舞者共用一个迪斯科音效。用 `isChannelActive(channel)` 检查通道是否被占用，用 `stopChannel(channel)` 取消播放或尚未完成的加载。表现定义中的音效列表可以直接传给 `SoundSystem.playSounds(sounds)`。
+
+游戏窗口隐藏时，不循环、也不跟随场地暂停的音效会停止。循环音效和跟随场地暂停的音效在窗口恢复后继续播放。
 
 ## 脚本
 
@@ -738,7 +760,7 @@ const regenerating = (Base) => class extends Base {
 - 用 `registry.zombies.register(assets.id, kind, Class)` 注册，然后在僵尸定义中写上 `kind`。
 - 要向客户端展示自己的内容，覆写 `snapshotOwn()` 返回一个 JSON 对象。它出现在快照的 `own` 中，客户端对应的视图类用 `this.own(zombie, field, validate)` 读取。
 - 每个僵尸都是其类的实例，位于世界的 `zombies` 列表中。实例的字段原样保存，因此只能是普通数据（引用其他僵尸时使用其实体 id）。子类在构造函数中为自己的字段赋初值，并覆写 `restoreOwn(fields, name)` 从存档中读回：取出并校验自己的字段，把其余字段交给 `super.restoreOwn`。
-- 类自己的定义字段（`vault`、`dance`、`enrage`）只能与接受它们的类一起编写，类的静态 `config` 列出了它接受哪些字段。撑杆僵尸的 `vault.evades` 列出它持杆期间不会被哪些瞄准键选中。
+- 类自己的定义字段（`vault`、`dance`、`enrage`）只能与接受它们的类一起编写，类的静态 `config` 列出了它接受哪些字段。撑杆僵尸的 `vault.evades` 列出它持杆期间不会被哪些瞄准键选中。它的攻击框持杆时为 `vault.attack`，在空中为 `vault.airborneAttack`，落地后为 `vault.landedAttack`。
 
 #### 子弹类型
 
@@ -781,12 +803,18 @@ host.get('client/views').plants.registerView('example:beacon', BeaconView)
 | `root` | 各图层所在的节点；移动它即移动整个画面。 |
 | `clip(name)`、`ownFrames(reanimId)`、`particle(...)`、`flash` | 片段、帧、粒子和受击闪光的辅助成员。 |
 | `own(entity, field, validate)` | 读取类型自己的快照数据（`snapshotOwn`）。 |
+| `hitRects(entity)` | 它的身体框和攻击框，与服务端判定所用的一致，位置取画面中绘制它的位置，而不是服务端的整数像素。`/hitboxes`、`/hp` 和 `/id` 按此绘制。服务端类按其他框判定的类型应覆盖它。 |
 
 装饰效果应根据权威的逻辑步和快照计算，而不是依赖视图自己的时钟，这样暂停时就不会继续发射粒子。
 
 ### 实体数据
 
-世界（`server/state/World`）是一组按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems` 和 `items`。每个列表按 id 保存对象本身，并按 id 顺序遍历，没有 ECS 组件。
+世界（`server/state/World`）是一组按类型分开的列表：`plants`、`zombies`、`projectiles`、`mowers`、`gridItems` 和 `items`。每个列表按槽位保存对象本身，并按槽位顺序遍历，没有 ECS 组件。
+
+- 新对象占用最近释放的槽位，没有空槽时在末尾新开一个；同一逻辑步释放的几个，槽位高的先被占用（`Board::ProcessDeleteQueue`）。
+- 一个逻辑步里释放的槽位，下一步开始才能再被占用。
+- id 不会复用。
+- 开场时街上的僵尸在开场结束前占着 `zombies` 最前面的槽位（`CutScene::PlaceStreetZombies`），关卡最先出场的僵尸接着使用这些槽位。
 
 要在实体上保存自己的数据，把它放在实体的 `extensions[id]`（一个 JSON 对象）中，其中 `id` 是自己命名空间中的限定 ID，需先用 `registry.extensions.register(id, validate?)` 注册（`pvz:` 下的 ID 会被拒绝）。
 
@@ -938,7 +966,7 @@ npm run mod:hosts                      # 重新生成宿主模块列表
 
 - 基础内容包总是最先加载，不能禁用或卸载。
 - 其源码 `mods/pvz-base/content.json` 像模组一样索引按类别拆分的 JSON，打包时合并为 `assets/gameplay.json` 和 `assets/presentation.json`。
-- 基础玩法还提供 `settings`（schemaVersion、阳光与金钱上限 `economy`、种子栏 `seedBank`、旗帜波的 `flagWave` 和休闲花园的 `zenGarden`）、全部关卡、默认文本和种子目录。之后加载的模组在各自的命名空间中添加内容。
+- 基础玩法还提供 `settings`（schemaVersion、阳光与金钱上限 `economy`、种子栏 `seedBank`、旗帜波的 `flagWave` 和休闲花园的 `zenGarden`），由服务端读取；以及表现层的 `settings`（粒子上限 `particles`），只由客户端读取；还有全部关卡、默认文本和种子目录。之后加载的模组在各自的命名空间中添加内容。
 - 每个资源（包括粒子）都在源码 `content.json` 的 `resources` 中显式登记；打包时不会扫描遗漏的资源。
 
 打包与发布：

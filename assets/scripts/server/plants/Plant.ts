@@ -1,11 +1,12 @@
 import { defineResource, type EntityId, type Position, type SystemContext, type World } from '@/server/state/World'
-import type { PlantState } from '@/shared/content/plantKinds'
+import { PLANT_WAKE_TICKS, type PlantState } from '@/shared/content/plantKinds'
 import type { GameplayDefinitions, ModField, PlantDefinition } from '@/shared/content/gameplay'
 import { type AnimationRandom, type LayerState, pacedLayers } from '@/shared/content/animation'
 import { jsonRoundTrip, type JsonObject, type PlantSnapshot, type Team } from '@/shared/protocol'
 import type { DeterministicRng } from '../state/DeterministicRng'
-import { LevelStateResource } from '../state/resources'
-import { plantPhaseAnimation } from './animation'
+import { EventQueueResource, emitServerEvent } from '../state/events'
+import { LevelStateResource, RandomResource } from '../state/resources'
+import { plantPhaseAnimation, sleepingPlantAnimation } from './animation'
 import { plantPace } from './chill'
 import { isPlantAsleep } from './sleep'
 
@@ -35,12 +36,17 @@ export interface PlantFields {
     animations?: Record<string, LayerState>
     /** Ticks to its next blink (Plant::mBlinkCountdown). */
     blinkTicks?: number
+    /**
+     * Waking (Plant::mWakeUpCounter, its own PLANT_WAKE_TICKS): the ticks left until it wakes, asleep until then.
+     * Absent when it is not waking.
+     */
+    wakeTicks?: number
 }
 
 /** Every plant's fields by name, those a plant may be without last: what else its save has is its kind's own. */
 export const PLANT_FIELDS = [
     'typeId', 'state', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks',
-    'mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks',
+    'mowered', 'team', 'mindControlled', 'frozenTicks', 'animations', 'blinkTicks', 'wakeTicks',
 ] as const satisfies readonly (keyof PlantFields)[]
 
 /** A plant as its save has it: every plant's fields, and its kind's own beside them (Plant.restore). */
@@ -120,9 +126,50 @@ export class Plant {
         return this.state === 'idle'
     }
 
-    /** Asleep: a nocturnal plant on a board not at night (Plant::mIsAsleep), doing nothing. */
+    /** Asleep (Plant::mIsAsleep), doing nothing: one the board sends to sleep (sleeps), or one still waking (`wakeTicks`). */
     asleep(world: World): boolean {
-        return isPlantAsleep(this.definition, world.resources.get(LevelStateResource).board)
+        return this.wakeTicks !== undefined || this.sleeps(world)
+    }
+
+    /**
+     * The board sends it to sleep: at a time of day its kind sleeps at (sleepTime), unless its kind keeps it awake
+     * (keepsAwake). The original has no awake plant fall asleep; at a time turned to day (`/time`) the others do.
+     */
+    sleeps(world: World): boolean {
+        return !this.keepsAwake() && this.sleepTime(world)
+    }
+
+    /** The level is at a time of day its kind sleeps at: a nocturnal plant at one that is not night. */
+    protected sleepTime(world: World): boolean {
+        const level = world.resources.get(LevelStateResource)
+        return isPlantAsleep(this.definition, level.board.times[level.time])
+    }
+
+    /** Its own waking starts (Plant::mWakeUpCounter): asleep meanwhile, it wakes PLANT_WAKE_TICKS on (updateWaking). */
+    startWaking(): void {
+        this.wakeTicks = PLANT_WAKE_TICKS
+    }
+
+    /**
+     * Plant::UpdateAbilities: its waking counts down, and as it runs out the plant wakes (Plant::SetSleeping), which is
+     * heard (`plantAwoke`).
+     */
+    updateWaking(context: SystemContext): void {
+        if (this.wakeTicks === undefined || --this.wakeTicks > 0) return
+        delete this.wakeTicks
+        const { world } = context
+        this.setSleeping(false, world.resources.get(RandomResource))
+        emitServerEvent(world.resources.get(EventQueueResource), 'plantAwoke', { entityId: this.id, typeId: this.typeId })
+    }
+
+    /** Its kind keeps it awake now, whatever the board (a lit fuse burns on): none of every plant's. */
+    protected keepsAwake(): boolean {
+        return false
+    }
+
+    /** Plant::SetSleeping in play: it falls asleep or wakes, its animation playing so (sleepingPlantAnimation). */
+    setSleeping(asleep: boolean, random: AnimationRandom): void {
+        sleepingPlantAnimation(this, this.definition, asleep, random)
     }
 
     /** A tick it sits out, chilled or frozen (plants/chill.ts): what it counts to waits a tick (a shooter's next shot). */
@@ -145,10 +192,12 @@ export class Plant {
         return undefined
     }
 
-    /** Plant::DoBlink: it misses a blink now, in a phase it does not blink in (a potato mine not armed). */
+    /**
+     * Plant::DoBlink: its kind misses a blink now, besides what its animation has it miss (a clip it fires with, a phase
+     * it does not blink in: stepPlantAnimation): none of every plant's.
+     */
     blinkMisses(): boolean {
-        const phases = this.definition.animation?.blink?.phases, phase = this.animationPhase()
-        return !!phases && (phase === undefined || !phases.includes(phase))
+        return false
     }
 
     /** Plant::PlantInitialize, once its layers have started (startPlantAnimations), `asleep` or not. */
@@ -188,6 +237,7 @@ export class Plant {
         const { position, mowered } = this, inPlay = this.inPlay, own = this.snapshotOwn(inPlay ? tick : undefined)
         const snapshot: PlantSnapshot = {
             entityId: this.id,
+            slot: world.plants.slot(this.id)!,
             typeId: this.typeId,
             state: this.state,
             x: position.x, y: position.y, row: position.row,
@@ -196,6 +246,7 @@ export class Plant {
             maxHealth: this.maxHealth,
         }
         if (inPlay && this.asleep(world)) snapshot.asleep = true
+        if (inPlay && this.wakeTicks !== undefined) snapshot.waking = this.wakeTicks
         if (this.team !== undefined) snapshot.team = this.team
         if (this.mindControlled) snapshot.mindControlled = true
         if (this.chilledTicks) snapshot.chilledTicks = this.chilledTicks

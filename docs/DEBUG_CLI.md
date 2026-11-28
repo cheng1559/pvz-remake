@@ -29,7 +29,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 ### Completion and history
 
 - Tab completes the word at the end of the line; pressing it again cycles through the candidates.
-- Command names and fixed values (pages, `add|set`, teams and so on) complete anywhere. Names of installed plants, seeds, zombies, items and levels complete only in a level, because the running level supplies them.
+- Command names and fixed values (pages, `add|set`, teams and so on) complete anywhere. Names of installed plants, seeds, zombies, items and levels complete as well, in a level or not, from the installed gameplay content.
 - A faded suffix after the text shows the first completion, followed by the placeholders of the remaining arguments as hints. In mobile mode, tap the faded suffix to fill it in and keep typing.
 - Up and Down recall the last 64 commands. The history is kept on this device across restarts; running a command again moves it to the newest place.
 
@@ -47,7 +47,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 - Most board commands need a level in play: past the intro and the seed chooser, and neither won nor lost. Elsewhere they report "/… requires an active level".
 - `/plant` works in any state of a level: during the intro, in the seed chooser and after the result.
 - `/money` and `/achievement` also work during the intro. `/money` outside a level and `/achievement` anywhere need a player profile.
-- The rule switches (`/cooldown`, `/suncost`, `/plantinvincible`, `/cheatseed`) and `/collect` work in any state of a level. Outside a level they only set the preference for the levels to come.
+- The rule switches (`/cooldown`, `/suncost`, `/plantinvincible`, `/plantanywhere`, `/cheatseed`) and `/collect` work in any state of a level. Outside a level they only set the preference for the levels to come.
 - Commands work while the level is paused and at speed 0.
 
 ## Examples
@@ -55,7 +55,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | Example | Effect |
 | --- | --- |
 | `/level 1-1` | Starts Adventure 1-1 afresh |
-| `/level pvz:seed-chooser-test` | Starts the seed chooser test level |
+| `/level pvz:sandbox-day` | Starts the day sandbox |
 | `/gamespeed 2` | Runs the game at double speed |
 | `/sun set 999` | Sets the sun to 999 |
 | `/seed 1 snowpea` | Puts a Snow Pea in seed slot 1, ready at once |
@@ -63,7 +63,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | `/zombie normal 3 9` | Puts a Zombie down in row 3, column 9 |
 | `/zombie normal 3 1 plants` | Puts a plants' side Zombie down in row 3, column 1 |
 | `/item award` | Drops the level's award |
-| `/plantinvincible`, `/cheatseed`, `/tilted`, `/highresolution`, `/haptics`, `/cursor`, `/fps` | Turn these switches over |
+| `/plantinvincible`, `/plantanywhere`, `/cheatseed`, `/tilted`, `/highresolution`, `/haptics`, `/cursor`, `/fps` | Turn these switches over |
 | `/sharpness 0.5` | Sets the sharpness back to its default |
 | `/mod` | Opens the Mod manager |
 | `/win` | Wins the level |
@@ -76,7 +76,7 @@ Opening the console pauses the level and the game clock, which drives both gamep
 | Command | Effect |
 | --- | --- |
 | `/goto {page}` | Opens a menu page: `main` (main menu), `minigames`, `puzzle`, `survival`, `almanac` (the almanac index), `plants` and `zombies` (the almanac's pages), `store`, `garden` (Zen Garden), `mushroom` (Mushroom Garden), `aquarium` (Aquarium Garden), `tree` (Tree of Wisdom), `achievements`, `help` |
-| `/level {level}` | Starts a level afresh, skipping the prompt about an existing save. Adventure levels take their number: `1-1`, `adventure-1-1` and `pvz:adventure-1-1` are the same. Other levels take their full ID, namespace included, such as `pvz:stress-test`. In a level, a level that is not installed is refused. |
+| `/level {level}` | Starts a level afresh, skipping the prompt about an existing save. Adventure levels take their number: `1-1`, `adventure-1-1` and `pvz:adventure-1-1` are the same. Other levels take their full ID, namespace included, such as `pvz:stress-test`. A level that is not installed is refused. |
 | `/restart` | Starts the current level afresh, skipping the prompt about an existing save; needs a running level |
 | `/reload` | Saves the running level and starts the game again from the splash screen |
 | `/quit` | Saves the running level and quits the game |
@@ -89,13 +89,16 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | --- | --- |
 | `pvz:teams-demo` | A temporary level that grants no achievements. Day lawn, 1000 sun and a fixed bank of 8 cards. On the left, every row has the plants' side's Sunflower and a shooter ready. Columns 7–9 on the right hold 9 zombies' side plants facing left (Peashooter, Repeater, Snow Pea, Wall-nut, Chomper, Potato Mine, Explode-o-nut). The two sides attack each other while 4 waves of zombies (Zombie, Conehead, Buckethead; the last is a flag wave) come from the right through the zombies' side plants. Put down a plants' side zombie there with `/zombie normal 3 1 plants`. See [Teams and the Hypno-shroom](TEAMS.md). |
 | `pvz:stress-test` | A temporary level that grants no achievements. Day lawn and 9990 sun, with 40 plants already placed (8 in each row) and 1023 zombies spawned as play begins. `/perf plants` and `/perf zombies` turn plant or zombie drawing off, and on again, to isolate rendering. |
-| `pvz:seed-chooser-test` | A level on the day lawn with 50 sun and 3 waves that grants no achievements. It has no fixed bank, so its bank starts by the original's rule: the seed chooser opens when the player owns more seeds than the bank has slots (6, plus any bought), and confirming starts the level; otherwise the bank holds every owned seed. It is not temporary: it replaces the level save, and winning it awards the Repeater and moves Adventure on to level 1-10 if it was not already past it. |
+| `pvz:sandbox-day`, `pvz:sandbox-night` | Temporary sandboxes that grant no achievements, on the day and the night lawn: 9990 sun, ten empty seed slots for `/seed` to fill, and no zombies but those put down (no waves come and the level never ends). They start in play, with no intro: no camera pan, the bank and the mowers in place, and no Ready, Set, Plant. |
+
+The test levels are outside the Adventure (they have no `adventureIndex`): each shows its name at the bottom right where an Adventure level shows its number, and on a first adventure it passes the checks of the level number as a replay does (coins drop, for one).
 
 ### Speed, waves and results
 
 | Command | Effect |
 | --- | --- |
 | `/gamespeed {0-10}` | Sets the speed of the game clock, which drives gameplay and presentation alike. Any number from 0 to 10 is accepted, decimals included; `0` freezes the game. The speed lasts until the game restarts. |
+| `/step {1-1000}` | Runs the level that many ticks at once, within one frame: the board shows where they leave it, and the game goes on at its speed. 1000 is as many as one frame may run. A paused level runs them too and stays paused. |
 | `/win` | Wins the level at once |
 | `/lose` | Loses the level at once |
 | `/nextwave` | Spawns the next wave at once |
@@ -118,7 +121,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 - Recharges follow Survival's repick: a card the bank held keeps its recharge, whether left in or chosen again, and any other card is ready. No chooser warning asks anything before Let's Rock, neither the one for a missing sun producer nor the level's own tutorial warnings.
 - It works on a level that deals its bank too, which goes back to a dealt bank afterwards, but not on a conveyor-belt level or a level without a bank ("This level has no seed bank to choose again"), and not while seeds are being chosen ("Finish choosing seeds first").
 - A repick is not saved: a save made during one holds the bank from before it (or, after Let's Rock, the bank chosen) and loads straight into play.
-- With hotkeys on (`/hotkeys`), `R` runs it during play, and pressed again in the repick it is Let's Rock.
+- With hotkeys and cheat seeds on (`/hotkeys`, `/cheatseed`), `R` runs it during play, and pressed again in the repick it is Let's Rock. On mobile, with cheat seeds on, a tap on the sun counter does the same.
 
 ### Plants, zombies and the lawn
 
@@ -132,6 +135,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | `/griditem {grave\|crater} {row} {col} [team]` | Places a grave or a crater in a cell |
 | `/gravezombies` | Raises a zombie from every grave at once |
 | `/lawnmower {trigger\|reset} [row]` | Sets off or resets the lawn mower of one row, or of every active row |
+| `/time {time_of_day}` | Changes the level to another time of day of its board, such as `/time night` |
 
 #### `/plant`
 
@@ -163,12 +167,19 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 - `reset` puts a new lawn mower down in the row, or in every active row, whose mower has gone, whatever that one is still doing.
 - When no mower changes, the command reports "No lawn mowers could be changed".
 
+#### `/time`
+
+- The name is one of the board's times of day (`day` or `night` on the front yard), in any case. A time the board does not have is refused ("Board has no time of day: …"); 1-1 to 1-4 have no night.
+- The change takes 100 ticks; the level is at the new time after 50.
+- While a change is in progress, `/time` is refused ("Time of day is changing").
+- The time the level is already at changes nothing.
+- Everything on the lawn stays where it is. See [Boards](GAMEPLAY.md#boards) for what changes.
+
 ### Seeds, sun, coins, drops and achievements
 
 | Command | Effect |
 | --- | --- |
 | `/seed {slot} {seed_name} [team]` | Puts a seed in a seed slot, ready at once |
-| `/seed {slot} empty` | Empties a seed slot |
 | `/sun {add\|set} {number}` | Adds or sets sun, kept within 0–9990 |
 | `/money {add\|set} {number}` | Adds or sets coins, kept within 0–99999, in the player profile as well |
 | `/item {item_name} [row col]` | Drops an installed item as zombie loot |
@@ -178,7 +189,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 
 #### `/seed`
 
-- It replaces the packet in a seed slot, numbered from 1 on the left, with an installed seed, or fills the slot when it is empty. `/seed {slot} empty` empties it. A slot outside the bank reports the slots there are ("Use slot 1-6").
+- It replaces the packet in a seed slot, numbered from 1 on the left, with an installed seed, or fills the slot when it is empty. A slot outside the bank reports the slots there are ("Use slot 1-6").
 - The new packet is immediately ready and uses its own cost and recharge.
 - The seed may be a zombie seed, such as `/seed 1 normal`, which puts down a hostile zombie.
 - A `team` other than the seed's own makes the packet put down the other side's, drawn mirrored in the packet, in hand and in the placement preview:
@@ -190,7 +201,7 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 
   See [Teams and the Hypno-shroom](TEAMS.md).
 - Replacing a held packet clears the cursor. A seed may appear in several slots, each with its own recharge.
-- On a conveyor-belt level the slots are the belt's packets from the left. A seed changes that packet where it stands, and `empty` takes it off, the packets after it closing up as the belt moves; `team` works there too.
+- On a conveyor-belt level the slots are the belt's packets from the left. A seed changes that packet where it stands; `team` works there too.
 - The command becomes available when gameplay starts; during a repick, once the seed chooser has closed. Changes work while paused or at speed 0 and persist in the level save.
 
 #### `/sun` and `/money`
@@ -219,7 +230,8 @@ Starting an ordinary level with `/level` or `/restart` replaces the current leve
 | `/cooldown` | Turns seed recharge on or off; turning it off makes every packet ready at once |
 | `/suncost` | Turns sun cost on or off |
 | `/plantinvincible` | Turns plant invincibility on or off |
-| `/cheatseed` | Turns cheat seeds on or off: more seeds in the seed chooser, and the whole almanac |
+| `/plantanywhere` | Turns planting anywhere on or off: any seed in any cell of the board |
+| `/cheatseed` | Turns cheat seeds on or off: more seeds in the seed chooser, every slot and the shovel, and the whole almanac |
 | `/collect {auto\|click\|move}` | Sets how sun and coins are collected |
 
 In a level these commands change the level's rules and also keep the new state as a preference; every new level starts with the preferences. Outside a level they only set the preference. The preferences are saved on this device.
@@ -239,6 +251,16 @@ In a level these commands change the level's rules and also keep the new state a
 - A plant's own self-destruction, shoveling and `/removeplant` still work.
 - It is off by default and persists locally across levels and restarts.
 
+#### `/plantanywhere`
+
+- While it is on, a seed put down from the seed bank or the conveyor goes into any cell of the board, whatever the level or what stands there. Sun cost and recharge still apply (`/suncost`, `/cooldown`).
+- A plant seed goes into a dirt row, onto a grave or a crater, and over another plant. The bowling red line, cells a level rule closes, and what the Grave Buster and aquatic plants need under them no longer hold either.
+- A zombie seed goes into a dirt row too.
+- A grave seed's grave replaces a grave already in the cell, and a crater seed's crater replaces a crater there, its time starting over. A grave and a crater can share a cell. Either still destroys the plants in its cell.
+- Of plants stacked on a cell, the one in the highest slot of the plant list, usually the last planted, is on top: zombies eat it first, projectiles hit it first, it is drawn over the rest and the shovel digs it up first.
+- The planting preview follows the switch too.
+- It is off by default and persists locally across levels and restarts.
+
 #### `/cheatseed`
 
 In the seed chooser:
@@ -250,8 +272,14 @@ In the seed chooser:
   4. The same pages follow on the zombies' side. A group longer than a page goes on to more pages.
 - Cards on the side that is not their seed's own are drawn mirrored, and both sides of one seed can be chosen.
 - Two yellow `(Prev Page)` and `(Next Page)` buttons turn the pages. They are drawn as the original's cheat-key `(Debug Play)` button (FONT_BRIANNETOD12 in 255,240,0, lit 200,200,255), where the DLC puts its arrows beside Let's Rock. The mouse wheel over the chooser turns them too, a notch a page, wrapping round at either end. Mods may restyle the two buttons (`LevelSeedChooser.pageTurners`).
-- The slots need not all be filled: Let's Rock starts with any number of cards chosen, at least one, and leaves the remaining slots empty.
-- These cards count towards the chooser's slots and towards whether it opens, so the early levels of a first Adventure open the chooser too.
+- The slots need not be filled; the battle can start with no cards chosen.
+- Turned off in the chooser or a repick, the slots stay as they are, even with fewer cards owned: Let's Rock also starts once every card offered is chosen.
+- These cards count towards whether the chooser opens, so the early levels of a first Adventure open the chooser too.
+
+In a level:
+
+- A level started with it on has every slot (`seedBank.maxSlots`, 10): the seed-slot upgrades count as bought, for that level only, so Crazy Dave offers none. Turning it over later leaves the level's slots as they are.
+- The shovel, and any tool a level awards, counts as collected; a level with tools of its own still has only those (Whack a Zombie has none).
 
 In the almanac:
 
@@ -268,6 +296,8 @@ The switch is off by default and persists locally. It turns in any state of a le
 | --- | --- |
 | `/fps` | Shows or hides the frame rate |
 | `/hitboxes` | Shows or hides hitboxes on the lawn |
+| `/hp` | Shows or hides health bars on the lawn |
+| `/id` | Shows or hides slot numbers on the lawn |
 | `/highresolution` | Draws the game at the window's own pixels instead of the original's |
 | `/sharpness {0-1}` | Sets how crisp an enlarged pixel is; 0.5 by default |
 | `/tilted` | Enlarges and tilts the pictures in seed packets |
@@ -304,10 +334,13 @@ The switch is off by default and persists locally. It turns in any state of a le
 - `npm run build:content` extracts the cursor images from the original executable into the base content; resource packs may replace them by ID.
 - It is on by default and saved locally.
 
-#### Frame rate and hitboxes
+#### Frame rate, hitboxes, health bars and slot numbers
 
 - `/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. The counter measures drawn frames against real time, independently of the game's pause or speed. It is off by default and saved locally.
-- `/hitboxes` outlines on the lawn the plants' bodies (green), the zombies' bodies (red) and bite areas (yellow), and the hitboxes of projectiles and lawn mowers (cyan; a waiting lawn mower's is the area where a zombie sets it off). It is off by default and saved locally.
+- `/hitboxes` outlines on the lawn, a screen pixel wide even when a Mod shows the lawn smaller, the plants' bodies (green) and attack areas (red: a Chomper's, a Potato Mine's, a bowled nut's, a Puff-shroom's or Fume-shroom's reach), the bodies (green) and bite areas (red) of zombies not dead or dying, and the hitboxes of projectiles and lawn mowers (red; a waiting lawn mower's is the area where a zombie sets it off). It is off by default and saved locally.
+- `/hp` shows health bars over the plants' and zombies' hitboxes: green for a plant; for a zombie, its body (red), then its helm (yellow) and its shield (blue), out of all three at their full. It is off by default and saved locally.
+- `/id` shows the plants' and zombies' slot numbers in their lists in the bottom right of their hitboxes (see [Entity data](MODS.md#entity-data)). It is off by default and saved locally.
+- When a Mod shows the lawn smaller, the health bars and slot numbers keep their size, as the seed bank does.
 
 #### Focus, haptics, controls, full screen and volume
 
@@ -340,7 +373,7 @@ The switch is off by default and persists locally. It turns in any state of a le
 - Installed Mods persist locally, independently of the original ZIP, and can be updated with a package of the same ID.
 - Higher-priority Mods, loaded later, override matching resource IDs. Missing IDs use the original resources; declared resources that fail to load do not fall back.
 - ZIP is the only installation format. The game has no built-in HD assets; they ship separately as a resource pack. Pico129 and Pix118Bold are excluded from the HD pack.
-- The manager shows `Loading...` until the installed Mod list is ready.
+- The manager shows the `LOADING` text (`LOADING...`) until the installed Mod list is ready.
 
 See [Mods](MODS.md) for the package format and installation.
 
@@ -352,8 +385,7 @@ With hotkeys on (`/hotkeys`, off by default and saved locally), each seed packet
 | --- | --- |
 | `1`–`9`, `0` | Pick the packet in seed slot 1–10, or the conveyor belt's packet in that place from the left. Holding another packet or the shovel, the key swaps straight to it; pressing the held packet's key puts it back. |
 | `F` | Pick up the shovel, or put it back. Holding a plant, it swaps straight to the shovel, as the number keys swap packets. |
-| `D` | Turn speed 0 on, or back to the speed from before |
-| `R` | Run `/repick`; pressed again in the repick, it is Let's Rock |
+| `R` | With `/cheatseed` on, run `/repick`; pressed again in the repick, it is Let's Rock |
 | `S` | Turn `/suncost` the other way, as typing it would |
 | `C` | Turn `/cooldown` the other way, as typing it would |
 
@@ -361,17 +393,20 @@ Hotkeys work only in a level, while no dialog covers the board. `F` works whenev
 
 ## Switches and saved settings
 
-The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen`, `/resize` and `/perf {category}`.
+The switches take no argument: each run turns its switch over and shows where it now stands, such as "Recharge: off". They are the rule switches, `/autopause`, `/hotkeys`, `/haptics`, `/cursor`, `/highresolution`, `/tilted`, `/fps`, `/hitboxes`, `/hp`, `/id`, `/mobile`, `/fullscreen`, `/resize` and `/perf {category}`.
 
 | Setting | Command | Default | Kept |
 | --- | --- | --- | --- |
 | Recharge | `/cooldown` | On | On this device |
 | Sun cost | `/suncost` | On | On this device |
 | Invincible plants | `/plantinvincible` | Off | On this device |
+| Plant anywhere | `/plantanywhere` | Off | On this device |
 | Cheat seeds | `/cheatseed` | Off | On this device |
 | Collection | `/collect` | `click` | On this device |
 | Frame rate | `/fps` | Off | On this device |
 | Hitboxes | `/hitboxes` | Off | On this device |
+| HP | `/hp` | Off | On this device |
+| Slot numbers | `/id` | Off | On this device |
 | High resolution | `/highresolution` | Off | On this device |
 | Sharpness | `/sharpness` | 0.5 | On this device |
 | Tilted seed packets | `/tilted` | Off | On this device |
@@ -390,11 +425,11 @@ Settings kept on this device, and the command history, live in the game's local 
 
 ## Installed content
 
-Content names complete only in a level. The base package of this version installs:
+The base package of this version installs:
 
 | Kind | Names |
 | --- | --- |
-| Levels | Adventure `1-1` to `1-10` and `2-1` to `2-10`; `pvz:teams-demo`, `pvz:stress-test`, `pvz:seed-chooser-test` |
+| Levels | Adventure `1-1` to `1-10` and `2-1` to `2-10`; `pvz:teams-demo`, `pvz:stress-test`, `pvz:sandbox-day`, `pvz:sandbox-night` |
 | Plants | `peashooter`, `sunflower`, `cherrybomb`, `wallnut`, `potatomine`, `snowpea`, `chomper`, `repeater`, `puffshroom`, `sunshroom`, `fumeshroom`, `gravebuster`, `hypnoshroom`, `scaredyshroom`, `iceshroom`, `doomshroom`, `lilypad` |
 | Hidden plant seeds | `explodenut` (Explode-o-nut), `bowling-wallnut` and `bowling-explodenut` (the bowling nuts) |
 | Zombies and zombie seeds | `normal`, `flag`, `conehead`, `pole_vaulter`, `buckethead`, `newspaper`, `screendoor`, `football`, `dancer`, `backup_dancer` |
@@ -406,7 +441,7 @@ Plant, zombie, item and level names come from the installed content on the game 
 
 ## How a command runs
 
-1. `GameApp` opens the dialog (`client/dialogs/DebugCliDialog.ts`), built on `UI.dialog` and `UI.input`. When a level is running, it first asks the server for a `catalog` of the installed plant seeds, seeds, zombies, items and levels, which feeds completion and the `/level` check.
+1. `GameApp` opens the dialog (`client/dialogs/DebugCliDialog.ts`), built on `UI.dialog` and `UI.input`. It first makes a list of the installed plant seeds, seeds, zombies, items and levels, which feeds completion and the `/level` check: `debugCliCatalog` (`shared/debug/DebugCli.ts`) reads it off the loaded gameplay content (`loadGameplayContent`), which levels are built from as well. If that content fails to load, the console opens without the list, so `/mod` can still mend a broken Mod.
 2. `executeDebugCliCommand` (`platform/debug/DebugCliCommands.ts`) parses the line with `parseDebugCliCommand` from `shared/debug/DebugCli.ts`, whose `specs.list()` holds every command's syntax. It runs the client's own commands itself: pages, levels and the app, speed, display and input switches, `/mod`, and `/money` outside a level and `/achievement` through the menu API's profile. Audio and full-screen settings go through the menu API's settings.
 3. Gameplay commands are forwarded as raw text: `LevelController.debugCommand` → `LocalIntegratedGame.debugCommand` → `IntegratedGameClient`, which sends a `debugCommand` packet.
 4. `IntegratedGameHost` queues the packet only when debug commands are enabled, as the local integrated game enables them, and otherwise rejects it with `unsupported-command`.
@@ -423,6 +458,6 @@ Rules and preferences:
 
 - The rule switches act on the session's `DebugRulesResource`. Recharge, sun cost, plant invincibility, collection and cheat seeds are also kept as debug preferences in `GameDebugSettings` and applied to each new level by `LevelController`; outside a level these commands only set the preference.
 - `GameDebugSettings` stores the settings kept on the device under the local storage key `pvz-remake:debug:settings` and the history under `pvz-remake:debug:cli-history`.
-- The hotkeys `S` and `C` run `/suncost` and `/cooldown` through `executeDebugCliCommand`, as the console does; `R` sends `/repick` to the level (`client/level/LevelInputPresenter.ts`).
+- The hotkeys `S` and `C` run `/suncost` and `/cooldown` through `executeDebugCliCommand`, as the console does; `R`, and on mobile the sun counter, send `/repick` to the level with cheat seeds on (`client/level/LevelInputPresenter.ts`).
 
 Mods add commands by wrapping `specs.list` and the `executor` objects with `host.around`; see [Mods](MODS.md#extending-cli-commands).

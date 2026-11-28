@@ -2,6 +2,7 @@ import { clipNamed } from '@/client/reanim/clips'
 import { loadedReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
 import { Color, type Node, Sprite } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
+import type { AttachedShadow } from '@/client/level/BoardShadows'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { entityTint } from '@/client/view/tints'
@@ -11,13 +12,16 @@ import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, ownFrames, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
-import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
+import { PLANT_BLINK_LAYER, type PlantAnimationDefinition, type Rect } from '@/shared/content/gameplay'
+import { animateCurveFloat } from '@/shared/content/animation'
+import { PLANT_WAKE_TICKS } from '@/shared/content/plantKinds'
+import { plantAttack, plantRectAt } from '@/shared/content/hitRects'
 import { type ReanimKeyframe, sampleReanimTrack } from '@/shared/content/reanim'
 export type { LayerShown } from '@/client/view/layerPlayback'
-import { renderOrder } from '@/shared/content/renderOrder'
+import { isAboveRows, renderOrder } from '@/shared/content/renderOrder'
 import { type AnimatedPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { offBoardRandom } from '@/client/view/offBoard'
-import { PLANT_WIDTH } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
@@ -52,6 +56,8 @@ const BLEND_SECONDS = 0.2
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
+/** Plant::UpdateReanim stretches a waking plant on its base, 80 below its top left (stretchWaking). */
+const WAKE_BASE = 80
 
 /**
  * A plant, drawn by its animation (PlantDefinition.animation): a player for each of its layers, showing the clip the
@@ -78,12 +84,17 @@ export class PlantView implements EntityView<PlantSnapshot> {
     private hasTint = false
     /** Mowed, it is frozen as it stood for its squashing. */
     private frozen = false
-    /** Its shadow's node and the size of the shadow's picture, which `pose` sizes it by (placeShadow). */
-    private shadow?: { node: Node, width: number, height: number }
+    /**
+     * Its shadow's node and the size of the shadow's picture, which `pose` sizes it by (placeShadow); `board`, the
+     * board's hold on it (BoardShadows.attach), on the board.
+     */
+    private shadow?: { node: Node, width: number, height: number, board?: AttachedShadow }
     /** The ice it stands in while a hostile ice-shroom has it frozen, around its layers; on the board only. */
     private ice?: IceTrapView
     /** Its own particles stand still while it is frozen (syncFrozen). */
     private particlesPaused = false
+    /** It was drawn waking (stretchWaking), so its layers are put back on their base once it is not. */
+    private stretched = false
 
     constructor(protected readonly context: PlantViewContext) {
         const animation = context.content.definitions.plants[context.plant.typeId].animation
@@ -96,8 +107,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
         // Plant::DrawShadow skips a few plants, such as the grave buster: those have no shadow in their presentation.
         const frame = draw?.shadow !== false && this.presentation.shadow && await plantShadow(content, stage)
         if (frame && node.isValid) {
-            const shadow = uiNode({ name: 'PlantShadow', parent: node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
-            this.shadow = { node: shadow, width: frame.originalSize.width, height: frame.originalSize.height }
+            const { node: shadow, sprite } = uiNode({ name: 'PlantShadow', parent: node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            this.shadow = { node: shadow, width: frame.originalSize.width, height: frame.originalSize.height, board: stage?.shadows.attach(sprite!) }
             this.placeShadow(plant)
         }
         // Every clip is in memory from here on, so a layer changes to one at once.
@@ -123,6 +134,16 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** The players of the layers it shows, for whoever shows a picture of the plant (a packet stills and colors them). */
     get players(): ReanimPlayer[] { return this.layers.shown }
+
+    /**
+     * Its body and attack rects, the ones the server goes by (plantRectAt: Plant::GetPlantRect, GetPlantAttackRect;
+     * plantAttack), on the board where `plant` has it stand as the frame draws it, not in the server's whole pixels: what
+     * `/hitboxes` outlines. No attack rect for one without.
+     */
+    hitRects(plant: PlantSnapshot): { body: Rect, attack?: Rect } {
+        const definition = this.context.content.definitions.plants[plant.typeId], team = plantTeam(plant), attack = plantAttack(definition)
+        return { body: plantRectAt(definition.body, team, plant.x, plant.y), ...attack ? { attack: plantRectAt(attack, team, plant.x, plant.y) } : {} }
+    }
 
     private get clips(): Record<string, ClientAnimationClip | undefined> {
         const { content, plant } = this.context
@@ -245,7 +266,9 @@ export class PlantView implements EntityView<PlantSnapshot> {
     advance(ticks: number): void {
         const { stage, plant } = this.context
         if (stage) throw new Error(`A plant on the board is animated by the server: ${plant.typeId}`)
-        for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(this.animation, plant, offBoardRandom)
+        // Its blink goes by the phase of its kind it is shown in (`blink.phases`: an armed potato mine's).
+        const own = plant.own?.phase, phase = typeof own === 'string' ? own : undefined
+        for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(this.animation, plant, offBoardRandom, { phase })
         this.pose(plant)
     }
 
@@ -353,10 +376,23 @@ export class PlantView implements EntityView<PlantSnapshot> {
      */
     protected onBoard(plant: PlantSnapshot, _world: WorldSnapshot): void {
         this.pose(plant)
+        this.stretchWaking(plant)
         const body = this.body
         if (!body.loadedId) return
         const gray = Math.min(255, this.flash * 3)
         body.setExtraAdditiveDraw(this.flash > 0, new Color(gray, gray, gray, 255))
+    }
+
+    /**
+     * Plant::UpdateReanim: waking (PlantSnapshot.waking), its layers stretch down and up on its base, 80 below its corner
+     * (PvzpAnimateCurveFloat(70, 0, mWakeUpCounter, 1, 0.8, CURVE_EASE_SIN_WAVE) of its height).
+     */
+    private stretchWaking(plant: PlantSnapshot): void {
+        if (plant.waking === undefined && !this.stretched) return
+        const scale = plant.waking === undefined ? 1 : animateCurveFloat(PLANT_WAKE_TICKS, 0, plant.waking, 1, 0.8, 'ease-sin-wave')
+        this.root.setScale(1, scale, 1)
+        this.root.setPosition(0, -WAKE_BASE * (1 - scale))
+        this.stretched = plant.waking !== undefined
     }
 
     /** The color the presentation draws the plant in (the explode-o-nut's red). */
@@ -372,7 +408,9 @@ export class PlantView implements EntityView<PlantSnapshot> {
             : shade.clone()
     }
 
-    destroy(): void {}
+    destroy(): void {
+        this.shadow?.board?.remove()
+    }
 
     /**
      * A plant put down: what its presentation sounds besides the board's planting (Board::DoPlantingEffects), as its fuse
@@ -383,15 +421,29 @@ export class PlantView implements EntityView<PlantSnapshot> {
         void SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
     }
 
-    /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
+    /**
+     * Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone
+     * by then. One over every row (RENDER_LAYER_TOP) still has its row as an offset, so a lower row's covers a higher
+     * row's; not the original, where such explosions tie and draw by their particle systems' slots.
+     */
     static readonly exploded: StageEvent = (stage, event) => {
         stage.shake(3, -4, 'explosion')
         const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
         void SoundSystem.playSounds(presentation?.explosionSounds)
         const { x, y, row } = event.data, explosion = presentation?.explosion
         if (!explosion || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
+        const order = renderOrder(explosion.layer, row, isAboveRows(explosion.layer) ? row : 0)
         // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
-        stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
+        stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, order)
+    }
+
+    /**
+     * Awake in play, its waking over (the time turned to night: `/time`): what its presentation sounds as it is put
+     * down awake, as it goes to work now (the doom-shroom's fuse, which Plant::UpdateDoomShroom sounds as it lights it
+     * once awake).
+     */
+    static readonly awoke: StageEvent = (stage, event) => {
+        void SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
     }
 
     /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */

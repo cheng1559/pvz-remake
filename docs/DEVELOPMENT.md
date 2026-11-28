@@ -9,23 +9,22 @@ Building the game needs Node.js, Python, the Cocos toolchain and the files of a 
 | Requirement | Used for |
 | --- | --- |
 | Node.js 22.17.0 and `node-gyp` | The Cocos CLI, as its setup guide specifies, and the project's Node tools |
-| Python 3.10 or later, run as `python3`, with Pillow | `build:content`, `build:icons` and `test:tools`, which call `python3` |
-| ffmpeg | Encoding music and sound effects; found on `PATH`, or in `/opt/homebrew/bin` or `/usr/local/bin` |
-| libopenmpt | Rendering the original's music modules; found as a system library, at the path in `LIBOPENMPT_PATH`, or in the usual folders (on Windows the current directory, `C:\msys64\mingw64\bin`, `C:\msys64\ucrt64\bin` and `C:\Program Files\OpenMPT`; on macOS `/opt/homebrew/lib`, `/usr/local/lib` and `/usr/lib`) |
+| Python 3.10 or later, run as `python3`, with Pillow and NumPy | `build:content`, `build:icons` and `test:tools`, which call `python3` |
+| ffmpeg | Encoding sound effects; found on `PATH`, or in `/opt/homebrew/bin` or `/usr/local/bin` |
 | The platform's development tools | Native builds, such as Xcode for macOS and iOS |
 | Inno Setup 6 | The Windows installer |
 | Xcode command line tools (`codesign`, `SetFile`) | The macOS disk image |
-| Emscripten (`em++` on `PATH`) | Only for rebuilding the shared C++ kernel (`npm run build:kernel`) |
+| Emscripten (`em++` on `PATH`) | Only for rebuilding the shared C++ kernel and the music player (`npm run build:kernel`, `npm run build:music`) |
 | The original game files | Importing resources; see [Original game files](#original-game-files) |
 
 ## Toolchain
 
 PvZ Remake uses the `dev/pvz-remake` branch of both toolchain repositories. The game declares Creator `4.0.0-alpha.35` in `package.json`. The CLI reads its engine source from `packages/engine`.
 
-| Repository | Role | Revision checked for v0.2.0 |
+| Repository | Role | Revision checked for v0.2.1 |
 | --- | --- | --- |
-| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | Provides `cocos preview`, `cocos build` and `cocos make`, including IPA packaging. | [`e24f0f9`](https://github.com/cheng1559/cocos-cli/commit/e24f0f92ee8b15e223512331ba7b5285b7b1ae0b) |
-| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | Supplies the runtime and native engine, including native cursors, pointer input for the low-resolution camera, and fixes for DPI and audio playback. | [`c987978`](https://github.com/cheng1559/cocos4/commit/c987978d37fe64fc180021806838de2dde78dc38) |
+| [cheng1559/cocos-cli](https://github.com/cheng1559/cocos-cli/tree/dev/pvz-remake) | Provides `cocos preview`, `cocos build` and `cocos make`, including IPA packaging. | [`409c35b`](https://github.com/cheng1559/cocos-cli/commit/409c35bdf1294df45809dc3dcbf1a7b7116c032f) |
+| [cheng1559/cocos4](https://github.com/cheng1559/cocos4/tree/dev/pvz-remake) | Supplies the runtime and native engine, including native cursors, pointer input for the low-resolution camera, audio streams for the tracker music, the macOS touch screen and trackpad scrolling, and fixes for DPI and audio playback. | [`a2df3bd`](https://github.com/cheng1559/cocos4/commit/a2df3bd432c1aa1947a8c53e22d52ba3acb7a188) |
 
 For a fresh toolchain, start outside the game repository. The CLI setup guide uses Node.js 22.17.0 and `node-gyp`. Its default `npm run init` selects the upstream engine from `repo.json`; the commands below instead place the game's fork in the engine slot and fetch the native libraries at the tag declared by both forks.
 
@@ -99,10 +98,9 @@ npm run mod:pack -- pvz-base --publish assets/resources/base.zip
 
 ### Music and sound effects
 
-- Music and sound effects are converted to MP3 by the existing `tools/pvz/music/convert.py` and `tools/pvz/audio.py` pipeline.
-- Music uses LAME VBR quality 2 and sound effects quality 4, both at 44.1 kHz.
-- Dynamic music stems retain their leading silence, gain and loop and beat metadata. Each tune is its own music resource (`pvz:<tune>`), so a Mod replaces one tune by registering the same ID.
-- This reduces download and package size; decoded PCM memory does not shrink by the same ratio.
+- Sound effects are converted to MP3 by `tools/pvz/audio.py`, at LAME VBR quality 4 and 44.1 kHz.
+- The music is the original's tracker modules, copied as they are (`tools/pvz/music/tunes.py`): `mainmusic.mo3` and `mainmusic_hihats.mo3` become the tracker resources `pvz:mainmusic` and `pvz:mainmusic_hihats`. Each tune is its own music resource (`pvz:<tune>`) listing the parts Music::PlayMusic plays, so a Mod replaces one tune by registering the same ID.
+- The game plays the modules itself; see [Music](ARCHITECTURE.md#music).
 
 ### Mouse cursors
 
@@ -142,12 +140,15 @@ The layout of `tools/` and its entry points are in [Development Scripts](../tool
 | `npm run mod:hosts` | Regenerates the lists of host modules that Mods can get |
 | `npm run build:icons` (or `npm run build:icons -- --exe /path/to/PlantsVsZombies.exe`) | Generates the app icons from the program's icon |
 | `npm run build:kernel` | Compiles the shared C++ kernel (`native/engine/common/kernel`) to WebAssembly |
+| `npm run build:music` | Compiles the music player (`native/engine/common/music`, with libopenmpt) to WebAssembly |
 | **Preview and builds** | |
 | `npm run preview:debug`, `npm run preview:release` | Starts the preview server, with or without debug mode |
 | `npm run build:web:debug` | Debug web build |
+| `npm run build:web:benchmark` | Release web build for benchmarks; see [Benchmarks](#benchmarks) |
+| `npm run bench -- <A> [<B>]` | Compares the benchmark on built games; see [Benchmarks](#benchmarks) |
 | `npm run compile:{platform}:release` | Release native build; see [Release builds](#release-builds) |
 
-`build:kernel` writes the generated module to `assets/scripts/shared/kernel/binary.ts`, which is committed, so other builds do not need Emscripten. Native builds compile the same kernel source directly.
+`build:kernel` writes the generated module to `assets/scripts/shared/kernel/binary.ts`, which is committed, so other builds do not need Emscripten. Native builds compile the same kernel source directly. `build:music` likewise writes `assets/resources/music/pvz_music.bin`.
 
 ## Testing
 
@@ -174,7 +175,7 @@ npm run build:web:debug
 | Platform | Command | Output |
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build in `build/web-mobile/` |
-| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
+| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe` and the zip `dist/pvz-remake-v{version}-windows-x64.zip`; packaging needs Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package in `build/android-arm64-release/`; `compile:android:armv7:release` builds for 32-bit devices into `build/android-armv7-release/` |
 | iOS | `npm run compile:ios:release` | The unsigned IPA `build/ios/pvz-remake-mobile-unsigned.ipa` to sign yourself; macOS only |
@@ -199,7 +200,7 @@ A `v*` tag deploys the staged build from CI (`.github/workflows/build.yml`), aft
 ### Windows
 
 1. `npm run compile:windows:release` clears the build's old assets (see [Native build output](#native-build-output)), builds, and compiles `build/windows/proj/Release/pvz-remake.exe`.
-2. `npm run package:windows` compiles `tools/installer/windows.iss` with Inno Setup 6, passing the version from `package.json`, and writes `dist/pvz-remake-v{version}-windows-x64-setup.exe`. It fails if the Release executable is missing.
+2. `npm run package:windows` picks the game executable, its DLLs and `Resources/` from the Release build, with the C++ runtime of the Visual Studio that built it (`Microsoft.VC143.CRT`) in place of the older one Cocos copies, so players need not install the Visual C++ runtime. It compiles `tools/installer/windows.iss` with Inno Setup 6 over them, passing the version from `package.json`, and writes `dist/pvz-remake-v{version}-windows-x64-setup.exe`. From the same files it writes `dist/pvz-remake-v{version}-windows-x64.zip`, which unpacks into a `Plants vs. Zombies` folder the game runs from. It fails if the Release executable is missing.
 
 The packaging script finds `ISCC.exe` through the `ISCC` environment variable, then in `Inno Setup 6` under `%LOCALAPPDATA%\Programs`, `%ProgramFiles(x86)%` and `%ProgramFiles%`, and finally on `PATH`.
 
@@ -275,7 +276,25 @@ The script's arguments are the forwarded endpoint (default `http://127.0.0.1:160
 
 ### High-load comparisons
 
-Use `/level pvz:stress-test` with `/fps` on: 40 plants against 160 zombies. `/perf {plants|zombies|particles|sfx|logic}` turns one part off at a time; see [Debug Console](DEBUG_CLI.md#performance-switches).
+Use `/level pvz:stress-test` with `/fps` on: 40 plants against 1023 zombies. `/perf {plants|zombies|particles|sfx|logic}` turns one part off at a time; see [Debug Console](DEBUG_CLI.md#performance-switches).
+
+### Benchmarks
+
+The benchmark (`app/Benchmark.ts`) plays the stress test the same way on every run and times the work:
+
+1. `npm run build:web:benchmark` makes a Release web build in `build/web-benchmark/` whose scripts target Chrome 110 and later.
+2. `npm run bench -- <A> [<B>]` runs the benchmark on one or two builds several times and prints each one's median over the runs with their range. For two builds it adds the change from A to B, marked "~" when it is within the runs' spread.
+
+A target is a web build folder, opened in a fresh headless Chrome, or a native executable or macOS app. Two targets take turns (A then B, then B then A), each run in a fresh browser or process. Options:
+
+- `--scenario steady` (the default) times the views, animations and drawing of the stress test after 10 seconds of play, the server then standing still; `--scenario combat` plays it from the start, the server included. In both the plants are invincible, so the zombies eat them to the end.
+- `--frames 1200` and `--rounds 3` set the frames each run times, after 120 frames of warm-up, and the runs of each target.
+- `--screenshots <folder>` saves each web run's last frame and counts the pixels that differ from the first run's.
+- `--chrome <path>` names the browser.
+
+Every run plays the same game: the level starts with a fixed seed, each frame advances the game by 1/60 s whatever time it took, and the client's `Math.random` is seeded from the frame's number. A run reports the whole frame (mean, median, p99 and 1% low, the mean of the slowest 1% of frames), the updates, the server's ticks within them, the engine's drawing, the draw calls, and a checksum of the server's last snapshot. Runs with the same checksum played the same game.
+
+The game runs the benchmark when it is launched with `?benchmark=combat&frames=1200` in the web page's address, or `--benchmark=combat --frames=1200 --benchmark-out=<file>` on a native command line. It starts once the loading screen has loaded everything. A fresh browser or install has no player, so it creates one named Benchmark. The result goes to the console and to `globalThis.pvzBenchmark`; a native build also writes it to the file (by default `benchmark.json` in the game's data folder) and then quits.
 
 ### Debug builds
 

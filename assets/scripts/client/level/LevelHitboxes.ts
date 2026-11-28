@@ -1,31 +1,74 @@
 import { Color, type Graphics, type Node } from 'cc'
+import { PlantView } from '@/client/plants/PlantView'
 import { uiNode } from '@/client/view/uiNode'
+import { overlayPixels } from './LevelGeometry'
+import { ZombieView } from '@/client/zombies/ZombieView'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { DEBUG_OVERLAY_ORDER } from '@/shared/content/renderOrder'
+import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { WorldSnapshot } from '@/shared/protocol/index'
+import type { LevelEntityRenderer } from './LevelEntityRenderer'
 
-/** `/hitboxes`: the plants' bodies, the zombies' bodies and bites, and the projectiles' and mowers' hitboxes, outlined on the lawn. */
+const GREEN = new Color(0, 255, 0, 255)
+const RED = new Color(255, 0, 0, 255)
+/** Plant::GetPlantAttackRect of a plant that reaches the whole row is as wide as the board, which goes unoutlined. */
+const BOARD_WIDTH = 800
+
+type Rect = { x: number, y: number, width: number, height: number }
+
+/**
+ * `/hitboxes`: Board::DrawDebugObjectRects, the rects the server goes by, where the frame draws each one. Each plant's
+ * body in green and in red the attack rect it reaches with, unless that spans the board; each zombie's body in green and
+ * its attack rect in red, while it is not dead or dying: each as its view has them (PlantView.hitRects,
+ * ZombieView.hitRects); each mower's and projectile's hitbox in red. Each as it faces, outlined as Graphics::DrawRect
+ * outlines a rect, in the screen's pixels however the lawn is scaled (overlayPixels), over the lawn's particles
+ * (DEBUG_OVERLAY_ORDER).
+ */
 export class LevelHitboxes {
-    private graphics: Graphics | null = null
+    private overlay: { node: Node, graphics: Graphics } | null = null
 
-    constructor(private readonly lawn: Node, private readonly definitions: GameplayDefinitions) {}
+    constructor(private readonly stage: Pick<LevelEntityRenderer, 'layer' | 'addScenery' | 'view' | 'lawnScale'>, private readonly definitions: GameplayDefinitions) {}
 
     sync(snapshot: WorldSnapshot): void {
-        if (!GameDebugSettings.hitboxesVisible) { this.graphics?.clear(); return }
-        const graphics = this.graphics ??= uiNode({ name: 'Hitboxes', parent: this.lawn, graphics: true }).graphics!
+        if (!GameDebugSettings.hitboxesVisible) { this.overlay?.graphics.clear(); return }
+        const { node, graphics } = this.overlay ??= this.created()
         graphics.clear()
-        graphics.lineWidth = 1
-        const draw = (entity: { x: number, y: number }, rect: { x: number, y: number, width: number, height: number }, color: Color) => {
-            graphics.strokeColor = color
-            graphics.rect(entity.x - 400 + rect.x, 300 - entity.y - rect.y - rect.height, rect.width, rect.height)
-            graphics.stroke()
+        const pixels = overlayPixels(node, this.stage.lawnScale())
+        // Graphics::DrawRect: a pixel wide round the rect, its right and bottom edges a pixel past it. Each edge on the
+        // screen's pixel its board line is shown on, the layer's y running up from its middle.
+        const draw = ({ x, y, width, height }: Rect, color: Color) => {
+            const left = pixels.x(x), right = pixels.x(x + width), top = pixels.y(y), bottom = pixels.y(y + height)
+            graphics.fillColor = color
+            graphics.rect(left, top - 1, right - left + 1, 1)
+            graphics.rect(left, bottom - 1, right - left + 1, 1)
+            graphics.rect(left, bottom, 1, top - 1 - bottom)
+            graphics.rect(right, bottom, 1, top - 1 - bottom)
+            graphics.fill()
         }
-        for (const plant of snapshot.plants) draw(plant, this.definitions.plants[plant.typeId].body, Color.GREEN)
+        // A plant's or zombie's view knows what its kind goes by; none until the view is made.
+        for (const plant of snapshot.plants) {
+            const rects = this.stage.view(plant.entityId, PlantView)?.hitRects(plant)
+            if (!rects) continue
+            draw(rects.body, GREEN)
+            if (rects.attack && rects.attack.width < BOARD_WIDTH) draw(rects.attack, RED)
+        }
         for (const zombie of snapshot.zombies) {
-            draw(zombie, this.definitions.zombies[zombie.typeId].body, Color.RED)
-            draw(zombie, this.definitions.zombies[zombie.typeId].attack, Color.YELLOW)
+            const rects = isDeadOrDying(zombie) ? undefined : this.stage.view(zombie.entityId, ZombieView)?.hitRects(zombie)
+            if (!rects) continue
+            draw(rects.body, GREEN)
+            draw(rects.attack, RED)
         }
         // A waiting mower's is where a zombie sets it off (LawnMower::GetLawnMowerAttackRect).
-        for (const projectile of [...snapshot.projectiles, ...snapshot.mowers]) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
+        for (const projectile of [...snapshot.projectiles, ...snapshot.mowers]) {
+            const { hitbox } = this.definitions.projectiles[projectile.typeId]
+            draw({ ...hitbox, x: projectile.x + hitbox.x, y: projectile.y + hitbox.y }, RED)
+        }
+    }
+
+    private created(): { node: Node, graphics: Graphics } {
+        const { node, graphics } = uiNode({ name: 'Hitboxes', parent: this.stage.layer, graphics: true })
+        this.stage.addScenery(node, DEBUG_OVERLAY_ORDER)
+        return { node, graphics: graphics! }
     }
 }

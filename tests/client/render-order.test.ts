@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
+import { isAboveRows, plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
 
 test('the board draws in Board::MakeRenderOrder order', () => {
     const plant = (row: number, x: number) => renderOrder('plant', row, plantRenderOffset(x))
@@ -11,5 +11,6 @@ test('the board draws in Board::MakeRenderOrder order', () => {
     assert.ok(plant(3, 700) > zombie(2), 'a front row covers the rows behind it')
     assert.ok(renderOrder('ground', 4, SHADOW_RENDER_OFFSET) < plant(0, 700), 'shadows lie under every row\'s plants')
     assert.equal(renderOrder('top', 4), renderOrder('top'), 'layers from top up are not per row')
+    assert.deepEqual([isAboveRows('top'), isAboveRows('fog'), isAboveRows('particle')], [true, true, false])
     assert.ok(renderOrder('top') > renderOrder('particle', 4))
 })

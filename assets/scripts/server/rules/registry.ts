@@ -92,22 +92,26 @@ export class LevelRuleRegistry {
 
     freeze(): void { this.rules.freeze() }
 
-    /** The level's waves before the random picks. */
+    /** The level's waves before the random picks; none for a level without waves. */
     draft(level: LevelDefinition, definitions: GameplayDefinitions): WaveDraft[] {
         if (!level.rules) {
-            return level.waves!.map(wave => ({ zombies: [...wave.zombies], ...(wave.flagWave ? { flagWave: true as const } : {}),
+            return (level.waves ?? []).map(wave => ({ zombies: [...wave.zombies], ...(wave.flagWave ? { flagWave: true as const } : {}),
                 points: wave.points === undefined ? 0 : wave.points - wave.zombies.reduce((sum, id) => sum + zombieValue(level, definitions, id), 0) }))
         }
         return this.get(level)!.draft(level.rules, level, definitions)
     }
 }
 
-/** Board::PickZombieWaves: after the fixed zombies, spend the remaining points by weight. */
+/** Board::PickZombieWaves: the most zombies a wave's random picks fill it up to, where the level gives none (`waveCapacity`). */
+export const MAX_ZOMBIES_IN_WAVE = 50
+
+/** Board::PickZombieWaves: after the fixed zombies, spend the remaining points by weight while the wave has room. */
 export function planWaves(drafts: WaveDraft[], level: LevelDefinition, random: DeterministicRng): WavePlan[] {
+    const capacity = level.waveCapacity ?? MAX_ZOMBIES_IN_WAVE
     return drafts.map((draft, index) => {
         const zombies = [...draft.zombies]
         let remaining = draft.points
-        while (remaining > 0) {
+        while (remaining > 0 && zombies.length < capacity) {
             const choices = level.zombiePool!.filter(entry => entry.weight > 0 && entry.points <= remaining && index + 1 >= (entry.firstWave ?? 1))
             const picked = pickWeighted(choices, random)
             zombies.push(picked.id)

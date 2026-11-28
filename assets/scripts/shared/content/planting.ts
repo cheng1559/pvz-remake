@@ -28,9 +28,14 @@ export function holdsCell(plants: GameplayDefinitions['plants'], plant: CellPlan
     return plant.state === 'idle' && plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column
 }
 
-/** The plant holding a cell (holdsCell), if any. */
+/**
+ * The plant holding a cell (holdsCell), if any. Of plants stacked on the cell (`/plantanywhere`, `/plant`) the top one,
+ * the last of `lawn` in slot order: the one zombies eat and projectiles hit first (Board::GetTopPlantAt) and the shovel
+ * digs up.
+ */
 export function cellPlant<T extends CellPlant>(plants: GameplayDefinitions['plants'], lawn: readonly T[], row: number, column: number): T | undefined {
-    return lawn.find(plant => holdsCell(plants, plant, row, column))
+    for (let i = lawn.length - 1; i >= 0; i--) if (holdsCell(plants, lawn[i], row, column)) return lawn[i]
+    return undefined
 }
 
 /** Board::ToolHitTestHelper: the shovel digs up a cell's plant, but neither a grave buster nor a plant on the zombies' side. */
@@ -44,6 +49,8 @@ export interface PlantingLawn {
     readonly board: Pick<BoardDefinition, 'rows' | 'columns'>
     /** The level's rule, for its share of the decision. */
     readonly rule?: LevelPlantingRule
+    /** `/plantanywhere` (DebugRules.plantAnywhere): any seed goes into any cell of the board. */
+    readonly anywhere?: boolean
     /** The plant holding a cell (cellPlant), if any. */
     plantAt(row: number, column: number): { readonly typeId: string, readonly team?: Team } | undefined
     /** The grave in a cell (graveAt), if any. */
@@ -94,9 +101,9 @@ export type PlantingRefusal =
     /** A grave buster's cell has a grave of its own side, which it does not eat. */
     | 'cell-has-own-grave'
 
-/** Why a cell is out of play: off the board, or in a row the level does not play. */
+/** Why a cell is out of play: off the board, or in a row the level does not play, which `/plantanywhere` plays too. */
 export function cellOutOfPlay(lawn: PlantingLawn, row: number, column: number): 'row-not-active' | 'column-out-of-range' | undefined {
-    if (!Number.isInteger(row) || row < 0 || row >= lawn.board.rows || !lawn.level.activeRows.includes(row)) return 'row-not-active'
+    if (!Number.isInteger(row) || row < 0 || row >= lawn.board.rows || !lawn.anywhere && !lawn.level.activeRows.includes(row)) return 'row-not-active'
     if (!Number.isInteger(column) || column < 0 || column >= lawn.board.columns) return 'column-out-of-range'
     return undefined
 }
@@ -105,6 +112,9 @@ export function cellOutOfPlay(lawn: PlantingLawn, row: number, column: number): 
 export function plantingRefusal(lawn: PlantingLawn, seed: SeedDefinition, team: Team, row: number, column: number): PlantingRefusal | undefined {
     const outOfPlay = cellOutOfPlay(lawn, row, column)
     if (outOfPlay) return outOfPlay
+    // `/plantanywhere`: whatever the level, the cell or what stands there. A plant goes over one there; a grave seed's
+    // grave replaces one there (placeGrave), and a crater seed's crater likewise (placeCrater).
+    if (lawn.anywhere) return undefined
     // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
     if (seed.kind === 'zombie') return undefined
     // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave or a crater (the plants there
@@ -129,9 +139,9 @@ export function plantingRefusal(lawn: PlantingLawn, seed: SeedDefinition, team: 
 
 /** The client's lawn: a snapshot's plants and things of the cells, on the level's board, with its rule's view. */
 export function snapshotLawn(definitions: Pick<GameplayDefinitions, 'plants' | 'boards'>, level: LevelDefinition,
-    snapshot: Pick<WorldSnapshot, 'plants' | 'gridItems'>, rule?: LevelPlantingRule): PlantingLawn {
+    snapshot: Pick<WorldSnapshot, 'plants' | 'gridItems' | 'debug'>, rule?: LevelPlantingRule): PlantingLawn {
     return {
-        level, board: definitions.boards[level.board], rule,
+        level, board: definitions.boards[level.board], rule, anywhere: snapshot.debug?.plantAnywhere === true,
         plantAt: (row, column) => cellPlant(definitions.plants, snapshot.plants, row, column),
         graveAt: (row, column) => graveAt(snapshot.gridItems, row, column),
         craterAt: (row, column) => craterAt(snapshot.gridItems, row, column),

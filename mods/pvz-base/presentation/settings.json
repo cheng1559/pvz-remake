@@ -1,0 +1,7 @@
+{
+  "particles": {
+    "systems": 1024,
+    "emitters": 1024,
+    "particles": 1024
+  }
+}

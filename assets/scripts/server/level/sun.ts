@@ -1,5 +1,5 @@
 import type { CommandBuffer, World } from '@/server/state/World'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, levelSkySun } from '@/shared/content/gameplay'
 import { LevelStateResource, RandomResource, SkySunResource } from '../state/resources'
 import { spawnItem } from '../items/itemSpawn'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -11,7 +11,7 @@ const SKY_SUN_X_MAX = 649
 
 export function updateSkySun(world: World, commands: CommandBuffer, definitions: GameplayDefinitions, tick: number): boolean {
     const level = world.resources.get(LevelStateResource)
-    const state = world.resources.get(SkySunResource), skySun = level.definition.skySun
+    const state = world.resources.get(SkySunResource), skySun = levelSkySun(level.definition, level.board.times[level.time])
     if (!skySun || level.result !== 'playing' || level.paused ||
         state.atTick === undefined || tick < state.atTick || levelAwardDropped(world)) return false
     spawnSkySun(world, commands, definitions, skySun)

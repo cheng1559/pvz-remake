@@ -25,7 +25,7 @@
 
 PvZ Remake is an open-source remake of the PC version of *Plants vs. Zombies*. It follows the Steam Game of the Year edition, version 1.2.0.1096, is written in TypeScript on Cocos 4, and runs in the browser and on Windows, macOS, Android and iOS. The project aims to rebuild and extend the original on a modern technology stack: a cross-platform, more stable game for players, and an easier, more consistent way for the community to build on it.
 
-The current version is v0.2.0, with all 20 Day and Night levels of Adventure mode. Besides restoring the original gameplay, the project fixes a number of presentation and logic problems in the original and adds teams, a debug console and Mod support, described below.
+The current version is v0.2.1, with all 20 Day and Night levels of Adventure mode. Besides restoring the original gameplay, the project fixes a number of presentation and logic problems in the original and adds teams, a debug console and Mod support, described below.
 
 ## 🎮 How to Play
 
@@ -187,13 +187,13 @@ Several Mods can be enabled at once and stack. For example, with the HD pack and
 
 | Mod | Content |
 | --- | --- |
-| [Widescreen](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
-| [Widescreen Edition music](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0) | The music of PvZ Widescreen Edition in place of the game's tracks |
-| [JiangNan PvZ2 pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
-| [Chinese pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
-| [HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0) | HD resources: every image at 2x and bitmap fonts at 4x |
-| [Chinese HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0) | The HD resources and Simplified Chinese in one package, usable alone |
-| [Extra buttons pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
+| [Widescreen](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.1) | Widens the view from 4:3 up to 21:9, with a widescreen main menu and backgrounds |
+| [Widescreen Edition music](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.1) | The music of PvZ Widescreen Edition in place of the game's tracks |
+| [JiangNan PvZ2 pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.1) | The art, animations and sounds of JiangNan Game's *PVZ2PAK GOTY edition* |
+| [Chinese pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.1) | Simplified Chinese text, fonts and interface images, translated as in the official Chinese GOTY edition |
+| [HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.1) | HD resources: every image at 2x and bitmap fonts at 4x |
+| [Chinese HD pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.1) | The HD resources and Simplified Chinese in one package, usable alone |
+| [Extra buttons pack](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.1) | Adds speed and freeze buttons and turns the seed chooser's page text into arrow buttons |
 
 #### How It Works
 
@@ -267,7 +267,7 @@ Switches take no argument: each run turns the switch over and shows its new stat
 | `/restart` | Restarts the current level |
 | `/reload`, `/quit` | Reloads or quits the game |
 
-Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the teams demo), `pvz:stress-test` (40 plants against 1023 zombies) and `pvz:seed-chooser-test` (the seed chooser).
+Four test levels do not overwrite the Adventure save: `pvz:teams-demo` (the teams demo), `pvz:stress-test` (40 plants against 1023 zombies), and `pvz:sandbox-day` and `pvz:sandbox-night` (day and night sandboxes: no zombies, no intro, ten empty seed slots for `/seed`).
 
 **Combat**
 
@@ -297,7 +297,6 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | Command | Effect |
 | --- | --- |
 | `/seed {slot} {seed} [team]` | Replaces the seed in a slot, ready at once; on conveyor-belt levels it replaces a packet on the belt |
-| `/seed {slot} empty` | Empties a slot |
 | `/sun {add\|set} {number}` | Adds or sets sun |
 | `/money {add\|set} {number}` | Adds or sets coins, also in the player profile |
 | `/item {item} [row col]` | Drops an item; `/item award` drops the level's award |
@@ -311,7 +310,7 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | `/cooldown` | Turns seed recharge on or off |
 | `/suncost` | Turns sun cost on or off |
 | `/plantinvincible` | Turns plant invincibility on or off: plants take no damage but can still be chilled and frozen |
-| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds |
+| `/cheatseed` | Turns all-seeds mode on or off: the seed chooser and the almanac show every seed, including Mod and hidden seeds, and the bank has every slot and the shovel |
 | `/collect {auto\|click\|move}` | Collects sun and coins automatically, by clicking or by moving the pointer over them |
 
 **Display and device**
@@ -333,7 +332,7 @@ Three test levels do not overwrite the Adventure save: `pvz:teams-demo` (the tea
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | Turns off drawing or processing of a part, for performance checks |
 | `/mod` | Opens the Mod manager |
 
-With hotkeys on, `1`–`9` and `0` pick the matching seed slot or conveyor packet, `F` picks up or puts back the shovel, `D` freezes or unfreezes the game, `R` runs `/repick` (and, pressed again while choosing, starts the level), and `S` and `C` switch sun cost and recharge.
+With hotkeys on, `1`–`9` and `0` pick the matching seed slot or conveyor packet, `F` picks up or puts back the shovel, `R` runs `/repick` with `/cheatseed` on (and, pressed again while choosing, starts the level; on mobile a tap on the sun counter does the same), and `S` and `C` switch sun cost and recharge.
 
 See [Debug Console](docs/DEBUG_CLI.md) for the full reference.
 
@@ -421,7 +420,7 @@ The project uses two forked repositories, both on the `dev/pvz-remake` branch:
 Requirements:
 
 - Node.js 22.17.0 and `node-gyp`;
-- Python 3.10 or later, with Pillow, ffmpeg and libopenmpt (to convert the game's resources);
+- Python 3.10 or later, with Pillow, NumPy and ffmpeg (to convert the game's resources);
 - For native builds, the platform's development tools, such as Xcode for macOS and iOS.
 
 Install the command-line tool outside the game repository, with the engine in its `packages/engine` directory:
@@ -464,12 +463,12 @@ npm run preview:debug     # start the preview, http://localhost:9527 by default
 | Platform | Command | Output |
 | --- | --- | --- |
 | Web | `npm run build:web:release` | The web build |
-| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe`; packaging needs Inno Setup 6 |
+| Windows | `npm run compile:windows:release`, then `npm run package:windows` | The installer `dist/pvz-remake-v{version}-windows-x64-setup.exe` and the zip `dist/pvz-remake-v{version}-windows-x64.zip`; packaging needs Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` and `compile:macos:x64:release`, then `npm run package:macos` | The disk images `dist/pvz-remake-v{version}-macos-arm64.dmg` for Apple silicon and `-macos-x64.dmg` for Intel Macs; macOS only |
 | Android | `npm run compile:android:arm64:release` | An arm64 package; use `android:armv7` for 32-bit devices |
 | iOS | `npm run compile:ios:release` | An unsigned IPA to sign yourself; macOS only |
 
-Replace `release` with `debug` in a command for a debug build. The Windows installer packs only a Release build.
+Replace `release` with `debug` in a command for a debug build. The Windows installer and zip pack only a Release build.
 
 See [Development](docs/DEVELOPMENT.md) for the full guide.
 
@@ -492,6 +491,7 @@ The following problems exist in the original 1.2.0.1096 and are fixed in this pr
 11. Fixed the Dancing Zombie facing the wrong way after eating during its moonwalk: for a frame, or walking backwards.
 12. Fixed zombies jumping a little to the left as a lawn mower runs them over.
 13. Fixed a headless zombie burned black keeping its shadow; like charred remains, it now has none.
+14. Fixed the dirt of the Backup Dancers a Dancing Zombie under a Hypno-shroom's control calls up coming up off their feet; it now comes up under them, turned round with them.
 
 ### Logic
 
@@ -517,7 +517,7 @@ Released versions list what they contain; planned versions may change.
 - Web and mobile support
 - Debug console
 
-### v0.2.0 (current)
+### v0.2.0 (released)
 
 - Client/server architecture rewrite
 - Adventure mode (Night)
@@ -532,6 +532,15 @@ Released versions list what they contain; planned versions may change.
 - Mods and resource packs (ZIP installation, HD pack, Simplified Chinese pack, widescreen)
 - Graphics (original-resolution rendering, high-resolution mode, frame rate display, tilted seed packets)
 - Controls (keyboard hotkeys, original mouse cursors, touch haptics, muting and auto-pause on focus loss)
+
+### v0.2.1 (current)
+
+- Music (the original's tracker music, played live as the original plays it)
+- Debug console (health bars, slot numbers, collision view, planting anywhere, running ticks at once, changing the time of day, day and night sandboxes)
+- Mods (load order, changes to what the base defines, scaling the lawn and the held tools)
+- Mobile (touches at the side edges left to the hand holding the device, more touch haptics)
+- Performance (zombies, entity lists, particles and rendering)
+- Fixes (collisions, zombie attacks and the dancers, the Chomper, graves, tutorials, the seed chooser and the layout on wide screens, the macOS touch screen and trackpad, music on macOS)
 
 ### v0.3.0 (planned)
 

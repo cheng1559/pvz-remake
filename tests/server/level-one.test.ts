@@ -36,6 +36,7 @@ function setup() {
         id: 'pvz:adventure-1-1',
         definition,
         board: definitions.boards[definition.board],
+        time: definition.time,
         phase: 'gameplay',
         result: 'playing',
         paused: false,

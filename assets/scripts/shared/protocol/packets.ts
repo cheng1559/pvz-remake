@@ -72,6 +72,8 @@ export interface StartSessionPacket extends ClientPacketBase {
     packetUpgradeOffer?: { cost: number }
     /** The seeds the player owns (the profile's awards and purchases); without it every catalog seed is available. */
     ownedSeeds?: string[]
+    /** The tools the player has collected from level awards (the profile's); without it every tool counts as collected. */
+    ownedTools?: string[]
     /** The achievements the player has; the level reports only new ones. */
     earnedAchievements?: string[]
     /**
@@ -186,8 +188,8 @@ export function parseClientPacket(value: unknown): ClientPacket {
                 const offer = record(packet.packetUpgradeOffer, 'startSession.packetUpgradeOffer')
                 nonNegativeInteger(offer.cost, 'startSession.packetUpgradeOffer.cost')
             }
-            if (packet.ownedSeeds !== undefined) {
-                array(packet.ownedSeeds, 'startSession.ownedSeeds').forEach((id, index) => nonEmptyString(id, `startSession.ownedSeeds[${index}]`))
+            for (const key of ['ownedSeeds', 'ownedTools'] as const) {
+                if (packet[key] !== undefined) array(packet[key], `startSession.${key}`).forEach((id, index) => nonEmptyString(id, `startSession.${key}[${index}]`))
             }
             if (packet.earnedAchievements !== undefined) {
                 array(packet.earnedAchievements, 'startSession.earnedAchievements')
@@ -256,12 +258,6 @@ export function validateServerPacket(value: unknown): ServerPacket {
                     if (typeof value !== 'string') throw new TypeError('debugResult.result.args entries must be strings')
                 })
             } else nonEmptyString(result.message, 'debugResult.result.message')
-            if (result.catalog !== undefined) {
-                const catalog = record(result.catalog, 'debugResult.result.catalog')
-                for (const kind of ['plants', 'zombies', 'items', 'levels']) {
-                    array(catalog[kind], `debug catalog.${kind}`).forEach(value => nonEmptyString(value, `debug catalog.${kind} entry`))
-                }
-            }
             break
         }
         case 'saveReady':

@@ -115,11 +115,11 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         }],
         conveyorPackets: [],
         plants: [{
-            entityId: 2, typeId: 'pvz:peashooter', state: 'idle',
+            entityId: 2, slot: 0, typeId: 'pvz:peashooter', state: 'idle',
             x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
-            entityId: 3, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
+            entityId: 3, slot: 0, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
             state: 'walking', health: 270, maxHealth: 270,
             animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             alpha: 255, hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 0,
@@ -178,6 +178,17 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     snapshot.seedPackets[0].cooldownRemaining = 0
     snapshot.cursor = { mode: 'none', seedId: 'pvz:peashooter' }
     assert.throws(() => parseServerPacket(packet), /does not match/)
+})
+
+test('local channel checks one frame in frameChecks, the first among them, and every frame by default', () => {
+    const broken = () => ({ protocolVersion: 1, type: 'frame' }) as unknown as ServerPacket
+    const sampled = new LocalGameChannel(2)
+    assert.throws(() => sampled.sendToClient(broken()))
+    assert.doesNotThrow(() => sampled.sendToClient(broken()))
+    assert.throws(() => sampled.sendToClient(broken()))
+    const every = new LocalGameChannel()
+    assert.throws(() => every.sendToClient(broken()))
+    assert.throws(() => every.sendToClient(broken()))
 })
 
 test('local server replies deeply isolate nested data with JSON copy semantics', () => {

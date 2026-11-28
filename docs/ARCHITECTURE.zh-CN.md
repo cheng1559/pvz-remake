@@ -102,7 +102,7 @@ flowchart LR
 
 服务端数据包按类型处理：
 
-- **帧**是最频繁的数据包，服务端用新建的对象构造其中的每个快照和事件。因此帧只经过校验（`validateServerPacket`）就直接交出，不做复制。
+- **帧**是最频繁的数据包，服务端用新建的对象构造其中的每个快照和事件。因此帧直接交出，不做复制。交出时会校验（`validateServerPacket`）：调试构建每帧都校验，发布构建每秒校验一帧（`LocalGameChannel` 的 `frameChecks`），因为每个 tick 检查每个实体的每个字段，花的时间超过了它能发现的问题。
 - **其他服务端数据包**可能引用服务端状态。`copyServerPacket` 在一次遍历中检查其 JSON 安全性并做深拷贝，然后再进行协议的结构检查。
 
 嵌套的模组状态、扩展数据和事件也以同样方式复制或检查，客户端修改自己持有的数据不会影响服务端或其他快照。客户端请求、外部数据包解析和存档格式各自遵循自己的规则。
@@ -164,7 +164,7 @@ flowchart LR
 
 ### 世界与实体
 
-世界（`state/World.ts`）由若干类型化列表组成，不使用 ECS 组件：`items`、`gridItems`、`plants`、`projectiles`、`mowers` 和 `zombies`，与世界的 `resources` 并列。每个列表都是一个 `EntityList`，按 id 直接保存对象本身，并按 id 顺序遍历。
+世界（`state/World.ts`）由若干类型化列表组成，不使用 ECS 组件：`items`、`gridItems`、`plants`、`projectiles`、`mowers` 和 `zombies`，与世界的 `resources` 并列。每个列表都是一个 `EntityList`，按槽位保存对象本身（原版的 DataArray），并按槽位顺序遍历。
 
 实体就是它在某个列表中的对象：
 
@@ -306,7 +306,7 @@ flowchart LR
 - 基础游戏的脚本通过 `installBuiltinTutorials` 注册；
 - 模组的脚本通过 `registry.tutorials.register(ownerId, id, script)` 注册。
 
-关卡的 `tutorial` 指定其中一个脚本，在内容校验时检查。运行中的游戏从世界中查找脚本：`levelTutorial` 返回关卡的脚本，`getActiveTutorial` 在脚本生效时返回它（首次冒险时，或对 `alwaysActive` 的脚本始终生效）。游戏通过它分发各种回调：选卡、取消、种植、冷却完成、收集阳光和金钱、选择工具、移除植物以及对话。
+关卡的 `tutorial` 指定其中一个脚本，在内容校验时检查。运行中的游戏从世界中查找脚本：`levelTutorial` 返回关卡的脚本，`getActiveTutorial` 在脚本生效时返回它（首次冒险时，除非脚本被跳过；或对 `alwaysActive` 的脚本始终生效）。游戏通过它分发各种回调：选卡、取消、种植、冷却完成、收集阳光和金钱、选择工具、移除植物以及对话。
 
 - 没有脚本的关卡省略 `tutorial`，使用共享流程。
 - 基础脚本的步骤是 `TUTORIAL_STEPS`，模组的步骤位于其命名空间中。
@@ -323,13 +323,14 @@ flowchart LR
 | `dialogQuestion` | 把当前台词标记为是/否提问，客户端用 `answerDialog` 回答。 |
 | `blocksIntro` | 阻止开场结束。 |
 | `blocksStart` | 阻止僵尸到来。与 `blocksIntro` 相互独立。 |
+| `skips` | 条件成立时，首次冒险不运行该脚本，例如卡槽里没有豌豆射手时的种植教程。开局时检查，成立则按重玩开局；关卡进行中也会检查，成立时由 `skipped` 放开脚本压住的内容。 |
 
 ### 工具
 
 工具即玩法定义中的 `tools` 表，按 ID 索引。每个工具都有一个说明其作用的 `kind`：`shovel` 表示 `tools.use` 会铲除格子中的植物，客户端会高亮指针下的那株植物。
 
 - 关卡的 `tools` 和 `tool` 类奖励都必须指向某个工具，并且每个工具都需要表现定义 `tools` 中的外观。
-- 工具来自奖励：首次冒险时，某关奖励的工具从下一关起可用；重玩时每关都可用。关卡自己的 `tools` 会替代奖励获得的工具。
+- 工具来自奖励：通关时，工具类奖励会把工具记入玩家档案，此后每关都有。关卡自己的 `tools` 会替代奖励获得的工具。
 
 铁铲是一个 `UIButton`，触摸操作与种子包相同：按下拿起，拖动瞄准，松开使用，拖回按钮上则取消。教程中可以使用，暂停会结束当前手势。
 
@@ -348,7 +349,7 @@ flowchart LR
 
 关卡的 `plantingLine: {column}` 是它的红线（坚果保龄球）：玩家不能在该列右侧种植，第一次尝试时提示 `ADVICE_NOT_PASSED_LINE`。这是下文共享种植判定中的一项检查。关卡表现定义中的 `plantingLine`（`{sprite, offset, dialogs}`）负责在战斗中以及列出的戴夫台词期间绘制它。任何关卡都可以设置红线，无论是否使用关卡规则。
 
-种子能种在哪里，对两端来说是同一个判定：`shared/content/planting.ts` 中的 `plantingRefusal`（`Board::CanPlantAt`）。它读取一个 `PlantingLawn`，两端各自根据自己的状态构建：服务端基于其 World，客户端基于快照（`snapshotLawn`）。
+种子能种在哪里，对两端来说是同一个判定：`shared/content/planting.ts` 中的 `plantingRefusal`（`Board::CanPlantAt`）。它读取一个 `PlantingLawn`，两端各自根据自己的状态构建：服务端基于其 World，客户端基于快照（`snapshotLawn`）。`PlantingLawn` 还带有来自调试规则的 `/plantanywhere`（`anywhere`），开启后两端同样只保留棋盘范围这一条限制。
 
 - 服务端对每种拒绝原因给出相应的拒绝码和提示。
 - 种植预览只显示是否会被拒绝。
@@ -420,7 +421,7 @@ flowchart LR
 
 玩法定义的编写表位于 `mods/pvz-base/gameplay/definitions/`，拆分为植物、僵尸、种子、场地、子弹、物品、成就、工具、商店、商店页面和图鉴。`gameplay/settings.json` 包含全局默认值，`gameplay/levels.json` 包含关卡。
 
-表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。
+表现定义表位于 `mods/pvz-base/presentation/definitions/`，按类别拆分成多个文件：植物与僵尸的动画、种子包图片、视图选择、部件轨道、阴影、掉落图片、场地、关卡、商店等。`presentation/settings.json` 包含客户端自己的全局设置，与服务端读取的玩法设置分开。
 
 根目录的 `mods/pvz-base/content.json` 以与模组源码相同的格式索引所有表。打包（`npm run mod:pack`，`tools/mod/cli.ts`）把它们合并为包内的 `assets/gameplay.json` 和 `assets/presentation.json`，结构与模组包相同，不增加额外的资源请求。基础内容包发布到 `assets/resources/base.zip`（`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`，`npm run build:content` 也会执行这一步）。无界面工具和测试读取同一套源表（`tools/mod/content.ts`）。
 
@@ -552,7 +553,7 @@ flowchart LR
 - 护具的 `dropSounds` 在护具破碎时与其 `clips.drop` 一起播放，攻击绕过护盾时除外。
 - `seedPackets` 保存种子包的闪光特效（`flash`）、选中颜色，以及图片在种子包中的默认位置。植物自己的表现定义 `packet` 可以指定其图片的 `placement` 和 `phase`。
 - `almanac` 按植物或僵尸 ID 保存图鉴中展示它所用的背景，以及它的种子包是否为升级植物的样式。
-- 表现定义中的 `boards` 定义背景、音乐和失败演出的几何参数；玩法定义中的 `boards.*.bounds` 定义水平边界。
+- 表现定义的 `boards` 定义失败演出的几何参数，以及每个时段（`times`）的背景、整片草坪、音乐和房门；玩法定义的 `boards.*.bounds` 定义水平边界。
 - 动画中带有 `flag` 层的僵尸会举着旗子，旗子按 `Zombie::DropFlag` 的方式掉落。
 - 粒子快照保留可选的剩余寿命。种子包闪光使用 `seedPackets.flash`，读档时不按特效 ID 分支。
 
@@ -589,7 +590,12 @@ flowchart LR
 
 - `LevelPresentation`（`getLevelPresentation`）按关卡 ID（表现定义的 `levels`）选择开场，以及教程文字和引导配置。
 - 冒险模式的开场（草皮铺开、预览僵尸、小推车驶入的时机）位于 `level/adventure/AdventureIntro`。共享场景中不包含任何开场时间参数。
-- 场地背景、音乐和失败演出的几何参数位于表现定义的 `boards`（`boards.json`）。
+- 场景背景、音乐和失败演出的几何参数位于表现定义的 `boards`（`boards.json`），按时段区分。
+- `/time`（`server/level/time.ts`）开始一次时段切换，即 `LevelState.timeChange`，快照中为 `timeChange`。服务端每个逻辑步推进一格，走到一半（`TIME_SWITCH_TICKS`）时把关卡换到新时段（`LevelState.time`）。
+- 客户端由 `TimeBlends`（`client/level/TimeBlends.ts`）绘制切换。每个 `TimeBlend` 开始时保留旧样子（`begin`），显示新时段的样子（`show`），按切换进度混合两者（`blend`），结束时去掉旧的（`end`）。本体提供草坪、阴影（`BoardShadows`）、音乐（`LevelAudioPresenter.timeBlend`）和房门（`LevelGameOverPresenter.timeBlend`）；模组用 `LevelView.addTimeBlend` 加入自己的。
+- 弹坑从 `LevelStage.timeBlend()` 读取切换进度。`SpriteBlend` 在一个精灵的位置画新旧两张图：影子各按比例绘制，遮挡类的图（弹坑、房门）新图在下完整绘制、旧图在上淡出。
+- 失败演出的房门图由 `LevelGameOverPresenter.doorFrames` 给出，宽屏模组包装它换成 TV 版。
+- 背景显示 `shownLawn`（`level/boards/definitions.ts`）选出的草坪，由 `LevelView.showLawn` 绘制，宽屏模组包装它换成 TV 版。
 - 后续关卡只需加入后端内容和一条表现定义条目（或复用已有条目）。新环境实现自己的场地表现，而不复制场景、输入、HUD 或存档控制器。
 
 #### 失败演出
@@ -615,7 +621,8 @@ flowchart LR
 - 植物的偏移为 `5 − x + 800`（越靠左越晚画），僵尸为 4。
 - 阴影位于 `ground` 层，偏移为 3，在所有行的植物和僵尸之下。
 - 掉落的头、手臂和头盔比所属僵尸高一级；其他粒子使用原版的渲染层，或所属实体的顺序加上其偏移。
-- 顺序相同的实体保持创建顺序，位于某实体顺序上的粒子画在该实体之后。
+- 位于 `top` 及以上渲染层的爆炸仍以所在行作为偏移，下面一行的爆炸盖住上面一行的；原版这些爆炸顺序相同，按粒子系统的槽位绘制。
+- 顺序相同的实体按槽位顺序排列，不同种类之间按固定顺序；位于某实体顺序上的残骸和粒子画在实体之后。同一顺序的粒子按生成先后绘制，复用的粒子与新生成的一样排在最后。
 - 表现数据中用名称指定渲染层（植物的 `layer`、爆炸的 `layer`；滚动的保龄球坚果使用 `projectile`），而不是写数字。
 
 #### 存档与布局
@@ -646,7 +653,7 @@ flowchart LR
 - **同步**：在场地上，`sync(entity, world)` 每帧执行一次，由视图自己摆放节点。新建的视图会立即用当时的快照同步一次。
 - **场地外**：植物、僵尸、格子物品和子弹也可以在场地外绘制（`client/view/offBoard.ts`）。它们由同样的注册表创建，上下文中没有 `stage`，从 `initialize` 起按上下文绘制，从不同步，用完后调用 `destroy`。
 - **存档**：需要跨存档保留的内容由视图自己通过 `snapshot` / `restore` 保存：僵尸的身体动画和推车驾驶员动画、阳光和金币的旋转。存档条目按类别区分（`zombie`、`item`）。植物和僵尸的受击闪光属于场地（`stage.flashes`，`EntityFlashes`），随渲染器的状态保存在关卡表现存档的 `flashes` 中，而不是由各视图保存。
-- **阴影**：位于视图自身节点之外的阴影节点（僵尸、子弹、小推车）是视图的 `shadowNode`，由渲染器放到地面层。设置 `draw.shadow: false` 时，植物和僵尸都不创建阴影。
+- **阴影**：位于视图自身节点之外的阴影节点（子弹、小推车，以及场地外的僵尸）是视图的 `shadowNode`，由渲染器放到地面层。场地上的僵尸没有阴影节点：它的阴影属于场地（`stage.shadows`，`BoardShadows`），同一行的阴影由一个批次一起绘制；视图通过 `shadow` 设置它的位置、大小、所在行以及是否显示。设置 `draw.shadow: false` 时，植物和僵尸都不创建阴影。
 
 植物或僵尸的表现定义可以省略 `view`（默认分别为 `plant` / `zombie`）。
 
@@ -780,6 +787,18 @@ Release 版本启动时会预热共享的 ZIP 缓存，并准备好所有 Reanim
 - 多个模拟步在一次调用中进入内核，只渲染最后的状态。
 - 存档保留种子和年龄，以便确定性重放。销毁或重启播放器会释放其内核状态。
 - 已用完固定发射上限的空系统会推迟剩余的模拟步并跳过空渲染，同时保持原有的寿命和存档年龄。
+- 表现层设置的 `particles` 规定原版粒子池（TodParticleHolder）的上限。`ParticlePlayer` 统计存活的特效和发射器，放不下的特效不会启动；内核统计所有系统的粒子，超过上限就不再生成，并且不为它取随机数。
+
+### 音乐
+
+音乐用原版的：`MusicSystem` 自己播放原版游戏的 tracker 模块，和原版用 BASS 播放的方式一样。
+
+- 模块曲目（`ModuleTune`）由 Music::PlayMusic 的几个部分组成：每部分是其模块（`mainmusic.mo3` 或 `mainmusic_hihats.mo3`）的一个实例，从指定 order 开始播放，只听得到它的声道（Music::SetupMusicFileForTune），按模块自身的跳转循环。跳转时停掉正在响的音符，和 `BASS_MUSIC_POSRESET` 相同。
+- 白天和夜晚的曲目按 Music::UpdateMusicBurst 调整各部分的音量。夜晚的鼓在主旋律进入下一个 order 时开始它的段落，由播放器按采样精确执行；原版让鼓略早跳过去，再靠调速度拉回同步（Music::MusicResync）。
+- 播放器是 `native/engine/common/music/` 下的 C++，基于 libopenmpt（`native/engine/common/third_party/libopenmpt`）。原生平台通过 `MusicBindings.cpp` 调用，混音作为引擎的音频流播放（`AudioEngine::playStream`）。
+- Web 端在 AudioWorklet 中运行编译为 WebAssembly 的同一份代码（`client/music/ModuleMusicWorklet.ts`），使用自己的音频上下文。修改 C++ 后需运行 `npm run build:music`（需要 Emscripten），并提交重新生成的 `assets/resources/music/pvz_music.bin`。
+- 读一个模块要花一些时间，`mainmusic.mo3` 约 0.25 秒，所以实例读好后会保留，供之后的曲目复用。原生平台在单独的线程上读模块，预加载曲目时会读好它还缺的实例；选卡时预加载本关的曲目。Worklet 在音频线程上读模块，会卡住正在播放的曲目，所以 Web 端在曲目开始时才读缺的实例。
+- 文件曲目（`FileTune`）是模组提供的录音：一个音频文件，整首循环。
 
 ### 游戏时钟
 

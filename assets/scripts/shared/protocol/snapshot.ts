@@ -80,6 +80,12 @@ export function parseGridItem(value: unknown, name: string): GridItemFields {
 export const TICK_SECONDS = 0.01
 
 /**
+ * The most fixed ticks the host runs at once: a frame further behind stops the game (`tick-limit-exceeded`), and `/step`
+ * takes no more.
+ */
+export const MAX_TICKS_PER_UPDATE = 1000
+
+/**
  * The level stands still: paused, or choosing its seeds again (`/repick`). Nothing on the lawn moves or takes the
  * pointer meanwhile, whichever it is. The two differ only in what else stops: a pause stops a seed chooser too and ends
  * with the player's resume, while a repick's chooser goes on and ends with its Let's Rock.
@@ -90,6 +96,13 @@ export function levelStandsStill(snapshot: Pick<WorldSnapshot, 'paused' | 'seedC
 
 export interface WorldSnapshot {
     levelId: string
+    /** The time of day the level is at, when not its own (`/time`; worldTime): one of its board's. */
+    time?: string
+    /**
+     * The lawn turning from a time of day to another (`/time`): the two, and how many of its TIME_CHANGE_TICKS it has
+     * turned; the level is at the time it turns to from TIME_SWITCH_TICKS on.
+     */
+    timeChange?: { from: string, to: string, ticks: number }
     tick: ServerTick
     gameplayTick: number
     phase: 'intro' | 'gameplay'
@@ -108,7 +121,7 @@ export interface WorldSnapshot {
      * `warnings` are shown one after another on confirm; each can be dismissed to repick. `repick`: chosen again in play
      * (`/repick`), the level standing still, for the bank's own size.
      */
-    /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any cards chosen. */
+    /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any number of cards chosen, none included. */
     seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true, cheatSeeds?: true }
     /** `team`: the side it puts down on, when not its seed's own (`/seed`). */
     conveyorPackets: Array<{ id: number; seedId: string; x: number; team?: Team; selected: boolean; availability: SeedAvailability }>
@@ -171,6 +184,11 @@ export interface DebugRules {
      * chosen. It counts towards the chooser's slots and whether it opens, so a chooser takes it up when it opens.
      */
     cheatSeeds: boolean
+    /**
+     * `/plantanywhere`: any seed goes into any cell of the board, whatever the level, the cell or what stands there
+     * (plantingRefusal): a dirt row, a plant's cell, a grave or a crater.
+     */
+    plantAnywhere: boolean
 }
 
 export type CursorSnapshot =
@@ -206,6 +224,8 @@ export interface SeedPacketSnapshot {
 
 export interface PlantSnapshot {
     entityId: EntityId
+    /** Its slot of the plants' list (the original's DataArray index), which the list goes over in order. */
+    slot: number
     typeId: string
     /** What it is in, whatever its kind (PLANT_STATES): in play, or crushed by a mower (`mowered`). */
     state: PlantState
@@ -215,8 +235,10 @@ export interface PlantSnapshot {
     column: number
     health: number
     maxHealth: number
-    /** A nocturnal plant on a day board. */
+    /** Asleep: a nocturnal plant by day, or one still waking. */
     asleep?: true
+    /** Waking (Plant::mWakeUpCounter): the ticks left until it wakes, stretching on its base meanwhile. */
+    waking?: number
     /**
      * What only its kind shows, which its view reads as its kind has it: the server's class of it writes it
      * (Plant.snapshotOwn) and the client's class of it reads it: the `phase` its animation goes by (PLANT_KIND_PHASES),
@@ -261,6 +283,8 @@ export const TEAMS: readonly Team[] = ['plants', 'zombies']
 
 export interface ZombieSnapshot {
     entityId: EntityId
+    /** Its slot of the zombies' list (the original's DataArray index), which the list goes over in order. */
+    slot: number
     typeId: string
     state: ZombieState
     x: number
@@ -362,6 +386,7 @@ export interface TutorialSnapshot {
 export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     const snapshot = record(value, 'snapshot')
     nonEmptyString(snapshot.levelId, 'snapshot.levelId')
+    if (snapshot.time !== undefined) nonEmptyString(snapshot.time, 'snapshot.time')
     nonNegativeInteger(snapshot.tick, 'snapshot.tick')
     nonNegativeInteger(snapshot.gameplayTick, 'snapshot.gameplayTick')
     if ((snapshot.gameplayTick as number) > (snapshot.tick as number)) {
@@ -374,6 +399,12 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         throw new TypeError('snapshot.result is unknown')
     }
     boolean(snapshot.paused, 'snapshot.paused')
+    if (snapshot.timeChange !== undefined) {
+        const change = exact(snapshot.timeChange, ['from', 'to', 'ticks'], 'snapshot.timeChange')
+        nonEmptyString(change.from, 'snapshot.timeChange.from')
+        nonEmptyString(change.to, 'snapshot.timeChange.to')
+        nonNegativeInteger(change.ticks, 'snapshot.timeChange.ticks')
+    }
     if (snapshot.iceTrap !== undefined) {
         const iceTrap = record(snapshot.iceTrap, 'snapshot.iceTrap')
         for (const [side, ticks] of Object.entries(iceTrap)) {
@@ -415,7 +446,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     }
     if (snapshot.debug !== undefined) {
         const debug = record(snapshot.debug, 'snapshot.debug')
-        for (const key of ['cooldown', 'sunCost', 'plantInvincible', 'cheatSeeds']) boolean(debug[key], `snapshot.debug.${key}`)
+        for (const key of ['cooldown', 'sunCost', 'plantInvincible', 'cheatSeeds', 'plantAnywhere']) boolean(debug[key], `snapshot.debug.${key}`)
         oneOf(debug.collect, DEBUG_COLLECT_MODES, 'snapshot.debug.collect')
     }
     record(snapshot.extensions, 'snapshot.extensions')
@@ -463,9 +494,10 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const slots = chooser.slots as number
         boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
         // An open bank may hold a card no longer offered (a saved hidden card whose Mod is gone); it can still go back.
-        // A repick keeps the bank's size, which a level's fixed bank may make larger than what the chooser offers.
+        // The slots may outnumber the cards offered: a repick keeps the bank's size, which a level's fixed bank may make
+        // larger, and `/cheatseed` turned off leaves fewer cards.
         if (chooser.repick !== undefined && chooser.repick !== true) throw new TypeError('snapshot.seedChooser.repick must be true')
-        if (slots < 1 || slots > 10 || slots > available.length + entries.length && chooser.repick === undefined || new Set(available).size !== available.length ||
+        if (slots < 1 || slots > 10 || new Set(available).size !== available.length ||
             seedPackets.length > slots) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }
@@ -478,6 +510,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const name = `snapshot.plants[${index}]`
         const plant = record(entry, name)
         nonNegativeInteger(plant.entityId, `${name}.entityId`)
+        nonNegativeInteger(plant.slot, `${name}.slot`)
         nonEmptyString(plant.typeId, `${name}.typeId`)
         // Mowed down exactly when it shows how far it is squashed.
         if ((oneOf(plant.state, PLANT_STATES, `${name}.state`) === 'mowered') !== (plant.mowered !== undefined)) throw new TypeError(`${name}.mowered goes with its state`)
@@ -491,6 +524,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
+        if (plant.waking !== undefined) positiveInteger(plant.waking, `${name}.waking`)
         if (plant.frozen !== undefined && plant.frozen !== true) throw new TypeError(`${name}.frozen must be true when present`)
         // Its view reads its own as its kind has it.
         if (plant.own !== undefined) record(plant.own, `${name}.own`)
@@ -504,6 +538,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
     array(snapshot.zombies, 'snapshot.zombies').forEach((entry, index) => {
         const name = `snapshot.zombies[${index}]`
         const zombie = validateLivingEntity(entry, name)
+        nonNegativeInteger(zombie.slot, `${name}.slot`)
         if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
         validateLayers(zombie.animations, `${name}.animations`)
         nonNegativeInteger(zombie.alpha, `${name}.alpha`)

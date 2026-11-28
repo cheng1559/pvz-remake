@@ -1,4 +1,3 @@
-import { easeInOutCurve } from '@/shared/content/animation'
 import { _decorator, Color, Component, input, Input, Mask, Node, UITransform, Vec3, type EventMouse, type EventTouch } from 'cc'
 import { getWheelScrollSteps, TouchScrollGesture } from '@/client/input/ScrollGesture'
 import { uiNode, type UiNodeParts } from '@/client/view/uiNode'
@@ -9,6 +8,8 @@ const { ccclass } = _decorator
 const BAR_WIDTH = 8
 /** SexyApp widgets update every 10ms; a held track pages after 25 updates, then every 5. */
 const PAGE_TICK = 0.01
+/** The wheel's glide: in this many seconds it closes all but a third (1/e) of the way to where the wheel points. */
+const WHEEL_GLIDE = 0.05
 
 /** ScrollbarWidget color slots: track, track while paging, thumb, thumb edge, thumb shadow, thumb highlight. */
 export type ScrollbarColors = readonly [Color, Color, Color, Color, Color, Color]
@@ -43,8 +44,6 @@ export interface UIScrollOptions {
     pageHeight?: number
     scrollbar?: boolean
     colors?: ScrollbarColors
-    /** Seconds for a full wheel step; zero keeps scrolling immediate. */
-    wheelDuration?: number
 }
 
 /** Vertical scroll area with the Steam GOTY ScrollbarWidget: 8px wide, no arrow buttons, track paging. */
@@ -60,11 +59,8 @@ export class UIScroll extends Component {
     private colors: ScrollbarColors = ZOMBIE_SCROLLBAR_COLORS
     private wheelStep = 12
     private showScrollbar = true
-    private wheelDuration = 0
-    private tweenDuration = 0
-    private tweenElapsed = 0
-    private tweenStart = 0
-    private tweenEnd = 0
+    /** Where the wheel points while the list glides there; null when it is there. */
+    private wheelTarget: number | null = null
     private maxScroll = 0
     private scroll = 0
     private pressed = false
@@ -76,7 +72,6 @@ export class UIScroll extends Component {
     private pageTicks = 0
     private pageElapsed = 0
     private lastY = 0
-    private mobile = false
     private readonly gesture = new TouchScrollGesture()
 
     initialize(options: UIScrollOptions): void {
@@ -86,7 +81,6 @@ export class UIScroll extends Component {
         this.colors = options.colors ?? ZOMBIE_SCROLLBAR_COLORS
         this.wheelStep = options.wheelStep ?? 12
         this.showScrollbar = options.scrollbar ?? true
-        this.wheelDuration = options.wheelDuration ?? 0
         this.viewport = uiNode({
             name: 'Viewport', parent: this.node, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT,
         })
@@ -96,7 +90,6 @@ export class UIScroll extends Component {
             name: 'Scrollbar', parent: this.node, position: { x: this.width - 6 },
             anchor: { x: 0, y: 1 }, size: { width: BAR_WIDTH, height: this.height }, graphics: true,
         })
-        this.mobile = GameDebugSettings.isMobileMode()
         this.setContentHeight(options.contentHeight)
         if (this.enabledInHierarchy) this.bindEvents('on')
     }
@@ -104,18 +97,9 @@ export class UIScroll extends Component {
     get contentWidth(): number { return this.viewport.transform.width }
     get offset(): number { return this.scroll }
     set offset(value: number) {
-        this.tweenDuration = 0
+        this.wheelTarget = null
         this.gesture.stopInertia()
         this.setScroll(value)
-    }
-
-    scrollTo(value: number, seconds = 0): void {
-        if (seconds <= 0) { this.offset = value; return }
-        this.gesture.stopInertia()
-        this.tweenStart = this.scroll
-        this.tweenEnd = Math.max(0, Math.min(this.maxScroll, value))
-        this.tweenElapsed = 0
-        this.tweenDuration = seconds
     }
 
     /** `drawnHeight` extends the range, never the thumb, when the drawn content is taller than the measured one. */
@@ -127,7 +111,7 @@ export class UIScroll extends Component {
         this.content.getComponent(UITransform)!.setContentSize(this.contentWidth, Math.max(contentHeight, drawnHeight))
         this.bar.node.active = scrolling && this.showScrollbar
         this.release()
-        this.tweenDuration = 0
+        this.wheelTarget = null
         this.gesture.cancel()
         this.setScroll(this.scroll)
     }
@@ -137,16 +121,18 @@ export class UIScroll extends Component {
     onDisable(): void {
         if (this.bar) this.bindEvents('off')
         this.release()
-        this.tweenDuration = 0
+        this.wheelTarget = null
         this.gesture.cancel()
     }
 
     update(dt: number): void {
         dt = gameClock.delta(dt)
-        if (this.tweenDuration > 0) {
-            this.tweenElapsed = Math.min(this.tweenDuration, this.tweenElapsed + dt)
-            this.setScroll(this.tweenStart + (this.tweenEnd - this.tweenStart) * easeInOutCurve(this.tweenElapsed / this.tweenDuration))
-            if (this.tweenElapsed >= this.tweenDuration) this.tweenDuration = 0
+        if (this.wheelTarget !== null) {
+            // The same share of the way each second, however the wheel's events fall in frames: a touchpad's come
+            // faster than frames, and as it slows, in whole points (1, 0, 1, 0), each a wheel step's share.
+            const left = this.wheelTarget - this.scroll
+            this.setScroll(Math.abs(left) < 0.5 ? this.wheelTarget : this.scroll + left * (1 - Math.exp(-dt / WHEEL_GLIDE)))
+            if (this.scroll === this.wheelTarget) this.wheelTarget = null
         }
         this.gesture.applyInertiaY(dt, () => this.scroll, value => this.setScroll(value))
         // ScrollbarWidget::Update: keep paging while the pointer stays on the same side of the thumb.
@@ -172,7 +158,6 @@ export class UIScroll extends Component {
         this.bar.node[method](Node.EventType.MOUSE_DOWN, this.pressBar, this)
         input[method](Input.EventType.MOUSE_MOVE, this.moveBar, this)
         input[method](Input.EventType.MOUSE_UP, this.releaseBar, this)
-        if (!this.mobile) return
         this.viewport.node[method](Node.EventType.TOUCH_START, this.beginTouch, this)
         this.viewport.node[method](Node.EventType.TOUCH_MOVE, this.moveTouch, this)
         this.viewport.node[method](Node.EventType.TOUCH_END, this.endTouch, this)
@@ -184,17 +169,15 @@ export class UIScroll extends Component {
         event.propagationStopped = true
         if (this.pressed) return
         this.gesture.stopInertia()
-        const from = this.tweenDuration > 0 ? this.tweenEnd : this.scroll
+        const from = this.wheelTarget ?? this.scroll
         const target = Math.max(0, Math.min(this.maxScroll, from - this.wheelStep * getWheelScrollSteps(event)))
-        const distance = Math.abs(target - from)
-        if (!distance) return
-        const duration = this.wheelDuration > 0 ? Math.max(0.05, this.wheelDuration * Math.min(1, distance / this.wheelStep)) : 0
-        this.scrollTo(target, duration)
+        if (target !== from) this.wheelTarget = target
     }
 
+    /** In mobile mode a drag in the area scrolls it, however long ago the area was built (achievements at startup). */
     private beginTouch(event: EventTouch): void {
-        if (this.maxScroll > 0 && !this.pressed) {
-            this.tweenDuration = 0
+        if (GameDebugSettings.isMobileMode() && this.maxScroll > 0 && !this.pressed) {
+            this.wheelTarget = null
             this.gesture.beginTouch(event)
         }
     }
@@ -224,7 +207,7 @@ export class UIScroll extends Component {
         // A mouse press can arrive as both MOUSE_DOWN and TOUCH_START.
         if (this.pressed || this.maxScroll <= 0) return
         this.pressed = true
-        this.tweenDuration = 0
+        this.wheelTarget = null
         this.gesture.cancel()
         event.propagationStopped = true
         this.lastY = this.localY(event)

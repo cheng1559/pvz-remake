@@ -8,7 +8,7 @@ const startingSeeds = (readGameplaySource('definitions') as { seedBank: { starti
  * level's award seed (what the profile's `seeds` would hold).
  */
 export function adventureSeeds(levels: GameplayLevels, levelId: string): string[] {
-    const index = levels.levels[levelId].adventureIndex
+    const index = levels.levels[levelId].adventureIndex!
     return [...startingSeeds, ...Object.values(levels.levels)
-        .flatMap(level => level.award.kind === 'seed' && level.adventureIndex < index ? [level.award.id] : [])]
+        .flatMap(level => level.award.kind === 'seed' && level.adventureIndex !== undefined && level.adventureIndex < index ? [level.award.id] : [])]
 }

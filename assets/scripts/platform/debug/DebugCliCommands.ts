@@ -8,6 +8,7 @@ import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
 import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSwitchAdvice, debugSwitched, debugSyntax, normalizeDebugName, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
@@ -17,6 +18,7 @@ const RULE_PREFERENCES: Record<string, () => boolean> = {
     cooldown: () => GameDebugSettings.set('rechargingEnabled', !GameDebugSettings.rechargingEnabled),
     suncost: () => GameDebugSettings.set('sunCostEnabled', !GameDebugSettings.sunCostEnabled),
     plantinvincible: () => GameDebugSettings.set('plantInvincible', !GameDebugSettings.plantInvincible),
+    plantanywhere: () => GameDebugSettings.set('plantAnywhere', !GameDebugSettings.plantAnywhere),
 }
 
 export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
@@ -54,6 +56,12 @@ async function executeCommand(
             if (!Number.isFinite(speed) || speed < 0 || speed > 10) return debugSyntax('Game speed must be between 0 and 10')
             gameClock.setSpeed(speed)
             return debugSuccess(`Game speed: ${speed}`)
+        }
+        case 'step': {
+            const ticks = debugInteger(args[0])
+            if (ticks === null || ticks < 1 || ticks > MAX_TICKS_PER_UPDATE) return debugSyntax(`Ticks must be an integer from 1 to ${MAX_TICKS_PER_UPDATE}`)
+            if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
+            return { ...debugSuccess(`Running ${ticks} ticks`), action: 'step', ticks }
         }
         case 'music': case 'sfx': {
             const percent = debugInteger(args[0])
@@ -101,6 +109,8 @@ async function executeCommand(
         }
         case 'fps': return debugSwitched(name, (GameDebugSettings.set('fpsVisible', !GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
         case 'hitboxes': return debugSwitched(name, (GameDebugSettings.set('hitboxesVisible', !GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
+        case 'hp': return debugSwitched(name, GameDebugSettings.set('hpVisible', !GameDebugSettings.hpVisible))
+        case 'id': return debugSwitched(name, GameDebugSettings.set('idVisible', !GameDebugSettings.idVisible))
         case 'sharpness': {
             const sharpness = Number(args[0])
             if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Sharpness must be between 0 and 1')
@@ -160,6 +170,7 @@ async function executeCommand(
             if (name === 'cooldown') GameDebugSettings.set('rechargingEnabled', enabled)
             if (name === 'suncost') GameDebugSettings.set('sunCostEnabled', enabled)
             if (name === 'plantinvincible') GameDebugSettings.set('plantInvincible', enabled)
+            if (name === 'plantanywhere') GameDebugSettings.set('plantAnywhere', enabled)
             return { ...result, advice: debugSwitchAdvice(name, enabled) }
         }
     }

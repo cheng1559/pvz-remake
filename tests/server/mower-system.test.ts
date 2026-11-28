@@ -25,11 +25,11 @@ import { newZombie, withZombieTypes } from '../zombieTypes'
 import { newPlant, withPlantTypes } from '../plantTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-const board = definitions.boards['pvz:day']
+const board = definitions.boards['pvz:frontyard']
 /** A level whose row 2 has a mower waiting. */
 function mowerWorld(): World {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
-    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board,
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board, time: 'day',
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     withProjectileMotions(world, definitions).resources.set(RandomResource, new DeterministicRng(1))
@@ -286,7 +286,7 @@ test("a row's mower waits from the level's start until it sets off as a projecti
 
     // Saved in their lists: a waiting one as a mower, a running one as a projectile.
     const saved = server.save()
-    assert.equal(saved.schemaVersion, 5)
+    assert.equal(saved.schemaVersion, 6)
     assert.deepEqual(Object.keys(saved.level), ['phase', 'result', 'paused'], 'no list of rows: the mowers are entities')
     assert.deepEqual(saved.mowers.find(mower => mower.id === first.entityId), { id: first.entityId, position: { x: -21, y: first.y, row: 1 }, typeId: 'pvz:lawnmower' })
     assert.deepEqual([saved.mowers.some(mower => mower.id === runningId), saved.projectiles.find(projectile => projectile.id === runningId)!.typeId], [false, 'pvz:lawnmower'])
@@ -304,7 +304,7 @@ test("a row's mower waits from the level's start until it sets off as a projecti
         assert.throws(() => new IntegratedGameServer(definitions, levels).start({ ...start, save }), message, why)
     }
     const saveOf = (save: any, list: string, id: number) => save[list].find((entity: any) => entity.id === id)
-    refused(save => { save.schemaVersion = 4 }, /schemaVersion must be 5/, 'an older save is refused, not read as this one')
+    refused(save => { save.schemaVersion = 5 }, /schemaVersion must be 6/, 'an older save is refused, not read as this one')
     refused(save => { save.level.mowerRows = [1, 2, 3] }, /server save\.level/, "the old rows' list")
     refused(save => { saveOf(save, 'mowers', first.entityId).typeId = 'pvz:pea' }, /Saved mower .* is invalid/, 'it sets off as the level\'s mower')
     refused(save => { saveOf(save, 'mowers', first.entityId).position.x = 0 }, /Saved mower .* is invalid/, 'it waits at MOWER_READY_X')

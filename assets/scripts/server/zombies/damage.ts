@@ -2,7 +2,7 @@ import { TICKS_PER_SECOND, playZombie, zombiePace } from './animation'
 import { LevelStateResource, RandomResource, TutorialResource } from '../state/resources'
 import type { Zombie } from './Zombie'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { damageIndex, type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { damageIndex, type GameplayDefinitions, pastAdventureLevel, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import type { EntityRemover, World } from '@/server/state/World'
 import { zombiePartDropped } from './parts'
 import { dropZombieLoot } from '../level/loot'
@@ -155,7 +155,7 @@ export function dropZombieShield(world: World, definitions: GameplayDefinitions,
 /** LawnApp::HasFinishedAdventure || mLevel > 5. */
 function canDoSuperLongDeath(world: World): boolean {
     if (!world.resources.has(TutorialResource) || !world.resources.has(LevelStateResource)) return false
-    return !world.resources.get(TutorialResource).firstAdventure || world.resources.get(LevelStateResource).definition.adventureIndex > 5
+    return !world.resources.get(TutorialResource).firstAdventure || pastAdventureLevel(world.resources.get(LevelStateResource).definition, 5)
 }
 
 /** Board::CountZombiesOnScreen: the zombies' side (not mind-controlled) with their heads, not dying, other than `except`. */

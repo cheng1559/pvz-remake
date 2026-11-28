@@ -161,7 +161,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     const { x, y } = plantPosition(card.place)
                     const button = ui.button(cardButtons, {
                         images: { normal: sprites['pvz:seedpacketflash'] }, x, y, width: 50, height: 70,
-                        pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), pressOffset: [0, 0],
+                        pressSound: null, clickSound: null, clickOnPress: true, pressOffset: [0, 0],
                         onClick: () => choose(card),
                     })
                     button.hapticsEnabled = false
@@ -193,7 +193,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 // AlmanacDialog::DrawZombies draws the window image at its own size over the 76x76 button.
                 const windowSize = sprites.almanac_zombiewindow.originalSize
                 const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x, y, width: 76, height: 76,
-                    imageBox: { width: windowSize.width, height: windowSize.height }, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => {
+                    imageBox: { width: windowSize.width, height: windowSize.height }, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: true, onClick: () => {
                         if (selection.zombie === zombie.place) return
                         selection.zombie = zombie.place
                         showZombie(zombie)

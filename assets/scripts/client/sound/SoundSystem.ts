@@ -43,6 +43,7 @@ interface SoundPlayer {
 /** A channel is occupied from the request until cancellation, failure or playback completion. */
 interface Voice {
     channel?: string
+    loop: boolean
     pauseWithGame: boolean
     volume: number
     volumeGroup?: SoundOptions['volumeGroup']
@@ -248,7 +249,7 @@ export class SoundSystem {
         if (options.foley && this._hasFoleyPlayedTooRecently(effect)) return
         const definition = this._foley[effect]
         const pauseWithGame = options.pauseWithGame ?? definition?.pauseWithGame ?? false
-        const voice: Voice = { channel, pauseWithGame, volume: options.volume ?? 1, volumeGroup: options.volumeGroup }
+        const voice: Voice = { channel, loop: options.loop === true, pauseWithGame, volume: options.volume ?? 1, volumeGroup: options.volumeGroup }
         this._voices.add(voice)
         let started = false
         try {
@@ -296,8 +297,17 @@ export class SoundSystem {
         this._gamePaused = false
     }
 
+    /**
+     * The window is hidden. A native build's audio engine pauses every sound with it and plays them on as it comes back,
+     * where the web's go on unheard and end. A sound that plays once and does not pause with the game stops instead of
+     * being heard late, whatever the game is doing then; a looping one, and one that pauses with the game, go on.
+     */
+    public static windowHidden(): void {
+        for (const voice of this._voices) if (!voice.loop && !voice.pauseWithGame) this._stop(voice)
+    }
+
     private static async _playClip(id: string, clip: AudioClip, pitch: number, options: SoundOptions, voice: Voice) {
-        const loop = options.loop === true
+        const loop = voice.loop
         if (this._playNative(clip, pitch, this._outputVolume(options), voice, loop)) return
 
         const context = pitch || (!sys.isNative && !voice.channel && !voice.pauseWithGame) ? this._getAudioContext() : null

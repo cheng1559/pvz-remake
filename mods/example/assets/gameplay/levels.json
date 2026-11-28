@@ -1,7 +1,8 @@
 {
   "example:testing": {
     "adventureIndex": 1,
-    "board": "pvz:day",
+    "board": "pvz:frontyard",
+    "time": "day",
     "activeRows": [
       2
     ],

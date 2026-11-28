@@ -119,6 +119,11 @@ export class Dancer extends Zombie {
         return !isSummoning(this.phase) && super.eats()
     }
 
+    /** Coming up out of the ground as its leader calls it up (its `rise` phase). */
+    calledUp(): boolean {
+        return this.phase === 'rise'
+    }
+
     /** Zombie::EatPlant: a plant in its way ends a leader's moonwalk, unbitten; it snaps its fingers next. */
     passesPlant(): boolean {
         if (this.phase !== 'moonwalk') return false

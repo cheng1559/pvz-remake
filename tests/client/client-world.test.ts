@@ -10,11 +10,11 @@ function snapshot(tick: number): WorldSnapshot {
         sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
-            entityId: 1, typeId: 'pvz:peashooter', state: 'idle',
+            entityId: 1, slot: 0, typeId: 'pvz:peashooter', state: 'idle',
             x: 0, y: 0, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
-            entityId: 2, typeId: 'pvz:normal', state: 'walking',
+            entityId: 2, slot: 0, typeId: 'pvz:normal', state: 'walking',
             x: 10, y: 20, row: 2, health: 270, maxHealth: 270,
             animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             alpha: 255, hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 0,
@@ -32,7 +32,7 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     const started: SessionStartedPacket = {
         protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot: first,
     }
-    assert.deepEqual(world.accept(started), { added: [1, 2, 4, 6, 7], removed: [] })
+    assert.deepEqual(world.accept(started), { added: [1, 2, 6, 7, 4], removed: [] })
     assert.equal(world.current, first)
 
     const second = snapshot(2)

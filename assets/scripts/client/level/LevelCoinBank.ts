@@ -5,6 +5,7 @@ import type { Content } from './LevelStage'
 import type { UILabel } from '@/client/ui/UILabel'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { uiNode } from '@/client/view/uiNode'
+import { uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 
@@ -22,17 +23,22 @@ export class LevelCoinBank {
     private daveOut = false
     private lastSnapshot?: WorldSnapshot
 
-    /** Its node in the HUD, drawn under the coins that fly to it, with its count. */
-    static async create(content: Content, ui: UI, hud: Node, coinLayer: Node): Promise<{ node: Node, text: UILabel }> {
+    /**
+     * Its node in the HUD, drawn under the coins that fly to it, with its count, kept at the UI area's left edge
+     * (`edge`, which money flies to as well: LevelStage.coinBankOffset).
+     */
+    static async create(content: Content, ui: UI, hud: Node, coinLayer: Node): Promise<{ node: Node, text: UILabel, edge: Node }> {
         // Board::DrawUICoinBank at (57, 599 - height); money flies to (39, 558) on the board.
         const coinBankFrame = await modResources.sprite('pvz:coinbank')
         const coinBankY = 599 - coinBankFrame.originalSize.height
-        const coinBank = uiNode({ name: 'CoinBank', parent: hud, anchor: { x: 0, y: 1 }, active: false }).node
+        const edge = uiAreaEdge(hud, 'left')
+        edge.name = 'CoinBankEdge'
         // Board::AddUIRenderItems draws the bank at RENDER_LAYER_COIN_BANK; coins sit one above it, so money flies over the bank.
-        coinBank.setSiblingIndex(coinLayer.getSiblingIndex())
+        edge.setSiblingIndex(coinLayer.getSiblingIndex())
+        const coinBank = uiNode({ name: 'CoinBank', parent: edge, anchor: { x: 0, y: 1 }, active: false }).node
         ui.image(coinBank, coinBankFrame, { x: 57, y: coinBankY })
         const coinText = ui.label(coinBank, { text: '', font: 'money', color: new Color(180, 255, 90), x: 57 + 116, y: coinBankY + 24, baseline: true, align: 'right' })
-        return { node: coinBank, text: coinText }
+        return { node: coinBank, text: coinText, edge }
     }
 
     constructor(private readonly items: GameplayDefinitions['items'], private readonly bank: { readonly node: Node, readonly text: UILabel }) {}
@@ -70,9 +76,14 @@ export class LevelCoinBank {
     setBesideDave(beside: boolean): void {
         if (this.daveOut === beside) return
         this.daveOut = beside
-        const x = beside ? 450 - 57 : 0
-        if (this.bank.node.position.x !== x) this.bank.node.setPosition(x, this.bank.node.position.y)
+        this.place()
         if (this.lastSnapshot) this.sync(this.lastSnapshot, [])
+    }
+
+    /** Beside Dave it is at 450 of the 800 layout he stands in, wherever the UI area's left edge it keeps to is. */
+    private place(): void {
+        const x = this.daveOut ? 450 - 57 + uiAreaInset() : 0
+        if (this.bank.node.position.x !== x) this.bank.node.setPosition(x, this.bank.node.position.y)
     }
 
     sync(snapshot: WorldSnapshot, events: readonly ServerEvent[]): void {
@@ -87,6 +98,7 @@ export class LevelCoinBank {
         const playing = snapshot.phase === 'gameplay' && snapshot.result !== 'lost'
         this.bank.node.active = this.ticks > 0 && (playing || this.daveOut)
         if (!this.bank.node.active) return
+        this.place()
         uiNode({ node: this.bank.node, opacity: Math.min(255, Math.round(255 * this.ticks / 15)) })
         const text = formatMoney(snapshot.money)
         if (this.bank.text.text !== text) this.bank.text.text = text

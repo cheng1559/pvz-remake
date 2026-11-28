@@ -25,7 +25,7 @@
 
 PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam 年度版 1.2.0.1096 为还原基准，使用 TypeScript 与 Cocos 4 开发，可在浏览器、Windows、macOS、Android 和 iOS 上运行。项目旨在基于现代技术栈重构并扩展原版：为玩家提供跨平台、更稳定的游玩体验，为社区提供更便捷、更规范的二次开发途径。
 
-当前版本为 v0.2.0，已完成冒险模式白天与黑夜共 20 个关卡。在还原原版玩法的同时，项目修正了原版中部分表现与逻辑问题，并加入了阵营系统、调试指令和模组支持，详见下文。
+当前版本为 v0.2.1，已完成冒险模式白天与黑夜共 20 个关卡。在还原原版玩法的同时，项目修正了原版中部分表现与逻辑问题，并加入了阵营系统、调试指令和模组支持，详见下文。
 
 ## 🎮 如何游玩
 
@@ -187,13 +187,13 @@ PvZ Remake 是《植物大战僵尸》PC 版的开源重制项目，以 Steam �
 
 | 模组 | 内容 |
 | --- | --- |
-| [宽屏拓展](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.0) | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
-| [宽屏版背景音乐](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.0) | 以 PvZ 宽屏版的配乐替换游戏音乐 |
-| [江南 PvZ2 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.0) | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
-| [汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.0) | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
-| [HD 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.0) | 全部图像 2 倍、位图字体 4 倍的高清资源 |
-| [HD 汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.0) | 高清资源与简体中文的合并包，可单独使用 |
-| [扩展按钮资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.0) | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
+| [宽屏拓展](https://github.com/cheng1559/pvz-remake/releases/tag/mod-widescreen-0.1.1) | 将画面扩展到 4:3 至 21:9，并替换为宽屏主界面与背景 |
+| [宽屏版背景音乐](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-bgm-0.1.1) | 以 PvZ 宽屏版的配乐替换游戏音乐 |
+| [江南 PvZ2 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-jiangnan-pvz2-0.1.1) | 移植江南游戏开发社《PVZ2PAK 年度版》的美术、动画与音效 |
+| [汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-0.1.1) | 简体中文文本、字体与界面图片，译文取自官方中文年度加强版 |
+| [HD 资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-hd-0.1.1) | 全部图像 2 倍、位图字体 4 倍的高清资源 |
+| [HD 汉化资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-zh-cn-hd-0.1.1) | 高清资源与简体中文的合并包，可单独使用 |
+| [扩展按钮资源包](https://github.com/cheng1559/pvz-remake/releases/tag/mod-dlc-buttons-0.1.1) | 加入加速、冻结按钮，并将选卡界面的翻页文字改为箭头按钮 |
 
 #### 运行机制
 
@@ -267,7 +267,7 @@ export function register({ host, assets }) {
 | `/restart` | 重新开始当前关卡 |
 | `/reload`、`/quit` | 重新载入游戏、退出游戏 |
 
-另有三个测试关卡，不覆盖冒险存档：`pvz:teams-demo`（阵营演示）、`pvz:stress-test`（40 株植物对 1023 只僵尸的压力测试）、`pvz:seed-chooser-test`（选卡测试）。
+另有四个测试关卡，不覆盖冒险存档：`pvz:teams-demo`（阵营演示）、`pvz:stress-test`（40 株植物对 1023 只僵尸的压力测试），以及 `pvz:sandbox-day` 和 `pvz:sandbox-night`（白天和黑夜的沙盒：没有僵尸、不播开场、10 个空卡槽供 `/seed` 填入）。
 
 **战斗流程**
 
@@ -297,7 +297,6 @@ export function register({ host, assets }) {
 | 指令 | 作用 |
 | --- | --- |
 | `/seed {卡槽} {种子} [阵营]` | 替换卡槽中的种子，新种子立即可用；传送带关卡中替换传送带上的卡片 |
-| `/seed {卡槽} empty` | 清空卡槽 |
 | `/sun {add\|set} {数值}` | 增加或设定阳光 |
 | `/money {add\|set} {数值}` | 增加或设定金币，同时写入玩家档案 |
 | `/item {物品} [行 列]` | 掉落指定物品；`/item award` 掉落本关奖励 |
@@ -311,7 +310,7 @@ export function register({ host, assets }) {
 | `/cooldown` | 开关种子冷却 |
 | `/suncost` | 开关阳光消耗 |
 | `/plantinvincible` | 开关植物无敌：植物不受伤害，但仍会被减速和冰冻 |
-| `/cheatseed` | 开关全卡模式：选卡界面和图鉴显示全部种子，包括模组种子与隐藏种子 |
+| `/cheatseed` | 开关全卡模式：选卡界面和图鉴显示全部种子，包括模组种子与隐藏种子，并开放全部卡槽和铁铲 |
 | `/collect {auto\|click\|move}` | 设定阳光和金币的收集方式：自动、点击或鼠标经过 |
 
 **显示与设备**
@@ -333,7 +332,7 @@ export function register({ host, assets }) {
 | `/perf {plants\|zombies\|particles\|sfx\|logic}` | 关闭指定部分的绘制或运算，用于性能排查 |
 | `/mod` | 打开模组管理器 |
 
-开启热键后：`1`–`9` 和 `0` 选取对应卡槽或传送带上的卡片，`F` 拿起或放回铁铲，`D` 切换定格，`R` 执行 `/repick`（重新选卡时再按一次即开始战斗），`S` 和 `C` 分别切换阳光消耗和冷却。
+开启热键后：`1`–`9` 和 `0` 选取对应卡槽或传送带上的卡片，`F` 拿起或放回铁铲，开启 `/cheatseed` 时 `R` 执行 `/repick`（重新选卡时再按一次即开始战斗；移动端点击阳光计数效果相同），`S` 和 `C` 分别切换阳光消耗和冷却。
 
 完整说明见[调试指令](docs/DEBUG_CLI.zh-CN.md)。
 
@@ -421,7 +420,7 @@ flowchart LR
 所需环境：
 
 - Node.js 22.17.0 与 `node-gyp`；
-- Python 3.10 及以上，以及 Pillow、ffmpeg、libopenmpt（用于转换游戏资源）；
+- Python 3.10 及以上，以及 Pillow、NumPy、ffmpeg（用于转换游戏资源）；
 - 构建原生版本时，还需要对应平台的开发工具，如构建 macOS 和 iOS 版本需要 Xcode。
 
 在游戏仓库之外安装命令行工具，并把引擎放到它的 `packages/engine` 目录：
@@ -464,12 +463,12 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 | 平台 | 命令 | 输出 |
 | --- | --- | --- |
 | 网页 | `npm run build:web:release` | Web 构建 |
-| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{版本}-windows-x64-setup.exe`；打包需要 Inno Setup 6 |
+| Windows | `npm run compile:windows:release`，然后 `npm run package:windows` | 安装包 `dist/pvz-remake-v{版本}-windows-x64-setup.exe` 和压缩包 `dist/pvz-remake-v{版本}-windows-x64.zip`；打包需要 Inno Setup 6 |
 | macOS | `npm run compile:macos:arm64:release` 和 `compile:macos:x64:release`，然后 `npm run package:macos` | 磁盘映像 `dist/pvz-remake-v{版本}-macos-arm64.dmg`（Apple 芯片）和 `-macos-x64.dmg`（Intel）；仅能在 macOS 上构建 |
 | Android | `npm run compile:android:arm64:release` | arm64 安装包；32 位设备使用 `android:armv7` |
 | iOS | `npm run compile:ios:release` | 未签名的 IPA，需要自行签名；仅能在 macOS 上构建 |
 
-把命令中的 `release` 换成 `debug` 即可构建调试版本。Windows 安装包只能从 Release 版本打包。
+把命令中的 `release` 换成 `debug` 即可构建调试版本。Windows 安装包和压缩包只能从 Release 版本打包。
 
 完整说明见[开发](docs/DEVELOPMENT.zh-CN.md)。
 
@@ -492,6 +491,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 11. 修复舞者僵尸在入场太空步中啃食后朝向错误的问题：会翻转一帧，或背对着前进。
 12. 修复僵尸被小推车碾压时先向左跳一下的问题。
 13. 修复没有头的僵尸被烧黑后仍有影子的问题，现在与焦黑残骸一样没有影子。
+14. 修复被迷糊菇控制的舞者僵尸召唤伴舞时，泥土不在伴舞脚下冒出的问题，现在泥土在脚下冒出，并随伴舞翻转。
 
 ### 逻辑层
 
@@ -517,7 +517,7 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 - 网页版与移动端适配
 - 调试控制台
 
-### v0.2.0（当前版本）
+### v0.2.0（已发布）
 
 - 客户端/服务端架构重写
 - 冒险模式（黑夜）
@@ -532,6 +532,15 @@ npm run preview:debug     # 启动预览，默认地址 http://localhost:9527
 - 模组与资源包（ZIP 安装、高清包、简体中文包、宽屏）
 - 画面（原版分辨率渲染、高分辨率模式、帧率显示、种子包倾斜样式）
 - 操作（键盘热键、原版鼠标指针、触控振动、失焦静音与自动暂停）
+
+### v0.2.1（当前版本）
+
+- 音乐（按原版的方式实时播放原版的模块音乐）
+- 调试控制台（血条、槽位号、碰撞箱、随意种植、一次运行多步、切换时段、白天与黑夜沙盒关卡）
+- 模组（加载顺序、修改基础内容的定义、缩放草坪和手持工具）
+- 移动端（屏幕两侧边缘的触摸留给握持设备的手、更多触控振动）
+- 性能（僵尸、实体列表、粒子和渲染）
+- 修复（碰撞、僵尸攻击与舞者僵尸、大嘴花、墓碑、教程、选卡界面与宽屏布局、macOS 触屏与触控板、macOS 上的音乐）
 
 ### v0.3.0（计划中）
 

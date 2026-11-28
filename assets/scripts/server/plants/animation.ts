@@ -1,12 +1,11 @@
 import type { GameSystem } from '@/server/state/World'
-import { type GameplayDefinitions, PLANT_BLINK_LAYER, type PlantDefinition } from '@/shared/content/gameplay'
-import { type AnimationRandom, framePosition, playLayers } from '@/shared/content/animation'
-import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
+import { type AnimationRandom, framePosition, playLayers, startLayer } from '@/shared/content/animation'
+import { blinkPhaseStarted, endBlink, startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import type { Plant } from './Plant'
 import { plantsInPlay } from '../level/lawn'
 import { plantPace, plantSkipsTick } from './chill'
-import { isPlantAsleep } from './sleep'
 
 /**
  * A plant's animation is the server's, as a zombie's is: what each of its layers plays and how far into it
@@ -31,8 +30,25 @@ export function startPlantAnimations(plant: Plant, definition: PlantDefinition, 
 export function firePlantAnimation(plant: Plant, definition: PlantDefinition, random: AnimationRandom): void {
     const animation = definition.animation
     if (!animation || !plant.animations) return
-    delete plant.animations[PLANT_BLINK_LAYER]
+    endBlink(plant)
     playLayers(animation, plant, animation.fire, random)
+}
+
+/**
+ * Plant::SetSleeping: the plant falls asleep or wakes in play (the time turned to day or night). Its layers play the
+ * asleep clips in place of their own (the Zs over it), or their own again with its kind's phase's (a grown sun-shroom
+ * Plant::SetSleeping plays anim_bigidle for), each from the start; a layer without a clip there goes. The view blends
+ * into them (Reanimation::StartBlend(20): a plant's clips blend in 0.2 seconds).
+ */
+export function sleepingPlantAnimation(plant: Plant, definition: PlantDefinition, asleep: boolean, random: AnimationRandom): void {
+    const animation = definition.animation
+    if (!animation || !plant.animations) return
+    const phase = plant.animationPhase()
+    const clips = asleep ? animation.asleep ?? {} : { ...animation.layers, ...(phase === undefined ? undefined : animation.phases?.[phase]) }
+    for (const [layer, clip] of Object.entries(clips)) {
+        if (clip === null) delete plant.animations[layer]
+        else plant.animations[layer] = startLayer(animation, plant, clip, random)
+    }
 }
 
 /** The plant came to a phase of its kind: its layers play that phase's clips, and a plant that blinks from then on counts down to its first. */
@@ -40,8 +56,7 @@ export function plantPhaseAnimation(plant: Plant, definition: PlantDefinition, p
     const animation = definition.animation
     if (!animation || !plant.animations) return
     playLayers(animation, plant, animation.phases?.[phase], random)
-    const blink = animation.blink
-    if (blink?.first && blink.phases?.includes(phase)) plant.blinkTicks = random.integer(blink.first.min, blink.first.max)
+    blinkPhaseStarted(animation, plant, phase, random)
 }
 
 /**
@@ -72,10 +87,10 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
                     // A chilled plant animates at half its rate, and counts down to its blink every other tick.
                     slowed: () => plantPace(plant),
                     chewed: plant.recentlyEatenCounter > 0,
-                    // Plant::UpdateBlink: an asleep plant's blink waits. Plant::DoBlink: one about to shoot, or in a state
-                    // it does not blink in (a potato mine not armed), misses its blink (its kind says, Plant.blinkMisses).
-                    blinkWaits: plantSkipsTick(plant) || isPlantAsleep(definition, level.board),
-                    blinkMisses: () => plant.blinkMisses(),
+                    // Plant::UpdateBlink: an asleep plant's blink waits.
+                    blinkWaits: plantSkipsTick(plant) || plant.asleep(world),
+                    phase: plant.animationPhase(),
+                    blinkMisses: plant.blinkMisses(),
                 })
             }
         },

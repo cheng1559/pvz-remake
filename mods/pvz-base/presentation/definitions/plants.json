@@ -165,6 +165,7 @@
       "body": {"reanimId": "pvz:sunshroom_big", "x": 0, "y": 0, "blend": 0.1},
       "small": {"reanimId": "pvz:sunshroom", "x": 0, "y": 0},
       "sleep": {"reanimId": "pvz:sunshroom_sleep", "x": 0, "y": 0},
+      "bigsleep": {"reanimId": "pvz:sunshroom_bigsleep", "x": 0, "y": 0},
       "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -40},
       "grow": {"reanimId": "pvz:sunshroom_grow", "x": 0, "y": 0, "blend": 0.1},
       "blink": {"reanimId": "pvz:sunshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
@@ -270,7 +271,7 @@
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
     "plantedSounds": [{"audio": "pvz:reverse_explosion", "foley": true}],
-    "explosionSounds": [{"audio": "pvz:doomshroom", "foley": false}],
+    "explosionSounds": [{"audio": "pvz:doomshroom", "foley": true}],
     "explosion": {"effect": "pvz:doom", "x": 0, "layer": "top"},
     "shake": {"clip": "explode", "tracks": {"DoomShroom_head1": 1, "DoomShroom_head2": 2, "DoomShroom_head3": 2}}
   }

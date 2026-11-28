@@ -3,8 +3,10 @@ import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { SeedAvailability, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
-import type { BoardPresentation } from '@/shared/content/presentation'
+import type { BoardTimePresentation } from '@/shared/content/presentation'
+import type { TimeBlend } from './TimeBlends'
 import type { LevelAudioSnapshot } from './LevelPresentationSnapshot'
+import { Haptics } from '@/platform/Haptics'
 
 export class LevelAudioPresenter {
     private ownsMusic = false
@@ -14,7 +16,7 @@ export class LevelAudioPresenter {
      * The level's own sounds and its music. What is heard of something on the board (a plant, a zombie, a projectile, an
      * item) is its view's (ClientViews.events).
      */
-    constructor(private readonly music: BoardPresentation['music']) {}
+    constructor(private music: BoardTimePresentation['music']) {}
 
     snapshot(): LevelAudioSnapshot {
         return {
@@ -33,9 +35,39 @@ export class LevelAudioPresenter {
         } else MusicSystem.stop()
     }
 
+    /**
+     * `/time`'s change of time of day as its music is heard (TimeBlends; `musicOf`, the level's music at a time): in
+     * play, the gameplay tune of the time it blends into plays beside the one playing (MusicSystem.keepTune), coming in
+     * as that one goes; a time of the same tune (the level's own music) plays on as it is. Once over, the level's music
+     * is that time's: in play its tune plays, unless the blend has it playing already (held or paused, it starts so).
+     */
+    timeBlend(musicOf: (time: string) => BoardTimePresentation['music']): TimeBlend {
+        let next: BoardTimePresentation['music'] | undefined
+        return {
+            begin: () => {},
+            show: time => {
+                next = musicOf(time)
+                if (!this.gameplayStarted || !this.ownsMusic || next.gameplay === this.music.gameplay) return
+                MusicSystem.keepTune()
+                return MusicSystem.playTune(next.gameplay)
+            },
+            blend: weight => MusicSystem.blendTunes(weight),
+            end: () => {
+                MusicSystem.dropKeptTune()
+                if (!next) return
+                const before = this.music
+                this.music = next
+                next = undefined
+                if (this.gameplayStarted && this.ownsMusic && this.music.gameplay !== before.gameplay) void MusicSystem.playTune(this.music.gameplay)
+            },
+        }
+    }
+
     startChoosing(): void {
         this.ownsMusic = true
         void MusicSystem.playTune(this.music.choosing, true)
+        // Ready while the seeds are chosen (ModuleTune.preload), for the gameplay tune to start as soon as it is played.
+        void MusicSystem.preloadTune(this.music.gameplay)
     }
 
     startGameplay(): void {
@@ -112,7 +144,8 @@ export class LevelAudioPresenter {
     play(event: ServerEvent): void {
         switch (event.type) {
             case 'toolSelected': void SoundSystem.play(SoundEffect.Shovel, { foley: true }); break
-            case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); break
+            // Felt as it is heard, like a plant put down (StageEventRegistry).
+            case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); Haptics.play(); break
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
             case 'musicBurst': MusicSystem.startBurst(Number(event.data.countdown)); break
             case 'hugeWaveSound': void SoundSystem.play(SoundEffect.HugeWave); break

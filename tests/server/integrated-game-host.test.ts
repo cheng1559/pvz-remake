@@ -10,6 +10,8 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { LocalGameChannel } from '@/shared/channel/index'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { ClientPacket, StartSessionPacket } from '@/shared/protocol/index'
+import { MAX_TICKS_PER_UPDATE } from '@/shared/protocol'
+import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'))
@@ -102,7 +104,7 @@ test('integrated host processes FIFO commands, acknowledgements, pause, resume, 
     assert.deepEqual(saved.map(packet => packet.type), ['frame', 'saveReady', 'saveReady'])
     assert.equal(saved[0].type === 'frame' && saved[0].serverTick, 6)
     assert.equal(saved[1].type === 'saveReady' &&
-        (saved[1].save as { schemaVersion: number }).schemaVersion, 5)
+        (saved[1].save as { schemaVersion: number }).schemaVersion, 6)
     assert.deepEqual(saved.slice(1).map(packet =>
         packet.type === 'saveReady' ? packet.acknowledgedSequence : -1), [8, 9])
 
@@ -185,6 +187,62 @@ test('a catch-up update sends the last two frames with every event and matches s
     assert.ok(events(stepped.frames).length > 0)
     assert.deepEqual(events(batched.frames), events(stepped.frames))
     assert.deepEqual(batched.save, stepped.save)
+})
+
+test('/step runs its ticks at once, as single steps would, and keeps the part of a tick shown', () => {
+    function run(steps: (host: IntegratedGameHost, channel: LocalGameChannel) => void) {
+        const channel = new LocalGameChannel()
+        const server = new IntegratedGameServer(definitions, levels)
+        const host = new IntegratedGameHost(server, channel, true)
+        send(channel, { ...startPacket, levelId: 'pvz:stress-test' })
+        send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+        send(channel, { protocolVersion: 1, sequence: 3, type: 'debugCommand', command: '/nextwave', args: null })
+        host.update(0.014)
+        channel.drainClientPackets()
+        steps(host, channel)
+        const frames = channel.drainClientPackets().flatMap(packet => packet.type === 'frame' ? [packet] : [])
+        return { frames, save: server.save(), alpha: host.interpolationAlpha }
+    }
+    const forward = run(host => host.fastForward(MAX_TICKS_PER_UPDATE))
+    const stepped = run(host => { for (let tick = 0; tick < MAX_TICKS_PER_UPDATE; tick++) host.update(0.01) })
+    assert.equal(forward.frames.length, 2)
+    assert.deepEqual(forward.frames.map(frame => frame.snapshot), stepped.frames.slice(-2).map(frame => frame.snapshot))
+    const events = (frames: typeof forward.frames) => frames.flatMap(frame => frame.events)
+    assert.deepEqual(events(forward.frames), events(stepped.frames))
+    assert.deepEqual(forward.save, stepped.save)
+    assert.ok(Math.abs(forward.alpha - 0.4) < 1e-9, `${forward.alpha}`)
+    const paused = run((host, channel) => {
+        send(channel, { protocolVersion: 1, sequence: 4, type: 'command', command: { type: 'pause' } })
+        host.update(0)
+        channel.drainClientPackets()
+        host.fastForward(10)
+    })
+    assert.deepEqual(paused.frames, [], 'none while the game is paused')
+    // One more than a frame may run stops the game, as a frame that far behind does.
+    const { channel, host } = setup()
+    send(channel, startPacket)
+    host.update(0)
+    channel.drainClientPackets()
+    host.fastForward(MAX_TICKS_PER_UPDATE + 1)
+    const [fatal, ...more] = channel.drainClientPackets()
+    assert.deepEqual([fatal?.type === 'fatalServerError' && fatal.code, more], ['tick-limit-exceeded', []])
+})
+
+test('/step runs a paused game on as well, which then stays paused', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+    game.command({ type: 'completeIntro' })
+    game.update(0.01)
+    const tick = () => game.currentSnapshot!.gameplayTick
+    const from = tick()
+    game.fastForward(300)
+    assert.equal(tick(), from + 300)
+    game.command({ type: 'pause' })
+    game.update(0)
+    game.fastForward(200)
+    assert.deepEqual([tick(), game.currentSnapshot!.paused], [from + 500, true])
+    game.update(1)
+    assert.equal(tick(), from + 500, 'and stands still')
 })
 
 test('frames are handed to the client without copying yet share nothing with server state', () => {

@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          python -m pip install pillow
+          python -m pip install pillow numpy
 
       - name: Restore the converted resources
         id: content
@@ -60,7 +60,7 @@ jobs:
         if: steps.content.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq ffmpeg libopenmpt0
+          sudo apt-get install -yq ffmpeg
           cp game-files/main.pak game-files/PlantsVsZombies.exe tools/
           npm run build:content
 

@@ -83,7 +83,7 @@ test("a lobber's pea arcs over to its target with the damage the plant gives it,
 test('a homing projectile turns across the rows to its target and hits only that', () => {
     const { definitions } = firing('shooter')
     const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
-    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:frontyard'], time: 'day',
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(RandomResource, new DeterministicRng(1))
@@ -117,11 +117,34 @@ test('a homing projectile whose target dies flies on as it was going, where it w
     assert.ok(Math.abs(Math.hypot(after.x - x, after.y - y) - 50 * 2) < 1e-6, 'fifty ticks straight on at its speed of 2')
 })
 
+test('a projectile hits by where it stood as the tick began, in whole pixels (Projectile::mX)', () => {
+    const { definitions, world, schedule, health } = flying(false)
+    // The body runs from 336 to 378 (Zombie::mX 300); the pea's rect, from mX - 15 to mX + 40, overlaps it from mX 297.
+    const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 300.5, 250)
+    launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
+    // At 3.33 a tick it begins tick 60 at 296.47 and tick 61 at 299.8.
+    for (let tick = 1; tick <= 60; tick++) schedule.run(world, tick)
+    assert.equal(health(zombie), 270)
+    schedule.run(world, 61)
+    assert.equal(health(zombie), 250)
+})
+
+test("a homing projectile hits only once its own y lies between its target's top and bottom, not as soon as its rect reaches the body", () => {
+    for (const [y, hit] of [[240, false], [260, true]] as const) {
+        const { definitions, world, schedule, health } = flying(false)
+        // The body runs from 336 to 378 across and from 250 to 365 down; the pea's rect overlaps it across.
+        const target = spawnZombie(world, definitions, 'pvz:normal', 2, 300, 250)
+        launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 330, y, row: 2 }, motion: HOMING, target })
+        schedule.run(world, 1)
+        assert.equal(health(target), hit ? 250 : 270, `from ${y}`)
+    }
+})
+
 test('a lobbed projectile comes down past a shield onto the body, where a straight one hits the shield', () => {
     const { definitions } = firing('shooter')
     const hit = (motion: string) => {
         const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
-        world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:day'],
+        world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board: definitions.boards['pvz:frontyard'], time: 'day',
             phase: 'gameplay', result: 'playing', paused: false })
         world.resources.set(EventQueueResource, createEventQueue())
         world.resources.set(RandomResource, new DeterministicRng(1))
@@ -144,7 +167,7 @@ function flying(pierce: boolean) {
     if (pierce) source.projectiles['pvz:pea'].pierce = true
     const definitions = parseGameplayDefinitions(source)
     const world = withZombieTypes(withProjectileMotions(new World(), definitions), definitions)
-    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board: definitions.boards['pvz:day'],
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board: definitions.boards['pvz:frontyard'], time: 'day',
         phase: 'gameplay', result: 'playing', paused: false })
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(RandomResource, new DeterministicRng(1))
@@ -175,7 +198,7 @@ test('whether a hit uses a projectile up is its own (pierce): a piercing pea hit
 
 test('a melon splashes what else its hitbox reaches on its row and the rows next to it, for a third of its damage', () => {
     const { definitions, world, schedule, health } = flying(false)
-    const row = (index: number) => definitions.boards['pvz:day'].origin.y + index * definitions.boards['pvz:day'].cell.height - 30
+    const row = (index: number) => definitions.boards['pvz:frontyard'].origin.y + index * definitions.boards['pvz:frontyard'].cell.height - 30
     const [struck, beside, above, far, behind] = [[2, 500], [2, 520], [1, 500], [0, 500], [2, 700]].map(([index, x]) => spawnZombie(world, definitions, 'pvz:normal', index, x, row(index)))
     const melon = launchProjectile(world, definitions, world, { typeId: 'pvz:melon', position: { x: 100, y: 290, row: 2 }, motion: LOB, target: struck })
     for (let tick = 1; tick < 1000 && world.hasEntity(melon); tick++) schedule.run(world, tick)
@@ -215,7 +238,7 @@ test('a piercing homing projectile turns to the nearest thing it has not hit aft
 
 test("coming down on the ground ends a projectile, a piercing one too: a lobbed mower crushes what it comes down on and is gone", () => {
     const { definitions, world, schedule } = flying(false)
-    const ground = mowerY(definitions.boards['pvz:day'], 2)
+    const ground = mowerY(definitions.boards['pvz:frontyard'], 2)
     const zombies = [600, 720].map(x => spawnZombie(world, definitions, 'pvz:normal', 2, x, 250))
     const mower = launchProjectile(world, definitions, world, { typeId: 'pvz:lawnmower', position: { x: 96, y: 290, row: 2 }, motion: LOB, target: zombies[0] })
     const position = world.projectiles.get(mower)!.position
@@ -255,7 +278,7 @@ test('a thrown projectile hits at its landing height over the ground, wherever i
     // hit a zombie, the 105 any thrown projectile comes down to and the melon's own 39 more.
     const heights = [290, 234].map(y => {
         const { definitions, world, schedule } = flying(false)
-        const board = definitions.boards['pvz:day']
+        const board = definitions.boards['pvz:frontyard']
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 600, 250)
         const melon = launchProjectile(world, definitions, world, { typeId: 'pvz:melon', position: { x: 100, y, row: 2 }, motion: LOB, target: zombie })
         const position = world.projectiles.get(melon)!.position

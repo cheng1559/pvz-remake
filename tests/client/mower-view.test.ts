@@ -6,7 +6,7 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as protocolModule from '@/shared/protocol'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as teamsModule from '@/shared/content/teams'
-import { MOWER_INTRO_X, MOWER_READY_X } from '@/shared/content/gameplay'
+import { MOWER_INTRO_X, MOWER_READY_X, streetZombies, type LevelDefinition } from '@/shared/content/gameplay'
 
 /** A client module run with `modules` for its imports, the shared ones real and the rest empty. */
 function load(path: string, modules: Record<string, unknown> = {}): Record<string, any> {
@@ -37,8 +37,11 @@ class Player {
     node!: Node
     playing = false
     fps = 0
+    /** Where it is in its animation: it has played a while by the time it is held. */
+    timeSeconds = 0
     change() {}
-    play(options: { fps: number }) { this.playing = true; this.fps = options.fps }
+    play(options: { fps: number }) { this.playing = true; this.fps = options.fps; this.timeSeconds = 0.3 }
+    seek(timeSeconds: number) { this.timeSeconds = timeSeconds }
     pause() { this.playing = false }
 }
 
@@ -67,7 +70,8 @@ async function projectileView(path: string, name: string, mower: object) {
     })
     const View = load(path, { './ProjectileView': ProjectileViewModule, '../projectiles/ProjectileView': ProjectileViewModule })[name]
     const intro = { complete: false, arrival: 0, mowerArrival(row: number) { assert.equal(row, ROW); return this.arrival } }
-    const stage = { layer: new Node(), content, intro }
+    // The board holds its shadow, as any plant shadow, to change and fade it with the board's picture.
+    const stage = { layer: new Node(), content, intro, shadows: { attach: () => ({ remove() {} }) } }
     const node = new Node(), view = new View({ node, content, projectile: mower, stage })
     await view.initialize()
     return { view, node, stage, intro }
@@ -81,7 +85,8 @@ test("a row's mower waiting is rolled in by the intro's time and held where it w
     const shadow = stage.layer.children[0], animation = node.children.find(child => child.name === 'ProjectileAnimation')!
     view.sync(ready)
     assert.deepEqual([node.active, shadow.active], [false, false], 'nothing shows before the intro brings it on')
-    assert.deepEqual([animation.position, animation.component!.playing], [{ x: -4, y: -19 }, false], 'held on its first frame where the cached frame is')
+    assert.deepEqual([animation.position, animation.component!.playing, animation.component!.timeSeconds], [{ x: -4, y: -19 }, false, 0],
+        'held on its first frame where the cached frame is, however long it played while loading')
     // CutScene::UpdateIntro: CalcPosition(start, start + TimeLawnMowerDuration, -80, -21), at whole pixels.
     for (let tick = 0; tick <= 25; tick += 0.5) {
         intro.arrival = tick / 25
@@ -111,6 +116,7 @@ test("the board makes a waiting mower's view by the mowers' registry, syncs it w
         '@/client/view/uiNode': { uiNode: () => ({ node }) },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfPlantsVisible: true, perfZombiesVisible: true } },
         './EntityFlashes': load('level/EntityFlashes'),
+        './BoardShadows': load('level/BoardShadows'),
         './LevelStage': { boardToLayer: (x: number, y: number) => ({ x, y }) },
     })
     const made: any[] = [], synced: number[] = []
@@ -180,10 +186,25 @@ test("the intro brings each row's mower on as CutScene::UpdateIntro does: the hi
     assert.equal(later.mowerArrival(0), 1, 'a complete intro has every one in place')
 })
 
+test('the intro slides the seed bank right as the camera pans back, unrounded, for its place to move smoothly', () => {
+    const { AdventureIntro } = load('level/adventure/AdventureIntro')
+    const intro = (layout: object) => new AdventureIntro({}, {}, [], { rolls: [], width: 0, ...layout }, null, [], new Map(), {}, {}, {}, {})
+    const plain = intro({})
+    // Its place comes from the UI area's edge with the pan back, TimePanLeftStart 4500 to 6000; its own 10 from
+    // CutScene's TimeSeedBankRightStart 4750 to the pan's end. Both eased in and out.
+    for (const [ticks, place, own] of [[400, 0, 0], [450, 0, 0], [475, 0.0156, 0], [525, 0.5, 0.2845], [537.5, 0.682, 0.5], [600, 1, 1], [700, 1, 1]]) {
+        plain.ticks = ticks
+        assert.equal(Number(plain.bankSettled().toFixed(4)), place, `place at ${ticks}`)
+        assert.equal(Number(plain.bankSlid(475).toFixed(4)), own, `own slide at ${ticks}`)
+    }
+    plain.ticks = 480
+    assert.ok(plain.bankSlid(475) > 0 && plain.bankSlid(475) * 10 % 1 !== 0, 'between whole pixels of its 10')
+    assert.equal(intro({ entrance: false }).bankSettled(), 1, 'without the entrance it is in its own place')
+})
+
 test("the street before an adventure level leaves out the zombie that leads the flag waves (CutScene::PlaceStreetZombies)", () => {
-    const { adventurePreviewTypes } = load('level/adventure/AdventureIntro')
-    const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }
-    assert.deepEqual(JSON.parse(JSON.stringify(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:flag' } }, 4))),
-        ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
-    assert.ok(adventurePreviewTypes(counts, { flagWave: { zombie: 'pvz:conehead' } }, 4).includes('pvz:flag'), 'whichever zombie the settings name')
+    const counts = { 'pvz:normal': 6, 'pvz:flag': 2, 'pvz:conehead': 2 }, level = { previewCapacity: 4 } as LevelDefinition
+    assert.deepEqual(streetZombies(level, counts, 'pvz:flag'), ['pvz:normal', 'pvz:normal', 'pvz:normal', 'pvz:conehead'])
+    assert.ok(streetZombies(level, counts, 'pvz:conehead').includes('pvz:flag'), 'whichever zombie the settings name')
+    assert.equal(streetZombies({} as LevelDefinition, { 'pvz:normal': 20 }, 'pvz:flag').length, 10, 'ten slots unless the level gives its own')
 })

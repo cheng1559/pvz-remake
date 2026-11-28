@@ -1,25 +1,35 @@
 {
-  "pvz:day": {
-    "background": "pvz:background1unsodded", "backgroundX": 80,
-    "music": {"choosing": "choose_seeds", "gameplay": "day_grasswalk"},
+  "pvz:frontyard": {
     "gameOver": {
-      "images": ["zombieswon", "background1_gameover_interior_overlay", "background1_gameover_mask"],
-      "interior": {"x": -126, "y": 225}, "doorway": {"x": -130, "y": 202},
+      "title": "pvz:zombieswon",
+      "interior": {"x": -126, "y": 196}, "doorway": {"x": -130, "y": 202},
       "clipX": -123, "winnerY": 290, "panX": 220
+    },
+    "times": {
+      "day": {
+        "background": "pvz:background1", "backgroundX": 80,
+        "music": {"choosing": "choose_seeds", "gameplay": "day_grasswalk"},
+        "door": {"interior": "pvz:background1_gameover_interior_overlay", "doorway": "pvz:background1_gameover_mask"}
+      },
+      "night": {
+        "background": "pvz:background2", "backgroundX": 80, "plantShadow": "pvz:plantshadow2",
+        "music": {"choosing": "choose_seeds", "gameplay": "night_moongrains"},
+        "door": {"interior": "pvz:background2_gameover_interior_overlay", "doorway": "pvz:background2_gameover_mask"}
+      }
     }
   },
-  "pvz:night": {
-    "background": "pvz:background2",
-    "backgroundX": 80,
-    "plantShadow": "pvz:plantshadow2",
-    "music": {"choosing": "choose_seeds", "gameplay": "night_moongrains"},
+  "pvz:frontyard-unsodded": {
     "gameOver": {
-      "images": ["zombieswon", "background2_gameover_interior_overlay", "background2_gameover_mask"],
-      "interior": {"x": -125, "y": 196},
-      "doorway": {"x": -128, "y": 207},
-      "clipX": -123,
-      "winnerY": 290,
-      "panX": 220
+      "title": "pvz:zombieswon",
+      "interior": {"x": -126, "y": 196}, "doorway": {"x": -130, "y": 202},
+      "clipX": -123, "winnerY": 290, "panX": 220
+    },
+    "times": {
+      "day": {
+        "background": "pvz:background1unsodded", "backgroundX": 80, "lawn": "pvz:background1",
+        "music": {"choosing": "choose_seeds", "gameplay": "day_grasswalk"},
+        "door": {"interior": "pvz:background1_gameover_interior_overlay", "doorway": "pvz:background1_gameover_mask"}
+      }
     }
   }
 }

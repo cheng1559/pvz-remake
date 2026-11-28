@@ -31,10 +31,21 @@ export function isRenderLayer(value: unknown): value is RenderLayer {
     return typeof value === 'string' && Object.hasOwn(RENDER_LAYERS, value)
 }
 
+/** Whether a layer is drawn over every row, so its order has no row in it: those from `top` up. */
+export function isAboveRows(layer: RenderLayer): boolean {
+    return RENDER_LAYERS[layer] >= RENDER_LAYERS.top
+}
+
 /** Board::MakeRenderOrder; a layer from `top` up ignores the row. */
 export function renderOrder(layer: RenderLayer, row = 0, offset = 0): number {
-    return (RENDER_LAYERS[layer] < RENDER_LAYERS.top ? row * ROW_OFFSET : 0) + RENDER_LAYERS[layer] + offset
+    return (isAboveRows(layer) ? 0 : row * ROW_OFFSET) + RENDER_LAYERS[layer] + offset
 }
+
+/**
+ * Where `/hitboxes` and `/hp` draw among the board's entities: over every row's particles and under what is drawn from
+ * `top` up, at the particle layer of a row past any board's.
+ */
+export const DEBUG_OVERLAY_ORDER = renderOrder('particle', 9)
 
 /** Plant::CalcRenderOrder's offset for a plant at board x (PLANT_ORDER_NORMAL): a plant further left draws later. */
 export function plantRenderOffset(x: number): number {

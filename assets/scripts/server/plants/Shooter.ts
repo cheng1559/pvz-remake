@@ -1,11 +1,12 @@
 import type { SystemContext, World } from '@/server/state/World'
+import type { AnimationRandom } from '@/shared/content/animation'
 import { type GameplayDefinitions, PLANT_ATTACKS, type PlantDefinition } from '@/shared/content/gameplay'
-import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantFacingX, plantTeam, shooterFront, teamDirection } from '@/shared/content/teams'
 import { exact, nonNegativeInteger, positiveInteger } from '@/shared/validate'
 import { getBoardBounds } from '../combat/collision'
 import { ProjectileMotionsResource } from '../projectiles/motions'
 import { launchProjectile } from '../projectiles/Projectile'
-import { hostilePlants } from '../combat/targets'
+import { hostilePlants, zombieRect } from '../combat/targets'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { RandomResource } from '../state/resources'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -63,15 +64,21 @@ export class Shooter extends Plant {
         if (this.burst) this.burst.fireAtTick++
     }
 
-    /** Plant::DoBlink: one about to shoot misses its blink. */
+    /** Falling asleep (the time turned to day), it drops the shot it winds up to: its burst is not fired. */
+    setSleeping(asleep: boolean, random: AnimationRandom): void {
+        if (asleep) delete this.burst
+        super.setSleeping(asleep, random)
+    }
+
+    /** Plant::DoBlink: one winding up to shoot misses its blink (Plant::mShootingCounter), as its firing clip has it do after. */
     blinkMisses(): boolean {
         return !!this.burst || super.blinkMisses()
     }
 
     attack({ world, commands, tick }: SystemContext): void {
         const definitions = this.definitions, definition = this.definition, shooter = this.shooter
-        // Mushrooms sleep on day boards.
-        if (this.asleep(world)) return
+        // A sleeping mushroom skips UpdateShooter, holding the launch counter.
+        if (this.asleep(world)) { this.readyAtTick++; return }
         const position = this.position
         const random = world.resources.get(RandomResource), events = world.resources.get(EventQueueResource)
         if (this.burst) {
@@ -146,7 +153,7 @@ function targets(
     const plantPosition = plant.position, { body: plantBody, shooter } = definitions.plants[plant.typeId]
     const team = plantTeam(plant), direction = teamDirection(team), anywhere = shooter?.type === 'seeker'
     const bounds = getBoardBounds(world), reach = shooter?.range ?? Infinity
-    const front = plantPosition.x + plantFacingX(plantBody.width, team)
+    const front = plantPosition.x + shooterFront(plantBody, team)
     const ahead = (left: number, width: number) => direction > 0
         ? left < Math.min(bounds.right, front + reach) && left + width >= front
         : left < bounds.right && left + width > Math.max(bounds.left, front - reach) && left <= front
@@ -163,8 +170,7 @@ function targets(
     for (const zombie of world.zombies) {
         const { id: entity, position } = zombie
         if (!isTargetableZombie(zombie, team) || !anywhere && position.row !== plantPosition.row) continue
-        const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
+        const rect = zombieRect(world, definitions, zombie)
         if (!anywhere && !ahead(rect.x, rect.width)) continue
         zombies.push(entity)
         near(entity, rect)

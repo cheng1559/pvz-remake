@@ -1,4 +1,4 @@
-import type { EntityAllocatorSnapshot, EntityId, Position } from '@/server/state/World'
+import { ENTITY_LISTS, type EntityAllocatorSnapshot, type EntityId, type Position } from '@/server/state/World'
 import { jsonRoundTrip, TEAMS, type JsonObject, type EnabledMod, type ServerEvent, type Team, assertJsonValue } from '@/shared/protocol/index'
 import { isQualifiedId } from '@/shared/mod'
 import { array, boolean, exact, finite, integer, nonEmptyString, nonNegativeFinite, nonNegativeInteger, oneOf, positiveInteger, record, trueFlag, uint32 } from '@/shared/validate'
@@ -47,11 +47,11 @@ export interface SavedFields {
     items: SavedOfList<Item>
 }
 
-/** Each typed list as it is saved, its entities in id order: an entity's id is unique across them all. */
+/** Each typed list as it is saved, in slot order (EntityList): an entity's id is unique across them all. */
 export type SavedLists = { [K in keyof SavedFields]: (SavedEntity & SavedFields[K])[] }
 
 export interface ServerSaveSnapshot extends SavedLists {
-    schemaVersion: 5
+    schemaVersion: 6
     /** Recreates the board's per-cell artwork, including cells with no current grave. */
     boardSeed: number
     levelId: string
@@ -60,8 +60,14 @@ export interface ServerSaveSnapshot extends SavedLists {
     gameplayTick: number
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
-    /** `iceTrap`: LevelState.iceTrap, a side the board keeps frozen. */
-    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, iceTrap?: Partial<Record<Team, number>> }
+    /**
+     * `iceTrap`: LevelState.iceTrap, a side the board keeps frozen; `time`: LevelState.time, when `/time` put it at
+     * another than its own; `timeChange`: LevelState.timeChange, the lawn turning.
+     */
+    level: {
+        phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, iceTrap?: Partial<Record<Team, number>>, time?: string
+        timeChange?: { from: string, to: string, ticks: number }
+    }
     economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
@@ -80,10 +86,23 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         'schemaVersion', 'boardSeed', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
         'seedBank', 'tutorial', 'skySun', 'wave', 'eventQueue', 'achievementProgress', ...SAVED_LISTS.map(list => list.key),
     ], 'server save', ['packetUpgradeOffer'])
-    if (save.schemaVersion !== 5) throw new TypeError('server save.schemaVersion must be 5')
+    if (save.schemaVersion !== 6) throw new TypeError('server save.schemaVersion must be 6')
 
-    const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
-    const allocator = { nextEntity: positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity') }
+    const allocatorSource = exact(save.allocator, ['nextEntity', 'slots'], 'server save.allocator')
+    const nextEntity = positiveInteger(allocatorSource.nextEntity, 'server save.allocator.nextEntity')
+    // Each list's slots (EntityList): restoring checks they hold its entities.
+    const slotsSource = exact(allocatorSource.slots, [...ENTITY_LISTS], 'server save.allocator.slots')
+    const allocator = { nextEntity, slots: Object.fromEntries(ENTITY_LISTS.map(key => {
+        const name = `server save.allocator.slots.${key}`, source = exact(slotsSource[key], ['slots', 'free', 'freeing', 'reserved'], name)
+        const slots = array(source.slots, `${name}.slots`).map((id, slot) => id === null ? null : positiveInteger(id, `${name}.slots[${slot}]`))
+        if (slots.some(id => id !== null && id >= nextEntity)) throw new TypeError(`${name}.slots must hold entities below allocator.nextEntity`)
+        const empty = (field: 'free' | 'freeing' | 'reserved') => array(source[field], `${name}.${field}`).map((slot, index) => {
+            const parsed = nonNegativeInteger(slot, `${name}.${field}[${index}]`)
+            if (parsed >= slots.length) throw new TypeError(`${name}.${field}[${index}] is past the slots`)
+            return parsed
+        })
+        return [key, { slots, free: empty('free'), freeing: empty('freeing'), reserved: empty('reserved') }]
+    })) as EntityAllocatorSnapshot['slots'] }
     const randomSource = exact(save.random, ['algorithm', 'state'], 'server save.random')
     const random = {
         algorithm: randomSource.algorithm,
@@ -91,12 +110,14 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     } as DeterministicRngState
     DeterministicRng.restore(random)
 
-    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level', ['iceTrap'])
+    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level', ['iceTrap', 'time', 'timeChange'])
     const level = {
         phase: oneOf(levelSource.phase, ['intro', 'gameplay'] as const, 'server save.level.phase'),
         result: oneOf(levelSource.result, ['playing', 'won', 'lost'] as const, 'server save.level.result'),
         paused: boolean(levelSource.paused, 'server save.level.paused'),
         ...(levelSource.iceTrap === undefined ? {} : { iceTrap: parseIceTrap(levelSource.iceTrap, 'server save.level.iceTrap') }),
+        ...(levelSource.time === undefined ? {} : { time: nonEmptyString(levelSource.time, 'server save.level.time') }),
+        ...(levelSource.timeChange === undefined ? {} : { timeChange: parseTimeChange(levelSource.timeChange, 'server save.level.timeChange') }),
     }
 
     const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], 'server save.economy', ['firstCoinDropped', 'mowerCoinTicks'])
@@ -140,7 +161,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     if (gameplayTick > tick) throw new TypeError('server save.gameplayTick must not exceed tick')
 
     return {
-        schemaVersion: 5,
+        schemaVersion: 6,
         boardSeed: uint32(save.boardSeed, 'server save.boardSeed'),
         levelId: nonEmptyString(save.levelId, 'server save.levelId'),
         mods,
@@ -216,6 +237,13 @@ function parseSeedBank(value: unknown): SeedBankState {
             .map((id, index) => nonEmptyString(id, `server save.seedBank.owned[${index}]`)) }) }
 }
 
+/** LevelState.timeChange: the time of day the lawn turns from, the one it turns to, and how many ticks it has turned. */
+function parseTimeChange(value: unknown, name: string): { from: string, to: string, ticks: number } {
+    const source = exact(value, ['from', 'to', 'ticks'], name)
+    return { from: nonEmptyString(source.from, `${name}.from`), to: nonEmptyString(source.to, `${name}.to`),
+        ticks: nonNegativeInteger(source.ticks, `${name}.ticks`) }
+}
+
 /** LevelState.iceTrap: the ticks left of a side frozen, by side. */
 function parseIceTrap(value: unknown, name: string): Partial<Record<Team, number>> {
     const source = exact(value, [], name, TEAMS)
@@ -223,9 +251,10 @@ function parseIceTrap(value: unknown, name: string): Partial<Record<Team, number
 }
 
 function parseTutorial(value: unknown): TutorialState {
-    const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex'])
+    const source = exact(value, ['firstAdventure', 'step', 'displayedAdvice'], 'server save.tutorial', ['promptAtTick', 'dialogIndex', 'skipped'])
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
+        ...(source.skipped === undefined ? {} : { skipped: trueFlag(source.skipped, 'server save.tutorial.skipped') }),
         step: isQualifiedId(source.step) ? source.step as TutorialStep : oneOf(source.step, TUTORIAL_STEPS, 'server save.tutorial.step'),
         displayedAdvice: array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
             .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]')),

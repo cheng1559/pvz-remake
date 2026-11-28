@@ -6,6 +6,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 import { parseClip, presentationSounds, type ClientAnimationClip, type LevelRulePresentation, type PresentationSound } from '@/shared/content/presentation'
 import { allFields, finite, named, nonEmptyString, positiveFinite } from '@/shared/validate'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
@@ -47,6 +48,8 @@ function parseConfig(config: LevelRulePresentation, name: string): WhackPresenta
  */
 export class WhackAZombieView implements LevelRuleView {
     private hammer?: ReanimPlayer
+    /** The mallet's node, at the pointer with the mallet at CURSOR_OFFSET from it, so a Mod may scale it about the pointer. */
+    private cursor?: Node
     private pointer?: { x: number; y: number }
     /** A touch swing keeps the mallet where it came down until the swing ends. */
     private touchSwing?: { x: number; y: number }
@@ -70,9 +73,10 @@ export class WhackAZombieView implements LevelRuleView {
         const config = parseConfig(context.config, `rules.${context.kind}`)
         const isSun = (typeId: string) => content.definitions.items[typeId] !== undefined && content.definitions.items[typeId].kind !== 'money'
         const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, isSun, context.bankHeight)
-        const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 } }).node
+        const node = view.cursor = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 } }).node
         node.once(Node.EventType.NODE_DESTROYED, () => UIHoverManager.setIdleCursor('default'))
-        const hammer = uiNode({ name: 'Mallet', parent: node, active: false }).node.addComponent(ReanimPlayer)
+        const offset = uiNode({ name: 'HammerOffset', parent: node, position: { x: CURSOR_OFFSET.x, y: -CURSOR_OFFSET.y } }).node
+        const hammer = uiNode({ name: 'Mallet', parent: offset, active: false }).node.addComponent(ReanimPlayer)
         await prepareClips([config.clips.hammer])
         // Challenge::StartLevel: held on its last frame until the first blow.
         showClip(hammer, config.clips.hammer)
@@ -103,6 +107,8 @@ export class WhackAZombieView implements LevelRuleView {
             if (event.type === 'sunDropped') { void SoundSystem.play(SoundEffect.Throw, { foley: true, pitchRange: 10 }); continue }
             // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.
             if (event.type !== 'zombieWhacked' && event.type !== 'plantWhacked') continue
+            // Felt as it lands.
+            Haptics.play('medium')
             const helm = event.data.helm === undefined ? undefined : String(event.data.helm)
             if (helm !== undefined) { void SoundSystem.playSounds(this.config.helmSounds[helm]); continue }
             const { bonk } = this.config
@@ -121,9 +127,7 @@ export class WhackAZombieView implements LevelRuleView {
         hammer.node.active = visible
         // Board::UpdateCursor: over nothing clickable, the mallet replaces the system cursor.
         UIHoverManager.setIdleCursor(visible && !GameDebugSettings.isMobileMode() ? 'none' : 'default')
-        if (visible) {
-            hammer.node.parent!.setPosition(point.x + CURSOR_OFFSET.x, -(point.y + CURSOR_OFFSET.y))
-        }
+        if (visible) this.cursor?.setPosition(point.x, -point.y)
     }
 
     /** The server's CURSOR_TYPE_HAMMER, put away once the award has dropped (Challenge::ClearCursor). */

@@ -1,6 +1,6 @@
 import type { World } from '@/server/state/World'
 import { chooserSeeds, type GameplayDefinitions, type LevelDefinition } from '@/shared/content/gameplay'
-import { cheatSeedEntries } from '@/shared/content/chooserPages'
+import { cheatSeedEntries, seedChoiceComplete } from '@/shared/content/chooserPages'
 import { chooserEntryKey, type ChooserEntry, type GameCommand, type Team, type WorldSnapshot } from '@/shared/protocol'
 import { packetTeam } from '@/shared/content/teams'
 import { EconomyStateResource, LevelStateResource, SeedBankResource, type SeedBankState, TutorialResource } from '../state/resources'
@@ -67,33 +67,41 @@ const offeredCards = (offer: ChooserOffer): ChooserEntry[] => [...offer.availabl
 const offers = (offer: ChooserOffer, seedId: string, team: Team | undefined): boolean =>
     team === undefined && offer.available.includes(seedId) || offer.entries.some(entry => entry.seedId === seedId && entry.team === team)
 
+/** The base slots plus one per upgrade, up to the most there are: the slots of a chooser, which opens with more cards. */
+function chooserSlots(definitions: GameplayDefinitions, packetUpgrades: number): number {
+    const { baseSlots, maxSlots } = definitions.seedBank
+    return Math.min(baseSlots + packetUpgrades, maxSlots)
+}
+
 /** Board::GetNumSeedsInBank: the base slots plus one per upgrade, but never more than the cards there are. */
 export function bankSlots(definitions: GameplayDefinitions, offer: ChooserOffer, packetUpgrades = 0): number {
-    const { baseSlots, maxSlots } = definitions.seedBank
-    return Math.min(baseSlots + packetUpgrades, maxSlots, offer.available.length + offer.entries.length)
+    return Math.min(chooserSlots(definitions, packetUpgrades), offer.available.length + offer.entries.length)
 }
 
 /**
- * How the level's bank starts: its fixed packets, a conveyor, or the original's rule. Board::InitLevel fills a bank
- * the cards fit in with all of them in order, and Board::ChooseSeedsOnCurrentLevel opens the chooser otherwise (from
- * level 8 of a first adventure, the first with more seeds than slots, and on every replay). A Mod's entries count too,
- * so offering more cards can open the chooser earlier.
+ * How the level's bank starts: its fixed packets (`null` an empty slot), a conveyor, or the original's rule.
+ * Board::InitLevel fills a bank the cards fit in with all of them in order, and Board::ChooseSeedsOnCurrentLevel opens
+ * the chooser otherwise (from level 8 of a first adventure, the first with more seeds than slots, and on every replay).
+ * A Mod's entries count too, so offering more cards can open the chooser earlier.
  */
 export function seedBankStart(definitions: GameplayDefinitions, level: LevelDefinition, offer: ChooserOffer, packetUpgrades = 0):
-    { seeds: ChooserEntry[] } | { chooser: true } | { conveyor: true } {
+    { seeds: Array<ChooserEntry | null> } | { chooser: true } | { conveyor: true } {
     if (level.conveyor) return { conveyor: true }
-    if (level.seedPackets) return { seeds: level.seedPackets.map(seedId => ({ seedId })) }
+    if (level.seedPackets) return { seeds: level.seedPackets.map(seedId => seedId === null ? null : { seedId }) }
     const cards = offeredCards(offer)
     const slots = bankSlots(definitions, offer, packetUpgrades)
     return cards.length > slots ? { chooser: true } : { seeds: cards.slice(0, slots) }
 }
 
-/** The offer for the world's player and the chooser's slots with it. */
+/**
+ * The offer for the world's player and the chooser's slots with it. The slots do not follow the offer: `/cheatseed`
+ * turned off can leave fewer cards than the bank has slots, which Let's Rock then leaves empty (seedChoiceComplete).
+ */
 function worldOffer(world: World, definitions: GameplayDefinitions): { offer: ChooserOffer, slots: number } {
     const bank = world.resources.get(SeedBankResource)
     const offer = chooserOffer(definitions, bank.owned, getDebugRules(world).cheatSeeds)
     // A repick keeps the bank's size: a slot bought since waits for the next level, as a bank in play does.
-    return { offer, slots: bank.repick?.packets.length ?? bankSlots(definitions, offer, world.resources.get(EconomyStateResource).packetUpgrades) }
+    return { offer, slots: bank.repick?.packets.length ?? chooserSlots(definitions, world.resources.get(EconomyStateResource).packetUpgrades) }
 }
 
 export function applySeedChoice(world: World, definitions: GameplayDefinitions, command: Extract<GameCommand, { type: 'chooseSeed' | 'confirmSeeds' }>): CommandRejectionCode | undefined {
@@ -104,8 +112,9 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     if (world.resources.get(TutorialResource).dialogIndex !== undefined) return 'intro-not-complete'
     const { offer, slots } = worldOffer(world, definitions)
     if (command.type === 'confirmSeeds') {
-        // `/cheatseed` starts with any cards chosen, the slots left over empty (finishSeedChoice).
-        if (bank.packets.length !== slots && !(getDebugRules(world).cheatSeeds && bank.packets.length > 0)) return 'seed-choice-incomplete'
+        // The slots left over stay empty (finishSeedChoice).
+        const chosen = bank.packets.flatMap(packet => packet ? [packet] : [])
+        if (!seedChoiceComplete({ chosen, ...offer, slots, cheatSeeds: getDebugRules(world).cheatSeeds })) return 'seed-choice-incomplete'
         finishSeedChoice(world, definitions)
         return
     }

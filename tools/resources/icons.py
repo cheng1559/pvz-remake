@@ -65,10 +65,10 @@ def write_android(image: Image.Image) -> None:
 
 
 def write_ios(image: Image.Image) -> None:
+    # One 1024x1024 icon; Xcode makes the iPhone and iPad sizes from it.
     folder = NATIVE / "ios/Images.xcassets/AppIcon.appiconset"
-    entries = json.loads((folder / "Contents.json").read_text())["images"]
-    for name, size in {entry["filename"]: int(entry["expected-size"]) for entry in entries}.items():
-        opaque(image, size).save(folder / name)
+    for entry in json.loads((folder / "Contents.json").read_text())["images"]:
+        opaque(image, int(entry["size"].split("x")[0])).save(folder / entry["filename"])
 
 
 def write_mac(image: Image.Image) -> None:

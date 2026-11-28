@@ -9,11 +9,17 @@ type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
     plantInvincible: boolean
-    /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any cards chosen. */
+    /** `/plantanywhere`: any seed goes into any cell of the board (DebugRules.plantAnywhere). */
+    plantAnywhere: boolean
+    /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any number of cards chosen, none included. */
     cheatSeedsEnabled: boolean
     fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
+    /** `/hp`: the plants' and zombies' health as bars over them (LevelHealthBars). */
+    hpVisible: boolean
+    /** `/id`: the plants' and zombies' slots of their lists over them (LevelHealthBars). */
+    idVisible: boolean
     /** `/tilted`: a seed packet's picture half as large again (a zombie's twice) and leaning out of its packet. */
     tiltedSeedPackets: boolean
     mobileEnabled: boolean
@@ -45,10 +51,13 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     rechargingEnabled: true,
     sunCostEnabled: true,
     plantInvincible: false,
+    plantAnywhere: false,
     cheatSeedsEnabled: false,
     fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
+    hpVisible: false,
+    idVisible: false,
     tiltedSeedPackets: false,
     mobileEnabled: sys.isMobile,
     autoPauseEnabled: true,
@@ -72,8 +81,8 @@ const isBoolean = (value: unknown): value is boolean => typeof value === 'boolea
  * to the default. The others (`/mobile`, the `/perf` toggles) last for the session.
  */
 const KEPT: { readonly [Key in keyof DebugSettings]?: (value: unknown) => value is DebugSettings[Key] } = {
-    rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, cheatSeedsEnabled: isBoolean,
-    fpsVisible: isBoolean, hitboxesVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
+    rechargingEnabled: isBoolean, sunCostEnabled: isBoolean, plantInvincible: isBoolean, plantAnywhere: isBoolean, cheatSeedsEnabled: isBoolean,
+    fpsVisible: isBoolean, hitboxesVisible: isBoolean, hpVisible: isBoolean, idVisible: isBoolean, tiltedSeedPackets: isBoolean, hotkeysEnabled: isBoolean,
     autoPauseEnabled: isBoolean, hapticsEnabled: isBoolean, originalCursorsEnabled: isBoolean, highResolutionEnabled: isBoolean,
     windowResizable: isBoolean,
     collectMode: (value): value is DebugCollectMode => value === 'auto' || value === 'click' || value === 'move',

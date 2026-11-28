@@ -18,6 +18,7 @@ import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 import * as zombieAnimationModule from '@/shared/content/zombieAnimation'
 import * as teamsModule from '@/shared/content/teams'
+import * as hitRectsModule from '@/shared/content/hitRects'
 import * as zombieStatesModule from '@/shared/content/zombieStates'
 import * as presentationModule from '@/shared/content/presentation'
 import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
@@ -62,8 +63,9 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
 clientStubs['@/client/reanim/clips'] = loadClientModule('reanim/clips', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
+clientStubs['./BoardShadows'] = clientStubs['@/client/level/BoardShadows'] = loadClientModule('level/BoardShadows', {})
 clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
-clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
+clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', { '@/shared/content/teams': teamsModule })
 
 /** The board of a test: a level whose award is the sunflower, and the views it is given, with no event handled. */
 function renderer(LevelEntityRenderer: any, views: object, intro: object = { complete: true }) {
@@ -287,6 +289,42 @@ test('every particle of the board is drawn at its order among the entities, one 
     assert.equal(board.projectileOrder('test:mower', 1), renderOrderModule.renderOrder('lawnMower', 1), "a mower's by its type's layer")
 })
 
+test("an equal draw order goes as the original's: a list's entities in slot order, then the remains of those gone, then the particles", () => {
+    class Node {
+        isValid = true
+        parent?: Node
+        readonly children: Node[] = []
+        constructor(readonly name = '') {}
+        setParent(parent: Node) {
+            if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1)
+            parent.children.push(this)
+            this.parent = parent
+        }
+        setSiblingIndex(index: number) {
+            const siblings = this.parent!.children
+            siblings.splice(siblings.indexOf(this), 1)
+            siblings.splice(index, 0, this)
+        }
+    }
+    const layer = new Node('layer'), on = (name: string) => { const node = new Node(name); node.setParent(layer); return node }
+    const uiNode = (options: { name: string, parent: Node }) => ({ node: on(options.name) })
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', { '@/client/view/uiNode': { uiNode } })
+    const content = { levels: { levels: { 'test:level': {} } }, presentation: { plants: {}, zombies: {} }, views: { events: { of: () => [] } } }
+    const board = new LevelEntityRenderer(content, layer, {}, {}, { complete: true }, {})
+    // Sunflower 7 and zombie 9 took slots freed under those of sunflower 2 and zombie 5, so the snapshot lists them first.
+    const plants = [7, 2].map(entityId => ({ entityId, typeId: 'test:sunflower', row: 1, column: 2, x: 200, y: 0 }))
+    const zombies = [9, 5].map(entityId => ({ entityId, typeId: 'test:zombie', row: 2, x: 400, y: 0 }))
+    const order = board.zombieOrder(2), particles = board.particleLayer(order)
+    board.addScenery(on('remains'), order, 4)
+    board.addScenery(on('held'), order, 5)
+    for (const [kind, list] of [['zombie', zombies], ['plant', plants]] as const) {
+        for (const { entityId } of [...list].reverse()) board.entities.set(entityId, { kind, node: on(`${kind}-${entityId}`) })
+    }
+    board.syncLayerOrder({ levelId: 'test:level', plants, zombies, projectiles: [], items: [], mowers: [] })
+    assert.deepEqual(layer.children.map(node => node.name),
+        ['plant-7', 'plant-2', 'zombie-9', 'held', 'zombie-5', 'remains', particles.name])
+})
+
 test('removing an entity while its custom view loads disposes the completed plant or zombie view', async () => {
     for (const kind of ['plant', 'zombie']) {
         const node = { isValid: true, destroy() { this.isValid = false } }
@@ -445,14 +483,16 @@ test('a mowed zombie keeps its shadow; one falling, vaulting, coming up or burne
         [true, true, false, false, false, false])
 })
 
-test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
+test('the presentation is built once from the base archive and the running Mods, its foley goes to the sound system and its particle limits to the particle players', async () => {
     const base = { content: { presentation: 'presentation.json' },
         files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
     let builds = 0, foley = 0
+    const limits: unknown[] = []
     const load = (archive: object) => loadClientModule('content/loadPresentationDefinitions', {
         './ModResources': { modResources: { baseContent: async () => archive } },
         './installedMods': { installedMods: async () => ({ presentationDefinitions: [] }) },
         '@/client/sound/SoundSystem': { SoundSystem: { useFoley() { foley++ } } },
+        '@/client/particle/ParticlePlayer': { ParticlePlayer: { useLimits(value: unknown) { limits.push(value) } } },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions: (...args: Parameters<typeof buildPresentationDefinitions>) => {
             builds++
             return buildPresentationDefinitions(...args)
@@ -464,6 +504,7 @@ test('the presentation is built once from the base archive and the running Mods,
     assert.deepEqual(presentation, presentationFixture)
     assert.equal(await loadPresentation(), presentation, 'the UI and the game draw with the same one')
     assert.deepEqual([builds, foley], [1, 1])
+    assert.deepEqual(limits, [{ systems: 1024, emitters: 1024, particles: 1024 }], 'TodParticleHolder::InitializeHolder')
     await assert.rejects(load({ ...base, content: {} })(), /does not define presentation/)
 })
 
@@ -674,6 +715,25 @@ test('focus mute affects active and late sounds and restores the current volume 
     assert.deepEqual(resumed, [2])
 })
 
+test('a hidden window stops the sounds that play once and not with the game, and keeps looping ones and the game\'s', async () => {
+    const urls: string[] = [], stopped: string[] = []
+    const engine = {
+        play2d(url: string) { urls.push(url); return urls.length },
+        stop(id: number) { stopped.push(urls[id - 1]) }, pause() {}, resume() {}, setVolume() {}, setFinishCallback() {},
+    }
+    const { SoundSystem } = loadScript('assets/scripts/client/sound/SoundSystem.ts', id => ({
+        cc: { sys: { isNative: true } }, '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfSfxEnabled: true } },
+    }[id]), { jsb: { AudioEngine: engine } })
+    SoundSystem.load = async (id: string) => ({ nativeUrl: id })
+    await SoundSystem.play('awooga')
+    await SoundSystem.play('dave', { channel: 'crazyDave' })
+    await SoundSystem.play('chomp', { channel: 'chewing', pauseWithGame: true })
+    await SoundSystem.play('sod', { channel: 'sodRoll', loop: true })
+    SoundSystem.windowHidden()
+    assert.deepEqual(stopped, ['awooga', 'dave'])
+    assert.deepEqual(['crazyDave', 'chewing', 'sodRoll'].map(channel => SoundSystem.isChannelActive(channel)), [false, true, true])
+})
+
 test('sound channels reserve during loading, keep or replace requests, and release on completion', async () => {
     const played: string[] = [], stopped: number[] = [], paused: number[] = [], resumed: number[] = []
     const ended = new Map<number, () => void>()
@@ -742,6 +802,26 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     view.applyParts({ ...zombie, shieldHealth: 0, hasArm: false })
     assert.deepEqual(visible('anim_screendoor', 'Zombie_innerarm_screendoor', 'Zombie_outerarm_hand', 'Zombie_outerarm_lower', 'Zombie_outerarm_upper', 'anim_innerarm2'),
         [false, false, false, false, true, true], 'DetachShield restores the arms, except the lost lower arm and hand')
+})
+
+test('a screen door zombie sets its shield\'s colors once for a flash, and again when its body changes to another Reanim', () => {
+    class Color {
+        static WHITE = new Color(255, 255, 255)
+        static BLACK = new Color(0, 0, 0)
+        constructor(readonly r: number, readonly g: number, readonly b: number, readonly a = 255) {}
+    }
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { cc: { Color } })
+    const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
+    const overrides: string[] = []
+    const player = { loadedId: 'pvz:door_zombie_eat', setExtraAdditiveDraw() {}, setTrackRenderOverride(track: string) { overrides.push(track) } }
+    const view = Object.assign(Object.create(ZombieView.prototype), { layers: { player: () => player }, presentation, flash: { flash: 0, through: false, past: false } })
+    const zombie = { shieldHealth: 1100, state: 'eating' }
+    view.applyHitFlash(zombie)
+    view.applyHitFlash(zombie)
+    assert.deepEqual(overrides, ['anim_screendoor'], 'the same flash is not set again')
+    // The body's new Reanim has its tracks anew, without the override (ZombieView.pose).
+    view.applyHitFlash(zombie, true)
+    assert.deepEqual(overrides, ['anim_screendoor', 'anim_screendoor'])
 })
 
 test('a player changes to another clip of its body in place: its batches stay, and it blends from the pose it showed', async () => {
@@ -921,8 +1001,11 @@ test('a collected item says how far it is on its way to its counter, which the s
     })
     const node = { position: { x: 0, y: 0 }, setPosition(x: number, y: number) { this.position = { x, y } }, setScale() {} }
     const content = { definitions: { items: { 'test:sun': { kind: 'sun' }, 'test:coin': { kind: 'money' } } }, presentation: { items: { 'test:sun': {}, 'test:coin': {} } } }
-    const shown = (typeId: string) => {
-        const view = new ItemView({ node, content, item: { typeId }, stage: { sunBankOffset: () => 100 } })
+    // The lawn shown at half size, its top left 20 right of and 10 below the screen's: a point of the screen UI is on
+    // the lawn twice as far from there.
+    const uiOnLawn = (x: number, y: number) => ({ x: (x - 20) * 2, y: (y - 10) * 2 })
+    const shown = (typeId: string, stage: object = { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn: (x: number, y: number) => ({ x, y }) }) => {
+        const view = new ItemView({ node, content, item: { typeId }, stage })
         view.animation = {}
         return view
     }
@@ -938,7 +1021,21 @@ test('a collected item says how far it is on its way to its counter, which the s
     coin.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
     coin.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
     assert.ok(Math.abs(coin.collectProgress - 2 / 3) < 1e-9, 'money, to the coin bank')
-    assert.equal(node.position.x, 39 + 100 + 30, 'which is not pinned')
+    assert.equal(node.position.x, 39 + 100 + 30, 'where the 800 layout has it')
+    const edged = shown('test:coin', { sunBankOffset: () => 100, coinBankOffset: () => -40, uiOnLawn: (x: number, y: number) => ({ x, y }) })
+    edged.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
+    edged.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
+    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 - 40 * 2 / 3)) < 1e-9, "or where the UI area's left edge has it")
+    // With the lawn moved and scaled, both head for where their counters are on it, across and down.
+    const far = shown('test:sun', { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn })
+    far.sync(at(315, 400))
+    far.sync(at(165, 200))
+    assert.deepEqual([node.position.x, node.position.y], [165 + 30 + ((115 - 20) * 2 - 15) * 0.5, -(200 + 30 + (0 - 10) * 2 * 0.5)])
+    const coins = shown('test:coin', { sunBankOffset: () => 100, coinBankOffset: () => 0, uiOnLawn })
+    coins.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
+    coins.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
+    assert.ok(Math.abs(node.position.x - (39 + 100 + 30 + ((39 - 20) * 2 - 39) * 2 / 3)) < 1e-9, 'money too')
+    assert.ok(Math.abs(node.position.y + (558 + 30 + ((558 - 10) * 2 - 558) * 2 / 3)) < 1e-9)
 })
 
 test("a projectile's impact sounds and splats without a view of the projectile, the board's own over its row", () => {
@@ -1160,20 +1257,46 @@ test("the winner's blend into its walk goes on by the game over's ticks, its pla
         'its approach and walk both take the blend on, before its pose is drawn where the walk is')
 })
 
-test("the level's award is collected by its own view: its sounds, the starburst, its glow gone and its own effect behind it", async () => {
+test("the winner's /hitboxes, /hp and /id go with its walk into the house, not where the server left it", () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', { '@/shared/content/teams': teamsModule, '@/shared/content/hitRects': hitRectsModule })
+    // Its ground track goes 10 along a second of its 1 s walk, whose frames are spread over 0.9 s.
+    const ground = (seconds: number) => seconds * 10
+    const player = {
+        loadedId: 'pvz:walk', durationSeconds: 1, fps: 12, lastFrameTimeSeconds: 0.9, sampleTrack: (_: string, seconds: number) => ({ x: ground(seconds) }),
+        advanceBlend() {}, seek() {},
+    }
+    const context = { content: { definitions: { zombies: { 'test:zombie': {
+        body: { x: 36, y: 0, width: 42, height: 115 }, attack: { x: 20, y: 0, width: 20, height: 115 },
+    } } } } }
+    const node = { parent: null as unknown, active: true, setParent(to: unknown) { this.parent = to }, setPosition() {} }
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        node, shadowNode: null, scale: 1, gameOverTicks: 0, layers: { player: () => player }, context,
+        presentation: { parts: { ground: '_ground' } }, playback: () => ({ fps: 12, timeSeconds: 0 }), placeShadow() {},
+    })
+    const standing = Object.assign(Object.create(ZombieView.prototype), { context })
+    // Where the server left it; the game over takes it to x 450 on the doorway's row, y 250, then half a second in.
+    const left = { entityId: 1, typeId: 'test:zombie', x: 500, y: 200 }
+    assert.deepEqual(view.hitRects(left), standing.hitRects(left))
+    view.syncGameOverWalk({ ...left, x: 450 }, {}, 50, 250, 100)
+    const walked = (ground(0.5 * 0.9) - ground(0)) / 0.9
+    assert.deepEqual(view.hitRects(left), standing.hitRects({ ...left, x: 450 - walked, y: 250 }))
+})
+
+test("the level's award is collected by its own view: its sounds and feel, the starburst, its glow gone and its own effect behind it", async () => {
     class FakeNode {
         isValid = true
         active = true
         children: FakeNode[] = []
         components: any[] = []
+        scale = { x: 1, y: 1 }
         constructor(readonly name = '', public parent?: FakeNode) { parent?.children.push(this) }
         setPosition() {}
-        setScale() {}
+        setScale(x: number, y: number) { this.scale = { x, y } }
         getComponent(type: any) { return this.components.find(component => component instanceof type) ?? null }
         getComponentsInChildren(type: any): any[] { return this.children.flatMap(child => [...child.components.filter(component => component instanceof type), ...child.getComponentsInChildren(type)]) }
         destroy() { this.isValid = false; this.parent!.children.splice(this.parent!.children.indexOf(this), 1) }
     }
-    const spawned: { id: string, parent: FakeNode }[] = [], played: string[] = []
+    const spawned: { id: string, parent: FakeNode }[] = [], played: string[] = [], felt: string[] = []
     class ParticlePlayer {
         constructor(readonly id: string, readonly node: FakeNode) {}
         overrideScale() {}
@@ -1193,6 +1316,7 @@ test("the level's award is collected by its own view: its sounds, the starburst,
         '@/client/hud/SeedPacketRenderer': { SEED_PACKET_WIDTH: 50, SEED_PACKET_HEIGHT: 70, SeedPacketRenderer: { drawSeedPacket: ({ parent, name }: any) => new FakeNode(name, parent) } },
         '@/client/level/LevelGeometry': { levelAwardSize: () => ({ width: 50, height: 70 }) },
         '@/client/plants/definitions': { plantPacket: () => ({ plant: {} }) },
+        '@/platform/Haptics': { Haptics: { play(style = 'light') { felt.push(style) } } },
     })
     const layer = new FakeNode('AwardLayer'), node = new FakeNode('Entity-5', layer)
     const stage: any = { level: { award: { id: 'test:seed', kind: 'seed' } }, levelEndTicks: () => -1 }
@@ -1204,11 +1328,18 @@ test("the level's award is collected by its own view: its sounds, the starburst,
     const back = node.children.find(child => child.name === AwardView.BACK)!
     assert.deepEqual(back.children.map(child => child.name), ['pvz:seedpacket'], 'a landed seed packet glows')
     AwardView.collected(stage, { eventId: 1, type: 'levelAwardCollected', data: { entityId: 5, awardId: 'test:seed', x: 100, y: 200 } }, {})
-    assert.deepEqual(played, ['seedlift', 'tap2'])
+    assert.deepEqual([played, felt], [['seedlift', 'tap2'], ['medium']])
     assert.deepEqual(spawned.slice(1).map(({ id, parent }) => [id, parent.name]), [['pvz:starburst', 'AwardLayer'], ['pvz:award', AwardView.BACK]])
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'the glow goes as it is collected')
     view.sync({ ...item, state: 'collecting' })
     assert.deepEqual(back.children.map(child => child.name), ['pvz:award'], 'and nothing else takes what is behind it away')
+    // Grown, it is twice its size on the screen: on a lawn shown at 0.8, its node scaled by a Mod to 1.25 (its own size
+    // on the screen), the 2x packet is drawn at its own size.
+    Object.assign(stage, { levelEndTicks: () => 400, lawnScale: () => 0.8, uiOnLawn: () => ({ x: 400, y: 200 }) })
+    node.setScale(1.25, 1.25)
+    view.sync({ ...item, state: 'collecting' })
+    const large = node.children.find(child => child.name === 'FinalSeedPacketLarge')!
+    assert.ok(large.active && Math.abs(0.8 * node.scale.x * large.scale.x * 2 - 2) < 1e-9, 'twice its size on the screen')
     AwardView.collected(stage, { eventId: 2, type: 'levelAwardCollected', data: { entityId: 6, x: 0, y: 0 } }, {})
     assert.deepEqual(played, ['seedlift', 'tap2', 'seedlift', 'tap2'], 'heard even before its view is made')
 })
@@ -1231,17 +1362,21 @@ test('each flash event is heard once by its flash handler, before the frame is d
     }
 })
 
-test('the grave rise effect faces the same way as the zombie it raises', () => {
+test('the grave rise effect faces the same way as the zombie it raises, under the stone of its grave', () => {
     const { ZombieView } = loadClientModule('zombies/ZombieView', {
         '@/client/sound/SoundSystem': { SoundSystem: { playSounds() {} } },
     })
     const particles: unknown[][] = []
-    const stage = { graveRise: { particle: 'pvz:zombierise', sounds: [] }, particle: (...args: unknown[]) => particles.push(args) }
+    const stage = { graveRise: { particle: 'pvz:zombierise', sounds: [] }, particle: (...args: unknown[]) => particles.push(args),
+        content: { presentation: presentationFixture } }
+    const gridItems = [{ entityId: 5, typeId: 'pvz:grave', row: 2, column: 3, offsetX: 3 }]
     for (const team of [undefined, 'plants']) {
-        ZombieView.rose(stage, { data: { entityId: 1 } }, { zombies: [{ entityId: 1, x: 200, y: 100, row: 2, team }] })
+        ZombieView.rose(stage, { data: { entityId: 1, row: 2, column: 3 } },
+            { zombies: [{ entityId: 1, typeId: 'pvz:normal', x: 200, y: 100, row: 2, team }], gridItems })
     }
     const order = renderOrderModule.renderOrder('particle', 2)
-    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 260, 210, order, undefined, true]])
+    // Where the original puts it, and turned round about the stone's middle, 64 right of the zombie by the grave's 3.
+    assert.deepEqual(particles, [['pvz:zombierise', 260, 210, order, undefined, false], ['pvz:zombierise', 200 + 2 * 67 - 60, 210, order, undefined, true]])
 })
 
 test('a zombie with steps kicks up their effect under its feet as its walk comes to each mark, mirrored walking right', () => {
@@ -1255,15 +1390,16 @@ test('a zombie with steps kicks up their effect under its feet as its walk comes
     })
     const walk = (time: number, zombie: object = {}) =>
         view.step({ x: 300.7, y: 50.2, row: 2, state: 'walking', animations: { body: { clip: 'walk', time, rate: 20 } }, ...zombie })
-    // Zombie::UpdateZombieWalking: 0.03 and 0.61 of the 30-frame walk, (81, 106) and (87, 110) from (mX, mY), at mRenderOrder - 1.
+    // Zombie::UpdateZombieWalking: 0.03 and 0.61 of the 30-frame walk, (81, 106) and (87, 110) from where the frame draws
+    // it, not in whole pixels, at mRenderOrder - 1.
     walk(0); walk(1); walk(18); walk(19)
     walk(31, { team: 'plants' })
     walk(40, { state: 'eating' })
     walk(0, { animations: { body: { clip: 'eat', time: 0, rate: 36 } } }); walk(20, { animations: { body: { clip: 'eat', time: 20, rate: 36 } } })
     assert.deepEqual(particles, [
-        ['pvz:dust_foot', 381, 156, 101, undefined, false],
-        ['pvz:dust_foot', 387, 160, 101, undefined, false],
-        ['pvz:dust_foot', 300 + 120 - 81, 156, 101, undefined, true],
+        ['pvz:dust_foot', 300.7 + 81, 50.2 + 106, 101, undefined, false],
+        ['pvz:dust_foot', 300.7 + 87, 50.2 + 110, 101, undefined, false],
+        ['pvz:dust_foot', 300.7 + (120 - 81), 50.2 + 106, 101, undefined, true],
     ], 'none while it eats, nor on another clip')
 })
 
@@ -1301,8 +1437,8 @@ test("a shot leaves the muzzle effect of the plant that fired it just over the r
     const order = renderOrderModule.renderOrder('lawnMower', 2, 1)
     assert.deepEqual(JSON.parse(JSON.stringify(particles)), [
         ['pvz:puffshroommuzzle', 118, 133, order, null, false],
-        // The spore's hitbox runs from -15 to 40: 27 in from one side is 2 out from the other.
-        ['pvz:puffshroommuzzle', 98, 133, order, null, true],
+        // The spore's hitbox runs from 0 to 40: 27 in from one side is 13 in from the other.
+        ['pvz:puffshroommuzzle', 113, 133, order, null, true],
         ['pvz:snowpeapuff', 108, 133, order, null, false],
     ], 'the peashooter has none')
 })

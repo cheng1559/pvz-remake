@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { Color, EventMouse, Node, UITransform, type EventTouch, SpriteFrame } from 'cc'
+import { Color, EventMouse, Node, UITransform, Vec3, type EventTouch, SpriteFrame } from 'cc'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { packetSubject } from '@/client/plants/definitions'
 import { UIButton } from '@/client/ui/UIButton'
@@ -7,17 +7,18 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
-import { animateCurve } from '@/shared/content/animation'
+import { animateCurve, animateCurveFloat } from '@/shared/content/animation'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
 import { CHOOSER_PLACES, FIVE_ROW_PLACES, type GameplayDefinitions } from '@/shared/content/gameplay'
-import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/chooserPages'
+import { chooserPages, pagePlaces, seedChoiceComplete, type ChooserPage } from '@/shared/content/chooserPages'
 import { packetTeam } from '@/shared/content/teams'
 import type { LoadedContent } from './LevelView'
 import { seedPacketX } from './LevelGeometry'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 
 /** A card in the chooser grid: an offered seed, on its side, at a grid place (8 columns in reading order from 0). */
 export interface ChooserCard extends ChooserEntry {
@@ -34,6 +35,8 @@ interface Choice extends ChooserEntry {
     home?: { x: number, y: number }
     slot: number
     motion?: { fromX: number, fromY: number, x: number, y: number, start: number, end: number }
+    /** Whether the level may not recommend it (a card of its seed's own side with a tooltip that warns; recommend). */
+    warns: boolean
     /** SeedNotRecommendedToPick: grayed while it waits in the chooser. */
     notRecommended: boolean
     grayed?: boolean
@@ -87,6 +90,14 @@ export class LevelSeedChooser {
     private warningOpen = false
     private readonly panel: Node
     private readonly edge: Node
+    /**
+     * The panel and what stands on it: the cards, those chosen into the bank too, their flights, Let's Rock and the page
+     * turners. The almanac and store buttons stand at the screen's bottom right instead, in `pageButtonLayer` beside it,
+     * which keeps to the UI area's right edge and slides with the panel; a Mod can resize the panel's layer alone (the
+     * widescreen Mod's high view).
+     */
+    private readonly panelLayer: Node
+    private readonly pageButtonLayer: Node
     private readonly cards: Node
     private readonly flying: Node
     /**
@@ -114,7 +125,7 @@ export class LevelSeedChooser {
     }
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
-        notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
+        private readonly notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
         entries: readonly ChooserEntry[] = [], cheatSeeds = false) {
         this.definitions = content.definitions
         this.slots = slots
@@ -130,33 +141,30 @@ export class LevelSeedChooser {
         })
         // The chooser hugs the left screen edge together with the seed bank, keeping their relative position.
         this.edge = uiAreaEdge(parent, 'left')
-        this.panel = uiNode({ name: 'SeedChooser', parent: this.edge, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
+        this.panelLayer = uiNode({ name: 'ChooserPanelLayer', parent: this.edge }).node
+        this.panel = uiNode({ name: 'SeedChooser', parent: this.panelLayer, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         ui.image(this.panel, background, { y: 87 })
         ui.label(this.panel, { text: ui.text('CHOOSE_YOUR_PLANTS'), font: 'yellow', color: Color.WHITE, x: 229, y: 110, baseline: true, align: 'center' })
         const shadows = uiNode({ name: 'ChooserShadows', parent: this.panel }).node
-        this.cards = uiNode({ name: 'ChooserCards', parent: this.edge, active: false }).node
-        this.cardIcons = uiNode({ name: 'ChooserCardIcons', parent: this.edge }).node
-        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.edge, active: false }).node
-        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
+        this.cards = uiNode({ name: 'ChooserCards', parent: this.panelLayer, active: false }).node
+        this.cardIcons = uiNode({ name: 'ChooserCardIcons', parent: this.panelLayer }).node
+        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.panelLayer, active: false }).node
+        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.panelLayer, active: false }).node
+        this.pageButtonLayer = uiNode({ name: 'ChooserPageButtons', parent: this.edge, active: false }).node
         this.gridShadows = uiNode({ name: 'GridSilhouettes', parent: shadows }).node
         this.addEmptySlots()
         // A card's two views, its grid shadow and the card itself, with its tooltip and button.
         this.addChoice = (card: ChooserEntry): Choice => {
             const seed = content.definitions.seeds[card.seedId]
+            // Never shaded: a card in the chooser has no cooldown, and the bank in play has packets of its own.
             const args = { definitions: content.presentation, name: `Choose-${cardKey(card)}`, parent: this.cards, layer: parent.layer,
-                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost }
+                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost, shade: false }
             const views = [new SeedPacketView({ ...args, name: `ChosenShadow-${cardKey(card)}`, parent: shadows, iconLayer: this.cardIcons }),
                 new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
-            let tooltipOptions: Parameters<UI['tooltip']>[1]
-            let warning: string | undefined
             const subject = packetSubject(content.presentation, seed)
             for (const view of views) view.setSeed(subject.plant, seed.sunCost, subject.zombie, subject.gridItem)
-            if (subject.tooltipKey === undefined) tooltipOptions = { text: ui.text(subject.nameKey), gap: 0 }
-            else {
-                warning = card.team === undefined ? notRecommended(card.seedId) : undefined
-                tooltipOptions = { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0,
-                    ...(warning ? { warning: ui.text(warning) } : {}) }
-            }
+            const tooltipOptions: Parameters<UI['tooltip']>[1] = subject.tooltipKey === undefined ? { text: ui.text(subject.nameKey), gap: 0 }
+                : { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0 }
             const [shadow, view] = views
             // A card of the other side from its seed's own faces the other way, as it does in the bank.
             if (packetTeam(seed, card.team)) for (const packet of views) packet.setMirrored(true)
@@ -169,7 +177,9 @@ export class LevelSeedChooser {
             button.hapticsEnabled = false
             button.clickOnPress = true
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
-            const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1, notRecommended: warning !== undefined }
+            const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1,
+                warns: subject.tooltipKey !== undefined && card.team === undefined, notRecommended: false }
+            this.recommend(choice)
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
             return choice
@@ -182,7 +192,7 @@ export class LevelSeedChooser {
         for (const [shown, key, x, open] of [[pages.almanac, 'ALMANAC_BUTTON', 560, () => this.onAlmanac()],
             [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
             if (!shown) continue
-            const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
+            const button = ui.button(this.pageButtonLayer, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
             this.pageButtons.push(button)
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen && !this.inFlight
         }
@@ -243,6 +253,16 @@ export class LevelSeedChooser {
         this.pages = cheatSeeds ? pages : pages.slice(0, 1)
         for (const { button } of this.pageTurners) button.node.active = this.pages.length > 1
         this.showPage(0)
+    }
+
+    /**
+     * Board::SeedNotRecommendedForLevel for a card, asked again as the chooser opens for a repick, since the level's
+     * time of day may have changed meanwhile (`/time`): its tooltip's warning, and whether it is grayed in the grid.
+     */
+    private recommend(choice: Choice): void {
+        const warning = choice.warns ? this.notRecommended(choice.seedId) : undefined
+        choice.notRecommended = warning !== undefined
+        choice.tooltip.warning = warning ? this.ui.text(warning) : ''
     }
 
     /** Turns to the next page (`step` 1) or the one before (-1), round from either end. */
@@ -342,6 +362,15 @@ export class LevelSeedChooser {
         this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
     }
 
+    /**
+     * The bank's shift and rise (setBankShift) read off where `bank` stands, by the nodes: its choosing place is the
+     * panel's layer's origin, wherever the layers holding the two are put or scaled.
+     */
+    followBank(bank: Node): void {
+        const at = this.panelLayer.inverseTransformPoint(new Vec3(), bank.worldPosition)
+        this.setBankShift(at.x, at.y)
+    }
+
     /** Whether the node is the chooser's: its panel, cards and buttons, and the preview zombies' tooltips. */
     holds(node: Node): boolean {
         return node.isChildOf(this.edge) || node.isChildOf(this.previewTooltipSurface)
@@ -349,11 +378,6 @@ export class LevelSeedChooser {
 
     placeBefore(node: Node): void {
         this.edge.setSiblingIndex(node.getSiblingIndex())
-    }
-
-    /** Presses Let's Rock from the keyboard, as a click on it would; whether it could be pressed. */
-    pressStart(): boolean {
-        return this.start.trigger()
     }
 
     /** Puts `node`, the chooser's sibling, right under it: over everything else, below the chooser's cards. */
@@ -373,6 +397,7 @@ export class LevelSeedChooser {
         if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= SEED_CHOOSER_SLIDE.offStart)) {
             this.repickTick = SEED_CHOOSER_SLIDE.onStart
             this.repickFinished = false
+            for (const choice of this.choices) this.recommend(choice)
             this.syncIntro(SEED_CHOOSER_SLIDE.onStart)
         }
         for (const button of this.pageButtons) button.node.active = !repick
@@ -405,11 +430,13 @@ export class LevelSeedChooser {
                 } else choice.view.node.setPosition(destination.x, -destination.y)
             }
         }
-        // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while the bank is full; a dialog or the
-        // intro only keeps it from being pressed (canInteract), as GameButton::IsMouseOver does.
-        // `/cheatseed` starts with any cards chosen, the slots left over empty.
-        const chosen = snapshot.seedPackets.length
-        this.start.interactable = !!offer && (chosen === offer.slots || offer.cheatSeeds === true && chosen > 0)
+        // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while Let's Rock would start
+        // (seedChoiceComplete); a dialog or the intro only keeps it from being pressed (canInteract), as
+        // GameButton::IsMouseOver does.
+        this.start.interactable = !!offer && seedChoiceComplete({
+            chosen: snapshot.seedPackets.flatMap(packet => packet ? [packet] : []), available: offer.availableSeeds,
+            entries: offer.entries ?? [], slots: offer.slots, cheatSeeds: offer.cheatSeeds === true,
+        })
         this.syncPlaceholders()
     }
 
@@ -447,9 +474,14 @@ export class LevelSeedChooser {
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active
         this.buttons.active = this.panel.active
-        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurve(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurve(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
+        this.pageButtonLayer.active = this.panel.active
+        // Unrounded, for a smooth slide.
+        const y = tick <= SEED_CHOOSER_SLIDE.onEnd ? animateCurveFloat(SEED_CHOOSER_SLIDE.onStart, SEED_CHOOSER_SLIDE.onEnd, tick, -516, 0, 'ease-in-out') : animateCurveFloat(SEED_CHOOSER_SLIDE.offStart, SEED_CHOOSER_SLIDE.offEnd, tick, 0, -516, 'ease-in-out')
         this.panel.setPosition(0, y)
         this.buttons.setPosition(0, y)
+        // The almanac and store buttons keep their margins from the UI area's right edge, as Menu does: twice its inset
+        // right of this left edge.
+        this.pageButtonLayer.setPosition(2 * uiAreaInset(), y)
         for (const choice of this.choices) {
             // A card waiting in the grid shows only while the grid lists it.
             choice.view.node.active = this.panel.active && (choice.slot < 0 ? !!choice.home || !!choice.motion : this.choosing)
@@ -476,6 +508,7 @@ export class LevelSeedChooser {
         for (const candidate of this.choices) this.land(candidate)
         if (choice.slot < 0 && this.snapshot!.seedPackets.length >= this.snapshot!.seedChooser!.slots) return
         for (const candidate of this.choices) candidate.tooltip.hide()
+        Haptics.play()
         void SoundSystem.play(SoundEffect.Tap)
         this.send({ type: 'chooseSeed', seedId: choice.seedId, ...(choice.team ? { team: choice.team } : {}) })
     }
@@ -510,11 +543,17 @@ export class LevelSeedChooser {
         return !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= SEED_CHOOSER_SLIDE.onEnd && !this.warningOpen
     }
 
-    private confirm(): void {
-        if (!this.start.interactable || !this.acceptsInput) return
+    /** Whether Let's Rock's start could go now: the button lit and the chooser taking input. */
+    get canConfirm(): boolean {
+        return this.start.interactable && this.acceptsInput
+    }
+
+    /** Let's Rock's start, also what R and the sun counter do in a repick; whether it went. */
+    confirm(): boolean {
+        if (!this.canConfirm) return false
         for (const choice of this.choices) { this.land(choice); choice.tooltip.hide() }
         const warnings = this.snapshot?.seedChooser?.warnings ?? []
-        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return }
+        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return true }
         this.warningOpen = true
         // DisplayRepickWarningDialog: each warning in turn; any repick stops the start.
         void (async () => {
@@ -526,5 +565,6 @@ export class LevelSeedChooser {
             this.warningOpen = false
             this.send({ type: 'confirmSeeds' })
         })()
+        return true
     }
 }

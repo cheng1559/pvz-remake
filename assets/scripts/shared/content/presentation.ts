@@ -449,9 +449,16 @@ export interface ZombieParts {
     readonly shieldArms?: { readonly holding: readonly string[]; readonly free: readonly string[] }
 }
 
+/** A level's intro. Its switches, each on (`true`) when its part plays, turn the original's parts off one by one. */
 export interface AdventureIntroLayout {
-    readonly previewCapacity: number
-    readonly stationary?: boolean
+    /** CutScene's pan over the street and back, with the house's name and the level's zombies to preview; on unless false. */
+    readonly pan?: boolean
+    /**
+     * CutScene's bank sliding down (TimeSeedBankOnStart) and the mowers coming on (TimeLawnMowerStart); on unless false.
+     * Off, they are in place from the start and the intro ends that much sooner, at once with no pan, sod roll, graves or
+     * Ready, Set, Plant (the sandboxes).
+     */
+    readonly entrance?: boolean
     /** CutScene: a level without a seed bank (IsChallengeWithoutSeedBank) leaves it above the screen. */
     readonly hiddenSeedBank?: boolean
     readonly sod: string
@@ -464,7 +471,12 @@ export interface AdventureIntroLayout {
     readonly readySetPlant: boolean
 }
 export interface LevelPresentationDefinition {
-    readonly music?: BoardPresentation['music']
+    readonly music?: BoardTimePresentation['music']
+    /**
+     * A strings key: the name a level outside the Adventure (no `adventureIndex`) shows at the bottom right, as the
+     * original's other modes show theirs (Board::DrawLevel's mChallengeName).
+     */
+    readonly nameKey?: string
     readonly intro: AdventureIntroLayout
     readonly advice: Readonly<Record<string, string>>
     readonly adviceDuringIntro?: boolean
@@ -487,15 +499,13 @@ export interface LevelRulePresentation {
     readonly [key: string]: unknown
 }
 /**
- * Zombie::UpdateZombieRiseFromGrave: a rising zombie's body comes up from `depth` below over the last `riseTicks` of
- * its rise. Zombie::GetDrawPos and DrawReanim draw it inside a clip `x` across from the zombie and `width` wide, from
- * `y` from the top of its body (which comes up with it) down to `bottom` under the zombie less the ticks it has still
- * to rise, at most `settleTicks`, so the clip's bottom comes down over its last ticks. Down is positive.
+ * A rising zombie's body, coming up as its rise has it (ZombieRise: BoardDefinition.riseFromGrave, ZombieDance.rise):
+ * Zombie::GetDrawPos and DrawReanim draw it inside a clip `x` across from the zombie and `width` wide, from `y` from the
+ * top of its body (which comes up with it) down to `bottom` under the zombie less the ticks it has still to rise, at
+ * most its rise's `settleTicks`, so the clip's bottom comes down over its last ticks. Down is positive.
  */
 export interface GraveZombiePresentation {
-    readonly depth: number
-    readonly riseTicks: number
-    readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number; readonly settleTicks: number }
+    readonly clip: { readonly x: number; readonly y: number; readonly width: number; readonly bottom: number }
 }
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets and clips are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
@@ -711,7 +721,20 @@ export interface PresentationDefinitions {
         /** A plant's picture in its packet, unless the plant has its own (`packet.placement`), or a thing of a cell its own. */
         readonly defaultPlacement: SeedPacketPlacement
     }
+    /** The client's own settings, apart from the gameplay settings the server reads; only the base package gives them. */
+    readonly settings: PresentationSettings
 }
+
+export interface PresentationSettings {
+    /**
+     * TodParticleHolder's pools: how many particle effects (its particle systems), emitters and particles may be alive
+     * at once, all over the game. An effect is not started while its emitters would not all fit, and a particle is not
+     * spawned while there are as many as the limit.
+     */
+    readonly particles: ParticleLimits
+}
+
+export interface ParticleLimits { readonly systems: number; readonly emitters: number; readonly particles: number }
 
 /**
  * Reading the presentation definitions, each checked as it is read, as the gameplay ones are (parseGameplay): a field
@@ -720,7 +743,7 @@ export interface PresentationDefinitions {
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const definitions = fields<PresentationDefinitions>(value, 'presentation', [
         'mainMenu', 'conveyor', 'foley', 'tools', 'store', 'storeDialogue', 'almanac', 'iceTrap', 'graves', 'dave', 'items', 'plants', 'zombies', 'projectiles',
-        'gridItems', 'seedPackets', 'clips',
+        'gridItems', 'seedPackets', 'clips', 'settings',
     ], {
         mainMenu: parseMainMenu,
         conveyor: (value, name) => allFields<PresentationDefinitions['conveyor']>(value, name, {
@@ -763,6 +786,9 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             flash: (value, name) => allFields<PresentationDefinitions['seedPackets']['flash']>(value, name, { id: nonEmptyString }),
             selection: (value, name) => allFields<PresentationDefinitions['seedPackets']['selection']>(value, name, { color }),
             defaultPlacement: placement,
+        }),
+        settings: (value, name) => allFields<PresentationSettings>(value, name, {
+            particles: (value, name) => allFields<ParticleLimits>(value, name, { systems: positiveInteger, emitters: positiveInteger, particles: positiveInteger }),
         }),
     })
     const { plants, zombies } = definitions
@@ -829,16 +855,15 @@ function graveRise(value: unknown, name: string): PresentationDefinitions['grave
 
 function graveZombie(value: unknown, name: string): GraveZombiePresentation {
     return allFields<GraveZombiePresentation>(value, name, {
-        depth: nonNegativeFinite, riseTicks: positiveInteger,
         clip: (value, name) => allFields<GraveZombiePresentation['clip']>(value, name, {
-            x: finite, y: finite, width: positiveFinite, bottom: finite, settleTicks: nonNegativeInteger,
+            x: finite, y: finite, width: positiveFinite, bottom: finite,
         }),
     })
 }
 
-function music(value: unknown, name: string): BoardPresentation['music'] {
+function music(value: unknown, name: string): BoardTimePresentation['music'] {
     const tune = (value: unknown, name: string) => nonEmptyString(value, name) as MusicTuneId
-    return allFields<BoardPresentation['music']>(value, name, { choosing: tune, gameplay: tune })
+    return allFields<BoardTimePresentation['music']>(value, name, { choosing: tune, gameplay: tune })
 }
 
 /** A pace: a value, or [min, max] to pick between. */
@@ -988,16 +1013,20 @@ function parseDave(value: unknown, name: string): PresentationDefinitions['dave'
 }
 
 function parseBoard(value: unknown, name: string): BoardPresentation {
-    return fields<BoardPresentation>(value, name, ['background', 'backgroundX', 'music', 'gameOver'], {
-        background: nonEmptyString, backgroundX: finite, plantShadow: nonEmptyString, music,
+    const board = allFields<BoardPresentation>(value, name, {
         gameOver: (value, name) => allFields<BoardPresentation['gameOver']>(value, name, {
-            images(value, name) {
-                const images = nonEmptyStrings(value, name)
-                if (images.length !== 3) throw new TypeError(`${name} must contain three images`)
-                return images as [string, string, string]
-            },
-            interior: point, doorway: point, clipX: finite, winnerY: finite, panX: finite,
+            title: nonEmptyString, interior: point, doorway: point, clipX: finite, winnerY: finite, panX: finite,
         }),
+        times: table(parseBoardTime),
+    })
+    if (!Object.keys(board.times).length) throw new TypeError(`${name}.times must not be empty`)
+    return board
+}
+
+function parseBoardTime(value: unknown, name: string): BoardTimePresentation {
+    return fields<BoardTimePresentation>(value, name, ['background', 'backgroundX', 'music', 'door'], {
+        background: nonEmptyString, backgroundX: finite, lawn: nonEmptyString, plantShadow: nonEmptyString, music,
+        door: (value, name) => allFields<BoardTimePresentation['door']>(value, name, { interior: nonEmptyString, doorway: nonEmptyString }),
     })
 }
 
@@ -1014,6 +1043,7 @@ function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
     type Line = NonNullable<LevelPresentationDefinition['plantingLine']>
     return fields<LevelPresentationDefinition>(value, name, ['intro', 'advice', 'seedGuideSteps', 'lawnGuideSteps'], {
         music,
+        nameKey: nonEmptyString,
         intro: parseIntro,
         // An empty advice shows nothing at its step.
         advice: table((value, name) => {
@@ -1037,8 +1067,8 @@ function parseLevel(value: unknown, name: string): LevelPresentationDefinition {
 
 function parseIntro(value: unknown, name: string): AdventureIntroLayout {
     type Sod = NonNullable<AdventureIntroLayout['existingSod']>
-    return fields<AdventureIntroLayout>(value, name, ['previewCapacity', 'sod', 'x', 'y', 'width', 'rolls', 'readySetPlant'], {
-        previewCapacity: positiveInteger, stationary: boolean, hiddenSeedBank: boolean,
+    return fields<AdventureIntroLayout>(value, name, ['sod', 'x', 'y', 'width', 'rolls', 'readySetPlant'], {
+        pan: boolean, entrance: boolean, hiddenSeedBank: boolean,
         sod: nonEmptyString, x: finite, y: finite, width: positiveFinite, sourceX: finite,
         existingSod: (value, name) => allFields<Sod>(value, name, { sprite: nonEmptyString, x: finite, y: finite }),
         rolls: (value, name) => array(value, name).map((roll, index) =>
@@ -1252,18 +1282,39 @@ function parseProjectile(value: unknown, name: string): ProjectilePresentationDe
     return projectile
 }
 
+/** A board's look (BoardDefinition): its house as the zombies win into it, and its look at each of its times of day. */
 export interface BoardPresentation {
-    readonly background: string
-    readonly backgroundX: number
-    /** The shadow under its plants and zombies (Board::DrawShadow: IMAGE_PLANTSHADOW, IMAGE_PLANTSHADOW2 at night); the day's when left out. */
-    readonly plantShadow?: string
-    readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
+    /**
+     * The zombies winning (CutScene::UpdateZombiesWon): the title that comes up (ZOMBIESWON), where the house's door
+     * lies (Board::DrawHouseDoorBottom draws its `interior` under the winner, Board::DrawHouseDoorTop its `doorway` frame
+     * over it), the board x the winner is cut off at behind the doorway, the y it walks in at, and how far the camera
+     * pans to the house. The same at every time: each time's door pictures (BoardTimePresentation.door) are made to lie
+     * alike (tools/pvz/doors.py), so a change of time blends them as the lawn.
+     */
     readonly gameOver: {
-        readonly images: readonly [string, string, string]
+        readonly title: string
         readonly interior: { readonly x: number; readonly y: number }
         readonly doorway: { readonly x: number; readonly y: number }
         readonly clipX: number
         readonly winnerY: number
         readonly panX: number
     }
+    readonly times: Readonly<Record<string, BoardTimePresentation>>
+}
+
+/** A board's look at a time of day (BoardPresentation.times). */
+export interface BoardTimePresentation {
+    readonly background: string
+    readonly backgroundX: number
+    /**
+     * The whole lawn, sodded (the day's): a level whose sod is it shows it whole once that sod is laid, and so does a
+     * level at this time by `/time`, whose own sod lies at its own time only (shownLawn). `background` when left out
+     * (the night's).
+     */
+    readonly lawn?: string
+    /** The shadow under its plants and zombies (Board::DrawShadow: IMAGE_PLANTSHADOW, IMAGE_PLANTSHADOW2 at night); the day's when left out. */
+    readonly plantShadow?: string
+    readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
+    /** Its house's door, open as the zombies win (BoardPresentation.gameOver): the interior's picture and the doorway's. */
+    readonly door: { readonly interior: string; readonly doorway: string }
 }

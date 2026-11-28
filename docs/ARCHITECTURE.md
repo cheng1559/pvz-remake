@@ -100,7 +100,7 @@ The local channel (`shared/channel`) parses every client packet after a JSON rou
 
 Server packets are handled by type:
 
-- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore validated (`validateServerPacket`) and handed over without a copy.
+- **Frames** are the most frequent packet, and the server builds each snapshot and event in them from new objects. A frame is therefore handed over without a copy. It is validated (`validateServerPacket`) on the way: every frame in a debug build, one a second in a release build (`LocalGameChannel`'s `frameChecks`), where checking every field of every entity each tick cost more than it caught.
 - **Every other server packet** may reference server state. `copyServerPacket` checks its JSON safety and deep-copies it in one traversal, before the protocol's structure checks.
 
 Nested Mod state, extensions and events are copied or checked the same way, so a client changing what it holds cannot reach the server or other snapshots. Client requests, external packet parsing and save formats keep their own rules.
@@ -162,7 +162,7 @@ Where the level's shared logic lives:
 
 ### World and entities
 
-The world (`state/World.ts`) is typed lists, with no ECS components: `items`, `gridItems`, `plants`, `projectiles`, `mowers` and `zombies`, beside the world's `resources`. Each is an `EntityList` that holds the objects themselves by id and iterates them in id order.
+The world (`state/World.ts`) is typed lists, with no ECS components: `items`, `gridItems`, `plants`, `projectiles`, `mowers` and `zombies`, beside the world's `resources`. Each is an `EntityList` that holds the objects themselves in slots (the original's DataArray) and iterates them in slot order.
 
 An entity is its object in one of the lists:
 
@@ -304,7 +304,7 @@ Tutorial scripts are registered by ID in `GameplayRegistry.tutorials` (`server/t
 - the base game's through `installBuiltinTutorials`;
 - a Mod's through `registry.tutorials.register(ownerId, id, script)`.
 
-A level's `tutorial` names one, checked when the content is validated. The running game looks it up from the world: `levelTutorial` gives the level's script, and `getActiveTutorial` gives it when it plays (on a first adventure, or always for one that is `alwaysActive`). The game routes its callbacks through it: seed selection, cancellation, planting, cooldown completion, sun and money collection, tool selection, plant removal and the dialogue.
+A level's `tutorial` names one, checked when the content is validated. The running game looks it up from the world: `levelTutorial` gives the level's script, and `getActiveTutorial` gives it when it plays (on a first adventure unless the script is skipped, or always for one that is `alwaysActive`). The game routes its callbacks through it: seed selection, cancellation, planting, cooldown completion, sun and money collection, tool selection, plant removal and the dialogue.
 
 - A level without a script leaves `tutorial` out and uses the shared flow.
 - A base script's steps are `TUTORIAL_STEPS`; a Mod's are in its namespace.
@@ -321,13 +321,14 @@ Script fields that shape the level:
 | `dialogQuestion` | Marks the current line as a Yes/No question, which the client answers with `answerDialog`. |
 | `blocksIntro` | Keeps the intro from ending. |
 | `blocksStart` | Keeps the zombies from coming. Independent of `blocksIntro`. |
+| `skips` | Plays a first adventure without the script while it holds, as the planting tutorial without a Peashooter in the bank. Checked as the level starts, which then starts as a replay does, and as the level goes on, where `skipped` lets go of what the script holds back. |
 
 ### Tools
 
 Tools are the gameplay `tools` table, by ID. Each has the `kind` that says what it does: with `shovel`, `tools.use` digs up the cell's plant, which the client lights under the pointer.
 
 - A level's `tools` and a `tool` award must name one, and each needs its presentation `tools` look.
-- Tools come from awards: a tool one level awards is available from the next level on a first adventure, and on every level in replays. A level's own `tools` replace the awarded ones.
+- Tools come from awards: a tool award records the tool in the profile when the level is won, and from then on every level has it. A level's own `tools` replace the awarded ones.
 
 The shovel is a `UIButton` with the same touch flow as a packet: press to pick it up, drag to aim, release to use it, drag back onto its button to cancel. Tutorials allow it, and a pause ends the gesture.
 
@@ -346,7 +347,7 @@ A level's gameplay `conveyor` gives the belt: its `capacity`, `spacing`, movemen
 
 A level's `plantingLine: {column}` is its red line (Wall-nut Bowling's): the player plants nothing right of that column, and gets `ADVICE_NOT_PASSED_LINE` the first time. It is a check of the shared planting decision below. The level presentation's `plantingLine` (`{sprite, offset, dialogs}`) draws it in play and during the listed Dave lines. Any level can have one, with or without a rule.
 
-Where a seed may go is one decision for both sides: `plantingRefusal` in `shared/content/planting.ts` (`Board::CanPlantAt`). It reads a `PlantingLawn` that each side builds from its own state: the server from its World, the client from its snapshot (`snapshotLawn`).
+Where a seed may go is one decision for both sides: `plantingRefusal` in `shared/content/planting.ts` (`Board::CanPlantAt`). It reads a `PlantingLawn` that each side builds from its own state: the server from its World, the client from its snapshot (`snapshotLawn`). The lawn also carries `/plantanywhere` (`anywhere`, from the debug rules), which lifts every rule but the board's bounds on both sides alike.
 
 - The server answers each refusal with its rejection and advice.
 - The planting preview only shows whether there is one.
@@ -418,7 +419,7 @@ A huge wave's message is the level's advice (`AdviceWidget`, style `huge-wave`, 
 
 Gameplay authoring tables live under `mods/pvz-base/gameplay/definitions/`, split into plants, zombies, seeds, boards, projectiles, items, achievements, tools, the store, its pages and the almanac. `gameplay/settings.json` contains the global defaults, and `gameplay/levels.json` the levels.
 
-Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more.
+Presentation tables live under `mods/pvz-base/presentation/definitions/`, split into category files: plant and zombie animations, seed packet pictures, view selection, part tracks, shadows, dropped images, boards, levels, the store and more. `presentation/settings.json` contains the client's own global settings, apart from the gameplay settings the server reads.
 
 The root `mods/pvz-base/content.json` indexes every table, in the same format as Mod sources. Packing (`npm run mod:pack`, `tools/mod/cli.ts`) merges them into the package's `assets/gameplay.json` and `assets/presentation.json`, using the same structure as Mod packages and adding no resource requests. The base package is published to `assets/resources/base.zip` (`npm run mod:pack -- pvz-base --publish assets/resources/base.zip`, which `npm run build:content` also runs). Headless tools and tests read the same source tables (`tools/mod/content.ts`).
 
@@ -550,7 +551,7 @@ A Mod's kind extends one of these classes and is registered by the name its defi
 - An armor's `dropSounds` play with its `clips.drop` when it breaks, unless the hit bypasses the shield.
 - `seedPackets` holds the packet flash effect (`flash`), the selection color and the default placement of a picture in its packet. A plant's own presentation `packet` may give its picture's `placement` and `phase`.
 - `almanac` holds, by plant or zombie ID, the ground the almanac shows it on and whether its packet is an upgrade's.
-- Presentation `boards` define backgrounds, music and game-over geometry; gameplay `boards.*.bounds` define the horizontal limits.
+- Presentation `boards` define the game-over geometry, and for each time of day (`times`) the background, the whole lawn, the music and the house door; gameplay `boards.*.bounds` define the horizontal limits.
 - A zombie whose animation has a `flag` layer carries a flag, dropped as in `Zombie::DropFlag`.
 - Particle snapshots retain optional remaining lifetimes. Packet flashes use `seedPackets.flash`, with no effect-ID branches on restore.
 
@@ -587,7 +588,12 @@ See [Mod Lab](../mods/example/README.md) and [Mods](MODS.md).
 
 - `LevelPresentation` (`getLevelPresentation`) selects the intro and the tutorial text and guide configuration by the level's ID (the presentation `levels`).
 - The adventure intro (the grass roll, the preview zombies and the timing of the mowers rolling in) lives in `level/adventure/AdventureIntro`. The shared scene contains no intro timings.
-- Board backgrounds, music and game-over geometry live in the presentation `boards` (`boards.json`).
+- Board backgrounds, music and game-over geometry live in the presentation `boards` (`boards.json`), by time of day.
+- `/time` (`server/level/time.ts`) starts a change of time of day, `LevelState.timeChange`, sent in the snapshot as `timeChange`. The server advances it a tick at a time and moves the level to the new time (`LevelState.time`) halfway (`TIME_SWITCH_TICKS`).
+- On the client, `TimeBlends` (`client/level/TimeBlends.ts`) draws the change. Each `TimeBlend` keeps the old look (`begin`), shows the new time's (`show`), mixes the two by the change's progress (`blend`) and drops the old one at the end (`end`). The base game adds the lawn, the shadows (`BoardShadows`), the music (`LevelAudioPresenter.timeBlend`) and the house door (`LevelGameOverPresenter.timeBlend`); a Mod adds its own with `LevelView.addTimeBlend`.
+- A crater reads the change from `LevelStage.timeBlend()`. `SpriteBlend` draws two pictures in one sprite's place: a shadow's at their shares, a covering picture's (a crater, the door) with the new one whole under the old one.
+- The game over draws the door from `LevelGameOverPresenter.doorFrames`, which the widescreen Mod wraps for its TV pictures.
+- The background shows the lawn `shownLawn` (`level/boards/definitions.ts`) picks. `LevelView.showLawn` draws it; the widescreen Mod wraps it for its TV pictures.
 - Later levels add backend content and a presentation entry (or reuse an existing one). New environments implement their board presentation; they do not copy the scene, input, HUD or save controller.
 
 #### Game over
@@ -613,7 +619,8 @@ The level's entities draw in the original's order, `Board::MakeRenderOrder`: `ro
 - Plants take `5 − x + 800` (further left draws later), and zombies 4.
 - Shadows lie on `ground` at 3, under every row's plants and zombies.
 - Dropped heads, arms and helms draw one above their zombie; other particles at the original's layer, or at their entity's order plus its offset.
-- Equal orders keep entities in creation order, with particles at an entity's order after it.
+- An explosion on a layer from `top` up still takes its row as an offset, so a lower row's covers a higher row's; the original's tie and draw by their particle systems' slots.
+- Equal orders keep a list's entities in slot order and the kinds in a fixed order, with the remains and particles at an entity's order after the entities. Particles of one order draw in the order they came, a recycled one going last as a new one would.
 - Presentation data names layers (a plant's `layer`, an explosion's `layer`; rolling bowling nuts use `projectile`) instead of numbers.
 
 #### Saves and layout
@@ -644,7 +651,7 @@ The six kinds of view keep one contract (`EntityView` in `LevelStage.ts`):
 - **Sync**: on the board `sync(entity, world)` runs every frame, and the view places its node itself. A new view is synced once with the snapshot of the moment as soon as it is made.
 - **Off the board**: plants, zombies, grid items and projectiles can also be drawn off the board (`client/view/offBoard.ts`). They are created by the same registries with no `stage` in the context, drawn as the context has them from `initialize` on, never synced, and `destroy`ed when done.
 - **Saves**: what must survive a save a view keeps itself through `snapshot` / `restore`: a zombie's body and mower-driver animation, the sun's and coins' spin. Save entries are told apart by kind (`zombie`, `item`). Plant and zombie hit flashes are the board's (`stage.flashes`, `EntityFlashes`), saved with the renderer's state in the level presentation save's `flashes`, not by each view.
-- **Shadows**: a shadow node outside the view's own (zombies, projectiles, mowers) is its `shadowNode`, which the renderer puts on the ground layer. With `draw.shadow: false` neither a plant nor a zombie builds one.
+- **Shadows**: a shadow node outside the view's own (projectiles, mowers, and a zombie off the board) is its `shadowNode`, which the renderer puts on the ground layer. A zombie on the board has no node for its shadow: it is one of the board's (`stage.shadows`, `BoardShadows`), which draws a whole row's in one batch; the view sets its `shadow`'s place, size, row and whether it shows. With `draw.shadow: false` neither a plant nor a zombie builds one.
 
 A plant's or zombie's presentation may leave out `view` (`plant` / `zombie` by default).
 
@@ -776,6 +783,18 @@ Particles:
 - Multiple simulation ticks enter the kernel in one call, and only the last state is rendered.
 - Saves retain the seed and age for deterministic replay. Destroying or restarting a player releases its kernel state.
 - Empty systems that have exhausted a fixed launch cap defer their remaining ticks and skip empty rendering, preserving their original lifetime and save age.
+- The presentation settings' `particles` gives the limits of the original's pools (TodParticleHolder). `ParticlePlayer` counts the effects and emitters alive and starts none that would not fit; the kernel counts the particles of all systems and spawns none past the limit, before drawing any random number for it.
+
+### Music
+
+The music is the original's: `MusicSystem` plays the tracker modules of the original game itself, as the original plays them with BASS.
+
+- A module tune (`ModuleTune`) is Music::PlayMusic's parts: each an instance of its module (`mainmusic.mo3` or `mainmusic_hihats.mo3`) played from an order, with only its channels heard (Music::SetupMusicFileForTune), looping by the module's own jumps. A seek stops the notes that were playing, as `BASS_MUSIC_POSRESET` does.
+- The day and night tunes run Music::UpdateMusicBurst on their parts' volumes. At night the drums start their part as the melody enters its next order, to the sample, in the player; the original jumped them a little early and pulled them back into step by their tempo (Music::MusicResync).
+- The player is C++ under `native/engine/common/music/`, on libopenmpt (`native/engine/common/third_party/libopenmpt`). Native platforms reach it through `MusicBindings.cpp` and play its mix as an engine stream (`AudioEngine::playStream`).
+- The web runs the same source compiled to WebAssembly in an AudioWorklet (`client/music/ModuleMusicWorklet.ts`) on an audio context of its own. After changing the C++, run `npm run build:music` (requires Emscripten) and commit the regenerated `assets/resources/music/pvz_music.bin`.
+- Reading a module takes a while, about a quarter of a second for `mainmusic.mo3`, so its instances are kept and reused from tune to tune. Native platforms read it on a thread of their own, and preloading a tune loads the instances it lacks; seed choosing preloads the level's tune. The worklet reads a module on the audio thread, where it would hold up the tune playing, so on the web a tune loads what it lacks as it starts.
+- A file tune (`FileTune`) is a recording a Mod supplies: one audio file, looping whole.
 
 ### Game clock
 

@@ -32,8 +32,9 @@ export interface SeedBankState {
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: ConveyorPacketState[] }
     choosing?: boolean
     /**
-     * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice) or emptied
-     * by `/seed {slot} empty`. While choosing, the chosen packets come one after another with no empty slots.
+     * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice) or one a
+     * fixed bank leaves empty (the sandboxes'). While choosing, the chosen packets come one after another with no empty
+     * slots.
      */
     packets: Array<SeedPacketState | null>
     /**
@@ -72,7 +73,18 @@ export interface EconomyState {
 export interface LevelState {
     id: string
     definition: LevelDefinition
+    /** The board it is on: its definition's. */
     board: BoardDefinition
+    /**
+     * The time of day it is at now, one of its board's `times`: its definition's, or another `/time` put it at
+     * (level/time.ts), which the save keeps.
+     */
+    time: string
+    /**
+     * The lawn turning from a time of day to another (`/time`; level/time.ts): the two, and how many of its
+     * TIME_CHANGE_TICKS it has turned; the level at the time it turns to from TIME_SWITCH_TICKS on. Kept by the save.
+     */
+    timeChange?: { from: string, to: string, ticks: number }
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
@@ -113,6 +125,8 @@ export type TutorialStep = typeof TUTORIAL_STEPS[number] | `${string}:${string}`
 export interface TutorialState {
     dialogIndex?: number
     firstAdventure: boolean
+    /** The level's script sits this first adventure out (TutorialScript.skips). */
+    skipped?: true
     step: TutorialStep
     promptAtTick?: number
     /** The advice shown this game, each once (Board::mHelpDisplayed). */

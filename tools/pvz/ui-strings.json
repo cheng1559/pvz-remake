@@ -63,9 +63,12 @@
   "DEBUG_SWITCH_COOLDOWN": "Recharge",
   "DEBUG_SWITCH_SUNCOST": "Sun cost",
   "DEBUG_SWITCH_PLANTINVINCIBLE": "Invincible plants",
+  "DEBUG_SWITCH_PLANTANYWHERE": "Plant anywhere",
   "DEBUG_SWITCH_CHEATSEED": "Cheat seeds",
   "DEBUG_SWITCH_FPS": "Frame rate",
   "DEBUG_SWITCH_HITBOXES": "Hitboxes",
+  "DEBUG_SWITCH_HP": "HP",
+  "DEBUG_SWITCH_ID": "Slot numbers",
   "DEBUG_SWITCH_BACKGROUND": "Background play",
   "DEBUG_SWITCH_MOBILE": "Mobile controls",
   "DEBUG_SWITCH_FULLSCREEN": "Full screen",
@@ -81,6 +84,8 @@
   "DEBUG_NO_WAVES": "No remaining zombie waves",
   "DEBUG_NO_MOWERS": "No lawn mowers could be changed",
   "DEBUG_ITEM_NOT_INSTALLED": "Item is not installed: %s",
+  "DEBUG_TIME_NOT_ON_BOARD": "Board has no time of day: %s",
+  "DEBUG_TIME_CHANGING": "Time of day is changing",
   "DEBUG_ACHIEVEMENT_NOT_INSTALLED": "Achievement is not installed: %s",
   "DEBUG_ACHIEVEMENT_EARNED": "Achievement already earned: %s",
   "DEBUG_ACHIEVEMENTS_OFF": "This level grants no achievements",
@@ -92,5 +97,9 @@
   "ALMANAC_PREVIOUS_PAGE": "PREVIOUS PAGE",
   "ALMANAC_NEXT_PAGE": "NEXT PAGE",
   "ALMANAC_HIDDEN_DESCRIPTION": "You shouldn't see this.",
-  "WAIT_TIME_NONE": "none"
+  "WAIT_TIME_NONE": "none",
+  "STRESS_TEST": "Stress Test",
+  "TEAMS_DEMO": "Teams Demo",
+  "SANDBOX_DAY": "Sandbox: Day",
+  "SANDBOX_NIGHT": "Sandbox: Night"
 }

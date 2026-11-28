@@ -14,7 +14,7 @@ import { withZombieTypes } from '../zombieTypes'
 import { newPlant, withPlantTypes } from '../plantTypes'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
-const board = definitions.boards['pvz:day']
+const board = definitions.boards['pvz:frontyard']
 
 function game(content = definitions) {
     const world = withPlantTypes(withZombieTypes(new World(), content), content)
@@ -24,7 +24,8 @@ function game(content = definitions) {
         id: 'pvz:test',
         definition: {
             adventureIndex: 1,
-            board: 'pvz:day',
+            board: 'pvz:frontyard',
+            time: 'day',
             activeRows: [2],
             startingSun: 0,
             seedPackets: ['pvz:peashooter'],
@@ -34,6 +35,7 @@ function game(content = definitions) {
             award: { kind: 'seed' as const, id: 'pvz:test' },
         },
         board,
+        time: 'day',
         phase: 'gameplay',
         result: 'playing' as const,
         paused: false,
@@ -196,9 +198,10 @@ test('a zombie looks for prey as CheckIfPreyCaught does: on every fourth tick of
     const { attack, bite } = definitions.zombies['pvz:normal'], body = definitions.plants['pvz:peashooter'].body
     // Coming from the right, its attack reaches a plant at `x` by 20 from here on.
     const reach = (x: number) => x + body.x + body.width - attack.x - 20
+    // In the day lawn's cell at `x` (its origin 40, its cells 80 wide), as a plant put down is.
     const put = (lawn: ReturnType<typeof game>, x: number) => {
         const entity = lawn.world.createEntity()
-        lawn.world.insert(lawn.world.plants, newPlant(lawn.world, 'pvz:peashooter', { id: entity, position: { x, y: 280, row: 2 } }))
+        lawn.world.insert(lawn.world.plants, newPlant(lawn.world, 'pvz:peashooter', { id: entity, column: Math.floor((x - 40) / 80), position: { x, y: 280, row: 2 } }))
         return entity
     }
 

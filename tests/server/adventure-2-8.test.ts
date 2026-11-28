@@ -78,7 +78,12 @@ function troupe(server: IntegratedGameServer, team = '') {
     debug(server, `/zombie dancer 3 9 ${team}`.trim())
     const leader = zombiesOf(server, 'pvz:dancer')[0].entityId
     const events = until(server, () => phaseOf(zombie(server, leader)) === 'hold', 400)
-    return { leader, events, backups: zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId) }
+    return { leader, events, backups: calledUp(events) }
+}
+
+/** The backup dancers called up, in the order of their places (Zombie::SummonBackupDancers), not the order listed. */
+function calledUp(events: readonly ServerEvent[]): number[] {
+    return events.filter(event => event.type === 'dancerCalledUp').map(event => event.data.entityId as number)
 }
 
 test('2-8 follows 2-7 with 10 waves over seven graves, brings the dancer in on waves 6 and 10 and awards the doom-shroom', () => {
@@ -108,7 +113,8 @@ test('2-8 follows 2-7 with 10 waves over seven graves, brings the dancer in on w
 test('the dancers: 500 and 270 health, drawn at 1 (the original\'s 0.8 is in their art), a backup dancer never picked for a wave', () => {
     const dancer = definitions.zombies['pvz:dancer'], backup = definitions.zombies['pvz:backup_dancer']
     assert.deepEqual([dancer.maxHealth, dancer.scale, dancer.wave], [500, undefined, { points: 5, weight: 1000, firstWave: 5 }])
-    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, undefined, 0, {}])
+    // Called up, it comes up over the 150 ticks of its rise from 200 below (ZOMBIE_BACKUP_DANCER_RISE_HEIGHT).
+    assert.deepEqual([backup.maxHealth, backup.scale, backup.wave.weight, backup.dance], [270, undefined, 0, { rise: { depth: 200, riseTicks: 150, settleTicks: 0 } }])
     assert.deepEqual({ ...lead, moonwalkTicks: { ...lead.moonwalkTicks } }, {
         moonwalkTicks: { min: 300, max: 311 }, backup: 'pvz:backup_dancer',
         troupe: [{ row: -1, x: 0 }, { row: 1, x: 0 }, { row: 0, x: -100 }, { row: 0, x: 100 }],
@@ -136,9 +142,8 @@ test('a dancer moonwalks in drawn turned round, snaps its fingers and calls up i
     // The snap plays out (9 frames at 24 a second) before they come.
     const events = until(server, () => phaseOf(zombie(server, leader.entityId)) === 'hold', 40)
     assert.ok(events.some(event => event.type === 'dancerSnapped' && event.data.music === true), 'with the disco music, few zombies about')
-    const called = events.filter(event => event.type === 'dancerCalledUp')
-    const backups = zombiesOf(server, 'pvz:backup_dancer')
-    assert.deepEqual(called.map(event => event.data.entityId), backups.map(backup => backup.entityId))
+    const called = calledUp(events), backups = called.map(id => zombie(server, id))
+    assert.deepEqual(new Set(zombiesOf(server, 'pvz:backup_dancer').map(backup => backup.entityId)), new Set(called))
     assert.deepEqual(backups.map(backup => [backup.row, backup.x]), [[1, x], [3, x], [2, x - 100], [2, x + 100]])
     assert.ok(backups.every(backup => backup.riseTicks === lead.riseTicks && phaseOf(backup) === 'rise'))
     assert.ok(backups.every(backup => backup.animations[ZOMBIE_BODY_LAYER].rate === 0), 'they come up standing still')
@@ -236,8 +241,7 @@ test('a dancer on the plants\' side calls up its troupe on its side; a mind-cont
     const plants = playing()
     const side = troupe(plants, 'plants')
     assert.ok(plants.snapshot().zombies.every(dancer => dancer.team === 'plants' && !dancer.mindControlled))
-    const backups = zombiesOf(plants, 'pvz:backup_dancer')
-    assert.deepEqual(backups.slice(2).map(backup => backup.x - Math.trunc(zombie(plants, side.leader).x)), [100, -100], 'its places turned round')
+    assert.deepEqual(side.backups.slice(2).map(id => zombie(plants, id).x - Math.trunc(zombie(plants, side.leader).x)), [100, -100], 'its places turned round')
 
     const server = playing()
     const { leader } = troupe(server)

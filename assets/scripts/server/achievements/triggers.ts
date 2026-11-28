@@ -87,14 +87,21 @@ interface PlantSelector { nocturnal?: boolean; plants?: string[] }
 
 /**
  * The level-win checks (0x41f200; Don't Pea in the Pool, Grounded, Good Morning, No Fungus Among Us): winning on one of
- * `boards` grants it, for the award page, when every plant the player planted matched `only` and none matched `never`.
+ * `boards`, at one of `times` (the original checks the background: a pool, a roof, a night or a day of any yard; either
+ * left out, any), grants it, for the award page, when every plant the player planted matched `only` and none matched
+ * `never`.
  * A selector matches nocturnal plants (Plant::IsFungus) with `nocturnal: true` and the plants it lists. Levels whose rule
  * is in `skipRules` are not checked (Whack-a-Zombie, Vasebreaker, Wall-nut Bowling).
  */
 const winPlantingTrigger: AchievementTrigger = {
     validate(settings, definitions, name) {
-        exact(settings, ['boards', 'skipRules'], name, ['only', 'never'])
-        ids(settings.boards, definitions.boards, `${name}.boards`)
+        exact(settings, ['skipRules'], name, ['boards', 'times', 'only', 'never'])
+        if (settings.boards === undefined && settings.times === undefined) throw new Error(`${name} needs boards or times`)
+        if (settings.boards !== undefined) ids(settings.boards, definitions.boards, `${name}.boards`)
+        if (settings.times !== undefined) {
+            const named = new Set(Object.values(definitions.boards).flatMap(board => Object.keys(board.times)))
+            for (const time of strings(settings.times, `${name}.times`)) if (!named.has(time)) throw new Error(`${name}.times names no board's time: ${time}`)
+        }
         strings(settings.skipRules, `${name}.skipRules`)
         if (settings.only === undefined && settings.never === undefined) throw new Error(`${name} needs only or never`)
         for (const key of ['only', 'never'] as const) {
@@ -112,8 +119,11 @@ const winPlantingTrigger: AchievementTrigger = {
             const only = settings.only as PlantSelector | undefined, never = settings.never as PlantSelector | undefined
             if (only && !matches(only) || never && matches(never)) state.broken = true
         } else if (event.type === 'levelWon' && state.broken !== true) {
-            const level = world.resources.get(LevelStateResource).definition
-            if ((settings.boards as string[]).includes(level.board) && !(settings.skipRules as string[]).includes(level.rules?.kind ?? '')) grant(false)
+            // The time it was won at, which `/time` may have changed.
+            const played = world.resources.get(LevelStateResource), level = played.definition
+            const boards = settings.boards as string[] | undefined, times = settings.times as string[] | undefined
+            if ((!boards || boards.includes(level.board)) && (!times || times.includes(played.time))
+                && !(settings.skipRules as string[]).includes(level.rules?.kind ?? '')) grant(false)
         }
     },
 }

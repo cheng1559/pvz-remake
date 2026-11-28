@@ -1,6 +1,7 @@
 import { prepareClips, showClip } from '@/client/reanim/clips'
 import { modResources } from '@/client/content/ModResources'
 import { type Node, Sprite, type SpriteFrame } from 'cc'
+import type { AttachedShadow } from '@/client/level/BoardShadows'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
@@ -45,9 +46,13 @@ export interface ProjectileViewContext {
 export class ProjectileView implements EntityView<ProjectileSnapshot> {
     /** Its shadow, a node of the board's layer: on the ground under it, drawn with the ground. */
     shadowNode?: Node
+    /** The board's hold on its shadow (BoardShadows.attach). */
+    private boardShadow?: AttachedShadow
     /** Its animation, for one its presentation animates (a mower's), once loaded. */
     protected animation?: ReanimPlayer
     private trail?: ParticlePlayer
+    /** It asked for its trail when the particle pools were full, and has none. */
+    private trailRefused = false
 
     constructor(protected readonly context: ProjectileViewContext) {}
 
@@ -82,8 +87,10 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         const frame = presentation.shadow ? ProjectileView.shadows.get(typeId) : presentation.plantShadow ? await plantShadow(content, stage) : undefined
         if (presentation.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${typeId}`)
         if (frame) {
-            this.shadowNode = uiNode({ name: 'ProjectileShadow', parent: stage.layer,
-                ...(presentation.shadow ? { anchor: { x: 0, y: 1 } } : {}), sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
+            const { node, sprite } = uiNode({ name: 'ProjectileShadow', parent: stage.layer,
+                ...(presentation.shadow ? { anchor: { x: 0, y: 1 } } : {}), sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            this.shadowNode = node
+            this.boardShadow = stage.shadows.attach(sprite!)
         }
     }
 
@@ -151,10 +158,16 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         // after a load.
         if (trail && node.isValid) {
             const order = stage.projectileOrder(projectile.typeId, projectile.row)
-            if (!this.trail?.isValid) this.trail = stage.spawnParticle(order, { ...trail, unsaved: true })
-            else stage.reorderParticle(this.trail, order)
-            this.trail.node.setPosition(left(trail.x), top + trail.y)
-            this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
+            if (this.trail?.isValid) stage.reorderParticle(this.trail, order)
+            else if (!this.trailRefused) {
+                this.trail = stage.spawnParticle(order, { ...trail, unsaved: true }) ?? undefined
+                // The particle pools were full, as Projectile::ProjectileInitialize's may be: it goes without one.
+                this.trailRefused = !this.trail
+            }
+            if (this.trail?.isValid) {
+                this.trail.node.setPosition(left(trail.x), top + trail.y)
+                this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
+            }
         }
     }
 
@@ -166,6 +179,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
     }
 
     destroy(): void {
+        this.boardShadow?.remove()
         if (this.shadowNode?.isValid) this.shadowNode.destroy()
         // Projectile::Die: its trail stays where it ended, launching no more, until its last particle is gone.
         if (this.trail?.isValid) this.trail.stop()

@@ -57,7 +57,7 @@ test("the base game's own state has fields of its own, and `extensions` holds on
     debug(bowling, '/collect move')
     debug(bowling, '/cooldown')
     assert.deepEqual(received(bowling.snapshot()).debug,
-        { cooldown: false, sunCost: true, plantInvincible: false, collect: 'move', cheatSeeds: false })
+        { cooldown: false, sunCost: true, plantInvincible: false, collect: 'move', cheatSeeds: false, plantAnywhere: false })
 
     // 2-5: no shovel and no belt; its rule shows the mallet under its kind.
     snapshot = received(start({ levelId: 'pvz:adventure-2-5', firstAdventure: false }).snapshot())
@@ -95,6 +95,6 @@ test("a plant's snapshot lists its own fields: the server's counters, and anythi
     Object.assign(plant, { chilledTicks: 30, blinkTicks: 400, recentlyEatenCounter: 5, serverOnly: 1 })
     const [shown] = received(server.snapshot()).plants
     assert.deepEqual(Object.keys(shown).sort(),
-        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'state', 'typeId', 'x', 'y'])
+        ['animations', 'chilledTicks', 'column', 'entityId', 'health', 'maxHealth', 'row', 'slot', 'state', 'typeId', 'x', 'y'])
     assert.equal(shown.chilledTicks, 30)
 })

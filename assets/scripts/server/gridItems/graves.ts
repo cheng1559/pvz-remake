@@ -25,7 +25,7 @@ export function graveCellLook(seed: number, row: number, column: number): Pick<G
     return { variant: value % GRAVE_VARIANTS, offsetX: offsets % 10 - 5, offsetY: Math.floor(offsets / 10) % 10 - 5 }
 }
 
-/** The graves on the lawn, in the order they were made. */
+/** The graves on the lawn, in slot order (EntityList). */
 export function graves(world: World): Grave[] {
     return [...world.gridItems].filter((item): item is Grave => item.typeId === GRAVE)
 }
@@ -60,7 +60,7 @@ export function placeGrave(world: World, definitions: GameplayDefinitions, row: 
 export function createGraves(world: World): void {
     const { definition: level, board } = world.resources.get(LevelStateResource)
     const seed = world.resources.get(BoardSeedResource)
-    const random = new DeterministicRng((seed + level.adventureIndex) >>> 0)
+    const random = new DeterministicRng((seed + (level.adventureIndex ?? 0)) >>> 0)
     const rowCount = Math.max(6, board.rows) // 1096 also draws the reserved sixth row on five-row lawns.
     for (const { column, count } of level.graves ?? []) {
         const available = new Set(level.activeRows)
@@ -82,7 +82,8 @@ export function pickSpecialGrave(world: World): void {
 
 /**
  * Zombie::RiseFromGrave: a zombie comes up out of a grave over `riseTicks`, on the grave's side: one of the plants' side
- * raises its zombies on that side. Every zombie a grave raises comes this way.
+ * raises its zombies on that side. Every zombie a grave raises comes this way; its event names the grave's cell, whose
+ * dirt it comes up through (ZombieView.rose).
  */
 export function raiseZombieFromGrave(world: World, definitions: GameplayDefinitions, grave: Pick<Grave, 'row' | 'column' | 'team'>,
     typeId: string, riseTicks: number): EntityId {
@@ -92,7 +93,7 @@ export function raiseZombieFromGrave(world: World, definitions: GameplayDefiniti
     const zombie = world.zombies.get(entityId)!
     zombie.riseTicks = riseTicks
     if (grave.team) zombie.team = grave.team
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieRoseFromGrave', { entityId, row: grave.row })
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieRoseFromGrave', { entityId, row: grave.row, column: grave.column })
     return entityId
 }
 

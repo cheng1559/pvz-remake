@@ -46,8 +46,7 @@
       "layers": {"body": "walk"}
     },
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:conehead": {
     "wave": {"points": 2, "weight": 4000},
@@ -61,8 +60,7 @@
     "helm": {"type": "cone", "health": 370},
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:buckethead": {
     "wave": {"points": 4, "weight": 3000},
@@ -76,8 +74,7 @@
     "helm": {"type": "bucket", "health": 1100},
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5,
-    "graveRise": true
+    "walk2Chance": 0.5
   },
   "pvz:pole_vaulter": {
     "kind": "polevaulter",
@@ -116,6 +113,7 @@
       "runSpeedPerTick": {"min": 0.66, "max": 0.68},
       "attack": {"x": -29, "y": 0, "width": 70, "height": 115},
       "bowlingAttack": {"x": -229, "y": 0, "width": 270, "height": 115},
+      "airborneAttack": {"x": -40, "y": 0, "width": 100, "height": 115},
       "landingOffset": 150,
       "landedAttack": {"x": 50, "y": 0, "width": 20, "height": 115},
       "evades": ["pvz:mine"]
@@ -236,7 +234,7 @@
   },
   "pvz:backup_dancer": {
     "kind": "dancer",
-    "facingRightOffsetX": 11.71,
+    "facingRightOffsetX": 14.57,
     "wave": {"points": 1, "weight": 0, "firstWave": 1},
     "maxHealth": 270,
     "boardEdgeX": -130,
@@ -245,7 +243,7 @@
     "body": {"x": 36, "y": 0, "width": 42, "height": 115},
     "attack": {"x": 50, "y": 0, "width": 20, "height": 115},
     "bite": {"damage": 4, "cadenceTicks": 4},
-    "dance": {},
+    "dance": {"rise": {"depth": 200, "riseTicks": 150, "settleTicks": 0}},
     "animation": {
       "clips": {
         "idle": {"frames": 22, "fps": 12},

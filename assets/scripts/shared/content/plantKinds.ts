@@ -1,6 +1,12 @@
 import { BASE_MOD_ID } from '@/shared/mod'
 
 /** The scaredy-shroom's fright (Plant::UpdateScaredyShroom's mState): calm, ducking, hidden, coming back up. */
+/**
+ * Plant::UpdateAbilities and UpdateReanim: the ticks a plant takes to wake, stretching down and up on its base as it
+ * does: the last 70 of the 100 a coffee bean sets on mWakeUpCounter, whose first 30 are the bean's own.
+ */
+export const PLANT_WAKE_TICKS = 70
+
 export type ScaredyShroomPhase = 'calm' | 'lowering' | 'scared' | 'raising'
 
 export const SCAREDY_SHROOM_PHASES: readonly ScaredyShroomPhase[] = ['calm', 'lowering', 'scared', 'raising']

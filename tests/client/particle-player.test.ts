@@ -160,22 +160,34 @@ test('kernel arrays start clear when released memory is reused', async () => {
     finally { api.release(next) }
 })
 
-test('a finished recyclable particle is reused by the next spawn of its effect and skipped by snapshots', async () => {
+type FakeNode = { name: string, parent: FakeNode | null, children: FakeNode[], isValid: boolean, [key: string]: any }
+
+/**
+ * The particle player on nodes of its own, with effects of `emitters` emitters each (by ID, one if not named) whose
+ * particles last 5 ticks, one launched by each emitter.
+ */
+async function particlePlayer(emitters: Record<string, number> = {}) {
     const kernelModule = await import('@/shared/kernel/index')
     const particles = await import('@/shared/kernel/particles')
     const snapshots = await import('@/client/particle/ParticlePlayerSnapshot')
     const constant = (value: number) => ({ nodes: [{ time: 0, low: value, high: value }] })
-    const definition = parseDefinition({ emitters: [{ sprite: 'pvz:test', systemDuration: constant(50),
-        particleDuration: constant(5), spawnMinActive: constant(1), spawnMaxLaunched: constant(1) }] })!
-    const assets = { definition, packed: particles.packParticleEmitters(definition.emitters),
-        emitters: [{ definition: definition.emitters[0], frame: {}, geometry: kernelModule.kernel().f64(kernelModule.IMAGE), cel: { width: 1, height: 1 } }] }
-    type FakeNode = { name: string, parent: FakeNode | null, children: FakeNode[], isValid: boolean, [key: string]: any }
+    const effect = (count: number) => {
+        const definition = parseDefinition({ emitters: Array.from({ length: count }, () => ({ sprite: 'pvz:test', systemDuration: constant(50),
+            particleDuration: constant(5), spawnMinActive: constant(1), spawnMaxLaunched: constant(1) })) })!
+        return { definition, packed: particles.packParticleEmitters(definition.emitters),
+            emitters: definition.emitters.map(emitter => ({ definition: emitter, frame: {}, geometry: kernelModule.kernel().f64(kernelModule.IMAGE), cel: { width: 1, height: 1 } })) }
+    }
+    const effects = new Map<string, ReturnType<typeof effect>>()
+    const assets = (id: string) => effects.get(id) ?? effects.set(id, effect(emitters[id] ?? 1)).get(id)!
+    const nodes: FakeNode[] = []
     const makeNode = (name: string, parent: FakeNode | null): FakeNode => {
         const node: FakeNode = { name, parent, children: [], isValid: true, worldPosition: { x: 0, y: 0 }, scaleX: 1,
             setPosition() {}, setScale(x: number) { node.scaleX = x }, addComponent(type: new () => any) { const component = new type(); component.node = node; return component },
+            setSiblingIndex(index: number) { const siblings = node.parent!.children; siblings.splice(siblings.indexOf(node), 1); siblings.splice(index, 0, node) },
             once(_event: string, listener: () => void) { node.destroyed = listener },
-            destroy() { node.isValid = false; node.destroyed?.() } }
+            destroy() { if (!node.isValid) return; node.isValid = false; node.destroyed?.() } }
         parent?.children.push(node)
+        nodes.push(node)
         return node
     }
     const modules: Record<string, unknown> = {
@@ -187,11 +199,19 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfParticlesEnabled: true } },
         '@/shared/content/particle': { PARTICLE_STEP_SECONDS: 0.01 },
         '@/shared/kernel/index': kernelModule, '@/shared/kernel/particles': particles,
-        './ParticleAssets': { ParticleAssets: { get: () => assets } }, './ParticlePlayerSnapshot': snapshots,
+        './ParticleAssets': { ParticleAssets: { get: assets } }, './ParticlePlayerSnapshot': snapshots,
     }
     const { ParticlePlayer } = loadScript('assets/scripts/client/particle/ParticlePlayer.ts',
         (id: string) => modules[id] ?? (id === '@/shared/content/renderOrder' ? renderOrderModule : {}))
-    const parent = makeNode('Holder', null)
+    // The kernel's systems and its count of particles are shared by every test: each leaves none of its own alive.
+    const clear = () => { for (const node of nodes) node.destroy() }
+    return { ParticlePlayer, parent: makeNode('Holder', null), kernel: kernelModule.kernel(), clear }
+}
+
+test('a finished recyclable particle is reused by the next spawn of its effect and skipped by snapshots', async t => {
+    const { ParticlePlayer, parent, clear } = await particlePlayer()
+    t.after(clear)
+    const snapshots = await import('@/client/particle/ParticlePlayerSnapshot')
     const spawn = (mirrored = false) => ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0, mirrored, recycle: true })
     const first = spawn(true)
     assert.equal(first.node.scaleX, -1)
@@ -199,11 +219,12 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     assert.equal(first.node.isValid, true, 'a finished recyclable particle keeps its node')
     assert.equal(first.live, false)
     assert.throws(() => first.snapshot(), /not ready/)
+    const later = ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0 })
     const second = spawn()
     assert.equal(second, first)
     assert.equal(second.live, true)
     assert.equal(second.node.scaleX, 1, 'a recycled particle drops its old facing')
-    assert.equal(parent.children.length, 1)
+    assert.deepEqual(parent.children, [later.node, first.node], 'it goes last, over what came before it, as a new one would')
     assert.equal(spawn() === first, false, 'a playing particle is not reused')
     const saved = spawn(true).snapshot()
     assert.equal(saved.mirrored, true)
@@ -229,6 +250,55 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     chewing.setPaused(false)
     chewing.update(0.01)
     assert.equal(chewing.ageTicks, age + 1)
+})
+
+test('TodParticleHolder::AllocParticleSystem: no effect starts while as many are alive as the limit, or its emitters would not fit', async t => {
+    const { ParticlePlayer, parent, kernel, clear } = await particlePlayer({ 'pvz:two': 2 })
+    ParticlePlayer.useLimits({ systems: 3, emitters: 3, particles: 1024 })
+    t.after(() => {
+        clear()
+        ParticlePlayer.useLimits({ systems: Infinity, emitters: Infinity, particles: Infinity })
+        kernel.particlesLimit(65536)
+    })
+    const spawn = (id = 'pvz:one') => ParticlePlayer.spawn({ parent, id, x: 0, y: 0 })
+    const alive = () => [ParticlePlayer.alive.systems, ParticlePlayer.alive.emitters]
+    const first = spawn(), second = spawn()
+    assert.equal(spawn('pvz:two'), null, 'two emitters more than the three')
+    const third = spawn()
+    assert.deepEqual(alive(), [3, 3])
+    assert.equal(spawn(), null, 'three effects alive')
+    // A save had room for what it kept: it comes back whatever is alive, and counts.
+    const restored = ParticlePlayer.restore({ parent, x: 0, y: 0, snapshot: third.snapshot() })
+    assert.deepEqual(alive(), [4, 4])
+    // A finished effect, and one whose node is gone, give their places back.
+    first.update(0.2)
+    assert.equal(first.node.isValid, false)
+    restored.node.destroy()
+    second.node.destroy()
+    assert.deepEqual(alive(), [1, 1])
+    assert.notEqual(spawn('pvz:two'), null)
+    assert.deepEqual(alive(), [2, 3])
+})
+
+test('TodParticleEmitter::SpawnParticle: no particle is spawned while as many are alive as the limit, over all systems', async () => {
+    const { kernel } = await import('@/shared/kernel/index')
+    const { KernelParticles, packParticleEmitters } = await import('@/shared/kernel/particles')
+    const constant = (value: number) => ({ nodes: [{ time: 0, low: value, high: value }] })
+    const packed = packParticleEmitters(parseDefinition({ emitters: [{ sprite: 'pvz:test', systemDuration: constant(50),
+        particleDuration: constant(40), spawnMinActive: constant(3), spawnMaxLaunched: constant(3) }] })!.emitters)
+    kernel().particlesLimit(4)
+    const first = new KernelParticles(packed, 1, 1), second = new KernelParticles(packed, 2, 1)
+    try {
+        first.step()
+        second.step()
+        assert.deepEqual([first.counts[0], second.counts[0]], [3, 1], 'four at most, the two systems together')
+        second.step()
+        assert.equal(second.counts[0], 1, 'none while there is no room')
+        // A system destroyed with particles alive leaves their room to the rest.
+        first.dispose()
+        second.step()
+        assert.equal(second.counts[0], 3)
+    } finally { first.dispose(); second.dispose(); kernel().particlesLimit(65536) }
 })
 
 test('particle frames follow AnimationRate and Animated as in TodParticleEmitter', async () => {

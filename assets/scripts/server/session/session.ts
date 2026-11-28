@@ -1,5 +1,5 @@
 import { Schedule, World } from '@/server/state/World'
-import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
+import { streetZombies, type GameplayDefinitions, type GameplayLevels } from '@/shared/content/gameplay'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -7,6 +7,7 @@ import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
 import { BoardSeedResource, EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/resources'
 import { createConveyorSystem } from '../level/conveyor'
+import { createTimeChangeSystem } from '../level/time'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../items/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
@@ -26,7 +27,7 @@ import { PlantFactoryResource } from '../plants/Plant'
 import { createProjectileSystem } from '../projectiles/projectiles'
 import { ProjectileMotionsResource } from '../projectiles/motions'
 import { ProjectileFactoryResource } from '../projectiles/Projectile'
-import { createWaveSystem } from '../level/waves'
+import { createWaveSystem, waveZombieCounts } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieFactoryResource } from '../zombies/Zombie'
@@ -123,6 +124,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
     const systems = [
         { phase: 'command', system: { id: 'pvz:commands', run: () => processCommandPhase(session) } },
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
+        { phase: 'spawn', system: createTimeChangeSystem() },
         { phase: 'spawn', system: createWaveSystem(definitions) },
         { phase: 'spawn', system: createBoardIceSystem() },
         { phase: 'spawn', system: createCraterSystem() },
@@ -156,25 +158,30 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         id: packet.levelId,
         definition: level,
         board,
+        time: level.time,
         phase: 'intro',
         result: 'playing',
         paused: false,
     })
+    // `/cheatseed` on as the level starts counts every seed-slot upgrade as bought, for this level only.
+    const { baseSlots, maxSlots } = definitions.seedBank
+    const packetUpgrades = packet.cheatSeeds ? maxSlots - baseSlots : packet.packetUpgrades ?? 0
     world.resources.set(EconomyStateResource, {
         sun: Math.min(definitions.economy.maxSun, level.startingSun),
         money: packet.initialMoney,
         pendingSunSpend: 0,
-        packetUpgrades: packet.packetUpgrades ?? 0,
+        packetUpgrades,
         ownedUpgrades: packet.packetUpgrades ?? 0,
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
     world.resources.set(BoardSeedResource, packet.randomSeed)
-    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packet.packetUpgrades)
+    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
-        packets: 'seeds' in bank ? bank.seeds.map(({ seedId, team }) => {
-            const cooldown = openingCooldown(world, definitions, seedId)
+        packets: 'seeds' in bank ? bank.seeds.map(card => {
+            if (!card) return null
+            const { seedId, team } = card, cooldown = openingCooldown(world, definitions, seedId)
             return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown, ...(team ? { team } : {}) }
         }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),
@@ -192,5 +199,8 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     if (packet.firstAdventure) for (const plant of levelTutorial(world)?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
     // CutScene::PlaceLawnItems: a mower for every row in play (Board::InitLawnMowers), which the intro rolls in.
     for (const row of level.activeRows) createMower(world, row)
+    // CutScene::PlaceStreetZombies: the street's zombies, which only the client draws, hold slots of the zombies' list
+    // until the intro is over (completeIntro), as the original's do.
+    world.zombies.reserve(streetZombies(level, waveZombieCounts(world), definitions.flagWave.zombie).length)
     return session
 }

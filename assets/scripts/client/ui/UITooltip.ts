@@ -182,8 +182,11 @@ export class UITooltip extends Component {
     }
 }
 
-/** Original tooltip wrapping breaks at the first separator at/after the target width. */
-function wrapTooltipText(text: string, measure: (text: string) => number, maxWidth: number): string[] {
+/**
+ * ToolTipWidget::GetLines: a line breaks at its first space at or past the target width, and at each newline. Text
+ * without spaces, as Chinese is, breaks only at the newlines it is written with, as the official Chinese text has them.
+ */
+export function wrapTooltipText(text: string, measure: (text: string) => number, maxWidth: number): string[] {
     const chars = Array.from(text.replace(/\r/g, ''))
     const lines: string[] = []
     let start = 0, width = 0
@@ -196,21 +199,13 @@ function wrapTooltipText(text: string, measure: (text: string) => number, maxWid
             continue
         }
         width += measure(char)
-        const space = char === ' '
-        const canBreak = space || (isAutoBreakChar(char) && i > start
-            && !'〉》」』】〕〗〙〛）］｝’”、。，．！？：；'.includes(char)
-            && !'〈《「『【〔〖〘〚（［｛‘‚‛“'.includes(chars[i - 1]))
-        if (width < maxWidth || !canBreak) continue
+        if (char !== ' ' || width < maxWidth) continue
         lines.push(chars.slice(start, i).join(''))
-        start = space ? i + 1 : i
+        start = i + 1
         while (chars[start] === ' ') start++
         i = start - 1
         width = 0
     }
     if (start < chars.length) lines.push(chars.slice(start).join(''))
     return lines
-}
-
-function isAutoBreakChar(char: string): boolean {
-    return /[\u2018-\u201d\u2600-\u27bf\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff01-\uff60\u{1f300}-\u{1faff}\u{20000}-\u{2fa1f}]/u.test(char)
 }

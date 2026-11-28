@@ -13,6 +13,9 @@ import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 
 const { ccclass } = _decorator
+/** AchievementsWidget's scroll speeds: an arrow press's (KeyDown, mDefaultScrollValue) and the More rock's (MouseUp). */
+const KEY_SPEED = 30
+const MORE_SPEED = 22
 const SPRITES = [
     'selectorscreen_achievements_bg', 'acheesements_hole_tile', 'acheesements_china',
     'acheesements_bookworm', 'acheesements_bejeweled', 'acheesements_chuzzle',
@@ -27,10 +30,14 @@ export class AchievementScreen extends Component {
     private more!: UIButton
     private showingTop = false
     private readonly icons = new Map<string, Sprite>()
-    /** AchievementsWidget::KeyDown speed: each arrow press sets it to 30, then it drops by 1 every 10ms. */
-    private keySpeed = 0
-    private keyDirection = 0
-    private keyTime = 0
+    /**
+     * AchievementsWidget::Update's speed: it drops by 1 every 10ms and the list moves that far each time, from 30 for
+     * an arrow press (29 + 28 + ... + 1, 435px) and from 22 for the More rock (231px).
+     */
+    private scrollSpeed = 0
+    /** 1 down the list, -1 up. */
+    private scrollDirection = 0
+    private scrollTime = 0
 
     async initialize(ui: UI, onBack: () => void): Promise<void> {
         const [data, frames] = await Promise.all([
@@ -100,14 +107,7 @@ export class AchievementScreen extends Component {
             x: 710, y: 470, width: rock.originalSize.width - 25, height: rock.originalSize.height - 50,
             imageBox: { x: -10, y: -20, width: moreImage.originalSize.width, height: moreImage.originalSize.height },
             releaseToNormalOnPressOut: true, pressSound: null,
-            onClick: () => {
-                this.showingTop = !this.showingTop
-                // Only scrolling down to the rest of the list plays the rock sound.
-                more.pressSound = this.showingTop ? null : SoundEffect.GraveButton
-                this.keySpeed = 0
-                more.onStateChange?.(more.isHovering ? 'hover' : 'normal')
-                this.scroll.scrollTo(this.scroll.offset + (this.showingTop ? 230 : -230), 0.25)
-            },
+            onClick: () => this.pressMore(),
         })
         more.changeCursor = false
         more.pressSound = SoundEffect.GraveButton
@@ -128,7 +128,7 @@ export class AchievementScreen extends Component {
             if (icon) icon.color = new Color(255, 255, 255, item.earned ? 255 : 32)
         }
         this.scroll.offset = 0
-        this.keySpeed = 0
+        this.scrollSpeed = 0
         this.showingTop = false
         this.more.pressSound = SoundEffect.GraveButton
         this.more.onStateChange?.('normal')
@@ -142,17 +142,34 @@ export class AchievementScreen extends Component {
     onDisable(): void {
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.off(Input.EventType.KEY_PRESSING, this.onKeyDown, this)
-        this.keySpeed = 0
+        this.scrollSpeed = 0
     }
 
     update(dt: number): void {
-        if (this.keySpeed <= 0) return
-        this.keyTime += gameClock.delta(dt)
-        while (this.keyTime >= 0.01 && this.keySpeed > 0) {
-            this.keyTime -= 0.01
-            this.keySpeed--
-            this.scroll.offset += this.keyDirection * this.keySpeed
+        if (this.scrollSpeed <= 0) return
+        this.scrollTime += gameClock.delta(dt)
+        while (this.scrollTime >= 0.01 && this.scrollSpeed > 0) {
+            this.scrollTime -= 0.01
+            this.scrollSpeed--
+            this.scroll.offset += this.scrollDirection * this.scrollSpeed
         }
+    }
+
+    /** Starts the list scrolling from this speed, 1 down or -1 up; a scroll on its way takes them instead of adding to them. */
+    private scrollFrom(speed: number, direction: number): void {
+        if (this.scrollSpeed <= 0) this.scrollTime = 0
+        this.scrollSpeed = speed
+        this.scrollDirection = direction
+    }
+
+    /** AchievementsWidget::MouseUp on the More rock: down to the rest of the list, or in its Top state back up. */
+    private pressMore(): void {
+        const more = this.more
+        this.showingTop = !this.showingTop
+        // Only scrolling down to the rest of the list plays the rock sound.
+        more.pressSound = this.showingTop ? null : SoundEffect.GraveButton
+        more.onStateChange?.(more.isHovering ? 'hover' : 'normal')
+        this.scrollFrom(MORE_SPEED, this.showingTop ? 1 : -1)
     }
 
     private onKeyDown(event: EventKeyboard): void {
@@ -160,9 +177,7 @@ export class AchievementScreen extends Component {
         if (!this.scroll || UIHoverManager.isInputBlocked || modal && !this.node.isChildOf(modal)) return
         if (event.keyCode !== KeyCode.ARROW_UP && event.keyCode !== KeyCode.ARROW_DOWN) return
         // Repeats reset the speed rather than adding to it, so holding a key scrolls at most 29px per tick.
-        if (this.keySpeed <= 0) this.keyTime = 0
-        this.keySpeed = 30
-        this.keyDirection = event.keyCode === KeyCode.ARROW_UP ? -1 : 1
+        this.scrollFrom(KEY_SPEED, event.keyCode === KeyCode.ARROW_UP ? -1 : 1)
         event.propagationStopped = true
     }
 }

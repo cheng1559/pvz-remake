@@ -11,6 +11,9 @@ import type { IceTrapPlacement, IceTrapPresentation } from '@/shared/content/pre
 export class IceTrapView {
     private constructor(private readonly back: Node, private readonly front: Node, private readonly placement: IceTrapPlacement) {}
 
+    /** The ice is shown (sync): it is made hidden. */
+    private shown = false
+
     /** The ice around `picture`, a child of `parent`, at `placement` from the entity's corner; hidden until it is frozen. */
     static async create(parent: Node, picture: Node, look: IceTrapPresentation, placement: IceTrapPlacement): Promise<IceTrapView> {
         const [back, front] = await Promise.all([look.back, look.front].map(id => modResources.sprite(id)))
@@ -27,8 +30,10 @@ export class IceTrapView {
      * turned round across that width by its own nodes, not by this one's, so the ice turns with it.
      */
     sync(frozen: boolean, mirrorWidth?: number): void {
+        // Every entity every frame, nearly all of them not frozen and hidden already: those ask the nodes nothing.
+        if (!frozen && !this.shown) return
         if (!this.back.isValid || !this.front.isValid) return
-        this.back.active = this.front.active = frozen
+        this.back.active = this.front.active = this.shown = frozen
         if (!frozen) return
         const { x, y, scale = 1 } = this.placement, mirrored = mirrorWidth !== undefined
         for (const node of [this.back, this.front]) {

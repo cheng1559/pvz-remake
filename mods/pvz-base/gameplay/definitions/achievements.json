@@ -153,8 +153,8 @@
     },
     "trigger": {
       "kind": "pvz:win-planting",
-      "boards": [
-        "pvz:day"
+      "times": [
+        "day"
       ],
       "skipRules": [
         "pvz:bowling",
@@ -175,8 +175,8 @@
     },
     "trigger": {
       "kind": "pvz:win-planting",
-      "boards": [
-        "pvz:night"
+      "times": [
+        "night"
       ],
       "skipRules": [
         "pvz:bowling",

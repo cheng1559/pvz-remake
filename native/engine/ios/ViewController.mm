@@ -34,44 +34,66 @@
 namespace {
 //    cc::Device::Orientation _lastOrientation;
 
-void playExplosionFeedback() {
+/** A rumble `duration` long at `intensity`, fading to none when `fades`. */
+CHHapticPattern *rumblePattern(NSTimeInterval duration, float intensity, BOOL fades, NSError **error) {
+    CHHapticEventParameter *strength = [[[CHHapticEventParameter alloc]
+        initWithParameterID:CHHapticEventParameterIDHapticIntensity value:intensity] autorelease];
+    CHHapticEventParameter *sharpness = [[[CHHapticEventParameter alloc]
+        initWithParameterID:CHHapticEventParameterIDHapticSharpness value:0.3] autorelease];
+    CHHapticEvent *event = [[[CHHapticEvent alloc] initWithEventType:CHHapticEventTypeHapticContinuous
+        parameters:@[strength, sharpness] relativeTime:0 duration:duration] autorelease];
+    NSArray<CHHapticParameterCurve *> *curves = @[];
+    if (fades) {
+        CHHapticParameterCurveControlPoint *start = [[[CHHapticParameterCurveControlPoint alloc]
+            initWithRelativeTime:0 value:1.0] autorelease];
+        CHHapticParameterCurveControlPoint *end = [[[CHHapticParameterCurveControlPoint alloc]
+            initWithRelativeTime:duration value:0.0] autorelease];
+        curves = @[[[[CHHapticParameterCurve alloc] initWithParameterID:CHHapticDynamicParameterIDHapticIntensityControl
+            controlPoints:@[start, end] relativeTime:0] autorelease]];
+    }
+    return [[[CHHapticPattern alloc] initWithEvents:@[event] parameterCurves:curves error:error] autorelease];
+}
+
+/**
+ * Core Haptics' engine, running; nil where the device has none. Making and starting it takes about 50 ms on the main
+ * thread, the game's, so the view controller does it as the app starts rather than at the first explosion. Once it
+ * runs, a start costs nothing, and one stopped since starts again.
+ */
+API_AVAILABLE(ios(13.0)) CHHapticEngine *rumbleEngine() {
+    if (![CHHapticEngine capabilitiesForHardware].supportsHaptics) return nil;
+    static CHHapticEngine *engine;
+    NSError *error = nil;
+    if (!engine) {
+        engine = [[CHHapticEngine alloc] initAndReturnError:&error];
+        engine.playsHapticsOnly = YES;
+        engine.autoShutdownEnabled = YES;
+    }
+    if (!engine || ![engine startAndReturnError:&error]) {
+        NSLog(@"[Haptics] Failed to start: %@", error);
+        return nil;
+    }
+    return engine;
+}
+
+/** The rumbles, with Core Haptics: an explosion's 0.28 s from full intensity to none, a pulse's 0.15 s held at 0.35. */
+void playRumble(NSString *style) {
     if (@available(iOS 13.0, *)) {
-        if (![CHHapticEngine capabilitiesForHardware].supportsHaptics) return;
-        static CHHapticEngine *engine;
-        static CHHapticPattern *pattern;
+        CHHapticEngine *engine = rumbleEngine();
+        if (!engine) return;
+        static NSMutableDictionary<NSString *, CHHapticPattern *> *patterns;
         static id<CHHapticPatternPlayer> player;
         NSError *error = nil;
-        if (!engine) {
-            engine = [[CHHapticEngine alloc] initAndReturnError:&error];
-            engine.playsHapticsOnly = YES;
-            engine.autoShutdownEnabled = YES;
-        }
-        if (!engine || ![engine startAndReturnError:&error]) {
-            NSLog(@"[Haptics] Failed to start: %@", error);
-            return;
-        }
+        if (!patterns) patterns = [[NSMutableDictionary alloc] init];
+        CHHapticPattern *pattern = patterns[style];
         if (!pattern) {
-            const NSTimeInterval duration = 0.28;
-            CHHapticEventParameter *intensity = [[[CHHapticEventParameter alloc]
-                initWithParameterID:CHHapticEventParameterIDHapticIntensity value:1.0] autorelease];
-            CHHapticEventParameter *sharpness = [[[CHHapticEventParameter alloc]
-                initWithParameterID:CHHapticEventParameterIDHapticSharpness value:0.3] autorelease];
-            CHHapticEvent *event = [[[CHHapticEvent alloc] initWithEventType:CHHapticEventTypeHapticContinuous
-                parameters:@[intensity, sharpness] relativeTime:0 duration:duration] autorelease];
-            CHHapticParameterCurveControlPoint *start = [[[CHHapticParameterCurveControlPoint alloc]
-                initWithRelativeTime:0 value:1.0] autorelease];
-            CHHapticParameterCurveControlPoint *end = [[[CHHapticParameterCurveControlPoint alloc]
-                initWithRelativeTime:duration value:0.0] autorelease];
-            CHHapticParameterCurve *fade = [[[CHHapticParameterCurve alloc]
-                initWithParameterID:CHHapticDynamicParameterIDHapticIntensityControl
-                controlPoints:@[start, end] relativeTime:0] autorelease];
-            pattern = [[CHHapticPattern alloc] initWithEvents:@[event] parameterCurves:@[fade] error:&error];
+            pattern = [style isEqualToString:@"explosion"] ? rumblePattern(0.28, 1.0, YES, &error) : rumblePattern(0.15, 0.35, NO, &error);
+            if (pattern) patterns[style] = pattern;
         }
         if (player) [player stopAtTime:CHHapticTimeImmediate error:nil];
         [player release];
         player = pattern ? [[engine createPlayerWithPattern:pattern error:&error] retain] : nil;
         if (!player || ![player startAtTime:CHHapticTimeImmediate error:&error]) {
-            NSLog(@"[Haptics] Failed to play explosion: %@", error);
+            NSLog(@"[Haptics] Failed to play %@: %@", style, error);
         }
     }
 }
@@ -83,10 +105,18 @@ void playExplosionFeedback() {
 
 @implementation ViewController
 
+- (instancetype)init {
+    if ((self = [super init])) {
+        // The rumbles' engine, ready before the first explosion (rumbleEngine).
+        if (@available(iOS 13.0, *)) rumbleEngine();
+    }
+    return self;
+}
+
 + (void)playHapticFeedback:(NSString *)style {
     void (^feedback)(void) = ^{
         if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
-        if ([style isEqualToString:@"explosion"]) { playExplosionFeedback(); return; }
+        if ([style isEqualToString:@"explosion"] || [style isEqualToString:@"pulse"]) { playRumble(style); return; }
         // Keep generators alive so repeated interactions do not recreate the haptic engine.
         static UIImpactFeedbackGenerator *light;
         static UIImpactFeedbackGenerator *medium;

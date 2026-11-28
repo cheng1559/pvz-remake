@@ -27,6 +27,7 @@
 #include "bindings/jswrapper/SeApi.h"
 
 bool registerPvzKernel(se::Object* global);
+bool registerPvzMusic(se::Object* global);
 
 #ifndef SCRIPT_XXTEAKEY
 #define SCRIPT_XXTEAKEY "";
@@ -132,6 +133,7 @@ int Game::init() {
   _xxteaKey = SCRIPT_XXTEAKEY;
 
   se::ScriptEngine::getInstance()->addPermanentRegisterCallback(registerPvzKernel);
+  se::ScriptEngine::getInstance()->addPermanentRegisterCallback(registerPvzMusic);
 
   BaseGame::init();
   return 0;

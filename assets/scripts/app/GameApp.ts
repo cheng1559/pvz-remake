@@ -27,6 +27,7 @@ import {
 } from './LevelController'
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
+import { benchmarkRunning, launchBenchmarkRequest, runLaunchedBenchmark } from './Benchmark'
 import { createProfileStore } from '@/server/menu/profileStore'
 import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
@@ -36,7 +37,7 @@ import { showDebugCliDialog } from '@/client/dialogs/DebugCliDialog'
 import { showPackageDialog } from '@/client/dialogs/PackageDialog'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import type { DebugCliResult } from '@/shared/debug/DebugCli'
+import { debugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
@@ -132,7 +133,15 @@ export class GameApp extends Component {
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
         // Animations and particles draw through the kernel and its material; the kernel may compile asynchronously on the web.
-        void Promise.all([loadKernel(), loadKernelMaterial()]).then(() => this.node?.isValid && this.navigate('splash'))
+        const benchmark = launchBenchmarkRequest()
+        void Promise.all([loadKernel(), loadKernelMaterial()]).then(async () => {
+            if (!this.node?.isValid) return
+            await this.navigate('splash')
+            if (!benchmark || !this.controller) return
+            // Once the loading screen has loaded everything, as for play: its loading would go on under the frames measured.
+            await this.menu?.entered
+            await runLaunchedBenchmark(benchmark, this.controller, levelId => this.navigate('restart', levelId))
+        })
         void UI.load().then(ui => {
             if (!this.canShowGameUI) return
             initializeViewport()
@@ -157,7 +166,7 @@ export class GameApp extends Component {
             active = next
             if (active) { savedOnLoss = false; return }
             this.spacePressed = false
-            if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading &&
+            if (GameDebugSettings.autoPauseEnabled && this.canShowGameUI && !this.currentPage && !this.loading && !benchmarkRunning() &&
                 !this.dialog && !this.debugCliOpen && !UIDialog.isOpen && this.controller?.canPause('focusLoss')) {
                 savedOnLoss = true
                 void this.openDialog('pause', 'focusLoss')
@@ -168,6 +177,7 @@ export class GameApp extends Component {
         const hide = () => {
             hidden = true
             sync()
+            SoundSystem.windowHidden()
             if (!savedOnLoss) { savedOnLoss = true; this.save() }
         }
         const show = () => {
@@ -550,7 +560,9 @@ export class GameApp extends Component {
         let result: DebugCliResult | null = null
         let ui: UI
         try {
-            const catalog = running ? controller.debugCommand('catalog').catalog : undefined
+            // The installed content's names, in a level or out of one, from the gameplay content levels are built from.
+            // Content that fails to load (a broken Mod) leaves them out: the CLI opens all the same, for /mod to mend it.
+            const catalog = await loadGameplayContent().then(({ definitions, levels }) => debugCliCatalog(definitions, levels), () => undefined)
             ui = await UI.load()
             if (!this.canShowGameUI) return
             result = await showDebugCliDialog(this.node, ui,
@@ -563,7 +575,9 @@ export class GameApp extends Component {
         } finally {
             releaseClock()
             this.debugCliOpen = false
-            if (!result?.action && this.node?.isValid && running && !wasPaused && this.currentPage === page) controller.resume()
+            // `/step` runs the level on from where the CLI found it.
+            const resumes = !result?.action || result.action === 'step'
+            if (resumes && this.node?.isValid && running && !wasPaused && this.currentPage === page) controller.resume()
         }
         if (!this.canShowGameUI || !result) return
         if (!result.ok) { this.showAdvice('key' in result ? ui.format(result.key, result.args) : result.message); return }
@@ -583,6 +597,7 @@ export class GameApp extends Component {
                     if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
                 }
                 break
+            case 'step': if (controller.isRunning()) controller.fastForward(result.ticks!); break
             case 'restart': await this.navigate('restart'); break
             case 'level': await this.navigate('restart', result.levelId); break
             case 'goto': await this.navigate(result.page!); break

@@ -3,9 +3,8 @@ import type { GameSystem, World } from '@/server/state/World'
 import { LevelStateResource, RandomResource } from '../state/resources'
 import { stepLayers } from '@/shared/content/animation'
 import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
-import { zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { zombieRect } from '../combat/targets'
 import { mowsZombie } from '../projectiles/MowingProjectile'
-import { readyMowers } from '../level/lawn'
 import { Mower } from './Mower'
 
 /**
@@ -30,18 +29,24 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
-            const ready = readyMowers(world)
-            if (ready.size) for (const zombie of [...world.zombies]) {
+            // Each row's waiting mower and the span it sets off from (LawnMower::GetLawnMowerAttackRect, in whole pixels),
+            // made once a run rather than for each zombie.
+            const ready: ({ mower: Mower, left: number, right: number } | undefined)[] = []
+            for (const mower of world.mowers) {
+                const hitbox = definitions.projectiles[mower.typeId].hitbox, left = Math.trunc(mower.position.x) + hitbox.x
+                ready[mower.position.row] = { mower, left, right: left + hitbox.width }
+            }
+            // The list as it goes: a mower setting off takes only the zombie that set it off out of it.
+            if (ready.length) for (const zombie of world.zombies) {
                 const { position } = zombie
-                const mower = ready.get(position.row)
+                const waiting = ready[position.row]
                 // Dead zombies cannot set a mower off themselves (LawnMower::Update).
-                if (mower === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
-                const waiting = world.mowers.get(mower)!, hitbox = definitions.projectiles[waiting.typeId].hitbox
-                const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-                const left = waiting.position.x + hitbox.x
-                if (Math.min(left + hitbox.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
-                    ready.delete(position.row)
-                    waiting.setOff(world, definitions, zombie)
+                if (waiting === undefined || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
+                // Against Zombie::GetZombieRect, in whole pixels too.
+                const body = zombieRect(world, definitions, zombie)
+                if (Math.min(waiting.right, body.x + body.width) > Math.max(waiting.left, body.x)) {
+                    ready[position.row] = undefined
+                    waiting.mower.setOff(world, definitions, zombie)
                 }
             }
             // A mowed plant is squashed as a mowed zombie is, by the driver it plays, then gone.

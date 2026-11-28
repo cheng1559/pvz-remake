@@ -40,13 +40,16 @@ function restore(save: ReturnType<IntegratedGameServer['save']>) {
     return server
 }
 
-test('grave zombies default to Board::PickGraveRisingZombieType over the zombies each level allows, and lawns with graves name theirs', () => {
+test("grave zombies default to Board::PickGraveRisingZombieType: the board's that each level's zombies include (mZombieAllowed)", () => {
     const picks = (id: string) => levels.levels[`pvz:adventure-${id}`].graveZombies!.map(entry => `${entry.id.slice(4)}:${entry.weight}`)
     assert.deepEqual(picks('1-1'), ['normal:4000'], '1-1 allows only normal zombies')
     assert.deepEqual(picks('1-3'), ['normal:4000', 'conehead:4000'])
     assert.deepEqual(picks('1-8'), ['normal:4000', 'conehead:4000', 'buckethead:3000'])
+    // At night no buckethead rises (StageHasGraveStones), though 2-2's waves bring them; 2-1's bring no conehead.
     assert.deepEqual(picks('2-1'), ['normal:4000'])
-    assert.deepEqual(picks('2-2'), ['normal:4000', 'conehead:4000'], '2-2 names no bucketheads for its own graves')
+    for (const id of ['2-2', '2-3', '2-4', '2-5', '2-6', '2-7', '2-8', '2-9', '2-10']) {
+        assert.deepEqual(picks(id), ['normal:4000', 'conehead:4000'], id)
+    }
 })
 
 test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores the delayed final-wave emergence', () => {
@@ -207,16 +210,17 @@ test('the conveyor counts planted and waiting grave busters before dealing anoth
     game.update(TICK_SECONDS)
     assert.equal(game.render().conveyorPackets!.length, 2, 'a new grave opens supply again')
     for (const cell of [first, second, { row: 0, column: 0 }]) assert.ok(game.debugCommand(`/griditem crater ${cell.row + 1} ${cell.column + 1}`).ok)
-    assert.ok(game.debugCommand('/seed 1 empty').ok)
-    assert.ok(game.debugCommand('/seed 1 empty').ok)
+    // The two waiting grave busters swapped for Peashooters: with no grave left, none is dealt in their place.
+    for (const line of ['/seed 1 peashooter', '/seed 2 peashooter']) assert.ok(game.debugCommand(line).ok, line)
     game.update(TICK_SECONDS)
-    assert.deepEqual(game.render().conveyorPackets, [], 'an empty lawn draws no grave buster')
+    assert.deepEqual(game.render().conveyorPackets!.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:peashooter'],
+        'an empty lawn draws no grave buster')
 })
 
 function worldFor(night: boolean) {
     const world = withPlantTypes(withZombieTypes(new World(), definitions), definitions)
-    const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false })
+    const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards['pvz:frontyard']
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, time: night ? 'night' : 'day', phase: 'gameplay', result: 'playing', paused: false })
     withProjectileMotions(world, definitions).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world
@@ -359,6 +363,22 @@ test('scaredy-shrooms shoot the whole row, hide while a hostile zombie is near, 
     at.x = 100
     run(300)
     assert.equal(state(), 'calm')
+})
+
+test("a spore's rect is the plain 40 square (Projectile::GetProjectileRect), fired from Plant::Fire's corner", () => {
+    assert.deepEqual(definitions.projectiles['pvz:spore'].hitbox, { x: 0, y: 0, width: 40, height: 40 })
+    for (const [typeId, x, y] of [['pvz:puffshroom', 40, 40], ['pvz:scaredyshroom', 29, 21]] as const) {
+        const world = worldFor(true), schedule = new Schedule(), queue = world.resources.get(EventQueueResource)
+        schedule.add('plant', createPlantAttackSystem(definitions))
+        plantAt(world, typeId, 40)
+        spawnZombie(world, definitions, 'pvz:normal', 0, 200, 50)
+        let fired: Record<string, unknown> | undefined
+        for (let tick = 1; tick < 400 && !fired; tick++) {
+            schedule.run(world, tick)
+            fired = drainServerEvents(queue).find(event => event.type === 'projectileFired')?.data
+        }
+        assert.deepEqual([fired?.x, fired?.y], [40 + x, 80 + y], typeId)
+    }
 })
 
 test('sun-shrooms drop small sun until they grow, produce nothing while growing, and neither grow nor produce asleep', () => {
