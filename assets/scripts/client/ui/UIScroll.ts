@@ -76,7 +76,6 @@ export class UIScroll extends Component {
     private pageTicks = 0
     private pageElapsed = 0
     private lastY = 0
-    private mobile = false
     private readonly gesture = new TouchScrollGesture()
 
     initialize(options: UIScrollOptions): void {
@@ -96,7 +95,6 @@ export class UIScroll extends Component {
             name: 'Scrollbar', parent: this.node, position: { x: this.width - 6 },
             anchor: { x: 0, y: 1 }, size: { width: BAR_WIDTH, height: this.height }, graphics: true,
         })
-        this.mobile = GameDebugSettings.isMobileMode()
         this.setContentHeight(options.contentHeight)
         if (this.enabledInHierarchy) this.bindEvents('on')
     }
@@ -172,7 +170,6 @@ export class UIScroll extends Component {
         this.bar.node[method](Node.EventType.MOUSE_DOWN, this.pressBar, this)
         input[method](Input.EventType.MOUSE_MOVE, this.moveBar, this)
         input[method](Input.EventType.MOUSE_UP, this.releaseBar, this)
-        if (!this.mobile) return
         this.viewport.node[method](Node.EventType.TOUCH_START, this.beginTouch, this)
         this.viewport.node[method](Node.EventType.TOUCH_MOVE, this.moveTouch, this)
         this.viewport.node[method](Node.EventType.TOUCH_END, this.endTouch, this)
@@ -192,8 +189,9 @@ export class UIScroll extends Component {
         this.scrollTo(target, duration)
     }
 
+    /** In mobile mode a drag in the area scrolls it, however long ago the area was built (achievements at startup). */
     private beginTouch(event: EventTouch): void {
-        if (this.maxScroll > 0 && !this.pressed) {
+        if (GameDebugSettings.isMobileMode() && this.maxScroll > 0 && !this.pressed) {
             this.tweenDuration = 0
             this.gesture.beginTouch(event)
         }
